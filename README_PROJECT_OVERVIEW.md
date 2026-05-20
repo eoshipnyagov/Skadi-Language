@@ -85,3 +85,10 @@ Expected current runtime behavior:
 ## 8. Related Planning File
 Detailed implementation roadmap is tracked in:
 - `SCADI_IMPLEMENTATION_PLAN.md`
+
+## 9. Near-Term Design Revisit
+In the near term, the language design should be revisited before broad feature expansion.
+Focus of that review:
+- narrow v1 scope to a smaller \"Skadi Core\" subset,
+- reduce overlapping syntax/semantics to one canonical path per feature,
+- postpone high-complexity runtime/memory features until core compiler stages are stable.

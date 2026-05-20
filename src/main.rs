@@ -1,6 +1,7 @@
 use std::fs;
 use v01::lexer::lex;
 use v01::parser::parse_program;
+use v01::semantic_analysis::semantic_analyze;
 
 fn main() {
     let source_file = "example_meteostation.txt";
@@ -18,6 +19,10 @@ fn main() {
             match parse_program(&tokens) {
                 Ok(program) => {
                     println!("Parsing completed successfully. Statement count: {}", program.statements.len());
+                    match semantic_analyze(&program) {
+                        Ok(()) => println!("Semantic analysis completed successfully."),
+                        Err(e) => eprintln!("Semantic analysis failed: {}", e),
+                    }
                 }
                 Err(e) => {
                     eprintln!("Parsing failed: {}", e);

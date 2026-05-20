@@ -92,6 +92,20 @@ Tasks:
 Exit criteria:
 - Feature checklist mapped to spec sections with coverage status.
 
+## Phase 6 - Language Design Review (Near-Term)
+Status: planned
+
+Tasks:
+- Revisit v1 language scope and explicitly reduce non-essential features for MVP.
+- Resolve syntax/model overlap (for example, keep one canonical `for` style for v1).
+- Reconfirm semantics for memory model (`allow drop`, chunk budgeting) before deeper implementation.
+- Freeze a reduced \"Skadi Core v1\" subset and map compiler milestones strictly to that subset.
+
+Exit criteria:
+- Written design decision record for v1 scope cuts and kept features.
+- Updated grammar/spec section for the reduced core subset.
+- Implementation plan updated to prioritize only frozen core features.
+
 ## Risk Register
 1. Contract drift between lexer token kinds and parser expectations.
 Mitigation: freeze shared enums in `common_types.rs`, change only with tests.

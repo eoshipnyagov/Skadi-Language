@@ -1,143 +1,154 @@
-// src/semantic_analysis.rs
-use std::collections::{HashMap, HashSet};
-use crate::ast_nodes::{Program, Statement, Expression, ScopeManager};
+use std::collections::HashSet;
 
-/// Executes the full semantic analysis pass on a given Program AST root.
+use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
+
 pub fn semantic_analyze(program: &Program) -> Result<(), String> {
-    println!("==========================================");
-    println!("--- Starting Skadi Semantic Analysis ---");
-    println!("------------------------------------------");
+    let mut scope = HashSet::new();
+    analyze_statements(&program.statements, &mut scope)
+}
 
-    // Symbol table tracks defined identifiers (variables/functions) and their scope, type, and memory footprint.
-    let mut global_scope: HashMap<String, &'static str> = HashMap::new(); 
-    let mut current_memory_budget: u64 = 0;
-
-    for stmt in &program.statements {
-        println!("Analyzing statement...");
-        // We start a new scope for each top-level statement/function definition.
-        match analyze_statement(stmt, &mut global_scope, &mut current_memory_budget) {
-            Ok(_) => println!("[OK] Statement analyzed successfully."),
-            Err(e) => {
-                return Err(format!("Semantic Failure in statement: {}", e)); 
-            }
-        }
+fn analyze_statements(statements: &[Statement], scope: &mut HashSet<String>) -> Result<(), String> {
+    for stmt in statements {
+        analyze_statement(stmt, scope)?;
     }
-
-    println!("\n==========================================");
-    if current_memory_budget > 0 {
-         println!("SUCCESS: Semantic analysis completed. Estimated final budget requirement: {} bytes.", current_memory_budget);
-    } else {
-         println!("SUCCESS: Semantic analysis completed with a clean scope and minimal memory usage.");
-    }
-
     Ok(())
 }
 
-/// Recursively analyzes an individual statement within its given scope context.
-fn analyze_statement(stmt: &Statement, scope: &mut HashMap<String, &'static str>, budget: &mut u64) -> Result<(), String> {
+fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<(), String> {
     match stmt {
-        // 1. Variable Declaration/Assignment
-        Statement::VarDecl { name, value, is_fixed } => {
-            if scope.contains_key(name.as_str()) {
-                return Err("Variable re-declaration in this scope.");
-            }
-            let value_type = analyze_expression(value, scope);
-            scope.insert(name.as_str(), "TypePlaceholder"); // Should store the resolved type string
-            println!("  - Declared variable '{}' of inferred type: {}", name, value_type);
-            // Crude budget estimation: assuming minimal storage cost for now.
-            *budget += 8; 
+        Statement::VarDecl { name, value, .. } => {
+            analyze_expression(value, scope)?;
+            scope.insert(name.clone());
             Ok(())
         }
-
         Statement::Assignment { target, value } => {
-             if !scope.contains_key(target.as_str()) {
-                return Err("Cannot assign to undeclared variable or field.");
+            if !scope.contains(target) && contains_variable(value, target) {
+                return Err(format!(
+                    "Invalid initialization: '{}' is used in its own initializing expression.",
+                    target
+                ));
             }
-            let value_type = analyze_expression(value, scope);
-            println!("  - Assigned value to '{}'. Value type: {}", target, value_type);
+            analyze_expression(value, scope)?;
+            if scope.contains(target) {
+                return Err(format!(
+                    "Redeclaration in same scope: '{}' is already defined.",
+                    target
+                ));
+            }
+            scope.insert(target.clone());
             Ok(())
         }
-
-        // 2. Function Definition (Skipped complex analysis for brevity)
-        Statement::FunctionDef { name, params, body, returns, is_danger } => {
-            println!("  - Defining function '{}' (Danger: {}).", name, is_danger);
-            let new_scope = ScopeManager{ parent_scope: scope.clone() }; 
-            // We pass 'global_scope' here to simulate nested context management
-            if let Err(e) = analyze_block(body, &mut new_scope, budget) {
-                return Err(format!("Error in function '{}': {}", name, e));
+        Statement::FunctionDef { name, params, body, .. } => {
+            scope.insert(name.clone());
+            let mut fn_scope = scope.clone();
+            for p in params {
+                fn_scope.insert(p.clone());
             }
-
-            println!("  - Function '{}' analysis OK.", name);
-            // We assume successful function definition adds it to the global scope.
-            scope.insert(name.as_str(), "Function"); 
-            Ok(())
+            analyze_block(body, &mut fn_scope)
         }
-
-
-        // 3. Control Flow: If/When
         Statement::IfStatement { condition, then_block, else_block } => {
-            let cond_type = analyze_expression(condition, &mut HashMap::new());
-            println!("  - IF statement analyzed. Condition type: {}", cond_type);
-
-            // Analyze THEN block (simulating temporary scope entry)
-            if let Err(e) = analyze_block(then_block, &mut ScopeManager{ parent_scope: global_scope.clone() }, budget) {
-                 return Err(format!("Error in IF block: {}", e));
-            }
-            
-            // If ELSE exists, analyze it too
-            if let Some(el) = else_block {
-                println!("  - Analyzing optional ELSE block.");
-                 if let Err(e) = analyze_block(el, &mut ScopeManager{ parent_scope: global_scope.clone() }, budget) {
-                     return Err(format!("Error in ELSE block: {}", e));
-                 }
+            analyze_expression(condition, scope)?;
+            let mut then_scope = scope.clone();
+            analyze_block(then_block, &mut then_scope)?;
+            if let Some(else_block) = else_block {
+                let mut else_scope = scope.clone();
+                analyze_block(else_block, &mut else_scope)?;
             }
             Ok(())
         }
-        
-        // 4. Generic Blocks (e.g., Function body, 'on error' context)
+        Statement::ForLoop { initialization, condition, update, body } => {
+            let mut loop_scope = scope.clone();
+
+            if let Some(init) = initialization {
+                if let Expression::VariableReference(name) = init.as_ref() {
+                    loop_scope.insert(name.clone());
+                } else {
+                    analyze_expression(init, &loop_scope)?;
+                }
+            }
+            if let Some(cond) = condition {
+                analyze_expression(cond, &loop_scope)?;
+            }
+            if let Some(upd) = update {
+                analyze_expression(upd, &loop_scope)?;
+            }
+
+            analyze_block(body, &mut loop_scope)
+        }
+        Statement::WhenBlock { when_expression, cases, else_block } => {
+            analyze_expression(when_expression, scope)?;
+            for (case_exprs, block) in cases {
+                for expr in case_exprs {
+                    analyze_expression(expr, scope)?;
+                }
+                let mut case_scope = scope.clone();
+                analyze_block(block, &mut case_scope)?;
+            }
+            if let Some(else_block) = else_block {
+                let mut else_scope = scope.clone();
+                analyze_block(else_block, &mut else_scope)?;
+            }
+            Ok(())
+        }
+        Statement::WhileLoop { condition, body } => {
+            analyze_expression(condition, scope)?;
+            let mut while_scope = scope.clone();
+            analyze_block(body, &mut while_scope)
+        }
+        Statement::LoopStatement { body } => {
+            let mut local_scope = scope.clone();
+            analyze_block(body, &mut local_scope)
+        }
+        Statement::OnErrorBlock { statements: body_statements } => {
+            let mut local_scope = scope.clone();
+            analyze_statements(body_statements, &mut local_scope)
+        }
         Statement::BlockStatement { statements } => {
-             if let Err(e) = analyze_block(Box::new(BlockStatement{statements: statements.clone()}), &mut ScopeManager{ parent_scope: global_scope.clone() }, budget) {
-                 return Err(format!("Error in block statement: {}", e));
+            let mut local_scope = scope.clone();
+            analyze_statements(statements, &mut local_scope)
+        }
+        Statement::LabelDecl { .. } | Statement::StructDecl { .. } | Statement::OnBlock { .. } => Ok(()),
+    }
+}
+
+fn analyze_block(block: &Box<BlockStatement>, scope: &mut HashSet<String>) -> Result<(), String> {
+    analyze_statements(&block.statements, scope)
+}
+
+fn analyze_expression(expr: &Expression, scope: &HashSet<String>) -> Result<(), String> {
+    match expr {
+        Expression::LiteralInt(_) | Expression::LiteralFloat(_) => Ok(()),
+        Expression::VariableReference(name) => {
+            if scope.contains(name) {
+                Ok(())
+            } else {
+                Err(format!("Use-before-definition: '{}' is not defined in current scope.", name))
+            }
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            analyze_expression(left, scope)?;
+            if let Some(right) = right {
+                analyze_expression(right, scope)?;
             }
             Ok(())
         }
-
-    }
-}
-
-
-/// Analyzes a block of code by iterating through its statements and updating the scope/budget.
-fn analyze_block(block: &Box<BlockStatement>, scope: &mut ScopeManager, budget: u64) -> Result<(), String> {
-    // The new local scope tracks variables defined *only* within this block.
-    let mut local_scope = ScopeManager{ parent_scope: scope.scope_stack.clone() };
-
-    for stmt in &block.statements {
-        match analyze_statement(stmt, &mut local_scope.scope, budget) {
-            Ok(_) => {}, 
-            Err(e) => return Err(format!("Semantic Error processing statement: {}", e)), // Propagate error upwards immediately
+        Expression::StructConstruction { fields } => {
+            for value in fields.values() {
+                analyze_expression(value, scope)?;
+            }
+            Ok(())
         }
     }
-    Ok(())
 }
 
-/// Analyzes an expression and returns the inferred/expected type of that expression.
-fn analyze_expression(expr: &Box<Expression>, scope: &mut HashMap<String, &'static str>) -> String {
-     match expr.as_ref() {
-         Expression::LiteralInt(_) => "Int".to_string(),
-         Expression::LiteralFloat(_) => "Float".to_string(),
-         Expression::VariableReference(name) => scope.get(name).cloned().unwrap_or("Unknown").to_string(),
-         // BinaryOp, Call, StructConstruction require deeper type resolution logic here...
-         _ => { 
-             if expr.is_struct() { "Struct".to_string() } else { "AnyType".to_string() }
-         }
-     }
-}
-
-
-// Helper to check if the expression is a struct construction (for clearer logging)
-fn is_struct(expr: &Expression) -> bool {
+fn contains_variable(expr: &Expression, name: &str) -> bool {
     match expr {
-        Expression::StructConstruction { .. } => true,
+        Expression::VariableReference(v) => v == name,
+        Expression::BinaryOp { left, right, .. } => {
+            contains_variable(left, name)
+                || right.as_deref().map(|r| contains_variable(r, name)).unwrap_or(false)
+        }
+        Expression::StructConstruction { fields } => fields.values().any(|v| contains_variable(v, name)),
         _ => false,
     }
 }
