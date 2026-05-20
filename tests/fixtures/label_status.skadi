@@ -1,0 +1,4 @@
+label Status {
+    Ok
+    Error
+}

@@ -1,5 +1,5 @@
 use std::fs;
-use v01::lexer::core::lex;
+use v01::lexer::lex;
 use v01::parser::parse_program;
 
 fn main() {

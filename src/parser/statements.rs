@@ -1,6 +1,6 @@
 // ================================================
 // Parser Logic Helpers (Rust)
-// File: src/parsing_logic.rs
+// File: src/parser/statements.rs
 // ----------------------------------------------------------------
 use crate::common_types::{Token, TokenKind};
 use crate::ast_nodes::{Statement, Expression, ScopeManager, BlockStatement};
