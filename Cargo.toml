@@ -1,0 +1,8 @@
+[package]
+name = "v01"
+version = "0.1.0"
+edition = "2024"
+
+# Modules definitions will be managed by src/lib.rs instead of a formal library block.
+[dependencies]
+# No external dependencies needed at this time for core compiler logic.

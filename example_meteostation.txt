@@ -1,0 +1,130 @@
+// Метеостанция Skadi v1.0
+// Цель: esp32, батарейка, глубокий сон между измерениями
+
+label Status {
+    Ok
+    Warning
+    Error
+}
+
+struct Sensor {
+    u8 address
+    String name
+    
+    fn read() returns struct {f32 value, Status status} {
+        i2c.start(address)
+        new raw = i2c.read(2) on error {
+            return {value = 0.0, status = Status.Error}
+        }
+        i2c.stop()
+        
+        new value = f32(raw) * 0.1
+        new status = Status.Ok
+        
+        if value > 50.0 {
+            status = Status.Warning
+        }
+        
+        return {value = value, status = status}
+    }
+}
+
+struct WeatherData {
+    f32 temperature
+    f32 humidity
+    f32 pressure
+    allow drop List(WeatherData) log   // можно затереть при нехватке
+}
+
+fn main() {
+    // Инициализация
+    gpio.mode(led_green, gpio.Output)
+    gpio.mode(led_red, gpio.Output)
+    i2c.init()
+    spi.init()
+    
+    new temp_sensor = Sensor {address = 0x40, name = "DHT20"}
+    new hum_sensor = Sensor {address = 0x40, name = "DHT20_hum"}
+    new press_sensor = Sensor {address = 0x77, name = "BMP280"}
+    
+    // Вечный цикл с глубоким сном
+    loop {
+        collect_and_send(temp_sensor, hum_sensor, press_sensor)
+        
+        // Спим 10 минут, экономя батарею
+        sleep(10min)
+    }
+}
+
+fn collect_and_send(Sensor temp_sensor, Sensor hum_sensor, Sensor press_sensor) {
+    new data = WeatherData {
+        temperature = 0.0,
+        humidity = 0.0,
+        pressure = 0.0,
+        log = List(WeatherData)
+    }
+    
+    // Считываем температуру
+    new temp_result = temp_sensor.read()
+    when temp_result.status {
+        is Status.Ok {
+            data.temperature = temp_result.value
+            gpio.write(led_green, gpio.High)
+        }
+        is Status.Warning {
+            data.temperature = temp_result.value
+            blink(led_green, 3, 200ms)
+        }
+        is Status.Error {
+            blink(led_red, 5, 100ms)
+            return
+        }
+    }
+    
+    // Считываем влажность
+    new hum_result = hum_sensor.read()
+    when hum_result.status {
+        is Status.Ok {
+            data.humidity = hum_result.value
+        }
+        else {
+            data.humidity = -1.0
+        }
+    }
+    
+    // Считываем давление по SPI
+    new press_result = press_sensor.read()
+    data.pressure = press_result.value on error { data.pressure = -1.0 }
+    
+    // Пишем в лог
+    data.log.append(data)
+    
+    // Отправляем
+    send_data(data)
+    
+    // Гасим светодиод
+    gpio.write(led_green, gpio.Low)
+}
+
+fn send_data(WeatherData data) {
+    uart.write("--- Weather Report ---")
+    uart.write("Temp: __data.temperature__ C")
+    uart.write("Hum:  __data.humidity__ %")
+    uart.write("Press: __data.pressure__ hPa")
+    
+    // В реальном устройстве — отправка по WiFi/LoRa
+}
+
+fn blink(u8 pin, Int count, Time duration) {
+    new i = 0
+    while i < count {
+        gpio.toggle(pin)
+        delay(duration)
+        i = i + 1
+    }
+}
+
+// Таймер для принудительного сбора (опционально, вместо loop+sleep)
+on interrupt timer0 {
+    collect_and_send(temp_sensor, hum_sensor, press_sensor)
+}

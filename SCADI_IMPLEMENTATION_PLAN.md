@@ -1,0 +1,108 @@
+# Scadi Implementation Plan
+
+## Plan Date
+2026-05-20
+
+## Goal
+Reach a working MVP compiler pipeline for a stable subset of Skadi:
+- `lex -> parse -> semantic` for representative programs,
+- deterministic diagnostics with source locations,
+- regression tests for implemented grammar.
+
+## Phase 0 - Baseline Lock (Completed)
+Status: completed
+
+Tasks:
+- Ensure project compiles with `cargo check`.
+- Fix critical compile blockers in lexer/parser contracts.
+- Establish project overview and planning docs.
+
+Exit criteria:
+- `cargo check` passes.
+- Baseline commit created.
+
+## Phase 1 - Parser Core Stabilization
+Status: planned
+
+Tasks:
+- Normalize parser entry API in `src/parser.rs`.
+- Replace skip-based branches with explicit AST node construction for:
+  - function declarations,
+  - assignments,
+  - `if` / `while` / `loop`,
+  - `when` skeleton with case capture.
+- Add structured parse errors (message + token location).
+
+Exit criteria:
+- Parser returns deterministic results for valid/invalid minimal programs.
+- No panic paths in normal parse flow.
+
+## Phase 2 - Expression Engine (Pratt Parser)
+Status: planned
+
+Tasks:
+- Implement precedence table from `Scadi_design.txt`.
+- Add prefix/infix parsing for arithmetic/comparison/logical operators.
+- Support grouped expressions and variable references.
+
+Exit criteria:
+- Precedence-correct AST for expressions.
+- Tests for at least 15 precedence/associativity scenarios.
+
+## Phase 3 - Semantic Analysis v1
+Status: planned
+
+Tasks:
+- Scope-aware symbol table validation.
+- Checks:
+  - use-before-definition,
+  - duplicate declarations in same scope,
+  - basic assignment compatibility.
+- Produce user-facing diagnostics with line/column.
+
+Exit criteria:
+- Semantic pass catches core scope/type errors on fixture set.
+- Diagnostic format stable across runs.
+
+## Phase 4 - Integration and Fixtures
+Status: planned
+
+Tasks:
+- Add fixture-based tests for:
+  - small unit snippets,
+  - `example_meteostation.txt` (integration sample).
+- Add pass/fail expectation files.
+- Add CI-friendly test command.
+
+Exit criteria:
+- `cargo test` validates MVP grammar slice.
+- Integration fixture is part of regression suite.
+
+## Phase 5 - Language Feature Expansion
+Status: planned
+
+Tasks:
+- Incrementally implement remaining spec features:
+  - `danger fn` + `on error`,
+  - `for in` collections,
+  - structs/methods + `my`,
+  - selected stdlib-aware semantics.
+- Keep each feature behind tests before merging.
+
+Exit criteria:
+- Feature checklist mapped to spec sections with coverage status.
+
+## Risk Register
+1. Contract drift between lexer token kinds and parser expectations.
+Mitigation: freeze shared enums in `common_types.rs`, change only with tests.
+
+2. Parser complexity growth without expression engine.
+Mitigation: prioritize Pratt parser before expanding statement grammar.
+
+3. Regressions due to scaffold code paths.
+Mitigation: convert placeholders to explicit `todo!` or typed errors where behavior is not implemented.
+
+## Working Rules
+- Every new grammar feature must include at least one positive and one negative test.
+- Prefer small commits per phase task.
+- Keep `Scadi_design.txt` as the normative grammar reference.
