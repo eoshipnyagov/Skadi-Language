@@ -15,34 +15,41 @@ Language source of truth:
 Implemented and working:
 - project builds with `cargo check`,
 - lexer module structure is in place and usable,
-- parser scaffolding exists for key constructs (`fn`, `for`, `when`, basic control flow),
-- shared contracts (`Token`, `TokenKind`, AST skeleton) are centralized.
+- parser supports core top-level constructs and expression parsing via Pratt parser,
+- semantic analysis includes baseline scope checks (`use-before-definition`, redeclaration, self-reference init),
+- regression tests for parser/semantic smoke scenarios are in place.
 
 Still in progress:
-- parser is largely scaffold-level and does not fully parse expressions/blocks by spec,
-- semantic analysis is not yet integrated as a robust stage,
-- warning count is high (dead code / placeholders), which is expected for this phase.
+- parser and semantic stages are not yet feature-complete vs full spec,
+- diagnostics are not yet fully standardized around source spans,
+- some legacy helper methods remain unused and need cleanup.
 
 ## 3. Repository Structure
 Top-level:
 - `Cargo.toml` - Rust package config
 - `README_PROJECT_OVERVIEW.md` - project snapshot and architecture overview
+- `SCADI_IMPLEMENTATION_PLAN.md` - implementation roadmap and phase tracking
 - `Scadi_design.txt` - Skadi v1.1 specification
 - `example_meteostation.txt` - integration-style sample program
-- `cargo_output.txt` - historical compilation diagnostics snapshot
+- `docs/SKADI_STYLE_PRINCIPLES.md` - accepted style/design baseline for syntax decisions
 
 Source tree (`src/`):
 - `lib.rs` - module wiring for compiler components
-- `main.rs` - current executable entry point (lexing run)
+- `main.rs` - executable pipeline runner (`lex -> parse -> semantic`)
 - `common_types.rs` - shared token contracts and common lexical types
-- `lexer_utils.rs` - lexer helper utilities
+- `lexer/mod.rs` - lexer module entry and re-exports
 - `lexer/core.rs` - lexer implementation (`Lexer`, `lex`)
 - `lexer/structures.rs` - lexer-related shared structures/errors
 - `ast_nodes.rs` - AST node types and scope manager scaffold
-- `parsing_logic.rs` - parser helper functions for language constructs
-- `parser.rs` - parser orchestration over token stream
-- `semantic_analysis.rs` - semantic analysis placeholder module
-- `location.rs` - source location utilities scaffold
+- `parser/mod.rs` - parser orchestration over token stream
+- `parser/statements.rs` - statement/declaration parsing logic
+- `parser/expressions.rs` - Pratt parser for expressions
+- `semantic_analysis.rs` - semantic analysis pass (current baseline checks)
+
+Tests (`tests/`):
+- `parser_smoke.rs` - parser integration smoke tests
+- `semantic_smoke.rs` - semantic integration smoke tests
+- `fixtures/` - fixture snippets used by tests
 
 ## 4. Compilation Pipeline Target
 Target architecture (MVP -> full):
@@ -52,19 +59,19 @@ Target architecture (MVP -> full):
 4. Semantic analysis (`AST -> validated AST / diagnostics`)
 5. Future: code generation backend (IR / WASM / native)
 
-Current executable (`main.rs`) runs Stage 2 directly (lexing) and serves as a stable smoke-test entrypoint.
+Current executable (`main.rs`) runs stages 2-4 for the sample source.
 
 ## 5. Development Principles
-- Keep `Scadi_design.txt` as the single functional spec baseline.
+- Keep `Scadi_design.txt` as the functional baseline.
+- Keep style decisions aligned with `docs/SKADI_STYLE_PRINCIPLES.md`.
 - Ship in vertical slices (end-to-end capability for a small subset).
-- Avoid broad refactors while parser/semantic contracts are still moving.
-- Add tests whenever a grammar feature is promoted from scaffold to implemented behavior.
+- Add tests whenever behavior is promoted from scaffold to implemented logic.
 
 ## 6. Short-Term Priorities
-1. Stabilize parser contracts and expression parsing strategy.
-2. Introduce Pratt parser for precedence-correct expressions.
-3. Integrate semantic checks for scope and base type consistency.
-4. Expand test corpus from mini-samples + `example_meteostation.txt`.
+1. Complete parser coverage for core statements and error forms.
+2. Strengthen semantic checks for function and block scopes.
+3. Normalize diagnostics with consistent source locations.
+4. Expand fixture-based regression coverage.
 
 ## 7. How To Run
 Validation build:
@@ -72,23 +79,23 @@ Validation build:
 cargo check
 ```
 
-Run current executable:
+Run test suite:
+```bash
+cargo test
+```
+
+Run executable pipeline:
 ```bash
 cargo run
 ```
 
-Expected current runtime behavior:
-- reads `example_meteostation.txt`,
-- runs lexer,
-- prints tokenization success/failure.
-
-## 8. Related Planning File
-Detailed implementation roadmap is tracked in:
+## 8. Related Planning Files
 - `SCADI_IMPLEMENTATION_PLAN.md`
+- `docs/SKADI_STYLE_PRINCIPLES.md`
 
 ## 9. Near-Term Design Revisit
-In the near term, the language design should be revisited before broad feature expansion.
-Focus of that review:
-- narrow v1 scope to a smaller \"Skadi Core\" subset,
-- reduce overlapping syntax/semantics to one canonical path per feature,
+In the near term, language design should be revisited before broad feature expansion.
+Focus:
+- narrow v1 scope to a smaller "Skadi Core" subset,
+- keep one canonical syntax path per feature,
 - postpone high-complexity runtime/memory features until core compiler stages are stable.

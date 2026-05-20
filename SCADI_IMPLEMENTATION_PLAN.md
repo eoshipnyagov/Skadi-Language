@@ -22,14 +22,15 @@ Exit criteria:
 - Baseline commit created.
 
 ## Phase 1 - Parser Core Stabilization
-Status: planned
+Status: in progress
 
 Tasks:
-- Normalize parser entry API in `src/parser.rs`.
+- Normalize parser entry API in `src/parser/mod.rs`.
 - Replace skip-based branches with explicit AST node construction for:
   - function declarations,
   - assignments,
   - `if` / `while` / `loop`,
+  - `for in`,
   - `when` skeleton with case capture.
 - Add structured parse errors (message + token location).
 
@@ -38,7 +39,7 @@ Exit criteria:
 - No panic paths in normal parse flow.
 
 ## Phase 2 - Expression Engine (Pratt Parser)
-Status: planned
+Status: in progress
 
 Tasks:
 - Implement precedence table from `Scadi_design.txt`.
@@ -50,13 +51,14 @@ Exit criteria:
 - Tests for at least 15 precedence/associativity scenarios.
 
 ## Phase 3 - Semantic Analysis v1
-Status: planned
+Status: in progress
 
 Tasks:
 - Scope-aware symbol table validation.
 - Checks:
   - use-before-definition,
   - duplicate declarations in same scope,
+  - self-reference in first assignment,
   - basic assignment compatibility.
 - Produce user-facing diagnostics with line/column.
 
@@ -84,7 +86,6 @@ Status: planned
 Tasks:
 - Incrementally implement remaining spec features:
   - `danger fn` + `on error`,
-  - `for in` collections,
   - structs/methods + `my`,
   - selected stdlib-aware semantics.
 - Keep each feature behind tests before merging.
@@ -97,9 +98,10 @@ Status: planned
 
 Tasks:
 - Revisit v1 language scope and explicitly reduce non-essential features for MVP.
-- Resolve syntax/model overlap (for example, keep one canonical `for` style for v1).
+- Resolve syntax/model overlap (one canonical style per feature in v1).
 - Reconfirm semantics for memory model (`allow drop`, chunk budgeting) before deeper implementation.
-- Freeze a reduced \"Skadi Core v1\" subset and map compiler milestones strictly to that subset.
+- Freeze a reduced "Skadi Core v1" subset and map compiler milestones strictly to that subset.
+- Align all syntax decisions with `docs/SKADI_STYLE_PRINCIPLES.md`.
 
 Exit criteria:
 - Written design decision record for v1 scope cuts and kept features.
@@ -114,9 +116,13 @@ Mitigation: freeze shared enums in `common_types.rs`, change only with tests.
 Mitigation: prioritize Pratt parser before expanding statement grammar.
 
 3. Regressions due to scaffold code paths.
-Mitigation: convert placeholders to explicit `todo!` or typed errors where behavior is not implemented.
+Mitigation: convert placeholders to explicit errors where behavior is not implemented.
+
+4. Syntax drift away from readability goals.
+Mitigation: enforce `docs/SKADI_STYLE_PRINCIPLES.md` as review baseline.
 
 ## Working Rules
 - Every new grammar feature must include at least one positive and one negative test.
 - Prefer small commits per phase task.
 - Keep `Scadi_design.txt` as the normative grammar reference.
+- Keep syntax choices aligned with `docs/SKADI_STYLE_PRINCIPLES.md`.
