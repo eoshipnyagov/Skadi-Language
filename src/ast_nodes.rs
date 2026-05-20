@@ -56,6 +56,9 @@ pub enum Statement {
     },
     WhileLoop { condition: Box<Expression>, body: Box<BlockStatement> },
     LoopStatement { body: Box<BlockStatement> },
+    LabelDecl { name: String, variants: Vec<String> },
+    StructDecl { name: String },
+    OnBlock { trigger: String },
     BlockStatement { statements: Vec<Statement> },
     OnErrorBlock { statements: Vec<Statement> }, // For 'on error' context
 }

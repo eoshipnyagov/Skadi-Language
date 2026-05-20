@@ -5,7 +5,7 @@ use super::structures::LexError;
 
 /// A Lexer tokenizes the source code string into a sequence of Tokens.
 pub struct Lexer<'a> {
-    source: &'a str,
+    _source: &'a str,
     chars: Vec<char>,
     current_pos: usize,
     current_line: u32,
@@ -16,7 +16,7 @@ impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Self {
         let chars: Vec<char> = source.chars().collect();
         Lexer {
-            source,
+            _source: source,
             chars,
             current_pos: 0,
             current_line: 1,
@@ -71,6 +71,10 @@ impl<'a> Lexer<'a> {
             }
         }
         None
+    }
+
+    fn lexeme_from_range(&self, start: usize, end: usize) -> String {
+        self.chars[start..end].iter().collect()
     }
 
     /// Skip whitespace and newlines (but record newlines).
@@ -139,7 +143,7 @@ impl<'a> Lexer<'a> {
                 None => break, // unterminated string
             }
         }
-        self.source[start..self.current_pos].to_string()
+        self.lexeme_from_range(start, self.current_pos)
     }
 
     /// Consume a numeric literal (int or float). Returns the text.
@@ -152,7 +156,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        self.source[start..self.current_pos].to_string()
+        self.lexeme_from_range(start, self.current_pos)
     }
 
     /// Consume an identifier or keyword. Returns the text.
@@ -165,7 +169,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        self.source[start..self.current_pos].to_string()
+        self.lexeme_from_range(start, self.current_pos)
     }
 
     /// Consume a single char literal 'c'.
@@ -176,7 +180,7 @@ impl<'a> Lexer<'a> {
         if let Some(c) = self.peek() {
             self.advance();
             if c == '\\' {
-                if let Some(ec) = self.peek() {
+                if let Some(_ec) = self.peek() {
                     self.advance();
                 }
             }
@@ -184,7 +188,7 @@ impl<'a> Lexer<'a> {
         if self.peek() == Some('\'') {
             self.advance(); // skip closing quote
         }
-        self.source[start..self.current_pos].to_string()
+        self.lexeme_from_range(start, self.current_pos)
     }
 
     /// Resolve a keyword/identifier string to TokenKind.
@@ -224,11 +228,23 @@ impl<'a> Lexer<'a> {
             return None;
         }
 
+        while let Some(c) = self.peek() {
+            if c == ' ' || c == '\t' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        if !self.has_more() {
+            return None;
+        }
+
         let line = self.current_line;
         let col = self.current_col;
 
         // Record the starting position before peeking
-        let start_pos = self.current_pos;
+        let _start_pos = self.current_pos;
 
         // 1. Newlines are significant in Skadi (one statement per line)
         if self.peek() == Some('\n') || self.peek() == Some('\r') {
