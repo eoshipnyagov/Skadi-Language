@@ -1,6 +1,7 @@
 use crate::common_types::{TokenKind, Token};
 use crate::ast_nodes::{Program, ScopeManager};
 mod statements;
+mod expressions;
 
 /// Parses a sequence of tokens and constructs a complete Program AST structure.
 /// This function orchestrates the process: it reads tokens sequentially 

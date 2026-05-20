@@ -3,7 +3,8 @@
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
 use crate::common_types::{Token, TokenKind};
-use crate::ast_nodes::{Statement, Expression, ScopeManager, BlockStatement};
+use crate::ast_nodes::{Statement, ScopeManager, BlockStatement};
+use super::expressions::parse_expression_range;
 
 /// Core type for a parser function: consumes tokens and returns the resulting AST node and the count of consumed tokens.
 pub type ParseResult<T> = Result<(T, usize), String>;
@@ -114,77 +115,85 @@ pub fn parse_for_loop(
     start_index: usize, 
     _scope: &ScopeManager
 ) -> ParseResult<Statement> {
-    // Expected pattern: for (init; condition; update) { ... }
+    // Supports both:
+    // 1) Skadi style: for item in collection { ... }
+    // 2) C-style: for (init; condition; update) { ... } (legacy scaffold path)
     let mut current_index = start_index;
     
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordFor {
         return Err("Expected 'for' keyword to start loop.".into());
     }
     
-    // Skip the 'for'
+    // Skip "for"
     current_index += 1;
-    
-    if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::OpPunctuation || tokens[current_index].lexeme != "(" {
-        return Err("For loop expected '(' after keyword.".into());
-    }
-    
-    // Skip the opening parenthesis
-    current_index += 1;
-    
-    // Parse initialization expression (if exists)
-    if current_index < tokens.len() && tokens[current_index].lexeme != ";" {
-        // For now we don't actually parse expressions, just skip to semicolon
-        while current_index < tokens.len() && tokens[current_index].lexeme != ";" {
+
+    // Skadi for-in path
+    if current_index < tokens.len() && tokens[current_index].kind() == TokenKind::Identifier {
+        let loop_var = tokens[current_index].lexeme.clone();
+        current_index += 1;
+        if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordIn {
+            return Err("For loop expected 'in' after iterator variable.".into());
+        }
+        current_index += 1;
+        let expr_start = current_index;
+        while current_index < tokens.len() && tokens[current_index].lexeme != "{" {
             current_index += 1;
         }
+        if current_index >= tokens.len() {
+            return Err("For-in loop expected '{' to begin body.".into());
+        }
+        let collection_expr = parse_expression_range(tokens, expr_start, current_index)?;
+        let block_end = find_block_end(tokens, current_index)?;
+        current_index = block_end + 1;
+        let stmt = Statement::ForLoop {
+            initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(loop_var))),
+            condition: Some(Box::new(collection_expr)),
+            update: None,
+            body: Box::new(BlockStatement { statements: vec![] }),
+        };
+        return Ok((stmt, current_index - start_index));
     }
-    
+
+    // Legacy C-style fallback
+    if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::OpPunctuation || tokens[current_index].lexeme != "(" {
+        return Err("For loop expected iterator variable or '(' after keyword.".into());
+    }
+    current_index += 1;
+    while current_index < tokens.len() && tokens[current_index].lexeme != ";" {
+        current_index += 1;
+    }
     if current_index >= tokens.len() || tokens[current_index].lexeme != ";" {
         return Err("For loop expected ';' after initialization.".into());
     }
-    
-    // Skip the semicolon
     current_index += 1;
-    
-    // Parse condition expression (if exists)
-    if current_index < tokens.len() && tokens[current_index].lexeme != ";" {
-        // For now we don't actually parse expressions, just skip to semicolon
-        while current_index < tokens.len() && tokens[current_index].lexeme != ";" {
-            current_index += 1;
-        }
+    while current_index < tokens.len() && tokens[current_index].lexeme != ";" {
+        current_index += 1;
     }
-    
     if current_index >= tokens.len() || tokens[current_index].lexeme != ";" {
         return Err("For loop expected ';' after condition.".into());
     }
-    
-    // Skip the semicolon
     current_index += 1;
-    
-    // Parse update expression (if exists)
-    if current_index < tokens.len() && tokens[current_index].lexeme != "}" {
-        // For now we don't actually parse expressions, just skip to closing brace
-        while current_index < tokens.len() && tokens[current_index].lexeme != "}" {
-            current_index += 1;
-        }
+    while current_index < tokens.len() && tokens[current_index].lexeme != ")" {
+        current_index += 1;
     }
-    
+    if current_index >= tokens.len() || tokens[current_index].lexeme != ")" {
+        return Err("For loop expected ')'.".into());
+    }
+    current_index += 1;
     if current_index >= tokens.len() || tokens[current_index].lexeme != "{" {
         return Err("For loop expected '{' to begin body.".into());
     }
-    
-    // Parse the loop body - just find matching closing brace
     let block_end = find_block_end(tokens, current_index)?;
     current_index = block_end + 1;
-    
-    let stmt = Statement::ForLoop {
-        initialization: None,
-        condition: None, 
-        update: None, 
-        body: BlockStatement { statements: vec![] }.into()
-    };
-    
-    Ok((stmt, current_index - start_index))
+    Ok((
+        Statement::ForLoop {
+            initialization: None,
+            condition: None,
+            update: None,
+            body: Box::new(BlockStatement { statements: vec![] }),
+        },
+        current_index - start_index,
+    ))
 }
 
 /// Parses a 'when' statement. Handles 'when' keyword followed by an expression and a body block.
@@ -202,7 +211,7 @@ pub fn parse_when_statement(
     // Skip the 'when'
     current_index += 1;
     
-    // Parse when expression (we'll just skip for now)
+    let expr_start = current_index;
     while current_index < tokens.len() && tokens[current_index].lexeme != "{" {
         current_index += 1;
     }
@@ -211,12 +220,14 @@ pub fn parse_when_statement(
         return Err("When statement expected '{' to begin body.".into());
     }
     
+    let expr_end = current_index;
     // Parse the when block - find matching closing brace
     let block_end = find_block_end(tokens, current_index)?;
     current_index = block_end + 1;
     
+    let when_expression = parse_expression_range(tokens, expr_start, expr_end)?;
     let stmt = Statement::WhenBlock {
-        when_expression: Box::new(Expression::LiteralInt(0)), // Placeholder
+        when_expression: Box::new(when_expression),
         cases: vec![],
         else_block: None
     };
@@ -228,7 +239,8 @@ pub fn parse_if_statement(tokens: &[Token], start_index: usize) -> ParseResult<S
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordIf {
         return Err("Expected 'if' keyword.".into());
     }
-    let mut cursor = start_index + 1;
+    let expr_start = start_index + 1;
+    let mut cursor = expr_start;
     while cursor < tokens.len() && tokens[cursor].lexeme != "{" {
         cursor += 1;
     }
@@ -255,9 +267,10 @@ pub fn parse_if_statement(tokens: &[Token], start_index: usize) -> ParseResult<S
         }
     }
 
+    let condition = parse_expression_range(tokens, expr_start, cursor)?;
     Ok((
         Statement::IfStatement {
-            condition: Box::new(Expression::LiteralInt(1)),
+            condition: Box::new(condition),
             then_block: Box::new(BlockStatement { statements: vec![] }),
             else_block,
         },
@@ -269,7 +282,8 @@ pub fn parse_while_statement(tokens: &[Token], start_index: usize) -> ParseResul
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordWhile {
         return Err("Expected 'while' keyword.".into());
     }
-    let mut cursor = start_index + 1;
+    let expr_start = start_index + 1;
+    let mut cursor = expr_start;
     while cursor < tokens.len() && tokens[cursor].lexeme != "{" {
         cursor += 1;
     }
@@ -277,9 +291,10 @@ pub fn parse_while_statement(tokens: &[Token], start_index: usize) -> ParseResul
         return Err("While statement expected '{'.".into());
     }
     let block_end = find_block_end(tokens, cursor)?;
+    let condition = parse_expression_range(tokens, expr_start, cursor)?;
     Ok((
         Statement::WhileLoop {
-            condition: Box::new(Expression::LiteralInt(1)),
+            condition: Box::new(condition),
             body: Box::new(BlockStatement { statements: vec![] }),
         },
         block_end + 1 - start_index,
@@ -321,10 +336,11 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
         }
         cursor += 1;
     }
+    let value = parse_expression_range(tokens, start_index + 2, cursor)?;
     Ok((
         Statement::Assignment {
             target: target_name,
-            value: Box::new(Expression::LiteralInt(0)),
+            value: Box::new(value),
         },
         (cursor - start_index).max(2),
     ))

@@ -215,6 +215,8 @@ impl<'a> Lexer<'a> {
             "allow" => TokenKind::KeywordAllowDrop,
             "on" => TokenKind::KeywordOnError,
             "interrupt" => TokenKind::KeywordOnInterrupt,
+            "and" | "or" | "xor" | "not" => TokenKind::OpLogical,
+            "div" | "mod" => TokenKind::OpArithmetic,
             "true" => TokenKind::TypeBool,
             "false" => TokenKind::TypeBool,
             _ => TokenKind::Identifier,
