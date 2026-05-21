@@ -27,3 +27,26 @@ fn add(a, b) {
     let c = transpile_program_to_c(&program);
     assert!(c.contains("int add(int a, int b)"));
 }
+
+#[test]
+fn codegen_emits_control_flow_and_return() {
+    let src = r#"
+fn f(x) {
+    if x {
+        y = 1
+    } else {
+        y = 2
+    }
+    while y {
+        y = y - 1
+    }
+    return y
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("if (x) {"));
+    assert!(c.contains("while (y) {"));
+    assert!(c.contains("return y;"));
+}

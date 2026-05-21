@@ -64,3 +64,17 @@ on interrupt timer0 {
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
 }
+
+#[test]
+fn semantic_fails_for_undefined_variable_in_return() {
+    let src = r#"
+fn f() {
+    return z
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("Use-before-definition"));
+    assert!(err.contains("z"));
+}

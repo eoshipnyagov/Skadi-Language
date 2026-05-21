@@ -143,12 +143,13 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
         }
         let collection_expr = parse_expression_range(tokens, expr_start, current_index)?;
         let block_end = find_block_end(tokens, current_index)?;
+        let body_statements = parse_statements_range(tokens, current_index + 1, block_end)?;
         current_index = block_end + 1;
         let stmt = Statement::ForLoop {
             initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(loop_var))),
             condition: Some(Box::new(collection_expr)),
             update: None,
-            body: Box::new(BlockStatement { statements: vec![] }),
+            body: Box::new(BlockStatement { statements: body_statements }),
         };
         return Ok((stmt, current_index - start_index));
     }
@@ -185,13 +186,14 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
         return Err("For loop expected '{' to begin body.".into());
     }
     let block_end = find_block_end(tokens, current_index)?;
+    let body_statements = parse_statements_range(tokens, current_index + 1, block_end)?;
     current_index = block_end + 1;
     Ok((
         Statement::ForLoop {
             initialization: None,
             condition: None,
             update: None,
-            body: Box::new(BlockStatement { statements: vec![] }),
+            body: Box::new(BlockStatement { statements: body_statements }),
         },
         current_index - start_index,
     ))
@@ -242,22 +244,28 @@ pub fn parse_if_statement(tokens: &[Token], start_index: usize) -> ParseResult<S
         return Err("If statement expected '{'.".into());
     }
     let then_end = find_block_end(tokens, cursor)?;
+    let then_statements = parse_statements_range(tokens, cursor + 1, then_end)?;
     let mut consumed_to = then_end + 1;
     let mut else_block = None;
 
     if consumed_to < tokens.len() && tokens[consumed_to].kind() == TokenKind::KeywordElse {
         consumed_to += 1;
         if consumed_to < tokens.len() && tokens[consumed_to].kind() == TokenKind::KeywordIf {
-            let (_, else_if_consumed) = parse_if_statement(tokens, consumed_to)?;
+            let (else_if_stmt, else_if_consumed) = parse_if_statement(tokens, consumed_to)?;
             consumed_to += else_if_consumed;
-            else_block = Some(Box::new(BlockStatement { statements: vec![] }));
+            else_block = Some(Box::new(BlockStatement {
+                statements: vec![else_if_stmt],
+            }));
         } else {
             if consumed_to >= tokens.len() || tokens[consumed_to].lexeme != "{" {
                 return Err("Else branch expected '{'.".into());
             }
             let else_end = find_block_end(tokens, consumed_to)?;
+            let else_statements = parse_statements_range(tokens, consumed_to + 1, else_end)?;
             consumed_to = else_end + 1;
-            else_block = Some(Box::new(BlockStatement { statements: vec![] }));
+            else_block = Some(Box::new(BlockStatement {
+                statements: else_statements,
+            }));
         }
     }
 
@@ -265,7 +273,9 @@ pub fn parse_if_statement(tokens: &[Token], start_index: usize) -> ParseResult<S
     Ok((
         Statement::IfStatement {
             condition: Box::new(condition),
-            then_block: Box::new(BlockStatement { statements: vec![] }),
+            then_block: Box::new(BlockStatement {
+                statements: then_statements,
+            }),
             else_block,
         },
         consumed_to - start_index,
@@ -286,10 +296,13 @@ pub fn parse_while_statement(tokens: &[Token], start_index: usize) -> ParseResul
     }
     let block_end = find_block_end(tokens, cursor)?;
     let condition = parse_expression_range(tokens, expr_start, cursor)?;
+    let body_statements = parse_statements_range(tokens, cursor + 1, block_end)?;
     Ok((
         Statement::WhileLoop {
             condition: Box::new(condition),
-            body: Box::new(BlockStatement { statements: vec![] }),
+            body: Box::new(BlockStatement {
+                statements: body_statements,
+            }),
         },
         block_end + 1 - start_index,
     ))
@@ -304,11 +317,40 @@ pub fn parse_loop_statement(tokens: &[Token], start_index: usize) -> ParseResult
         return Err("Loop statement expected '{' after 'loop'.".into());
     }
     let block_end = find_block_end(tokens, open)?;
+    let body_statements = parse_statements_range(tokens, open + 1, block_end)?;
     Ok((
         Statement::LoopStatement {
-            body: Box::new(BlockStatement { statements: vec![] }),
+            body: Box::new(BlockStatement {
+                statements: body_statements,
+            }),
         },
         block_end + 1 - start_index,
+    ))
+}
+
+pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordReturn {
+        return Err("Expected 'return' keyword.".into());
+    }
+
+    let expr_start = start_index + 1;
+    let mut cursor = expr_start;
+    while cursor < tokens.len() {
+        if tokens[cursor].kind() == TokenKind::NewLine || tokens[cursor].lexeme == "}" {
+            break;
+        }
+        cursor += 1;
+    }
+
+    let value = if cursor > expr_start {
+        Some(Box::new(parse_expression_range(tokens, expr_start, cursor)?))
+    } else {
+        None
+    };
+
+    Ok((
+        Statement::ReturnStatement { value },
+        (cursor - start_index).max(1),
     ))
 }
 

@@ -116,6 +116,12 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
             }
             Ok(())
         }
+        Statement::ReturnStatement { value } => {
+            if let Some(expr) = value {
+                analyze_expression(expr, scope)?;
+            }
+            Ok(())
+        }
         Statement::LabelDecl { .. } | Statement::StructDecl { .. } => Ok(()),
     }
 }

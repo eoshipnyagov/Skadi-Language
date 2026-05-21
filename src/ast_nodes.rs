@@ -59,6 +59,7 @@ pub enum Statement {
     LabelDecl { name: String, variants: Vec<String> },
     StructDecl { name: String },
     OnBlock { trigger: String },
+    ReturnStatement { value: Option<Box<Expression>> },
     BlockStatement { statements: Vec<Statement> },
     OnErrorBlock { statements: Vec<Statement> }, // For 'on error' context
 }

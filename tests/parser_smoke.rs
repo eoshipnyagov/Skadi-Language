@@ -129,3 +129,56 @@ danger fn parse_value(input) {
         _ => panic!("expected FunctionDef"),
     }
 }
+
+#[test]
+fn parses_if_and_while_bodies() {
+    let src = r#"
+if x {
+    y = 1
+} else {
+    y = 2
+}
+
+while y {
+    y = y - 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+
+    assert_eq!(program.statements.len(), 2);
+
+    match &program.statements[0] {
+        Statement::IfStatement { then_block, else_block, .. } => {
+            assert_eq!(then_block.statements.len(), 1);
+            assert!(else_block.is_some());
+            let else_block = else_block.as_ref().expect("else block");
+            assert_eq!(else_block.statements.len(), 1);
+        }
+        _ => panic!("expected IfStatement"),
+    }
+
+    match &program.statements[1] {
+        Statement::WhileLoop { body, .. } => {
+            assert_eq!(body.statements.len(), 1);
+        }
+        _ => panic!("expected WhileLoop"),
+    }
+}
+
+#[test]
+fn parses_return_statement_in_function() {
+    let src = r#"
+fn add(a, b) {
+    return a + b
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+
+    let Statement::FunctionDef { body, .. } = &program.statements[0] else {
+        panic!("expected FunctionDef");
+    };
+    assert_eq!(body.statements.len(), 1);
+    assert!(matches!(body.statements[0], Statement::ReturnStatement { .. }));
+}

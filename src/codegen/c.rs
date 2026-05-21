@@ -154,6 +154,15 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
             out.push_str(trigger);
             out.push_str(" TODO(v1): runtime binding */\n");
         }
+        Statement::ReturnStatement { value } => {
+            out.push_str(&pad);
+            out.push_str("return");
+            if let Some(expr) = value {
+                out.push(' ');
+                out.push_str(&emit_expr(expr));
+            }
+            out.push_str(";\n");
+        }
         Statement::WhenBlock { .. } => {
             out.push_str(&pad);
             out.push_str("/* TODO(v1): when lowering */\n");
