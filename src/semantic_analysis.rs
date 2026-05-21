@@ -4,24 +4,37 @@ use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
 
 pub fn semantic_analyze(program: &Program) -> Result<(), String> {
     let mut functions = HashMap::new();
-    let mut labels: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut labels: HashMap<String, Vec<String>> = HashMap::new();
     for stmt in &program.statements {
         if let Statement::FunctionDef { name, is_danger, .. } = stmt {
             functions.insert(name.clone(), *is_danger);
         }
         if let Statement::LabelDecl { name, variants } = stmt {
-            labels.insert(name.clone(), variants.iter().cloned().collect());
+            labels.insert(name.clone(), variants.clone());
         }
     }
+    validate_error_code_label(&labels)?;
     let mut scope = HashSet::new();
     analyze_statements(&program.statements, &mut scope, &functions, &labels, None)
+}
+
+fn validate_error_code_label(labels: &HashMap<String, Vec<String>>) -> Result<(), String> {
+    if let Some(error_codes) = labels.get("ErrorCode") {
+        if error_codes.is_empty() {
+            return Err("label ErrorCode must define at least one variant.".to_string());
+        }
+        if error_codes[0] != "Ok" {
+            return Err("label ErrorCode must start with 'Ok' variant.".to_string());
+        }
+    }
+    Ok(())
 }
 
 fn analyze_statements(
     statements: &[Statement],
     scope: &mut HashSet<String>,
     functions: &HashMap<String, bool>,
-    labels: &HashMap<String, HashSet<String>>,
+    labels: &HashMap<String, Vec<String>>,
     current_fn_is_danger: Option<bool>,
 ) -> Result<(), String> {
     for stmt in statements {
@@ -34,7 +47,7 @@ fn analyze_statement(
     stmt: &Statement,
     scope: &mut HashSet<String>,
     functions: &HashMap<String, bool>,
-    labels: &HashMap<String, HashSet<String>>,
+    labels: &HashMap<String, Vec<String>>,
     current_fn_is_danger: Option<bool>,
 ) -> Result<(), String> {
     match stmt {
@@ -71,7 +84,15 @@ fn analyze_statement(
             for p in params {
                 fn_scope.insert(p.name.clone());
             }
-            analyze_block(body, &mut fn_scope, functions, labels, Some(*functions.get(name).unwrap_or(&false)))
+            let is_danger = *functions.get(name).unwrap_or(&false);
+            analyze_block(body, &mut fn_scope, functions, labels, Some(is_danger))?;
+            if is_danger && !block_guarantees_termination(body) {
+                return Err(format!(
+                    "danger fn '{}' must end with explicit return/return error on all paths.",
+                    name
+                ));
+            }
+            Ok(())
         }
         Statement::IfStatement { condition, then_block, else_block } => {
             analyze_expression(condition, scope)?;
@@ -188,7 +209,7 @@ fn analyze_statement(
             let Some(error_codes) = labels.get("ErrorCode") else {
                 return Err("return error requires label ErrorCode declaration.".to_string());
             };
-            if !error_codes.contains(code) {
+            if !error_codes.iter().any(|v| v == code) {
                 return Err(format!("Unknown ErrorCode variant: '{}'.", code));
             }
             Ok(())
@@ -207,10 +228,40 @@ fn analyze_block(
     block: &Box<BlockStatement>,
     scope: &mut HashSet<String>,
     functions: &HashMap<String, bool>,
-    labels: &HashMap<String, HashSet<String>>,
+    labels: &HashMap<String, Vec<String>>,
     current_fn_is_danger: Option<bool>,
 ) -> Result<(), String> {
     analyze_statements(&block.statements, scope, functions, labels, current_fn_is_danger)
+}
+
+fn block_guarantees_termination(block: &BlockStatement) -> bool {
+    let Some(last) = block.statements.last() else {
+        return false;
+    };
+    statement_guarantees_termination(last)
+}
+
+fn statement_guarantees_termination(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::ReturnStatement { .. } | Statement::ReturnError { .. } => true,
+        Statement::IfStatement {
+            then_block,
+            else_block,
+            ..
+        } => {
+            let Some(else_block) = else_block else {
+                return false;
+            };
+            block_guarantees_termination(then_block) && block_guarantees_termination(else_block)
+        }
+        Statement::BlockStatement { statements } | Statement::OnErrorBlock { statements } => {
+            let Some(last) = statements.last() else {
+                return false;
+            };
+            statement_guarantees_termination(last)
+        }
+        _ => false,
+    }
 }
 
 fn analyze_expression(expr: &Expression, scope: &HashSet<String>) -> Result<(), String> {

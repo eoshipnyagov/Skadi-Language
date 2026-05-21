@@ -149,3 +149,34 @@ danger fn parse_value(Int x) Int {
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("Unknown ErrorCode variant"));
 }
+
+#[test]
+fn semantic_rejects_errorcode_without_ok_first() {
+    let src = r#"
+label ErrorCode {
+    ZeroDivision
+    Ok
+}
+
+danger fn parse_value(Int x) Int {
+    return error ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("must start with 'Ok'"));
+}
+
+#[test]
+fn semantic_rejects_danger_fn_without_explicit_return() {
+    let src = r#"
+danger fn parse_value(Int x) Int {
+    new y = x + 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("must end with explicit return"));
+}
