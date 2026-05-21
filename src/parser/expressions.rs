@@ -98,7 +98,52 @@ impl<'a> ExprParser<'a> {
                 Ok(Expression::LiteralFloat(parsed))
             }
             TokenKind::TypeBool => Ok(Expression::LiteralBool(tok.lexeme == "true")),
-            TokenKind::TypeString | TokenKind::TypeChar | TokenKind::Identifier => {
+            TokenKind::Identifier => {
+                if self.idx < self.end
+                    && self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                    && self.tokens[self.idx].lexeme == "("
+                {
+                    self.idx += 1; // skip '('
+                    let mut args = Vec::new();
+                    if self.idx < self.end
+                        && self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                        && self.tokens[self.idx].lexeme == ")"
+                    {
+                        self.idx += 1;
+                        return Ok(Expression::Call {
+                            name: tok.lexeme.clone(),
+                            args,
+                        });
+                    }
+                    loop {
+                        let arg = self.parse_bp(0)?;
+                        args.push(arg);
+                        if self.idx >= self.end {
+                            return Err("Expected ')' to close function call.".into());
+                        }
+                        if self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                            && self.tokens[self.idx].lexeme == ","
+                        {
+                            self.idx += 1;
+                            continue;
+                        }
+                        if self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                            && self.tokens[self.idx].lexeme == ")"
+                        {
+                            self.idx += 1;
+                            break;
+                        }
+                        return Err("Expected ',' or ')' in argument list.".into());
+                    }
+                    Ok(Expression::Call {
+                        name: tok.lexeme.clone(),
+                        args,
+                    })
+                } else {
+                    Ok(Expression::VariableReference(tok.lexeme.clone()))
+                }
+            }
+            TokenKind::TypeString | TokenKind::TypeChar => {
                 Ok(Expression::VariableReference(tok.lexeme.clone()))
             }
             _ => Err(format!(

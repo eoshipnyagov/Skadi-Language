@@ -123,3 +123,19 @@ danger fn parse_value(Int x) Int {
     assert!(c.contains("ErrorCode_ZeroDivision = 1"));
     assert!(c.contains("return ErrorCode_ZeroDivision;"));
 }
+
+#[test]
+fn codegen_emits_regular_call_expression() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+new Int x = 1
+new Int y = add(x, 2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int64_t y = add(x, 2);"));
+}

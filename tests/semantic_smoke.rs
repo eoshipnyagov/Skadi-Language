@@ -242,3 +242,18 @@ x = parse_value(x) on error {
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("Argument type mismatch"));
 }
+
+#[test]
+fn semantic_rejects_regular_call_arg_count_mismatch() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+new Int x = 1
+new Int y = add(x)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("Argument count mismatch"));
+}

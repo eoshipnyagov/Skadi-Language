@@ -251,3 +251,21 @@ danger fn parse_value(Int x) Int {
     };
     assert!(matches!(body.statements[0], Statement::ReturnError { .. }));
 }
+
+#[test]
+fn parses_call_expression_in_declaration() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+new Int x = 1
+new Int y = add(x, 2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 3);
+    let Statement::VarDecl { value, .. } = &program.statements[2] else {
+        panic!("expected VarDecl");
+    };
+    assert!(matches!(**value, Expression::Call { .. }));
+}

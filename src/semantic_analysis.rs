@@ -81,6 +81,33 @@ fn can_assign(target: ValueType, source: ValueType) -> bool {
     target == source || (target == ValueType::Float && source == ValueType::Int)
 }
 
+fn validate_call_args(
+    name: &str,
+    args: &[Expression],
+    sig: &FunctionSig,
+    scope: &HashMap<String, ValueType>,
+    functions: &HashMap<String, FunctionSig>,
+) -> Result<(), String> {
+    if args.len() != sig.param_types.len() {
+        return Err(format!(
+            "Argument count mismatch for '{}': expected {}, got {}.",
+            name,
+            sig.param_types.len(),
+            args.len()
+        ));
+    }
+    for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().copied()) {
+        let actual_ty = infer_expression_type(arg, scope, functions)?;
+        if !can_assign(expected_ty, actual_ty) {
+            return Err(format!(
+                "Argument type mismatch for '{}': expected {:?}, got {:?}.",
+                name, expected_ty, actual_ty
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn analyze_statements(
     statements: &[Statement],
     scope: &mut HashMap<String, ValueType>,
@@ -120,7 +147,7 @@ fn analyze_statement(
                     name
                 ));
             }
-            let value_ty = infer_expression_type(value, scope)?;
+            let value_ty = infer_expression_type(value, scope, functions)?;
             let final_ty = if let Some(tn) = declared_type {
                 let declared = parse_type_name(tn);
                 if !can_assign(declared, value_ty) {
@@ -143,7 +170,7 @@ fn analyze_statement(
                     target
                 ));
             };
-            let value_ty = infer_expression_type(value, scope)?;
+            let value_ty = infer_expression_type(value, scope, functions)?;
             if !can_assign(target_ty, value_ty) {
                 return Err(format!(
                     "Type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
@@ -181,7 +208,7 @@ fn analyze_statement(
             then_block,
             else_block,
         } => {
-            let cty = infer_expression_type(condition, scope)?;
+            let cty = infer_expression_type(condition, scope, functions)?;
             if cty != ValueType::Bool {
                 return Err("if condition must be bool.".to_string());
             }
@@ -204,14 +231,14 @@ fn analyze_statement(
                 if let Expression::VariableReference(name) = init.as_ref() {
                     loop_scope.insert(name.clone(), ValueType::Unknown);
                 } else {
-                    let _ = infer_expression_type(init, &loop_scope)?;
+                    let _ = infer_expression_type(init, &loop_scope, functions)?;
                 }
             }
             if let Some(cond) = condition {
-                let _ = infer_expression_type(cond, &loop_scope)?;
+                let _ = infer_expression_type(cond, &loop_scope, functions)?;
             }
             if let Some(upd) = update {
-                let _ = infer_expression_type(upd, &loop_scope)?;
+                let _ = infer_expression_type(upd, &loop_scope, functions)?;
             }
             analyze_block(body, &mut loop_scope, functions, labels, fn_ctx)
         }
@@ -220,10 +247,10 @@ fn analyze_statement(
             cases,
             else_block,
         } => {
-            let _ = infer_expression_type(when_expression, scope)?;
+            let _ = infer_expression_type(when_expression, scope, functions)?;
             for (case_exprs, block) in cases {
                 for expr in case_exprs {
-                    let _ = infer_expression_type(expr, scope)?;
+                    let _ = infer_expression_type(expr, scope, functions)?;
                 }
                 let mut case_scope = scope.clone();
                 analyze_block(block, &mut case_scope, functions, labels, fn_ctx)?;
@@ -235,7 +262,7 @@ fn analyze_statement(
             Ok(())
         }
         Statement::WhileLoop { condition, body } => {
-            let cty = infer_expression_type(condition, scope)?;
+            let cty = infer_expression_type(condition, scope, functions)?;
             if cty != ValueType::Bool {
                 return Err("while condition must be bool.".to_string());
             }
@@ -280,23 +307,7 @@ fn analyze_statement(
                     target
                 ));
             }
-            if args.len() != sig.param_types.len() {
-                return Err(format!(
-                    "Argument count mismatch for '{}': expected {}, got {}.",
-                    call_name,
-                    sig.param_types.len(),
-                    args.len()
-                ));
-            }
-            for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().copied()) {
-                let actual_ty = infer_expression_type(arg, scope)?;
-                if !can_assign(expected_ty, actual_ty) {
-                    return Err(format!(
-                        "Argument type mismatch for '{}': expected {:?}, got {:?}.",
-                        call_name, expected_ty, actual_ty
-                    ));
-                }
-            }
+            validate_call_args(call_name, args, sig, scope, functions)?;
             let mut on_error_scope = scope.clone();
             analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
         }
@@ -314,23 +325,7 @@ fn analyze_statement(
                     call_name
                 ));
             }
-            if args.len() != sig.param_types.len() {
-                return Err(format!(
-                    "Argument count mismatch for '{}': expected {}, got {}.",
-                    call_name,
-                    sig.param_types.len(),
-                    args.len()
-                ));
-            }
-            for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().copied()) {
-                let actual_ty = infer_expression_type(arg, scope)?;
-                if !can_assign(expected_ty, actual_ty) {
-                    return Err(format!(
-                        "Argument type mismatch for '{}': expected {:?}, got {:?}.",
-                        call_name, expected_ty, actual_ty
-                    ));
-                }
-            }
+            validate_call_args(call_name, args, sig, scope, functions)?;
             let mut on_error_scope = scope.clone();
             analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
         }
@@ -349,7 +344,7 @@ fn analyze_statement(
         Statement::ReturnStatement { value } => {
             if let Some(ctx) = fn_ctx {
                 if let Some(expr) = value {
-                    let actual = infer_expression_type(expr, scope)?;
+                    let actual = infer_expression_type(expr, scope, functions)?;
                     if let Some(expected) = ctx.return_type {
                         if !can_assign(expected, actual) {
                             return Err(format!(
@@ -362,7 +357,7 @@ fn analyze_statement(
                     return Err("Non-danger function with return type must return a value.".to_string());
                 }
             } else if let Some(expr) = value {
-                let _ = infer_expression_type(expr, scope)?;
+                let _ = infer_expression_type(expr, scope, functions)?;
             }
             Ok(())
         }
@@ -391,6 +386,7 @@ fn param_type_or_default(param: &FunctionParam) -> ValueType {
 fn infer_expression_type(
     expr: &Expression,
     scope: &HashMap<String, ValueType>,
+    functions: &HashMap<String, FunctionSig>,
 ) -> Result<ValueType, String> {
     match expr {
         Expression::LiteralInt(_) => Ok(ValueType::Int),
@@ -400,24 +396,31 @@ fn infer_expression_type(
             .get(name)
             .copied()
             .ok_or_else(|| format!("Use-before-definition: '{}' is not defined in current scope.", name)),
+        Expression::Call { name, args } => {
+            let Some(sig) = functions.get(name) else {
+                return Err(format!("Unknown function '{}' in expression call.", name));
+            };
+            validate_call_args(name, args, sig, scope, functions)?;
+            Ok(sig.return_type.unwrap_or(ValueType::Unknown))
+        }
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {
-                let lt = infer_expression_type(left, scope)?;
+                let lt = infer_expression_type(left, scope, functions)?;
                 if lt == ValueType::Int || lt == ValueType::Float {
                     return Ok(lt);
                 }
                 return Err("Unary '-' requires numeric operand.".to_string());
             }
             if op == "not" {
-                let lt = infer_expression_type(left, scope)?;
+                let lt = infer_expression_type(left, scope, functions)?;
                 if lt == ValueType::Bool || lt == ValueType::Int {
                     return Ok(ValueType::Bool);
                 }
                 return Err("Unary 'not' requires bool/int operand.".to_string());
             }
-            let lt = infer_expression_type(left, scope)?;
+            let lt = infer_expression_type(left, scope, functions)?;
             let rt = if let Some(r) = right {
-                infer_expression_type(r, scope)?
+                infer_expression_type(r, scope, functions)?
             } else {
                 ValueType::Unknown
             };
@@ -450,7 +453,7 @@ fn infer_expression_type(
         }
         Expression::StructConstruction { fields } => {
             for value in fields.values() {
-                let _ = infer_expression_type(value, scope)?;
+                let _ = infer_expression_type(value, scope, functions)?;
             }
             Ok(ValueType::Unknown)
         }
@@ -500,6 +503,7 @@ fn contains_variable(expr: &Expression, name: &str) -> bool {
         Expression::StructConstruction { fields } => {
             fields.values().any(|v| contains_variable(v, name))
         }
+        Expression::Call { args, .. } => args.iter().any(|a| contains_variable(a, name)),
         _ => false,
     }
 }
