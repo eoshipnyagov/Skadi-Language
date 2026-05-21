@@ -82,13 +82,17 @@ fn f() {
 #[test]
 fn semantic_allows_danger_on_error_assignment_for_defined_target() {
     let src = r#"
-danger fn parse_value(Int x) Int {
-    return x
+danger fn parse_value(bool x) Int {
+    if x {
+        return 1
+    } else {
+        return 0
+    }
 }
 
-new x = 0
+new bool x = true
 x = parse_value(x) on error {
-    x = 1
+    x = false
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
@@ -99,11 +103,15 @@ x = parse_value(x) on error {
 #[test]
 fn semantic_rejects_on_error_for_non_danger_function() {
     let src = r#"
-fn parse_value(Int x) Int {
-    return x
+fn parse_value(bool x) Int {
+    if x {
+        return 1
+    } else {
+        return 0
+    }
 }
 
-new x = 0
+new bool x = true
 x = parse_value(x) on error {
     x = 1
 }
@@ -123,7 +131,7 @@ label ErrorCode {
     ZeroDivision
 }
 
-danger fn parse_value(Int x) Int {
+danger fn parse_value(bool x) Int {
     return error ZeroDivision
 }
 "#;
@@ -140,7 +148,7 @@ label ErrorCode {
     ZeroDivision
 }
 
-danger fn parse_value(Int x) Int {
+danger fn parse_value(bool x) Int {
     return error InvalidFormat
 }
 "#;
@@ -158,7 +166,7 @@ label ErrorCode {
     Ok
 }
 
-danger fn parse_value(Int x) Int {
+danger fn parse_value(bool x) Int {
     return error ZeroDivision
 }
 "#;
@@ -171,8 +179,10 @@ danger fn parse_value(Int x) Int {
 #[test]
 fn semantic_rejects_danger_fn_without_explicit_return() {
     let src = r#"
-danger fn parse_value(Int x) Int {
-    new y = x + 1
+danger fn parse_value(bool x) Int {
+    if x {
+        return 1
+    }
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
@@ -196,4 +206,39 @@ fn semantic_allows_int_to_float_widening() {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_non_bool_if_condition() {
+    let src = r#"
+new Int x = 1
+if x {
+    x = 2
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("if condition must be bool"));
+}
+
+#[test]
+fn semantic_rejects_danger_on_error_arg_type_mismatch() {
+    let src = r#"
+danger fn parse_value(bool x) Int {
+    if x {
+        return 1
+    } else {
+        return 0
+    }
+}
+new Int x = 1
+x = parse_value(x) on error {
+    x = 0
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("Argument type mismatch"));
 }

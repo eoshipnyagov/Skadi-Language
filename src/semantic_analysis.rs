@@ -14,6 +14,7 @@ enum ValueType {
 struct FunctionSig {
     is_danger: bool,
     return_type: Option<ValueType>,
+    param_types: Vec<ValueType>,
 }
 
 #[derive(Clone, Copy)]
@@ -31,6 +32,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             name,
             is_danger,
             returns,
+            params,
             ..
         } = stmt
         {
@@ -39,6 +41,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 FunctionSig {
                     is_danger: *is_danger,
                     return_type: returns.as_deref().map(parse_type_name).or(Some(ValueType::Int)),
+                    param_types: params.iter().map(param_type_or_default).collect(),
                 },
             );
         }
@@ -179,8 +182,8 @@ fn analyze_statement(
             else_block,
         } => {
             let cty = infer_expression_type(condition, scope)?;
-            if cty != ValueType::Bool && cty != ValueType::Int {
-                return Err("if condition must be bool/int-compatible.".to_string());
+            if cty != ValueType::Bool {
+                return Err("if condition must be bool.".to_string());
             }
             let mut then_scope = scope.clone();
             analyze_block(then_block, &mut then_scope, functions, labels, fn_ctx)?;
@@ -233,8 +236,8 @@ fn analyze_statement(
         }
         Statement::WhileLoop { condition, body } => {
             let cty = infer_expression_type(condition, scope)?;
-            if cty != ValueType::Bool && cty != ValueType::Int {
-                return Err("while condition must be bool/int-compatible.".to_string());
+            if cty != ValueType::Bool {
+                return Err("while condition must be bool.".to_string());
             }
             let mut while_scope = scope.clone();
             analyze_block(body, &mut while_scope, functions, labels, fn_ctx)
@@ -277,8 +280,22 @@ fn analyze_statement(
                     target
                 ));
             }
-            for arg in args {
-                let _ = infer_expression_type(arg, scope)?;
+            if args.len() != sig.param_types.len() {
+                return Err(format!(
+                    "Argument count mismatch for '{}': expected {}, got {}.",
+                    call_name,
+                    sig.param_types.len(),
+                    args.len()
+                ));
+            }
+            for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().copied()) {
+                let actual_ty = infer_expression_type(arg, scope)?;
+                if !can_assign(expected_ty, actual_ty) {
+                    return Err(format!(
+                        "Argument type mismatch for '{}': expected {:?}, got {:?}.",
+                        call_name, expected_ty, actual_ty
+                    ));
+                }
             }
             let mut on_error_scope = scope.clone();
             analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
@@ -297,8 +314,22 @@ fn analyze_statement(
                     call_name
                 ));
             }
-            for arg in args {
-                let _ = infer_expression_type(arg, scope)?;
+            if args.len() != sig.param_types.len() {
+                return Err(format!(
+                    "Argument count mismatch for '{}': expected {}, got {}.",
+                    call_name,
+                    sig.param_types.len(),
+                    args.len()
+                ));
+            }
+            for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().copied()) {
+                let actual_ty = infer_expression_type(arg, scope)?;
+                if !can_assign(expected_ty, actual_ty) {
+                    return Err(format!(
+                        "Argument type mismatch for '{}': expected {:?}, got {:?}.",
+                        call_name, expected_ty, actual_ty
+                    ));
+                }
             }
             let mut on_error_scope = scope.clone();
             analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
