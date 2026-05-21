@@ -52,42 +52,14 @@ impl<'a> Lexer<'a> {
         self.current_pos < self.chars.len()
     }
 
-    /// Peek ahead N positions.
-    fn peek_at(&self, offset: usize) -> Option<char> {
-        self.chars.get(self.current_pos + offset).copied()
-    }
-
     /// Check if the remaining source starts with the given string.
     fn starts_with(&self, s: &str) -> bool {
         let rem: String = self.chars[self.current_pos..].iter().collect();
         rem.starts_with(s)
     }
 
-    /// Check if the remaining source starts with any of the given strings.
-    fn starts_with_any<'b>(&self, prefixes: &'b [&'b str]) -> Option<&'b str> {
-        for &p in prefixes {
-            if self.starts_with(p) {
-                return Some(p);
-            }
-        }
-        None
-    }
-
     fn lexeme_from_range(&self, start: usize, end: usize) -> String {
         self.chars[start..end].iter().collect()
-    }
-
-    /// Skip whitespace and newlines (but record newlines).
-    fn skip_whitespace_and_newlines(&mut self) {
-        while let Some(c) = self.peek() {
-            if c == '\n' || c == '\r' || c == '\t' {
-                self.advance();
-            } else if c.is_whitespace() {
-                self.advance();
-            } else {
-                break;
-            }
-        }
     }
 
     /// Consume a line comment (// ...).
@@ -168,25 +140,6 @@ impl<'a> Lexer<'a> {
             } else {
                 break;
             }
-        }
-        self.lexeme_from_range(start, self.current_pos)
-    }
-
-    /// Consume a single char literal 'c'.
-    fn scan_char_literal(&mut self) -> String {
-        let start = self.current_pos;
-        assert_eq!(self.peek(), Some('\''));
-        self.advance(); // skip opening quote
-        if let Some(c) = self.peek() {
-            self.advance();
-            if c == '\\' {
-                if let Some(_ec) = self.peek() {
-                    self.advance();
-                }
-            }
-        }
-        if self.peek() == Some('\'') {
-            self.advance(); // skip closing quote
         }
         self.lexeme_from_range(start, self.current_pos)
     }

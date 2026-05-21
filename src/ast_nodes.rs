@@ -91,13 +91,6 @@ pub enum Expression {
     StructConstruction { fields: HashMap<String, Box<Expression>> }, // e.g., WeatherData { temperature = ... }
 }
 
-impl Expression {
-    fn is_struct(&self) -> bool {
-        matches!(self, Expression::StructConstruction { .. })
-    }
-}
-
-
 // --- Scope Management (Symbol Table Implementation) ---
 #[derive(Debug)]
 pub struct ScopeManager {
