@@ -247,10 +247,16 @@ fn analyze_statement(
             cases,
             else_block,
         } => {
-            let _ = infer_expression_type(when_expression, scope, functions)?;
+            let when_ty = infer_expression_type(when_expression, scope, functions)?;
             for (case_exprs, block) in cases {
                 for expr in case_exprs {
-                    let _ = infer_expression_type(expr, scope, functions)?;
+                    let case_ty = infer_expression_type(expr, scope, functions)?;
+                    if !can_assign(when_ty, case_ty) && !can_assign(case_ty, when_ty) {
+                        return Err(format!(
+                            "Type mismatch in when-case: case type {:?} incompatible with when type {:?}.",
+                            case_ty, when_ty
+                        ));
+                    }
                 }
                 let mut case_scope = scope.clone();
                 analyze_block(block, &mut case_scope, functions, labels, fn_ctx)?;

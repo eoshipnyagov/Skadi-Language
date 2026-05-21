@@ -257,3 +257,19 @@ new Int y = add(x)
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("Argument count mismatch"));
 }
+
+#[test]
+fn semantic_rejects_when_case_type_mismatch() {
+    let src = r#"
+new Int x = 1
+when x {
+    is true {
+        x = 2
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("Type mismatch in when-case"));
+}

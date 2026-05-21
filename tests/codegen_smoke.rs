@@ -160,8 +160,9 @@ when x {
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("if ((x == 1)) {"));
-    assert!(c.contains("else if ((x == 2) || (x == 3)) {"));
+    assert!(c.contains("int64_t __when_tmp_1 = x;"));
+    assert!(c.contains("if ((__when_tmp_1 == 1)) {"));
+    assert!(c.contains("else if ((__when_tmp_1 == 2) || (__when_tmp_1 == 3)) {"));
     assert!(c.contains("else {"));
 }
 

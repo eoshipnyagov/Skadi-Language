@@ -368,6 +368,13 @@ fn emit_statement(
                 return;
             }
             let when_expr = emit_expr(when_expression);
+            let when_tmp = format!("__when_tmp_{}", indent);
+            out.push_str(&pad);
+            out.push_str("int64_t ");
+            out.push_str(&when_tmp);
+            out.push_str(" = ");
+            out.push_str(&when_expr);
+            out.push_str(";\n");
             for (idx, (case_exprs, case_block)) in cases.iter().enumerate() {
                 out.push_str(&pad);
                 if idx == 0 {
@@ -383,7 +390,7 @@ fn emit_statement(
                             out.push_str(" || ");
                         }
                         out.push('(');
-                        out.push_str(&when_expr);
+                        out.push_str(&when_tmp);
                         out.push_str(" == ");
                         out.push_str(&emit_expr(expr));
                         out.push(')');
