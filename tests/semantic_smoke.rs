@@ -4,7 +4,7 @@ use v01::semantic_analysis::semantic_analyze;
 
 #[test]
 fn semantic_passes_for_defined_variables() {
-    let src = "a = 1\nb = a + 2\n";
+    let src = "new a = 1\nnew b = a + 2\nb = b + 1\n";
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
@@ -12,17 +12,17 @@ fn semantic_passes_for_defined_variables() {
 
 #[test]
 fn semantic_fails_for_use_before_definition() {
-    let src = "b = a + 2\na = 1\n";
+    let src = "b = a + 2\nnew a = 1\n";
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("Use-before-definition"));
-    assert!(err.contains("a"));
+    assert!(err.contains("b"));
 }
 
 #[test]
 fn semantic_fails_for_redeclaration_in_same_scope() {
-    let src = "a = 1\na = 2\n";
+    let src = "new a = 1\nnew a = 2\n";
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
@@ -32,7 +32,7 @@ fn semantic_fails_for_redeclaration_in_same_scope() {
 
 #[test]
 fn semantic_fails_for_self_reference_on_initialization() {
-    let src = "x = x + 1\n";
+    let src = "new x = x + 1\n";
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
@@ -44,7 +44,7 @@ fn semantic_fails_for_self_reference_on_initialization() {
 fn semantic_fails_for_on_error_without_danger_call_binding() {
     let src = r#"
 on error {
-    x = 1
+    new x = 1
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
@@ -57,7 +57,7 @@ on error {
 fn semantic_allows_on_interrupt_block() {
     let src = r#"
 on interrupt timer0 {
-    x = 1
+    new x = 1
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");

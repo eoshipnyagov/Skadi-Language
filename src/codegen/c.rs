@@ -57,20 +57,11 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
     match stmt {
         Statement::Assignment { target, value } => {
             let expr = emit_expr(value);
-            if declared.insert(target.clone()) {
-                out.push_str(&pad);
-                out.push_str("int ");
-                out.push_str(target);
-                out.push_str(" = ");
-                out.push_str(&expr);
-                out.push_str(";\n");
-            } else {
-                out.push_str(&pad);
-                out.push_str(target);
-                out.push_str(" = ");
-                out.push_str(&expr);
-                out.push_str(";\n");
-            }
+            out.push_str(&pad);
+            out.push_str(target);
+            out.push_str(" = ");
+            out.push_str(&expr);
+            out.push_str(";\n");
         }
         Statement::IfStatement { condition, then_block, else_block } => {
             out.push_str(&pad);

@@ -17,25 +17,30 @@ fn analyze_statements(statements: &[Statement], scope: &mut HashSet<String>) -> 
 fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<(), String> {
     match stmt {
         Statement::VarDecl { name, value, .. } => {
+            if scope.contains(name) {
+                return Err(format!(
+                    "Redeclaration in same scope: '{}' is already defined.",
+                    name
+                ));
+            }
+            if contains_variable(value, name) {
+                return Err(format!(
+                    "Invalid initialization: '{}' is used in its own initializing expression.",
+                    name
+                ));
+            }
             analyze_expression(value, scope)?;
             scope.insert(name.clone());
             Ok(())
         }
         Statement::Assignment { target, value } => {
-            if !scope.contains(target) && contains_variable(value, target) {
+            if !scope.contains(target) {
                 return Err(format!(
-                    "Invalid initialization: '{}' is used in its own initializing expression.",
+                    "Use-before-definition: '{}' is not defined in current scope.",
                     target
                 ));
             }
             analyze_expression(value, scope)?;
-            if scope.contains(target) {
-                return Err(format!(
-                    "Redeclaration in same scope: '{}' is already defined.",
-                    target
-                ));
-            }
-            scope.insert(target.clone());
             Ok(())
         }
         Statement::FunctionDef { name, params, body, .. } => {

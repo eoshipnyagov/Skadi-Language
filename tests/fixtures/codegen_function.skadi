@@ -1,4 +1,4 @@
 fn add(a, b) {
-    c = a + b
+    new c = a + b
 }
-x = 3
+new x = 3

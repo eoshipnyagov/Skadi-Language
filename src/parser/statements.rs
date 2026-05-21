@@ -382,6 +382,40 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
     ))
 }
 
+pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordNew {
+        return Err("Expected 'new' keyword.".into());
+    }
+    if start_index + 2 >= tokens.len() {
+        return Err("Incomplete variable declaration after 'new'.".into());
+    }
+    if tokens[start_index + 1].kind() != TokenKind::Identifier {
+        return Err("Variable declaration expected identifier after 'new'.".into());
+    }
+    if tokens[start_index + 2].kind() != TokenKind::OpAssignment {
+        return Err("Variable declaration expected '=' after identifier.".into());
+    }
+
+    let name = tokens[start_index + 1].lexeme.clone();
+    let expr_start = start_index + 3;
+    let mut cursor = expr_start;
+    while cursor < tokens.len() {
+        if tokens[cursor].kind() == TokenKind::NewLine || tokens[cursor].lexeme == "}" {
+            break;
+        }
+        cursor += 1;
+    }
+    let value = parse_expression_range(tokens, expr_start, cursor)?;
+    Ok((
+        Statement::VarDecl {
+            name,
+            value: Box::new(value),
+            is_fixed: false,
+        },
+        (cursor - start_index).max(3),
+    ))
+}
+
 pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordLabel {
         return Err("Expected 'label' keyword.".into());

@@ -49,12 +49,12 @@ on interrupt timer0 {
 
 #[test]
 fn parses_operator_precedence_in_assignment() {
-    let src = "x = 1 + 2 * 3\n";
+    let src = "new x = 1 + 2 * 3\n";
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 1);
 
-    let Statement::Assignment { value, .. } = &program.statements[0] else {
+    let Statement::VarDecl { value, .. } = &program.statements[0] else {
         panic!("expected Assignment");
     };
 
@@ -75,10 +75,10 @@ fn parses_operator_precedence_in_assignment() {
 
 #[test]
 fn parses_word_logical_operators_precedence() {
-    let src = "x = a and b or c\n";
+    let src = "new x = a and b or c\n";
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    let Statement::Assignment { value, .. } = &program.statements[0] else {
+    let Statement::VarDecl { value, .. } = &program.statements[0] else {
         panic!("expected Assignment");
     };
     let Expression::BinaryOp { op, left, right } = &**value else {
@@ -115,7 +115,7 @@ for item in items {
 fn parses_danger_function_declaration() {
     let src = r#"
 danger fn parse_value(input) {
-    x = input
+    new x = input
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
@@ -134,7 +134,7 @@ danger fn parse_value(input) {
 fn parses_if_and_while_bodies() {
     let src = r#"
 if x {
-    y = 1
+    new y = 1
 } else {
     y = 2
 }
