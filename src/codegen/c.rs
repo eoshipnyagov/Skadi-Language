@@ -29,19 +29,28 @@ pub fn transpile_program_to_c(program: &Program) -> String {
 }
 
 fn emit_function(stmt: &Statement, out: &mut String) {
-    if let Statement::FunctionDef { name, params, body, .. } = stmt {
-        out.push_str("int ");
+    if let Statement::FunctionDef {
+        name,
+        params,
+        body,
+        returns,
+        ..
+    } = stmt
+    {
+        out.push_str(map_skadi_type_to_c(returns.as_deref()));
+        out.push(' ');
         out.push_str(name);
         out.push('(');
         for (i, p) in params.iter().enumerate() {
             if i > 0 {
                 out.push_str(", ");
             }
-            out.push_str("int ");
-            out.push_str(p);
+            out.push_str(map_skadi_type_to_c(p.param_type.as_deref()));
+            out.push(' ');
+            out.push_str(&p.name);
         }
         out.push_str(") {\n");
-        let mut declared: HashSet<String> = params.iter().cloned().collect();
+        let mut declared: HashSet<String> = params.iter().map(|p| p.name.clone()).collect();
         emit_block(body, out, 1, &mut declared);
         out.push_str("    return 0;\n");
         out.push_str("}\n");

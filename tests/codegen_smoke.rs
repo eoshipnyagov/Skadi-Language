@@ -17,7 +17,7 @@ fn codegen_emits_main_and_assignment() {
 #[test]
 fn codegen_emits_function_signature() {
     let src = r#"
-fn add(a, b) {
+fn add(Int a, Int b) Int {
     new c = a + b
 }
 "#;
@@ -25,7 +25,7 @@ fn add(a, b) {
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int add(int a, int b)"));
+    assert!(c.contains("int64_t add(int64_t a, int64_t b)"));
 }
 
 #[test]

@@ -194,3 +194,23 @@ fn parses_typed_new_declaration() {
     assert_eq!(name, "t");
     assert_eq!(declared_type.as_deref(), Some("Float"));
 }
+
+#[test]
+fn parses_typed_function_signature() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::FunctionDef { params, returns, .. } = &program.statements[0] else {
+        panic!("expected FunctionDef");
+    };
+    assert_eq!(params.len(), 2);
+    assert_eq!(params[0].param_type.as_deref(), Some("Int"));
+    assert_eq!(params[0].name, "a");
+    assert_eq!(params[1].param_type.as_deref(), Some("Int"));
+    assert_eq!(params[1].name, "b");
+    assert_eq!(returns.as_deref(), Some("Int"));
+}

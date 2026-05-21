@@ -32,12 +32,18 @@ impl Program {
 
 /// A general container for all top-level executable structures (Function definitions, etc.)
 #[derive(Debug)]
+pub struct FunctionParam {
+    pub name: String,
+    pub param_type: Option<String>,
+}
+
+#[derive(Debug)]
 pub enum Statement {
     VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String> },
     Assignment { target: String, value: Box<Expression> },
     FunctionDef { 
         name: String, 
-        params: Vec<String>, 
+        params: Vec<FunctionParam>, 
         body: Box<BlockStatement>, 
         returns: Option<String>, // Type of return
         is_danger: bool 

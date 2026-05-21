@@ -2,7 +2,7 @@
 // Parser Logic Helpers (Rust)
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
-use crate::ast_nodes::{BlockStatement, ScopeManager, Statement};
+use crate::ast_nodes::{BlockStatement, FunctionParam, ScopeManager, Statement};
 use crate::common_types::{Token, TokenKind};
 
 use super::expressions::parse_expression_range;
@@ -78,8 +78,30 @@ pub fn parse_function_declaration(
         current_index += 1;
     } else {
         while current_index < tokens.len() && tokens[current_index].lexeme != ")" {
+            if tokens[current_index].kind() == TokenKind::OpPunctuation
+                && tokens[current_index].lexeme == ","
+            {
+                current_index += 1;
+                continue;
+            }
+
+            if current_index + 1 < tokens.len()
+                && tokens[current_index].kind() == TokenKind::Identifier
+                && tokens[current_index + 1].kind() == TokenKind::Identifier
+            {
+                params.push(FunctionParam {
+                    param_type: Some(tokens[current_index].lexeme.clone()),
+                    name: tokens[current_index + 1].lexeme.clone(),
+                });
+                current_index += 2;
+                continue;
+            }
+
             if tokens[current_index].kind() == TokenKind::Identifier {
-                params.push(tokens[current_index].lexeme.clone());
+                params.push(FunctionParam {
+                    param_type: None,
+                    name: tokens[current_index].lexeme.clone(),
+                });
             }
             current_index += 1;
         }
@@ -90,7 +112,15 @@ pub fn parse_function_declaration(
         }
     }
 
-    let returns = None;
+    let mut returns = None;
+    if current_index < tokens.len()
+        && tokens[current_index].kind() == TokenKind::Identifier
+        && current_index + 1 < tokens.len()
+        && tokens[current_index + 1].lexeme == "{"
+    {
+        returns = Some(tokens[current_index].lexeme.clone());
+        current_index += 1;
+    }
 
     if current_index >= tokens.len()
         || tokens[current_index].kind() != TokenKind::OpPunctuation

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-int add(int a, int b) {
+int64_t add(int64_t a, int64_t b) {
     int64_t c = (a + b);
     return 0;
 }

@@ -47,7 +47,7 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
             scope.insert(name.clone());
             let mut fn_scope = scope.clone();
             for p in params {
-                fn_scope.insert(p.clone());
+                fn_scope.insert(p.name.clone());
             }
             analyze_block(body, &mut fn_scope)
         }
