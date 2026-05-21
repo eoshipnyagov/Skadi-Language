@@ -76,6 +76,7 @@ pub enum Statement {
         args: Vec<Expression>,
         on_error: Box<BlockStatement>,
     },
+    ReturnError { code: String },
     ReturnStatement { value: Option<Box<Expression>> },
     BlockStatement { statements: Vec<Statement> },
     OnErrorBlock { statements: Vec<Statement> }, // For 'on error' context

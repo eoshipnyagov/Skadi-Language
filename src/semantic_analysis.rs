@@ -4,22 +4,28 @@ use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
 
 pub fn semantic_analyze(program: &Program) -> Result<(), String> {
     let mut functions = HashMap::new();
+    let mut labels: HashMap<String, HashSet<String>> = HashMap::new();
     for stmt in &program.statements {
         if let Statement::FunctionDef { name, is_danger, .. } = stmt {
             functions.insert(name.clone(), *is_danger);
         }
+        if let Statement::LabelDecl { name, variants } = stmt {
+            labels.insert(name.clone(), variants.iter().cloned().collect());
+        }
     }
     let mut scope = HashSet::new();
-    analyze_statements(&program.statements, &mut scope, &functions)
+    analyze_statements(&program.statements, &mut scope, &functions, &labels, None)
 }
 
 fn analyze_statements(
     statements: &[Statement],
     scope: &mut HashSet<String>,
     functions: &HashMap<String, bool>,
+    labels: &HashMap<String, HashSet<String>>,
+    current_fn_is_danger: Option<bool>,
 ) -> Result<(), String> {
     for stmt in statements {
-        analyze_statement(stmt, scope, functions)?;
+        analyze_statement(stmt, scope, functions, labels, current_fn_is_danger)?;
     }
     Ok(())
 }
@@ -28,6 +34,8 @@ fn analyze_statement(
     stmt: &Statement,
     scope: &mut HashSet<String>,
     functions: &HashMap<String, bool>,
+    labels: &HashMap<String, HashSet<String>>,
+    current_fn_is_danger: Option<bool>,
 ) -> Result<(), String> {
     match stmt {
         Statement::VarDecl { name, value, .. } => {
@@ -63,15 +71,15 @@ fn analyze_statement(
             for p in params {
                 fn_scope.insert(p.name.clone());
             }
-            analyze_block(body, &mut fn_scope, functions)
+            analyze_block(body, &mut fn_scope, functions, labels, Some(*functions.get(name).unwrap_or(&false)))
         }
         Statement::IfStatement { condition, then_block, else_block } => {
             analyze_expression(condition, scope)?;
             let mut then_scope = scope.clone();
-            analyze_block(then_block, &mut then_scope, functions)?;
+            analyze_block(then_block, &mut then_scope, functions, labels, current_fn_is_danger)?;
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions)?;
+                analyze_block(else_block, &mut else_scope, functions, labels, current_fn_is_danger)?;
             }
             Ok(())
         }
@@ -92,7 +100,7 @@ fn analyze_statement(
                 analyze_expression(upd, &loop_scope)?;
             }
 
-            analyze_block(body, &mut loop_scope, functions)
+            analyze_block(body, &mut loop_scope, functions, labels, current_fn_is_danger)
         }
         Statement::WhenBlock { when_expression, cases, else_block } => {
             analyze_expression(when_expression, scope)?;
@@ -101,30 +109,30 @@ fn analyze_statement(
                     analyze_expression(expr, scope)?;
                 }
                 let mut case_scope = scope.clone();
-                analyze_block(block, &mut case_scope, functions)?;
+                analyze_block(block, &mut case_scope, functions, labels, current_fn_is_danger)?;
             }
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions)?;
+                analyze_block(else_block, &mut else_scope, functions, labels, current_fn_is_danger)?;
             }
             Ok(())
         }
         Statement::WhileLoop { condition, body } => {
             analyze_expression(condition, scope)?;
             let mut while_scope = scope.clone();
-            analyze_block(body, &mut while_scope, functions)
+            analyze_block(body, &mut while_scope, functions, labels, current_fn_is_danger)
         }
         Statement::LoopStatement { body } => {
             let mut local_scope = scope.clone();
-            analyze_block(body, &mut local_scope, functions)
+            analyze_block(body, &mut local_scope, functions, labels, current_fn_is_danger)
         }
         Statement::OnErrorBlock { statements: body_statements } => {
             let mut local_scope = scope.clone();
-            analyze_statements(body_statements, &mut local_scope, functions)
+            analyze_statements(body_statements, &mut local_scope, functions, labels, current_fn_is_danger)
         }
         Statement::BlockStatement { statements } => {
             let mut local_scope = scope.clone();
-            analyze_statements(statements, &mut local_scope, functions)
+            analyze_statements(statements, &mut local_scope, functions, labels, current_fn_is_danger)
         }
         Statement::OnBlock { trigger } => {
             if trigger == "error" {
@@ -158,7 +166,7 @@ fn analyze_statement(
                 analyze_expression(arg, scope)?;
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, current_fn_is_danger)
         }
         Statement::DangerCallOnError { call_name, args, on_error, .. } => {
             if !functions.get(call_name).copied().unwrap_or(false) {
@@ -171,7 +179,19 @@ fn analyze_statement(
                 analyze_expression(arg, scope)?;
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, current_fn_is_danger)
+        }
+        Statement::ReturnError { code } => {
+            if current_fn_is_danger != Some(true) {
+                return Err("return error is allowed only inside danger fn.".to_string());
+            }
+            let Some(error_codes) = labels.get("ErrorCode") else {
+                return Err("return error requires label ErrorCode declaration.".to_string());
+            };
+            if !error_codes.contains(code) {
+                return Err(format!("Unknown ErrorCode variant: '{}'.", code));
+            }
+            Ok(())
         }
         Statement::ReturnStatement { value } => {
             if let Some(expr) = value {
@@ -187,8 +207,10 @@ fn analyze_block(
     block: &Box<BlockStatement>,
     scope: &mut HashSet<String>,
     functions: &HashMap<String, bool>,
+    labels: &HashMap<String, HashSet<String>>,
+    current_fn_is_danger: Option<bool>,
 ) -> Result<(), String> {
-    analyze_statements(&block.statements, scope, functions)
+    analyze_statements(&block.statements, scope, functions, labels, current_fn_is_danger)
 }
 
 fn analyze_expression(expr: &Expression, scope: &HashSet<String>) -> Result<(), String> {

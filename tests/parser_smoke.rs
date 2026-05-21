@@ -236,3 +236,18 @@ x = parse_value(x) on error {
         _ => panic!("expected DangerAssignOnError"),
     }
 }
+
+#[test]
+fn parses_return_error_statement() {
+    let src = r#"
+danger fn parse_value(Int x) Int {
+    return error ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::FunctionDef { body, .. } = &program.statements[0] else {
+        panic!("expected FunctionDef");
+    };
+    assert!(matches!(body.statements[0], Statement::ReturnError { .. }));
+}

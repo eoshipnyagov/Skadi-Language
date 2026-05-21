@@ -364,6 +364,19 @@ pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResu
     }
 
     let expr_start = start_index + 1;
+    if expr_start + 1 < tokens.len()
+        && tokens[expr_start].kind() == TokenKind::Identifier
+        && tokens[expr_start].lexeme == "error"
+        && tokens[expr_start + 1].kind() == TokenKind::Identifier
+    {
+        return Ok((
+            Statement::ReturnError {
+                code: tokens[expr_start + 1].lexeme.clone(),
+            },
+            3,
+        ));
+    }
+
     let mut cursor = expr_start;
     while cursor < tokens.len() {
         if tokens[cursor].kind() == TokenKind::NewLine || tokens[cursor].lexeme == "}" {

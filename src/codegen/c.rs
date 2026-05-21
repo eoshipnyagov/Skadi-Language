@@ -12,6 +12,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     out.push_str("#include <stdio.h>\n\n");
     out.push_str("#include <stdint.h>\n");
     out.push_str("#include <stdbool.h>\n\n");
+    emit_error_code_enum(program, &mut out);
 
     for stmt in &program.statements {
         if let Statement::FunctionDef { .. } = stmt {
@@ -31,6 +32,25 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     out.push_str("}\n");
 
     out
+}
+
+fn emit_error_code_enum(program: &Program, out: &mut String) {
+    for stmt in &program.statements {
+        if let Statement::LabelDecl { name, variants } = stmt {
+            if name == "ErrorCode" && !variants.is_empty() {
+                out.push_str("typedef enum ErrorCode {\n");
+                for (i, v) in variants.iter().enumerate() {
+                    if i == 0 {
+                        out.push_str(&format!("    ErrorCode_{} = 0,\n", v));
+                    } else {
+                        out.push_str(&format!("    ErrorCode_{} = {},\n", v, i));
+                    }
+                }
+                out.push_str("} ErrorCode;\n\n");
+                break;
+            }
+        }
+    }
 }
 
 fn emit_function(stmt: &Statement, out: &mut String) {
@@ -280,6 +300,12 @@ fn emit_statement(
                 out.push(' ');
                 out.push_str(&emit_expr(expr));
             }
+            out.push_str(";\n");
+        }
+        Statement::ReturnError { code } => {
+            out.push_str(&pad);
+            out.push_str("return ErrorCode_");
+            out.push_str(code);
             out.push_str(";\n");
         }
         Statement::WhenBlock { .. } => {

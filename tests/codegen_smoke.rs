@@ -102,3 +102,24 @@ danger fn parse_value(Int x) Int {
     assert!(c.contains("int parse_value(int64_t x, int64_t *out)"));
     assert!(c.contains("return 1;"));
 }
+
+#[test]
+fn codegen_emits_error_enum_and_return_error() {
+    let src = r#"
+label ErrorCode {
+    Ok
+    ZeroDivision
+}
+
+danger fn parse_value(Int x) Int {
+    return error ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("typedef enum ErrorCode"));
+    assert!(c.contains("ErrorCode_ZeroDivision = 1"));
+    assert!(c.contains("return ErrorCode_ZeroDivision;"));
+}

@@ -114,3 +114,38 @@ x = parse_value(x) on error {
     assert!(err.contains("on error requires danger fn call"));
     assert!(err.contains("parse_value"));
 }
+
+#[test]
+fn semantic_allows_return_error_with_errorcode_label() {
+    let src = r#"
+label ErrorCode {
+    Ok
+    ZeroDivision
+}
+
+danger fn parse_value(Int x) Int {
+    return error ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_unknown_return_error_code() {
+    let src = r#"
+label ErrorCode {
+    Ok
+    ZeroDivision
+}
+
+danger fn parse_value(Int x) Int {
+    return error InvalidFormat
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("Unknown ErrorCode variant"));
+}
