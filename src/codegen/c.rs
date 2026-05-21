@@ -2,6 +2,11 @@ use std::collections::HashSet;
 
 use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
 
+struct FunctionContext {
+    is_danger: bool,
+    return_type: Option<String>,
+}
+
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
     out.push_str("#include <stdio.h>\n\n");
@@ -19,7 +24,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let mut declared = HashSet::new();
     for stmt in &program.statements {
         if !matches!(stmt, Statement::FunctionDef { .. }) {
-            emit_statement(stmt, &mut out, 1, &mut declared);
+            emit_statement(stmt, &mut out, 1, &mut declared, None);
         }
     }
     out.push_str("    return 0;\n");
@@ -34,10 +39,15 @@ fn emit_function(stmt: &Statement, out: &mut String) {
         params,
         body,
         returns,
+        is_danger,
         ..
     } = stmt
     {
-        out.push_str(map_skadi_type_to_c(returns.as_deref()));
+        if *is_danger {
+            out.push_str("int");
+        } else {
+            out.push_str(map_skadi_type_to_c(returns.as_deref()));
+        }
         out.push(' ');
         out.push_str(name);
         out.push('(');
@@ -49,21 +59,44 @@ fn emit_function(stmt: &Statement, out: &mut String) {
             out.push(' ');
             out.push_str(&p.name);
         }
+        if *is_danger && let Some(ret_ty) = returns.as_deref() {
+            if !params.is_empty() {
+                out.push_str(", ");
+            }
+            out.push_str(map_skadi_type_to_c(Some(ret_ty)));
+            out.push_str(" *out");
+        }
         out.push_str(") {\n");
         let mut declared: HashSet<String> = params.iter().map(|p| p.name.clone()).collect();
-        emit_block(body, out, 1, &mut declared);
+        let fn_ctx = FunctionContext {
+            is_danger: *is_danger,
+            return_type: returns.clone(),
+        };
+        emit_block(body, out, 1, &mut declared, Some(&fn_ctx));
         out.push_str("    return 0;\n");
         out.push_str("}\n");
     }
 }
 
-fn emit_block(block: &BlockStatement, out: &mut String, indent: usize, declared: &mut HashSet<String>) {
+fn emit_block(
+    block: &BlockStatement,
+    out: &mut String,
+    indent: usize,
+    declared: &mut HashSet<String>,
+    fn_ctx: Option<&FunctionContext>,
+) {
     for stmt in &block.statements {
-        emit_statement(stmt, out, indent, declared);
+        emit_statement(stmt, out, indent, declared, fn_ctx);
     }
 }
 
-fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &mut HashSet<String>) {
+fn emit_statement(
+    stmt: &Statement,
+    out: &mut String,
+    indent: usize,
+    declared: &mut HashSet<String>,
+    fn_ctx: Option<&FunctionContext>,
+) {
     let pad = "    ".repeat(indent);
     match stmt {
         Statement::Assignment { target, value } => {
@@ -80,13 +113,13 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
             out.push_str(&emit_expr(condition));
             out.push_str(") {\n");
             let mut then_decl = declared.clone();
-            emit_block(then_block, out, indent + 1, &mut then_decl);
+            emit_block(then_block, out, indent + 1, &mut then_decl, fn_ctx);
             out.push_str(&pad);
             out.push_str("}");
             if let Some(else_block) = else_block {
                 out.push_str(" else {\n");
                 let mut else_decl = declared.clone();
-                emit_block(else_block, out, indent + 1, &mut else_decl);
+                emit_block(else_block, out, indent + 1, &mut else_decl, fn_ctx);
                 out.push_str(&pad);
                 out.push_str("}");
             }
@@ -98,7 +131,7 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
             out.push_str(&emit_expr(condition));
             out.push_str(") {\n");
             let mut inner = declared.clone();
-            emit_block(body, out, indent + 1, &mut inner);
+            emit_block(body, out, indent + 1, &mut inner, fn_ctx);
             out.push_str(&pad);
             out.push_str("}\n");
         }
@@ -106,7 +139,7 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
             out.push_str(&pad);
             out.push_str("while (1) {\n");
             let mut inner = declared.clone();
-            emit_block(body, out, indent + 1, &mut inner);
+            emit_block(body, out, indent + 1, &mut inner, fn_ctx);
             out.push_str(&pad);
             out.push_str("}\n");
         }
@@ -129,7 +162,7 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
                 out.push_str(";\n");
                 let mut inner = declared.clone();
                 inner.insert(var_name);
-                emit_block(body, out, indent + 1, &mut inner);
+                emit_block(body, out, indent + 1, &mut inner, fn_ctx);
                 out.push_str(&pad);
                 out.push_str("}\n");
             } else {
@@ -181,7 +214,7 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
             out.push_str(target);
             out.push_str(") != 0) {\n");
             let mut inner = declared.clone();
-            emit_block(on_error, out, indent + 1, &mut inner);
+            emit_block(on_error, out, indent + 1, &mut inner, fn_ctx);
             out.push_str(&pad);
             out.push_str("}\n");
         }
@@ -204,11 +237,26 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
             }
             out.push_str(") != 0) {\n");
             let mut inner = declared.clone();
-            emit_block(on_error, out, indent + 1, &mut inner);
+            emit_block(on_error, out, indent + 1, &mut inner, fn_ctx);
             out.push_str(&pad);
             out.push_str("}\n");
         }
         Statement::ReturnStatement { value } => {
+            if let Some(ctx) = fn_ctx {
+                if ctx.is_danger {
+                    if let Some(expr) = value
+                        && ctx.return_type.is_some()
+                    {
+                        out.push_str(&pad);
+                        out.push_str("*out = ");
+                        out.push_str(&emit_expr(expr));
+                        out.push_str(";\n");
+                    }
+                    out.push_str(&pad);
+                    out.push_str("return 0;\n");
+                    return;
+                }
+            }
             out.push_str(&pad);
             out.push_str("return");
             if let Some(expr) = value {
@@ -234,7 +282,7 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
         Statement::BlockStatement { statements } | Statement::OnErrorBlock { statements } => {
             let mut inner = declared.clone();
             for s in statements {
-                emit_statement(s, out, indent, &mut inner);
+                emit_statement(s, out, indent, &mut inner, fn_ctx);
             }
         }
     }

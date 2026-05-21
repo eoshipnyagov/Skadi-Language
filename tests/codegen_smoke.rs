@@ -74,3 +74,17 @@ x = parse_value(x) on error {
     let c = transpile_program_to_c(&program);
     assert!(c.contains("if (parse_value(x, &x) != 0) {"));
 }
+
+#[test]
+fn codegen_emits_danger_fn_with_out_param() {
+    let src = r#"
+danger fn parse_value(Int x) Int {
+    return x
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int parse_value(int64_t x, int64_t *out)"));
+    assert!(c.contains("*out = x;"));
+}
