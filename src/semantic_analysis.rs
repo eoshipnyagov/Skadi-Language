@@ -107,7 +107,16 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
             let mut local_scope = scope.clone();
             analyze_statements(statements, &mut local_scope)
         }
-        Statement::LabelDecl { .. } | Statement::StructDecl { .. } | Statement::OnBlock { .. } => Ok(()),
+        Statement::OnBlock { trigger } => {
+            if trigger == "error" {
+                return Err(
+                    "Unsupported context: 'on error { ... }' is not yet semantically bound to a danger call."
+                        .to_string(),
+                );
+            }
+            Ok(())
+        }
+        Statement::LabelDecl { .. } | Statement::StructDecl { .. } => Ok(()),
     }
 }
 

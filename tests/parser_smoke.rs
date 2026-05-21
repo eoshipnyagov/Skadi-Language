@@ -110,3 +110,22 @@ for item in items {
         _ => panic!("expected ForLoop"),
     }
 }
+
+#[test]
+fn parses_danger_function_declaration() {
+    let src = r#"
+danger fn parse_value(input) {
+    x = input
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 1);
+    match &program.statements[0] {
+        Statement::FunctionDef { name, is_danger, .. } => {
+            assert_eq!(name, "parse_value");
+            assert!(*is_danger);
+        }
+        _ => panic!("expected FunctionDef"),
+    }
+}

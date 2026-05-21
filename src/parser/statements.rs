@@ -2,9 +2,11 @@
 // Parser Logic Helpers (Rust)
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
+use crate::ast_nodes::{BlockStatement, ScopeManager, Statement};
 use crate::common_types::{Token, TokenKind};
-use crate::ast_nodes::{Statement, ScopeManager, BlockStatement};
+
 use super::expressions::parse_expression_range;
+use super::parse_statements_range;
 
 /// Core type for a parser function: consumes tokens and returns the resulting AST node and the count of consumed tokens.
 pub type ParseResult<T> = Result<(T, usize), String>;
@@ -31,52 +33,56 @@ fn find_block_end(tokens: &[Token], open_brace_index: usize) -> Result<usize, St
     Ok(current - 1)
 }
 
-
-/// Parses a full function definition (fn name(...) { ... }) from a token stream.
-/// Consumes all necessary tokens from 'tokens' starting *after* the initial 'fn' keyword.
 pub fn parse_function_declaration(
-    tokens: &[Token], 
-    start_index: usize, 
-    _scope: &ScopeManager
+    tokens: &[Token],
+    start_index: usize,
+    _scope: &ScopeManager,
 ) -> ParseResult<Statement> {
     let mut current_index = start_index;
-    
-    // Minimum checks required to prevent panics on incomplete input.
+    let mut is_danger = false;
+
+    if current_index < tokens.len()
+        && tokens[current_index].kind() == TokenKind::Identifier
+        && tokens[current_index].lexeme == "danger"
+    {
+        is_danger = true;
+        current_index += 1;
+    }
+
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordFn {
         return Err("Expected 'fn' keyword but found nothing.".into());
     }
 
-    // 1. Consume "fn" (already passed start_index, so we expect the next token)
-    let function_name = if current_index + 1 < tokens.len() && tokens[current_index+1].kind() == TokenKind::Identifier {
-        tokens[current_index+1].lexeme.clone()
+    let function_name = if current_index + 1 < tokens.len()
+        && tokens[current_index + 1].kind() == TokenKind::Identifier
+    {
+        tokens[current_index + 1].lexeme.clone()
     } else {
-         return Err("Function definition must be followed by an identifier (function name).".into());
+        return Err("Function definition must be followed by an identifier (function name).".into());
     };
 
-    // 2. Consume '(' and parse parameter list
     if current_index + 2 >= tokens.len()
         || tokens[current_index + 2].kind() != TokenKind::OpPunctuation
         || tokens[current_index + 2].lexeme != "("
     {
         return Err("Function signature expected '('.".into());
     }
-    
-    // Parse parameters
+
     let mut params = Vec::new();
-    current_index += 3; // Move past "fn name ("
-    
-    if current_index < tokens.len() && tokens[current_index].kind() == TokenKind::OpPunctuation && tokens[current_index].lexeme == ")" {
-        // No parameters
+    current_index += 3;
+
+    if current_index < tokens.len()
+        && tokens[current_index].kind() == TokenKind::OpPunctuation
+        && tokens[current_index].lexeme == ")"
+    {
         current_index += 1;
     } else {
-        // Parse parameter list - very simplified implementation
         while current_index < tokens.len() && tokens[current_index].lexeme != ")" {
             if tokens[current_index].kind() == TokenKind::Identifier {
                 params.push(tokens[current_index].lexeme.clone());
             }
             current_index += 1;
         }
-        // Skip the closing ')'
         if current_index < tokens.len() && tokens[current_index].lexeme == ")" {
             current_index += 1;
         } else {
@@ -84,50 +90,43 @@ pub fn parse_function_declaration(
         }
     }
 
-    // 3. Parse return type or nothing (for void functions)
-    let returns = None; // Simplified for now - we don't parse complex return types yet
-    
-    // 4. Expecting '{' to begin the body block
-    if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::OpPunctuation || tokens[current_index].lexeme != "{" {
-        return Err("Function signature expected '{{' to begin the body block.".into());
+    let returns = None;
+
+    if current_index >= tokens.len()
+        || tokens[current_index].kind() != TokenKind::OpPunctuation
+        || tokens[current_index].lexeme != "{"
+    {
+        return Err("Function signature expected '{' to begin the body block.".into());
     }
-    
-    // 5. Parse function body
-    let block_end = find_block_end(tokens, current_index)?;
+
+    let open_brace = current_index;
+    let block_end = find_block_end(tokens, open_brace)?;
+    let inner_statements = parse_statements_range(tokens, open_brace + 1, block_end)?;
     current_index = block_end + 1;
-    
-    // Create a placeholder body for now
-    let stmt = Statement::FunctionDef { 
-        name: function_name, 
-        params, 
-        body: BlockStatement { statements: vec![] }.into(),
+
+    let stmt = Statement::FunctionDef {
+        name: function_name,
+        params,
+        body: BlockStatement {
+            statements: inner_statements,
+        }
+        .into(),
         returns,
-        is_danger: false
+        is_danger,
     };
 
     Ok((stmt, current_index - start_index))
 }
 
-
-/// Parses a 'for' loop structure. Consumes tokens for initialization, condition, and update blocks.
-pub fn parse_for_loop(
-    tokens: &[Token], 
-    start_index: usize, 
-    _scope: &ScopeManager
-) -> ParseResult<Statement> {
-    // Supports both:
-    // 1) Skadi style: for item in collection { ... }
-    // 2) C-style: for (init; condition; update) { ... } (legacy scaffold path)
+pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
     let mut current_index = start_index;
-    
+
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordFor {
         return Err("Expected 'for' keyword to start loop.".into());
     }
-    
-    // Skip "for"
+
     current_index += 1;
 
-    // Skadi for-in path
     if current_index < tokens.len() && tokens[current_index].kind() == TokenKind::Identifier {
         let loop_var = tokens[current_index].lexeme.clone();
         current_index += 1;
@@ -154,8 +153,10 @@ pub fn parse_for_loop(
         return Ok((stmt, current_index - start_index));
     }
 
-    // Legacy C-style fallback
-    if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::OpPunctuation || tokens[current_index].lexeme != "(" {
+    if current_index >= tokens.len()
+        || tokens[current_index].kind() != TokenKind::OpPunctuation
+        || tokens[current_index].lexeme != "("
+    {
         return Err("For loop expected iterator variable or '(' after keyword.".into());
     }
     current_index += 1;
@@ -196,42 +197,35 @@ pub fn parse_for_loop(
     ))
 }
 
-/// Parses a 'when' statement. Handles 'when' keyword followed by an expression and a body block.
-pub fn parse_when_statement(
-    tokens: &[Token], 
-    start_index: usize, 
-    _scope: &ScopeManager
-) -> ParseResult<Statement> {
+pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
     let mut current_index = start_index;
-    
+
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordWhen {
         return Err("Expected 'when' keyword to start statement.".into());
     }
-    
-    // Skip the 'when'
+
     current_index += 1;
-    
+
     let expr_start = current_index;
     while current_index < tokens.len() && tokens[current_index].lexeme != "{" {
         current_index += 1;
     }
-    
+
     if current_index >= tokens.len() || tokens[current_index].lexeme != "{" {
         return Err("When statement expected '{' to begin body.".into());
     }
-    
+
     let expr_end = current_index;
-    // Parse the when block - find matching closing brace
     let block_end = find_block_end(tokens, current_index)?;
     current_index = block_end + 1;
-    
+
     let when_expression = parse_expression_range(tokens, expr_start, expr_end)?;
     let stmt = Statement::WhenBlock {
         when_expression: Box::new(when_expression),
         cases: vec![],
-        else_block: None
+        else_block: None,
     };
-    
+
     Ok((stmt, current_index - start_index))
 }
 

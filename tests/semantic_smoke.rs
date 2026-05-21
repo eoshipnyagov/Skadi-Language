@@ -39,3 +39,28 @@ fn semantic_fails_for_self_reference_on_initialization() {
     assert!(err.contains("Invalid initialization"));
     assert!(err.contains("x"));
 }
+
+#[test]
+fn semantic_fails_for_on_error_without_danger_call_binding() {
+    let src = r#"
+on error {
+    x = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("on error"));
+}
+
+#[test]
+fn semantic_allows_on_interrupt_block() {
+    let src = r#"
+on interrupt timer0 {
+    x = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
