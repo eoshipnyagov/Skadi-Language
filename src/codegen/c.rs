@@ -9,9 +9,18 @@ struct FunctionContext {
 
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
+    let needs_list_runtime = program_uses_for_loop(program);
     out.push_str("#include <stdio.h>\n\n");
+    if needs_list_runtime {
+        out.push_str("#include <stddef.h>\n");
+    }
     out.push_str("#include <stdint.h>\n");
     out.push_str("#include <stdbool.h>\n\n");
+    if needs_list_runtime {
+        out.push_str(
+            "typedef struct {\n    int64_t *data;\n    size_t len;\n} SkadiListInt;\n\n",
+        );
+    }
     emit_error_code_enum(program, &mut out);
 
     for stmt in &program.statements {
@@ -32,6 +41,44 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     out.push_str("}\n");
 
     out
+}
+
+fn program_uses_for_loop(program: &Program) -> bool {
+    fn block_has_for(block: &BlockStatement) -> bool {
+        block.statements.iter().any(statement_has_for)
+    }
+    fn statement_has_for(stmt: &Statement) -> bool {
+        match stmt {
+            Statement::ForLoop { .. } => true,
+            Statement::FunctionDef { body, .. } => block_has_for(body),
+            Statement::IfStatement {
+                then_block,
+                else_block,
+                ..
+            } => {
+                block_has_for(then_block)
+                    || else_block
+                        .as_ref()
+                        .map(|b| block_has_for(b))
+                        .unwrap_or(false)
+            }
+            Statement::WhenBlock { cases, else_block, .. } => {
+                cases.iter().any(|(_, b)| block_has_for(b))
+                    || else_block
+                        .as_ref()
+                        .map(|b| block_has_for(b))
+                        .unwrap_or(false)
+            }
+            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body } => block_has_for(body),
+            Statement::DangerAssignOnError { on_error, .. }
+            | Statement::DangerCallOnError { on_error, .. } => block_has_for(on_error),
+            Statement::BlockStatement { statements } | Statement::OnErrorBlock { statements } => {
+                statements.iter().any(statement_has_for)
+            }
+            _ => false,
+        }
+    }
+    program.statements.iter().any(statement_has_for)
 }
 
 fn emit_error_code_enum(program: &Program, out: &mut String) {
@@ -164,21 +211,22 @@ fn emit_statement(
             out.push_str("}\n");
         }
         Statement::ForLoop { initialization, condition, body, .. } => {
-            // Transitional lowering for `for item in collection`.
             if let (Some(init), Some(coll)) = (initialization, condition) {
                 let var_name = match init.as_ref() {
                     Expression::VariableReference(v) => v.clone(),
                     _ => "item".to_string(),
                 };
+                let coll_expr = emit_expr(coll);
                 out.push_str(&pad);
-                out.push_str("/* TODO(v1): lower Skadi List iteration semantics */\n");
-                out.push_str(&pad);
-                out.push_str("for (int __i = 0; __i < 1; ++__i) {\n");
+                out.push_str("for (size_t __i = 0; __i < ");
+                out.push_str(&coll_expr);
+                out.push_str(".len; ++__i) {\n");
                 out.push_str(&"    ".repeat(indent + 1));
-                out.push_str("int ");
+                out.push_str("int64_t ");
                 out.push_str(&var_name);
                 out.push_str(" = ");
-                out.push_str(&emit_expr(coll));
+                out.push_str(&coll_expr);
+                out.push_str(".data[__i]");
                 out.push_str(";\n");
                 let mut inner = declared.clone();
                 inner.insert(var_name);
@@ -187,7 +235,7 @@ fn emit_statement(
                 out.push_str("}\n");
             } else {
                 out.push_str(&pad);
-                out.push_str("/* TODO(v1): unsupported for-loop form */\n");
+                out.push_str("/* TODO(v1): unsupported for-loop form; expected 'for item in collection' */\n");
             }
         }
         Statement::FunctionDef { .. } => {}

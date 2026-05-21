@@ -164,3 +164,18 @@ when x {
     assert!(c.contains("else if ((x == 2) || (x == 3)) {"));
     assert!(c.contains("else {"));
 }
+
+#[test]
+fn codegen_lowers_for_in_to_list_iteration_shape() {
+    let src = r#"
+new Int sum = 0
+for item in items {
+    sum = sum + item
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("for (size_t __i = 0; __i < items.len; ++__i) {"));
+    assert!(c.contains("int64_t item = items.data[__i];"));
+}
