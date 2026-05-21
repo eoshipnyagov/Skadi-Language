@@ -244,17 +244,34 @@ fn emit_statement(
         Statement::ReturnStatement { value } => {
             if let Some(ctx) = fn_ctx {
                 if ctx.is_danger {
-                    if let Some(expr) = value
-                        && ctx.return_type.is_some()
-                    {
-                        out.push_str(&pad);
-                        out.push_str("*out = ");
-                        out.push_str(&emit_expr(expr));
-                        out.push_str(";\n");
+                    match (ctx.return_type.is_some(), value) {
+                        (true, Some(expr)) => {
+                            out.push_str(&pad);
+                            out.push_str("*out = ");
+                            out.push_str(&emit_expr(expr));
+                            out.push_str(";\n");
+                            out.push_str(&pad);
+                            out.push_str("return 0;\n");
+                            return;
+                        }
+                        (true, None) => {
+                            out.push_str(&pad);
+                            out.push_str("return 1;\n");
+                            return;
+                        }
+                        (false, Some(expr)) => {
+                            out.push_str(&pad);
+                            out.push_str("return ");
+                            out.push_str(&emit_expr(expr));
+                            out.push_str(";\n");
+                            return;
+                        }
+                        (false, None) => {
+                            out.push_str(&pad);
+                            out.push_str("return 1;\n");
+                            return;
+                        }
                     }
-                    out.push_str(&pad);
-                    out.push_str("return 0;\n");
-                    return;
                 }
             }
             out.push_str(&pad);

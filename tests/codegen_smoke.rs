@@ -88,3 +88,17 @@ danger fn parse_value(Int x) Int {
     assert!(c.contains("int parse_value(int64_t x, int64_t *out)"));
     assert!(c.contains("*out = x;"));
 }
+
+#[test]
+fn codegen_emits_error_status_for_empty_return_in_danger_fn() {
+    let src = r#"
+danger fn parse_value(Int x) Int {
+    return
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int parse_value(int64_t x, int64_t *out)"));
+    assert!(c.contains("return 1;"));
+}
