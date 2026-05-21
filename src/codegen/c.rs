@@ -308,9 +308,53 @@ fn emit_statement(
             out.push_str(code);
             out.push_str(";\n");
         }
-        Statement::WhenBlock { .. } => {
-            out.push_str(&pad);
-            out.push_str("/* TODO(v1): when lowering */\n");
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+        } => {
+            if cases.is_empty() {
+                if let Some(else_block) = else_block {
+                    emit_block(else_block, out, indent, declared, fn_ctx);
+                }
+                return;
+            }
+            let when_expr = emit_expr(when_expression);
+            for (idx, (case_exprs, case_block)) in cases.iter().enumerate() {
+                out.push_str(&pad);
+                if idx == 0 {
+                    out.push_str("if (");
+                } else {
+                    out.push_str("else if (");
+                }
+                if case_exprs.is_empty() {
+                    out.push_str("0");
+                } else {
+                    for (j, expr) in case_exprs.iter().enumerate() {
+                        if j > 0 {
+                            out.push_str(" || ");
+                        }
+                        out.push('(');
+                        out.push_str(&when_expr);
+                        out.push_str(" == ");
+                        out.push_str(&emit_expr(expr));
+                        out.push(')');
+                    }
+                }
+                out.push_str(") {\n");
+                let mut inner = declared.clone();
+                emit_block(case_block, out, indent + 1, &mut inner, fn_ctx);
+                out.push_str(&pad);
+                out.push_str("}\n");
+            }
+            if let Some(else_block) = else_block {
+                out.push_str(&pad);
+                out.push_str("else {\n");
+                let mut inner = declared.clone();
+                emit_block(else_block, out, indent + 1, &mut inner, fn_ctx);
+                out.push_str(&pad);
+                out.push_str("}\n");
+            }
         }
         Statement::VarDecl { name, value, declared_type, .. } => {
             out.push_str(&pad);

@@ -269,3 +269,30 @@ new Int y = add(x, 2)
     };
     assert!(matches!(**value, Expression::Call { .. }));
 }
+
+#[test]
+fn parses_when_statement_cases_and_else() {
+    let src = r#"
+when x {
+    is 1 {
+        new y = 10
+    }
+    is 2, 3 {
+        new y = 20
+    }
+    else {
+        new y = 0
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 1);
+    let Statement::WhenBlock { cases, else_block, .. } = &program.statements[0] else {
+        panic!("expected WhenBlock");
+    };
+    assert_eq!(cases.len(), 2);
+    assert_eq!(cases[0].0.len(), 1);
+    assert_eq!(cases[1].0.len(), 2);
+    assert!(else_block.is_some());
+}

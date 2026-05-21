@@ -139,3 +139,28 @@ new Int y = add(x, 2)
     let c = transpile_program_to_c(&program);
     assert!(c.contains("int64_t y = add(x, 2);"));
 }
+
+#[test]
+fn codegen_lowers_when_to_if_chain() {
+    let src = r#"
+new Int x = 2
+when x {
+    is 1 {
+        new y = 10
+    }
+    is 2, 3 {
+        new y = 20
+    }
+    else {
+        new y = 0
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("if ((x == 1)) {"));
+    assert!(c.contains("else if ((x == 2) || (x == 3)) {"));
+    assert!(c.contains("else {"));
+}

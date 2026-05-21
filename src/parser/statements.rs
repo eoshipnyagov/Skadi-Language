@@ -11,6 +11,35 @@ use super::parse_statements_range;
 /// Core type for a parser function: consumes tokens and returns the resulting AST node and the count of consumed tokens.
 pub type ParseResult<T> = Result<(T, usize), String>;
 
+fn parse_expression_list(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+) -> Result<Vec<crate::ast_nodes::Expression>, String> {
+    let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut seg_start = start;
+    let mut i = start;
+    while i < end {
+        let t = &tokens[i];
+        if t.lexeme == "(" {
+            depth += 1;
+        } else if t.lexeme == ")" {
+            depth = depth.saturating_sub(1);
+        } else if t.lexeme == "," && depth == 0 {
+            if seg_start < i {
+                out.push(parse_expression_range(tokens, seg_start, i)?);
+            }
+            seg_start = i + 1;
+        }
+        i += 1;
+    }
+    if seg_start < end {
+        out.push(parse_expression_range(tokens, seg_start, end)?);
+    }
+    Ok(out)
+}
+
 fn find_block_end(tokens: &[Token], open_brace_index: usize) -> Result<usize, String> {
     if open_brace_index >= tokens.len() || tokens[open_brace_index].lexeme != "{" {
         return Err("Expected '{'.".into());
@@ -248,14 +277,65 @@ pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &Scope
     }
 
     let expr_end = current_index;
-    let block_end = find_block_end(tokens, current_index)?;
-    current_index = block_end + 1;
+    let open_brace = current_index;
+    let block_end = find_block_end(tokens, open_brace)?;
 
     let when_expression = parse_expression_range(tokens, expr_start, expr_end)?;
+    let mut cases = Vec::new();
+    let mut else_block = None;
+
+    current_index = open_brace + 1;
+    while current_index < block_end {
+        if tokens[current_index].kind() == TokenKind::NewLine {
+            current_index += 1;
+            continue;
+        }
+        if tokens[current_index].kind() == TokenKind::KeywordIs {
+            current_index += 1;
+            let case_expr_start = current_index;
+            while current_index < block_end && tokens[current_index].lexeme != "{" {
+                current_index += 1;
+            }
+            if current_index >= block_end {
+                return Err("when case expected '{' after 'is ...'.".into());
+            }
+            let case_exprs = parse_expression_list(tokens, case_expr_start, current_index)?;
+            let case_block_end = find_block_end(tokens, current_index)?;
+            let case_statements = parse_statements_range(tokens, current_index + 1, case_block_end)?;
+            cases.push((
+                case_exprs,
+                Box::new(BlockStatement {
+                    statements: case_statements,
+                }),
+            ));
+            current_index = case_block_end + 1;
+            continue;
+        }
+        if tokens[current_index].kind() == TokenKind::KeywordElse {
+            current_index += 1;
+            if current_index >= block_end || tokens[current_index].lexeme != "{" {
+                return Err("when else expected '{'.".into());
+            }
+            let else_end = find_block_end(tokens, current_index)?;
+            let else_statements = parse_statements_range(tokens, current_index + 1, else_end)?;
+            else_block = Some(Box::new(BlockStatement {
+                statements: else_statements,
+            }));
+            current_index = else_end + 1;
+            continue;
+        }
+        return Err(format!(
+            "Unexpected token in when block: {:?} ('{}')",
+            tokens[current_index].kind(),
+            tokens[current_index].lexeme
+        ));
+    }
+
+    current_index = block_end + 1;
     let stmt = Statement::WhenBlock {
         when_expression: Box::new(when_expression),
-        cases: vec![],
-        else_block: None,
+        cases,
+        else_block,
     };
 
     Ok((stmt, current_index - start_index))
