@@ -389,15 +389,30 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
     if start_index + 2 >= tokens.len() {
         return Err("Incomplete variable declaration after 'new'.".into());
     }
-    if tokens[start_index + 1].kind() != TokenKind::Identifier {
+    let mut idx = start_index + 1;
+    let mut declared_type: Option<String> = None;
+
+    // Supports both:
+    // new x = 1
+    // new Int x = 1
+    if idx + 2 < tokens.len()
+        && tokens[idx].kind() == TokenKind::Identifier
+        && tokens[idx + 1].kind() == TokenKind::Identifier
+        && tokens[idx + 2].kind() == TokenKind::OpAssignment
+    {
+        declared_type = Some(tokens[idx].lexeme.clone());
+        idx += 1;
+    }
+
+    if idx >= tokens.len() || tokens[idx].kind() != TokenKind::Identifier {
         return Err("Variable declaration expected identifier after 'new'.".into());
     }
-    if tokens[start_index + 2].kind() != TokenKind::OpAssignment {
+    if idx + 1 >= tokens.len() || tokens[idx + 1].kind() != TokenKind::OpAssignment {
         return Err("Variable declaration expected '=' after identifier.".into());
     }
 
-    let name = tokens[start_index + 1].lexeme.clone();
-    let expr_start = start_index + 3;
+    let name = tokens[idx].lexeme.clone();
+    let expr_start = idx + 2;
     let mut cursor = expr_start;
     while cursor < tokens.len() {
         if tokens[cursor].kind() == TokenKind::NewLine || tokens[cursor].lexeme == "}" {
@@ -411,8 +426,9 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
             name,
             value: Box::new(value),
             is_fixed: false,
+            declared_type,
         },
-        (cursor - start_index).max(3),
+        (cursor - start_index).max(4),
     ))
 }
 

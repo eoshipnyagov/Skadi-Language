@@ -11,7 +11,7 @@ fn codegen_emits_main_and_assignment() {
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("int main(void)"));
-    assert!(c.contains("int x = (1 + 2);"));
+    assert!(c.contains("int64_t x = (1 + 2);"));
 }
 
 #[test]
@@ -49,4 +49,14 @@ fn f(x) {
     assert!(c.contains("if (x) {"));
     assert!(c.contains("while (y) {"));
     assert!(c.contains("return y;"));
+}
+
+#[test]
+fn codegen_respects_typed_new() {
+    let src = "new Float temperature = 21.5\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("double temperature = 21.5;"));
 }

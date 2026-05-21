@@ -1,6 +1,9 @@
 #include <stdio.h>
 
+#include <stdint.h>
+#include <stdbool.h>
+
 int main(void) {
-    int x = (1 + 2);
+    int64_t x = (1 + 2);
     return 0;
 }

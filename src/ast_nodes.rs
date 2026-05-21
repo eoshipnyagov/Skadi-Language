@@ -33,7 +33,7 @@ impl Program {
 /// A general container for all top-level executable structures (Function definitions, etc.)
 #[derive(Debug)]
 pub enum Statement {
-    VarDecl { name: String, value: Box<Expression>, is_fixed: bool },
+    VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String> },
     Assignment { target: String, value: Box<Expression> },
     FunctionDef { 
         name: String, 

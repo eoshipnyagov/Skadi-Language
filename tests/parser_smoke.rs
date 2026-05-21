@@ -182,3 +182,15 @@ fn add(a, b) {
     assert_eq!(body.statements.len(), 1);
     assert!(matches!(body.statements[0], Statement::ReturnStatement { .. }));
 }
+
+#[test]
+fn parses_typed_new_declaration() {
+    let src = "new Float t = 21.5\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::VarDecl { name, declared_type, .. } = &program.statements[0] else {
+        panic!("expected VarDecl");
+    };
+    assert_eq!(name, "t");
+    assert_eq!(declared_type.as_deref(), Some("Float"));
+}

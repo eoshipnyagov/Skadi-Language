@@ -5,6 +5,8 @@ use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
     out.push_str("#include <stdio.h>\n\n");
+    out.push_str("#include <stdint.h>\n");
+    out.push_str("#include <stdbool.h>\n\n");
 
     for stmt in &program.statements {
         if let Statement::FunctionDef { .. } = stmt {
@@ -158,9 +160,10 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
             out.push_str(&pad);
             out.push_str("/* TODO(v1): when lowering */\n");
         }
-        Statement::VarDecl { name, value, .. } => {
+        Statement::VarDecl { name, value, declared_type, .. } => {
             out.push_str(&pad);
-            out.push_str("int ");
+            out.push_str(map_skadi_type_to_c(declared_type.as_deref()));
+            out.push(' ');
             out.push_str(name);
             out.push_str(" = ");
             out.push_str(&emit_expr(value));
@@ -173,6 +176,15 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
                 emit_statement(s, out, indent, &mut inner);
             }
         }
+    }
+}
+
+fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
+    match skadi_type.unwrap_or("Int") {
+        "Int" | "i64" => "int64_t",
+        "Float" | "f64" => "double",
+        "bool" => "bool",
+        _ => "int64_t",
     }
 }
 
