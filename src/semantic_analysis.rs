@@ -1,20 +1,55 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
+use crate::ast_nodes::{BlockStatement, Expression, FunctionParam, Program, Statement};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ValueType {
+    Int,
+    Float,
+    Bool,
+    Unknown,
+}
+
+#[derive(Clone, Debug)]
+struct FunctionSig {
+    is_danger: bool,
+    return_type: Option<ValueType>,
+}
+
+#[derive(Clone, Copy)]
+struct FnContext {
+    is_danger: bool,
+    return_type: Option<ValueType>,
+}
 
 pub fn semantic_analyze(program: &Program) -> Result<(), String> {
-    let mut functions = HashMap::new();
+    let mut functions: HashMap<String, FunctionSig> = HashMap::new();
     let mut labels: HashMap<String, Vec<String>> = HashMap::new();
+
     for stmt in &program.statements {
-        if let Statement::FunctionDef { name, is_danger, .. } = stmt {
-            functions.insert(name.clone(), *is_danger);
+        if let Statement::FunctionDef {
+            name,
+            is_danger,
+            returns,
+            ..
+        } = stmt
+        {
+            functions.insert(
+                name.clone(),
+                FunctionSig {
+                    is_danger: *is_danger,
+                    return_type: returns.as_deref().map(parse_type_name).or(Some(ValueType::Int)),
+                },
+            );
         }
         if let Statement::LabelDecl { name, variants } = stmt {
             labels.insert(name.clone(), variants.clone());
         }
     }
+
     validate_error_code_label(&labels)?;
-    let mut scope = HashSet::new();
+
+    let mut scope: HashMap<String, ValueType> = HashMap::new();
     analyze_statements(&program.statements, &mut scope, &functions, &labels, None)
 }
 
@@ -30,29 +65,47 @@ fn validate_error_code_label(labels: &HashMap<String, Vec<String>>) -> Result<()
     Ok(())
 }
 
+fn parse_type_name(name: &str) -> ValueType {
+    match name {
+        "Int" | "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" => ValueType::Int,
+        "Float" | "f64" | "f32" => ValueType::Float,
+        "bool" => ValueType::Bool,
+        _ => ValueType::Unknown,
+    }
+}
+
+fn can_assign(target: ValueType, source: ValueType) -> bool {
+    target == source || (target == ValueType::Float && source == ValueType::Int)
+}
+
 fn analyze_statements(
     statements: &[Statement],
-    scope: &mut HashSet<String>,
-    functions: &HashMap<String, bool>,
+    scope: &mut HashMap<String, ValueType>,
+    functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
-    current_fn_is_danger: Option<bool>,
+    fn_ctx: Option<FnContext>,
 ) -> Result<(), String> {
     for stmt in statements {
-        analyze_statement(stmt, scope, functions, labels, current_fn_is_danger)?;
+        analyze_statement(stmt, scope, functions, labels, fn_ctx)?;
     }
     Ok(())
 }
 
 fn analyze_statement(
     stmt: &Statement,
-    scope: &mut HashSet<String>,
-    functions: &HashMap<String, bool>,
+    scope: &mut HashMap<String, ValueType>,
+    functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
-    current_fn_is_danger: Option<bool>,
+    fn_ctx: Option<FnContext>,
 ) -> Result<(), String> {
     match stmt {
-        Statement::VarDecl { name, value, .. } => {
-            if scope.contains(name) {
+        Statement::VarDecl {
+            name,
+            value,
+            declared_type,
+            ..
+        } => {
+            if scope.contains_key(name) {
                 return Err(format!(
                     "Redeclaration in same scope: '{}' is already defined.",
                     name
@@ -64,29 +117,55 @@ fn analyze_statement(
                     name
                 ));
             }
-            analyze_expression(value, scope)?;
-            scope.insert(name.clone());
+            let value_ty = infer_expression_type(value, scope)?;
+            let final_ty = if let Some(tn) = declared_type {
+                let declared = parse_type_name(tn);
+                if !can_assign(declared, value_ty) {
+                    return Err(format!(
+                        "Type mismatch in declaration '{}': cannot assign {:?} to {:?}.",
+                        name, value_ty, declared
+                    ));
+                }
+                declared
+            } else {
+                value_ty
+            };
+            scope.insert(name.clone(), final_ty);
             Ok(())
         }
         Statement::Assignment { target, value } => {
-            if !scope.contains(target) {
+            let Some(target_ty) = scope.get(target).copied() else {
                 return Err(format!(
                     "Use-before-definition: '{}' is not defined in current scope.",
                     target
                 ));
+            };
+            let value_ty = infer_expression_type(value, scope)?;
+            if !can_assign(target_ty, value_ty) {
+                return Err(format!(
+                    "Type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
+                    target, value_ty, target_ty
+                ));
             }
-            analyze_expression(value, scope)?;
             Ok(())
         }
-        Statement::FunctionDef { name, params, body, .. } => {
-            scope.insert(name.clone());
+        Statement::FunctionDef {
+            name, params, body, ..
+        } => {
             let mut fn_scope = scope.clone();
             for p in params {
-                fn_scope.insert(p.name.clone());
+                let pty = param_type_or_default(p);
+                fn_scope.insert(p.name.clone(), pty);
             }
-            let is_danger = *functions.get(name).unwrap_or(&false);
-            analyze_block(body, &mut fn_scope, functions, labels, Some(is_danger))?;
-            if is_danger && !block_guarantees_termination(body) {
+            let Some(sig) = functions.get(name) else {
+                return Err(format!("Internal error: missing function signature for '{}'.", name));
+            };
+            let local_ctx = FnContext {
+                is_danger: sig.is_danger,
+                return_type: sig.return_type,
+            };
+            analyze_block(body, &mut fn_scope, functions, labels, Some(local_ctx))?;
+            if sig.is_danger && !block_guarantees_termination(body) {
                 return Err(format!(
                     "danger fn '{}' must end with explicit return/return error on all paths.",
                     name
@@ -94,66 +173,79 @@ fn analyze_statement(
             }
             Ok(())
         }
-        Statement::IfStatement { condition, then_block, else_block } => {
-            analyze_expression(condition, scope)?;
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+        } => {
+            let cty = infer_expression_type(condition, scope)?;
+            if cty != ValueType::Bool && cty != ValueType::Int {
+                return Err("if condition must be bool/int-compatible.".to_string());
+            }
             let mut then_scope = scope.clone();
-            analyze_block(then_block, &mut then_scope, functions, labels, current_fn_is_danger)?;
+            analyze_block(then_block, &mut then_scope, functions, labels, fn_ctx)?;
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, current_fn_is_danger)?;
+                analyze_block(else_block, &mut else_scope, functions, labels, fn_ctx)?;
             }
             Ok(())
         }
-        Statement::ForLoop { initialization, condition, update, body } => {
+        Statement::ForLoop {
+            initialization,
+            condition,
+            update,
+            body,
+        } => {
             let mut loop_scope = scope.clone();
-
             if let Some(init) = initialization {
                 if let Expression::VariableReference(name) = init.as_ref() {
-                    loop_scope.insert(name.clone());
+                    loop_scope.insert(name.clone(), ValueType::Unknown);
                 } else {
-                    analyze_expression(init, &loop_scope)?;
+                    let _ = infer_expression_type(init, &loop_scope)?;
                 }
             }
             if let Some(cond) = condition {
-                analyze_expression(cond, &loop_scope)?;
+                let _ = infer_expression_type(cond, &loop_scope)?;
             }
             if let Some(upd) = update {
-                analyze_expression(upd, &loop_scope)?;
+                let _ = infer_expression_type(upd, &loop_scope)?;
             }
-
-            analyze_block(body, &mut loop_scope, functions, labels, current_fn_is_danger)
+            analyze_block(body, &mut loop_scope, functions, labels, fn_ctx)
         }
-        Statement::WhenBlock { when_expression, cases, else_block } => {
-            analyze_expression(when_expression, scope)?;
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+        } => {
+            let _ = infer_expression_type(when_expression, scope)?;
             for (case_exprs, block) in cases {
                 for expr in case_exprs {
-                    analyze_expression(expr, scope)?;
+                    let _ = infer_expression_type(expr, scope)?;
                 }
                 let mut case_scope = scope.clone();
-                analyze_block(block, &mut case_scope, functions, labels, current_fn_is_danger)?;
+                analyze_block(block, &mut case_scope, functions, labels, fn_ctx)?;
             }
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, current_fn_is_danger)?;
+                analyze_block(else_block, &mut else_scope, functions, labels, fn_ctx)?;
             }
             Ok(())
         }
         Statement::WhileLoop { condition, body } => {
-            analyze_expression(condition, scope)?;
+            let cty = infer_expression_type(condition, scope)?;
+            if cty != ValueType::Bool && cty != ValueType::Int {
+                return Err("while condition must be bool/int-compatible.".to_string());
+            }
             let mut while_scope = scope.clone();
-            analyze_block(body, &mut while_scope, functions, labels, current_fn_is_danger)
+            analyze_block(body, &mut while_scope, functions, labels, fn_ctx)
         }
         Statement::LoopStatement { body } => {
             let mut local_scope = scope.clone();
-            analyze_block(body, &mut local_scope, functions, labels, current_fn_is_danger)
+            analyze_block(body, &mut local_scope, functions, labels, fn_ctx)
         }
-        Statement::OnErrorBlock { statements: body_statements } => {
+        Statement::OnErrorBlock { statements } | Statement::BlockStatement { statements } => {
             let mut local_scope = scope.clone();
-            analyze_statements(body_statements, &mut local_scope, functions, labels, current_fn_is_danger)
-        }
-        Statement::BlockStatement { statements } => {
-            let mut local_scope = scope.clone();
-            analyze_statements(statements, &mut local_scope, functions, labels, current_fn_is_danger)
+            analyze_statements(statements, &mut local_scope, functions, labels, fn_ctx)
         }
         Statement::OnBlock { trigger } => {
             if trigger == "error" {
@@ -169,41 +261,50 @@ fn analyze_statement(
             call_name,
             args,
             on_error,
-            ..
         } => {
-            if !functions.get(call_name).copied().unwrap_or(false) {
+            let Some(sig) = functions.get(call_name) else {
+                return Err(format!("Unknown function '{}' in on error call.", call_name));
+            };
+            if !sig.is_danger {
                 return Err(format!(
                     "on error requires danger fn call: '{}' is not declared as danger.",
                     call_name
                 ));
             }
-            if !scope.contains(target) {
+            if !scope.contains_key(target) {
                 return Err(format!(
                     "Use-before-definition: '{}' is not defined in current scope.",
                     target
                 ));
             }
             for arg in args {
-                analyze_expression(arg, scope)?;
+                let _ = infer_expression_type(arg, scope)?;
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, current_fn_is_danger)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
         }
-        Statement::DangerCallOnError { call_name, args, on_error, .. } => {
-            if !functions.get(call_name).copied().unwrap_or(false) {
+        Statement::DangerCallOnError {
+            call_name,
+            args,
+            on_error,
+        } => {
+            let Some(sig) = functions.get(call_name) else {
+                return Err(format!("Unknown function '{}' in on error call.", call_name));
+            };
+            if !sig.is_danger {
                 return Err(format!(
                     "on error requires danger fn call: '{}' is not declared as danger.",
                     call_name
                 ));
             }
             for arg in args {
-                analyze_expression(arg, scope)?;
+                let _ = infer_expression_type(arg, scope)?;
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, current_fn_is_danger)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
         }
         Statement::ReturnError { code } => {
-            if current_fn_is_danger != Some(true) {
+            if fn_ctx.map(|c| c.is_danger) != Some(true) {
                 return Err("return error is allowed only inside danger fn.".to_string());
             }
             let Some(error_codes) = labels.get("ErrorCode") else {
@@ -215,8 +316,22 @@ fn analyze_statement(
             Ok(())
         }
         Statement::ReturnStatement { value } => {
-            if let Some(expr) = value {
-                analyze_expression(expr, scope)?;
+            if let Some(ctx) = fn_ctx {
+                if let Some(expr) = value {
+                    let actual = infer_expression_type(expr, scope)?;
+                    if let Some(expected) = ctx.return_type {
+                        if !can_assign(expected, actual) {
+                            return Err(format!(
+                                "Type mismatch in return: cannot return {:?} where {:?} expected.",
+                                actual, expected
+                            ));
+                        }
+                    }
+                } else if !ctx.is_danger && ctx.return_type.is_some() {
+                    return Err("Non-danger function with return type must return a value.".to_string());
+                }
+            } else if let Some(expr) = value {
+                let _ = infer_expression_type(expr, scope)?;
             }
             Ok(())
         }
@@ -225,13 +340,90 @@ fn analyze_statement(
 }
 
 fn analyze_block(
-    block: &Box<BlockStatement>,
-    scope: &mut HashSet<String>,
-    functions: &HashMap<String, bool>,
+    block: &BlockStatement,
+    scope: &mut HashMap<String, ValueType>,
+    functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
-    current_fn_is_danger: Option<bool>,
+    fn_ctx: Option<FnContext>,
 ) -> Result<(), String> {
-    analyze_statements(&block.statements, scope, functions, labels, current_fn_is_danger)
+    analyze_statements(&block.statements, scope, functions, labels, fn_ctx)
+}
+
+fn param_type_or_default(param: &FunctionParam) -> ValueType {
+    param
+        .param_type
+        .as_deref()
+        .map(parse_type_name)
+        .unwrap_or(ValueType::Int)
+}
+
+fn infer_expression_type(
+    expr: &Expression,
+    scope: &HashMap<String, ValueType>,
+) -> Result<ValueType, String> {
+    match expr {
+        Expression::LiteralInt(_) => Ok(ValueType::Int),
+        Expression::LiteralFloat(_) => Ok(ValueType::Float),
+        Expression::LiteralBool(_) => Ok(ValueType::Bool),
+        Expression::VariableReference(name) => scope
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("Use-before-definition: '{}' is not defined in current scope.", name)),
+        Expression::BinaryOp { op, left, right } => {
+            if op == "neg" {
+                let lt = infer_expression_type(left, scope)?;
+                if lt == ValueType::Int || lt == ValueType::Float {
+                    return Ok(lt);
+                }
+                return Err("Unary '-' requires numeric operand.".to_string());
+            }
+            if op == "not" {
+                let lt = infer_expression_type(left, scope)?;
+                if lt == ValueType::Bool || lt == ValueType::Int {
+                    return Ok(ValueType::Bool);
+                }
+                return Err("Unary 'not' requires bool/int operand.".to_string());
+            }
+            let lt = infer_expression_type(left, scope)?;
+            let rt = if let Some(r) = right {
+                infer_expression_type(r, scope)?
+            } else {
+                ValueType::Unknown
+            };
+            match op.as_str() {
+                "+" | "-" | "*" | "/" | "div" | "mod" | "^" => {
+                    if (lt == ValueType::Int || lt == ValueType::Float)
+                        && (rt == ValueType::Int || rt == ValueType::Float)
+                    {
+                        if lt == ValueType::Float || rt == ValueType::Float {
+                            Ok(ValueType::Float)
+                        } else {
+                            Ok(ValueType::Int)
+                        }
+                    } else {
+                        Err(format!("Operator '{}' requires numeric operands.", op))
+                    }
+                }
+                "==" | "!=" | "<" | ">" | "<=" | ">=" => Ok(ValueType::Bool),
+                "and" | "or" | "xor" => {
+                    if (lt == ValueType::Bool || lt == ValueType::Int)
+                        && (rt == ValueType::Bool || rt == ValueType::Int)
+                    {
+                        Ok(ValueType::Bool)
+                    } else {
+                        Err(format!("Operator '{}' requires bool/int operands.", op))
+                    }
+                }
+                _ => Ok(ValueType::Unknown),
+            }
+        }
+        Expression::StructConstruction { fields } => {
+            for value in fields.values() {
+                let _ = infer_expression_type(value, scope)?;
+            }
+            Ok(ValueType::Unknown)
+        }
+    }
 }
 
 fn block_guarantees_termination(block: &BlockStatement) -> bool {
@@ -264,40 +456,19 @@ fn statement_guarantees_termination(stmt: &Statement) -> bool {
     }
 }
 
-fn analyze_expression(expr: &Expression, scope: &HashSet<String>) -> Result<(), String> {
-    match expr {
-        Expression::LiteralInt(_) | Expression::LiteralFloat(_) => Ok(()),
-        Expression::VariableReference(name) => {
-            if scope.contains(name) {
-                Ok(())
-            } else {
-                Err(format!("Use-before-definition: '{}' is not defined in current scope.", name))
-            }
-        }
-        Expression::BinaryOp { left, right, .. } => {
-            analyze_expression(left, scope)?;
-            if let Some(right) = right {
-                analyze_expression(right, scope)?;
-            }
-            Ok(())
-        }
-        Expression::StructConstruction { fields } => {
-            for value in fields.values() {
-                analyze_expression(value, scope)?;
-            }
-            Ok(())
-        }
-    }
-}
-
 fn contains_variable(expr: &Expression, name: &str) -> bool {
     match expr {
         Expression::VariableReference(v) => v == name,
         Expression::BinaryOp { left, right, .. } => {
             contains_variable(left, name)
-                || right.as_deref().map(|r| contains_variable(r, name)).unwrap_or(false)
+                || right
+                    .as_deref()
+                    .map(|r| contains_variable(r, name))
+                    .unwrap_or(false)
         }
-        Expression::StructConstruction { fields } => fields.values().any(|v| contains_variable(v, name)),
+        Expression::StructConstruction { fields } => {
+            fields.values().any(|v| contains_variable(v, name))
+        }
         _ => false,
     }
 }

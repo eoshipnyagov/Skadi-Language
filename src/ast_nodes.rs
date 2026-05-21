@@ -101,6 +101,7 @@ impl From<Vec<Statement>> for Box<BlockStatement> {
 pub enum Expression {
     LiteralInt(i64), // Simple integer literal
     LiteralFloat(f32),// Floating point literal
+    LiteralBool(bool),
     VariableReference(String), // Usage of a defined variable name
     BinaryOp { 
         op: String,     // Operator (+, -, etc.)

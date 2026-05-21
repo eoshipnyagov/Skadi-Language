@@ -97,7 +97,8 @@ impl<'a> ExprParser<'a> {
                 let parsed = tok.lexeme.parse::<f32>().unwrap_or(0.0);
                 Ok(Expression::LiteralFloat(parsed))
             }
-            TokenKind::TypeBool | TokenKind::TypeString | TokenKind::TypeChar | TokenKind::Identifier => {
+            TokenKind::TypeBool => Ok(Expression::LiteralBool(tok.lexeme == "true")),
+            TokenKind::TypeString | TokenKind::TypeChar | TokenKind::Identifier => {
                 Ok(Expression::VariableReference(tok.lexeme.clone()))
             }
             _ => Err(format!(

@@ -344,6 +344,9 @@ fn emit_expr(expr: &Expression) -> String {
     match expr {
         Expression::LiteralInt(v) => v.to_string(),
         Expression::LiteralFloat(v) => v.to_string(),
+        Expression::LiteralBool(v) => {
+            if *v { "true".to_string() } else { "false".to_string() }
+        }
         Expression::VariableReference(name) => name.clone(),
         Expression::BinaryOp { op, left, right } => {
             let l = emit_expr(left);

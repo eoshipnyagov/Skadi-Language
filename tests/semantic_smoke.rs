@@ -180,3 +180,20 @@ danger fn parse_value(Int x) Int {
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("must end with explicit return"));
 }
+
+#[test]
+fn semantic_rejects_assignment_type_mismatch_bool_to_int() {
+    let src = "new Int x = 1\nx = true\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("Type mismatch in assignment"));
+}
+
+#[test]
+fn semantic_allows_int_to_float_widening() {
+    let src = "new Float x = 1\nx = 2\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
