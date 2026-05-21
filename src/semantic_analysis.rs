@@ -1,20 +1,34 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
 
 pub fn semantic_analyze(program: &Program) -> Result<(), String> {
+    let mut functions = HashMap::new();
+    for stmt in &program.statements {
+        if let Statement::FunctionDef { name, is_danger, .. } = stmt {
+            functions.insert(name.clone(), *is_danger);
+        }
+    }
     let mut scope = HashSet::new();
-    analyze_statements(&program.statements, &mut scope)
+    analyze_statements(&program.statements, &mut scope, &functions)
 }
 
-fn analyze_statements(statements: &[Statement], scope: &mut HashSet<String>) -> Result<(), String> {
+fn analyze_statements(
+    statements: &[Statement],
+    scope: &mut HashSet<String>,
+    functions: &HashMap<String, bool>,
+) -> Result<(), String> {
     for stmt in statements {
-        analyze_statement(stmt, scope)?;
+        analyze_statement(stmt, scope, functions)?;
     }
     Ok(())
 }
 
-fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<(), String> {
+fn analyze_statement(
+    stmt: &Statement,
+    scope: &mut HashSet<String>,
+    functions: &HashMap<String, bool>,
+) -> Result<(), String> {
     match stmt {
         Statement::VarDecl { name, value, .. } => {
             if scope.contains(name) {
@@ -49,15 +63,15 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
             for p in params {
                 fn_scope.insert(p.name.clone());
             }
-            analyze_block(body, &mut fn_scope)
+            analyze_block(body, &mut fn_scope, functions)
         }
         Statement::IfStatement { condition, then_block, else_block } => {
             analyze_expression(condition, scope)?;
             let mut then_scope = scope.clone();
-            analyze_block(then_block, &mut then_scope)?;
+            analyze_block(then_block, &mut then_scope, functions)?;
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope)?;
+                analyze_block(else_block, &mut else_scope, functions)?;
             }
             Ok(())
         }
@@ -78,7 +92,7 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
                 analyze_expression(upd, &loop_scope)?;
             }
 
-            analyze_block(body, &mut loop_scope)
+            analyze_block(body, &mut loop_scope, functions)
         }
         Statement::WhenBlock { when_expression, cases, else_block } => {
             analyze_expression(when_expression, scope)?;
@@ -87,30 +101,30 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
                     analyze_expression(expr, scope)?;
                 }
                 let mut case_scope = scope.clone();
-                analyze_block(block, &mut case_scope)?;
+                analyze_block(block, &mut case_scope, functions)?;
             }
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope)?;
+                analyze_block(else_block, &mut else_scope, functions)?;
             }
             Ok(())
         }
         Statement::WhileLoop { condition, body } => {
             analyze_expression(condition, scope)?;
             let mut while_scope = scope.clone();
-            analyze_block(body, &mut while_scope)
+            analyze_block(body, &mut while_scope, functions)
         }
         Statement::LoopStatement { body } => {
             let mut local_scope = scope.clone();
-            analyze_block(body, &mut local_scope)
+            analyze_block(body, &mut local_scope, functions)
         }
         Statement::OnErrorBlock { statements: body_statements } => {
             let mut local_scope = scope.clone();
-            analyze_statements(body_statements, &mut local_scope)
+            analyze_statements(body_statements, &mut local_scope, functions)
         }
         Statement::BlockStatement { statements } => {
             let mut local_scope = scope.clone();
-            analyze_statements(statements, &mut local_scope)
+            analyze_statements(statements, &mut local_scope, functions)
         }
         Statement::OnBlock { trigger } => {
             if trigger == "error" {
@@ -123,10 +137,17 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
         }
         Statement::DangerAssignOnError {
             target,
+            call_name,
             args,
             on_error,
             ..
         } => {
+            if !functions.get(call_name).copied().unwrap_or(false) {
+                return Err(format!(
+                    "on error requires danger fn call: '{}' is not declared as danger.",
+                    call_name
+                ));
+            }
             if !scope.contains(target) {
                 return Err(format!(
                     "Use-before-definition: '{}' is not defined in current scope.",
@@ -137,14 +158,20 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
                 analyze_expression(arg, scope)?;
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope)
+            analyze_block(on_error, &mut on_error_scope, functions)
         }
-        Statement::DangerCallOnError { args, on_error, .. } => {
+        Statement::DangerCallOnError { call_name, args, on_error, .. } => {
+            if !functions.get(call_name).copied().unwrap_or(false) {
+                return Err(format!(
+                    "on error requires danger fn call: '{}' is not declared as danger.",
+                    call_name
+                ));
+            }
             for arg in args {
                 analyze_expression(arg, scope)?;
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope)
+            analyze_block(on_error, &mut on_error_scope, functions)
         }
         Statement::ReturnStatement { value } => {
             if let Some(expr) = value {
@@ -156,8 +183,12 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
     }
 }
 
-fn analyze_block(block: &Box<BlockStatement>, scope: &mut HashSet<String>) -> Result<(), String> {
-    analyze_statements(&block.statements, scope)
+fn analyze_block(
+    block: &Box<BlockStatement>,
+    scope: &mut HashSet<String>,
+    functions: &HashMap<String, bool>,
+) -> Result<(), String> {
+    analyze_statements(&block.statements, scope, functions)
 }
 
 fn analyze_expression(expr: &Expression, scope: &HashSet<String>) -> Result<(), String> {

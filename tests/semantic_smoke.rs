@@ -82,6 +82,10 @@ fn f() {
 #[test]
 fn semantic_allows_danger_on_error_assignment_for_defined_target() {
     let src = r#"
+danger fn parse_value(Int x) Int {
+    return x
+}
+
 new x = 0
 x = parse_value(x) on error {
     x = 1
@@ -90,4 +94,23 @@ x = parse_value(x) on error {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_on_error_for_non_danger_function() {
+    let src = r#"
+fn parse_value(Int x) Int {
+    return x
+}
+
+new x = 0
+x = parse_value(x) on error {
+    x = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("on error requires danger fn call"));
+    assert!(err.contains("parse_value"));
 }
