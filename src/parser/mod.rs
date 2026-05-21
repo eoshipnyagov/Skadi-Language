@@ -31,7 +31,9 @@ fn parse_statement_at(
         {
             statements::parse_function_declaration(tokens, current_token_index, parser_scope)
         }
-        TokenKind::Identifier => statements::parse_assignment_statement(tokens, current_token_index),
+        TokenKind::Identifier => {
+            statements::parse_identifier_led_statement(tokens, current_token_index)
+        }
         _ => {
             return Err(format!(
                 "Unsupported statement start token at index {}: {:?} ('{}')",

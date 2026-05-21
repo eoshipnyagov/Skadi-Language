@@ -156,6 +156,58 @@ fn emit_statement(stmt: &Statement, out: &mut String, indent: usize, declared: &
             out.push_str(trigger);
             out.push_str(" TODO(v1): runtime binding */\n");
         }
+        Statement::DangerAssignOnError {
+            target,
+            call_name,
+            args,
+            on_error,
+        } => {
+            out.push_str(&pad);
+            out.push_str("/* TODO(v1): danger call lowering */\n");
+            out.push_str(&pad);
+            out.push_str("if (");
+            out.push_str(call_name);
+            out.push('(');
+            for (i, a) in args.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(&emit_expr(a));
+            }
+            if !args.is_empty() {
+                out.push_str(", ");
+            }
+            out.push('&');
+            out.push_str(target);
+            out.push_str(") != 0) {\n");
+            let mut inner = declared.clone();
+            emit_block(on_error, out, indent + 1, &mut inner);
+            out.push_str(&pad);
+            out.push_str("}\n");
+        }
+        Statement::DangerCallOnError {
+            call_name,
+            args,
+            on_error,
+        } => {
+            out.push_str(&pad);
+            out.push_str("/* TODO(v1): danger call lowering */\n");
+            out.push_str(&pad);
+            out.push_str("if (");
+            out.push_str(call_name);
+            out.push('(');
+            for (i, a) in args.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(&emit_expr(a));
+            }
+            out.push_str(") != 0) {\n");
+            let mut inner = declared.clone();
+            emit_block(on_error, out, indent + 1, &mut inner);
+            out.push_str(&pad);
+            out.push_str("}\n");
+        }
         Statement::ReturnStatement { value } => {
             out.push_str(&pad);
             out.push_str("return");

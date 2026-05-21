@@ -121,6 +121,31 @@ fn analyze_statement(stmt: &Statement, scope: &mut HashSet<String>) -> Result<()
             }
             Ok(())
         }
+        Statement::DangerAssignOnError {
+            target,
+            args,
+            on_error,
+            ..
+        } => {
+            if !scope.contains(target) {
+                return Err(format!(
+                    "Use-before-definition: '{}' is not defined in current scope.",
+                    target
+                ));
+            }
+            for arg in args {
+                analyze_expression(arg, scope)?;
+            }
+            let mut on_error_scope = scope.clone();
+            analyze_block(on_error, &mut on_error_scope)
+        }
+        Statement::DangerCallOnError { args, on_error, .. } => {
+            for arg in args {
+                analyze_expression(arg, scope)?;
+            }
+            let mut on_error_scope = scope.clone();
+            analyze_block(on_error, &mut on_error_scope)
+        }
         Statement::ReturnStatement { value } => {
             if let Some(expr) = value {
                 analyze_expression(expr, scope)?;

@@ -60,3 +60,17 @@ fn codegen_respects_typed_new() {
     let c = transpile_program_to_c(&program);
     assert!(c.contains("double temperature = 21.5;"));
 }
+
+#[test]
+fn codegen_emits_danger_on_error_shape() {
+    let src = r#"
+new x = 0
+x = parse_value(x) on error {
+    x = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("if (parse_value(x, &x) != 0) {"));
+}

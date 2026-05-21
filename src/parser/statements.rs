@@ -412,6 +412,103 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
     ))
 }
 
+fn parse_call_expression(tokens: &[Token], start: usize, end: usize) -> Result<(String, Vec<crate::ast_nodes::Expression>), String> {
+    if start + 2 >= end {
+        return Err("Danger call expected 'name(...)'.".into());
+    }
+    if tokens[start].kind() != TokenKind::Identifier {
+        return Err("Danger call must start with function name.".into());
+    }
+    if tokens[start + 1].lexeme != "(" {
+        return Err("Danger call expected '(' after function name.".into());
+    }
+    if tokens[end - 1].lexeme != ")" {
+        return Err("Danger call expected ')'.".into());
+    }
+
+    let call_name = tokens[start].lexeme.clone();
+    let mut args = Vec::new();
+    let mut arg_start = start + 2;
+    let mut depth = 0usize;
+    let mut i = start + 2;
+    while i < end - 1 {
+        let t = &tokens[i];
+        if t.lexeme == "(" {
+            depth += 1;
+        } else if t.lexeme == ")" {
+            depth = depth.saturating_sub(1);
+        } else if t.lexeme == "," && depth == 0 {
+            if arg_start < i {
+                args.push(parse_expression_range(tokens, arg_start, i)?);
+            }
+            arg_start = i + 1;
+        }
+        i += 1;
+    }
+    if arg_start < end - 1 {
+        args.push(parse_expression_range(tokens, arg_start, end - 1)?);
+    }
+    Ok((call_name, args))
+}
+
+pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let mut line_end = start_index;
+    while line_end < tokens.len() {
+        if tokens[line_end].kind() == TokenKind::NewLine || tokens[line_end].lexeme == "}" {
+            break;
+        }
+        line_end += 1;
+    }
+
+    let on_idx = (start_index..line_end).find(|&i| {
+        tokens[i].kind() == TokenKind::KeywordOnError
+            && i + 1 < line_end
+            && tokens[i + 1].lexeme == "error"
+    });
+
+    if let Some(on_idx) = on_idx {
+        let block_open = on_idx + 2;
+        if block_open >= tokens.len() || tokens[block_open].lexeme != "{" {
+            return Err("on error expected '{'.".into());
+        }
+        let block_end = find_block_end(tokens, block_open)?;
+        let on_error_statements = parse_statements_range(tokens, block_open + 1, block_end)?;
+
+        if start_index + 2 < on_idx
+            && tokens[start_index].kind() == TokenKind::Identifier
+            && tokens[start_index + 1].kind() == TokenKind::OpAssignment
+        {
+            let target = tokens[start_index].lexeme.clone();
+            let (call_name, args) = parse_call_expression(tokens, start_index + 2, on_idx)?;
+            return Ok((
+                Statement::DangerAssignOnError {
+                    target,
+                    call_name,
+                    args,
+                    on_error: Box::new(BlockStatement {
+                        statements: on_error_statements,
+                    }),
+                },
+                block_end + 1 - start_index,
+            ));
+        }
+
+        let (call_name, args) = parse_call_expression(tokens, start_index, on_idx)?;
+        return Ok((
+            Statement::DangerCallOnError {
+                call_name,
+                args,
+                on_error: Box::new(BlockStatement {
+                    statements: on_error_statements,
+                }),
+            },
+            block_end + 1 - start_index,
+        ));
+    }
+
+    parse_assignment_statement(tokens, start_index)
+}
+
 pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordNew {
         return Err("Expected 'new' keyword.".into());

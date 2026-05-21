@@ -214,3 +214,25 @@ fn add(Int a, Int b) Int {
     assert_eq!(params[1].name, "b");
     assert_eq!(returns.as_deref(), Some("Int"));
 }
+
+#[test]
+fn parses_danger_on_error_assignment() {
+    let src = r#"
+new x = 0
+x = parse_value(x) on error {
+    x = 0
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 2);
+    match &program.statements[1] {
+        Statement::DangerAssignOnError { target, call_name, args, on_error } => {
+            assert_eq!(target, "x");
+            assert_eq!(call_name, "parse_value");
+            assert_eq!(args.len(), 1);
+            assert_eq!(on_error.statements.len(), 1);
+        }
+        _ => panic!("expected DangerAssignOnError"),
+    }
+}

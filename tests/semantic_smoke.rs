@@ -78,3 +78,16 @@ fn f() {
     assert!(err.contains("Use-before-definition"));
     assert!(err.contains("z"));
 }
+
+#[test]
+fn semantic_allows_danger_on_error_assignment_for_defined_target() {
+    let src = r#"
+new x = 0
+x = parse_value(x) on error {
+    x = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
