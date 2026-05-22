@@ -1,5 +1,6 @@
 #[derive(Clone, Copy, Debug)]
 pub enum DiagnosticKind {
+    Lex,
     Parse,
     Semantic,
 }
@@ -7,6 +8,7 @@ pub enum DiagnosticKind {
 impl DiagnosticKind {
     fn as_str(self) -> &'static str {
         match self {
+            DiagnosticKind::Lex => "Lex",
             DiagnosticKind::Parse => "Parse",
             DiagnosticKind::Semantic => "Semantic",
         }

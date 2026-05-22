@@ -1,5 +1,6 @@
 // File: src/lexer/structures.rs
 use crate::common_types::Token;
+use crate::diagnostics::{format_diagnostic, DiagnosticKind};
 
 /// Represents an error during lexical analysis.
 #[derive(Debug)]
@@ -11,7 +12,17 @@ pub struct LexError {
 
 impl std::fmt::Display for LexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Lexical Error at line {}: col {} - {}", self.line, self.col, self.message)
+        write!(
+            f,
+            "{}",
+            format_diagnostic(
+                DiagnosticKind::Lex,
+                &self.message,
+                Some(self.line),
+                Some(self.col),
+                None,
+            )
+        )
     }
 }
 
