@@ -24,6 +24,18 @@ struct FnContext {
     return_type: Option<ValueType>,
 }
 
+const SEM_REDECLARATION: &str = "SC-SEM-010";
+const SEM_INVALID_INIT: &str = "SC-SEM-011";
+const SEM_USE_BEFORE_DEF: &str = "SC-SEM-012";
+const SEM_TYPE_MISMATCH: &str = "SC-SEM-020";
+const SEM_UNKNOWN_FUNCTION: &str = "SC-SEM-030";
+const SEM_ARG_COUNT: &str = "SC-SEM-031";
+const SEM_ARG_TYPE: &str = "SC-SEM-032";
+const SEM_INVALID_CONTEXT: &str = "SC-SEM-040";
+const SEM_RETURN_RULE: &str = "SC-SEM-050";
+const SEM_ERRORCODE_RULE: &str = "SC-SEM-051";
+const SEM_INTERNAL: &str = "SC-SEM-900";
+
 fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
     match stmt {
         Statement::VarDecl { loc, .. }
@@ -46,25 +58,22 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
     }
 }
 
-fn err_at(stmt: &Statement, msg: String) -> String {
+fn sem_err(code: &'static str, msg: String) -> String {
+    format_diagnostic(DiagnosticKind::Semantic, Some(code), msg, None, None, None)
+}
+
+fn err_at_code(stmt: &Statement, code: &'static str, msg: String) -> String {
     if let Some((line, col)) = statement_loc(stmt) {
         format_diagnostic(
             DiagnosticKind::Semantic,
-            Some("SC-SEM-001"),
+            Some(code),
             msg,
             Some(line),
             Some(col),
             None,
         )
     } else {
-        format_diagnostic(
-            DiagnosticKind::Semantic,
-            Some("SC-SEM-001"),
-            msg,
-            None,
-            None,
-            None,
-        )
+        sem_err(code, msg)
     }
 }
 
@@ -134,20 +143,24 @@ fn validate_call_args(
     functions: &HashMap<String, FunctionSig>,
 ) -> Result<(), String> {
     if args.len() != sig.param_types.len() {
-        return Err(format!(
+        return Err(sem_err(
+            SEM_ARG_COUNT,
+            format!(
             "argument count mismatch for '{}': expected {}, got {}.",
             name,
             sig.param_types.len(),
             args.len()
-        ));
+        )));
     }
     for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().copied()) {
         let actual_ty = infer_expression_type(arg, scope, functions)?;
         if !can_assign(expected_ty, actual_ty) {
-            return Err(format!(
+            return Err(sem_err(
+                SEM_ARG_TYPE,
+                format!(
                 "argument type mismatch for '{}': expected {:?}, got {:?}.",
                 name, expected_ty, actual_ty
-            ));
+            )));
         }
     }
     Ok(())
@@ -181,14 +194,16 @@ fn analyze_statement(
             ..
         } => {
             if scope.contains_key(name) {
-                return Err(format!(
-                    "{}",
-                    err_at(stmt, format!("redeclaration in same scope: '{}' is already defined.", name))
+                return Err(err_at_code(
+                    stmt,
+                    SEM_REDECLARATION,
+                    format!("redeclaration in same scope: '{}' is already defined.", name),
                 ));
             }
             if contains_variable(value, name) {
-                return Err(err_at(
+                return Err(err_at_code(
                     stmt,
+                    SEM_INVALID_INIT,
                     format!("invalid initialization: '{}' is used in its own initializing expression.", name),
                 ));
             }
@@ -198,8 +213,9 @@ fn analyze_statement(
                 if !can_assign(declared, value_ty) {
                     return Err(format!(
                         "{}",
-                        err_at(
+                        err_at_code(
                             stmt,
+                            SEM_TYPE_MISMATCH,
                             format!(
                                 "type mismatch in declaration '{}': cannot assign {:?} to {:?}.",
                                 name, value_ty, declared
@@ -218,8 +234,9 @@ fn analyze_statement(
             let Some(target_ty) = scope.get(target).copied() else {
                 return Err(format!(
                     "{}",
-                    err_at(
+                    err_at_code(
                         stmt,
+                        SEM_USE_BEFORE_DEF,
                         format!("use-before-definition: '{}' is not defined in current scope.", target),
                     )
                 ));
@@ -228,8 +245,9 @@ fn analyze_statement(
             if !can_assign(target_ty, value_ty) {
                 return Err(format!(
                     "{}",
-                    err_at(
+                    err_at_code(
                         stmt,
+                        SEM_TYPE_MISMATCH,
                         format!(
                             "type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
                             target, value_ty, target_ty
@@ -248,7 +266,10 @@ fn analyze_statement(
                 fn_scope.insert(p.name.clone(), pty);
             }
             let Some(sig) = functions.get(name) else {
-                return Err(format!("internal error: missing function signature for '{}'.", name));
+                return Err(sem_err(
+                    SEM_INTERNAL,
+                    format!("internal error: missing function signature for '{}'.", name),
+                ));
             };
             let local_ctx = FnContext {
                 is_danger: sig.is_danger,
@@ -258,8 +279,9 @@ fn analyze_statement(
             if sig.is_danger && !block_guarantees_termination(body) {
                 return Err(format!(
                     "{}",
-                    err_at(
+                    err_at_code(
                         stmt,
+                        SEM_RETURN_RULE,
                         format!("danger fn '{}' must end with explicit return/return error on all paths.", name),
                     )
                 ));
@@ -274,7 +296,7 @@ fn analyze_statement(
         } => {
             let cty = infer_expression_type(condition, scope, functions)?;
             if cty != ValueType::Bool {
-                return Err(err_at(stmt, "if condition must be bool.".to_string()));
+                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, "if condition must be bool.".to_string()));
             }
             let mut then_scope = scope.clone();
             analyze_block(then_block, &mut then_scope, functions, labels, fn_ctx)?;
@@ -318,9 +340,13 @@ fn analyze_statement(
                 for expr in case_exprs {
                     let case_ty = infer_expression_type(expr, scope, functions)?;
                     if !can_assign(when_ty, case_ty) && !can_assign(case_ty, when_ty) {
-                        return Err(format!(
-                            "type mismatch in when-case: case type {:?} incompatible with when type {:?}.",
-                            case_ty, when_ty
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TYPE_MISMATCH,
+                            format!(
+                                "type mismatch in when-case: case type {:?} incompatible with when type {:?}.",
+                                case_ty, when_ty
+                            ),
                         ));
                     }
                 }
@@ -336,7 +362,11 @@ fn analyze_statement(
         Statement::WhileLoop { condition, body, .. } => {
             let cty = infer_expression_type(condition, scope, functions)?;
             if cty != ValueType::Bool {
-                return Err(err_at(stmt, "while condition must be bool.".to_string()));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    "while condition must be bool.".to_string(),
+                ));
             }
             let mut while_scope = scope.clone();
             analyze_block(body, &mut while_scope, functions, labels, fn_ctx)
@@ -352,8 +382,9 @@ fn analyze_statement(
         Statement::OnBlock { trigger, .. } => {
             if trigger == "error" {
                 return Err(
-                    err_at(
+                    err_at_code(
                         stmt,
+                        SEM_INVALID_CONTEXT,
                         "unsupported context: 'on error { ... }' is not yet semantically bound to a danger call."
                             .to_string(),
                     ),
@@ -369,13 +400,18 @@ fn analyze_statement(
             ..
         } => {
             let Some(sig) = functions.get(call_name) else {
-                return Err(format!("unknown function '{}' in on error call.", call_name));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_UNKNOWN_FUNCTION,
+                    format!("unknown function '{}' in on error call.", call_name),
+                ));
             };
             if !sig.is_danger {
                 return Err(format!(
                     "{}",
-                    err_at(
+                    err_at_code(
                         stmt,
+                        SEM_INVALID_CONTEXT,
                         format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
                     )
                 ));
@@ -383,8 +419,9 @@ fn analyze_statement(
             if !scope.contains_key(target) {
                 return Err(format!(
                     "{}",
-                    err_at(
+                    err_at_code(
                         stmt,
+                        SEM_USE_BEFORE_DEF,
                         format!("use-before-definition: '{}' is not defined in current scope.", target),
                     )
                 ));
@@ -400,13 +437,18 @@ fn analyze_statement(
             ..
         } => {
             let Some(sig) = functions.get(call_name) else {
-                return Err(format!("unknown function '{}' in on error call.", call_name));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_UNKNOWN_FUNCTION,
+                    format!("unknown function '{}' in on error call.", call_name),
+                ));
             };
             if !sig.is_danger {
                 return Err(format!(
                     "{}",
-                    err_at(
+                    err_at_code(
                         stmt,
+                        SEM_INVALID_CONTEXT,
                         format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
                     )
                 ));
@@ -417,13 +459,25 @@ fn analyze_statement(
         }
         Statement::ReturnError { code, .. } => {
             if fn_ctx.map(|c| c.is_danger) != Some(true) {
-                return Err(err_at(stmt, "return error is allowed only inside danger fn.".to_string()));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    "return error is allowed only inside danger fn.".to_string(),
+                ));
             }
             let Some(error_codes) = labels.get("ErrorCode") else {
-                return Err(err_at(stmt, "return error requires label ErrorCode declaration.".to_string()));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_ERRORCODE_RULE,
+                    "return error requires label ErrorCode declaration.".to_string(),
+                ));
             };
             if !error_codes.iter().any(|v| v == code) {
-                return Err(err_at(stmt, format!("unknown ErrorCode variant: '{}'.", code)));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_ERRORCODE_RULE,
+                    format!("unknown ErrorCode variant: '{}'.", code),
+                ));
             }
             Ok(())
         }
@@ -433,15 +487,20 @@ fn analyze_statement(
                     let actual = infer_expression_type(expr, scope, functions)?;
                     if let Some(expected) = ctx.return_type {
                         if !can_assign(expected, actual) {
-                            return Err(format!(
-                                "type mismatch in return: cannot return {:?} where {:?} expected.",
-                                actual, expected
+                            return Err(err_at_code(
+                                stmt,
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "type mismatch in return: cannot return {:?} where {:?} expected.",
+                                    actual, expected
+                                ),
                             ));
                         }
                     }
                 } else if !ctx.is_danger && ctx.return_type.is_some() {
-                    return Err(err_at(
+                    return Err(err_at_code(
                         stmt,
+                        SEM_RETURN_RULE,
                         "non-danger function with return type must return a value.".to_string(),
                     ));
                 }
@@ -484,10 +543,13 @@ fn infer_expression_type(
         Expression::VariableReference(name) => scope
             .get(name)
             .copied()
-            .ok_or_else(|| format!("use-before-definition: '{}' is not defined in current scope.", name)),
+            .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", name))),
         Expression::Call { name, args } => {
             let Some(sig) = functions.get(name) else {
-                return Err(format!("unknown function '{}' in expression call.", name));
+                return Err(sem_err(
+                    SEM_UNKNOWN_FUNCTION,
+                    format!("unknown function '{}' in expression call.", name),
+                ));
             };
             validate_call_args(name, args, sig, scope, functions)?;
             Ok(sig.return_type.unwrap_or(ValueType::Unknown))
@@ -498,14 +560,20 @@ fn infer_expression_type(
                 if lt == ValueType::Int || lt == ValueType::Float {
                     return Ok(lt);
                 }
-                return Err("unary '-' requires numeric operand.".to_string());
+                return Err(sem_err(
+                    SEM_TYPE_MISMATCH,
+                    "unary '-' requires numeric operand.".to_string(),
+                ));
             }
             if op == "not" {
                 let lt = infer_expression_type(left, scope, functions)?;
                 if lt == ValueType::Bool || lt == ValueType::Int {
                     return Ok(ValueType::Bool);
                 }
-                return Err("unary 'not' requires bool/int operand.".to_string());
+                return Err(sem_err(
+                    SEM_TYPE_MISMATCH,
+                    "unary 'not' requires bool/int operand.".to_string(),
+                ));
             }
             let lt = infer_expression_type(left, scope, functions)?;
             let rt = if let Some(r) = right {
@@ -524,7 +592,10 @@ fn infer_expression_type(
                             Ok(ValueType::Int)
                         }
                     } else {
-                        Err(format!("operator '{}' requires numeric operands.", op))
+                        Err(sem_err(
+                            SEM_TYPE_MISMATCH,
+                            format!("operator '{}' requires numeric operands.", op),
+                        ))
                     }
                 }
                 "==" | "!=" | "<" | ">" | "<=" | ">=" => Ok(ValueType::Bool),
@@ -534,7 +605,10 @@ fn infer_expression_type(
                     {
                         Ok(ValueType::Bool)
                     } else {
-                        Err(format!("operator '{}' requires bool/int operands.", op))
+                        Err(sem_err(
+                            SEM_TYPE_MISMATCH,
+                            format!("operator '{}' requires bool/int operands.", op),
+                        ))
                     }
                 }
                 _ => Ok(ValueType::Unknown),
