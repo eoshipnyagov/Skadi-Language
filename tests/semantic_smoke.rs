@@ -318,3 +318,27 @@ new Int n = len(x)
     assert!(err.contains("SC-SEM-020"));
     assert!(err.contains("builtin 'len' expects List or Text"));
 }
+
+#[test]
+fn semantic_allows_list_index_access() {
+    let src = r#"
+new i32 List xs = [1, 2, 3]
+new i32 x = xs[1]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_non_int_index_access() {
+    let src = r#"
+new i32 List xs = [1, 2, 3]
+new i32 x = xs[true]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("index access requires Int index"));
+}

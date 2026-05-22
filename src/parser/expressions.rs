@@ -30,6 +30,25 @@ impl<'a> ExprParser<'a> {
             }
 
             let tok = &self.tokens[self.idx];
+            if tok.kind == TokenKind::OpPunctuation && tok.lexeme == "[" {
+                if 10 < min_bp {
+                    break;
+                }
+                self.idx += 1; // skip '['
+                let index_expr = self.parse_bp(0)?;
+                if self.idx >= self.end
+                    || self.tokens[self.idx].kind != TokenKind::OpPunctuation
+                    || self.tokens[self.idx].lexeme != "]"
+                {
+                    return Err(parse_err("SC-PARSE-209", "expected ']' to close index access."));
+                }
+                self.idx += 1; // skip ']'
+                lhs = Expression::Index {
+                    base: Box::new(lhs),
+                    index: Box::new(index_expr),
+                };
+                continue;
+            }
             let op = if is_infix_operator(tok) {
                 tok.lexeme.as_str()
             } else {

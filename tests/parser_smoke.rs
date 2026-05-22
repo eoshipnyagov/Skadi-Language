@@ -212,6 +212,20 @@ fn parses_typed_list_new_declaration_with_literal() {
 }
 
 #[test]
+fn parses_index_expression_in_declaration() {
+    let src = r#"
+new i32 List xs = [1, 2, 3]
+new i32 x = xs[1]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::VarDecl { value, .. } = &program.statements[1] else {
+        panic!("expected VarDecl");
+    };
+    assert!(matches!(**value, Expression::Index { .. }));
+}
+
+#[test]
 fn parses_typed_function_signature() {
     let src = r#"
 fn add(Int a, Int b) Int {

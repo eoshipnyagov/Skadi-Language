@@ -450,6 +450,9 @@ fn emit_expr(expr: &Expression) -> String {
             if *v { "true".to_string() } else { "false".to_string() }
         }
         Expression::VariableReference(name) => name.clone(),
+        Expression::Index { base, index } => {
+            format!("{}[{}]", emit_expr(base), emit_expr(index))
+        }
         Expression::Call { name, args } => {
             let rendered: Vec<String> = args.iter().map(emit_expr).collect();
             format!("{}({})", name, rendered.join(", "))

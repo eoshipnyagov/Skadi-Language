@@ -8,6 +8,7 @@ enum ValueType {
     Int,
     Float,
     Bool,
+    Char,
     Text,
     List(Box<ValueType>),
     Unknown,
@@ -130,6 +131,7 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "Int" | "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" => ValueType::Int,
         "Float" | "f64" | "f32" => ValueType::Float,
         "bool" => ValueType::Bool,
+        "char" => ValueType::Char,
         "Text" => ValueType::Text,
         _ => ValueType::Unknown,
     }
@@ -588,6 +590,24 @@ fn infer_expression_type(
             .get(name)
             .cloned()
             .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", name))),
+        Expression::Index { base, index } => {
+            let base_ty = infer_expression_type(base, scope, functions)?;
+            let idx_ty = infer_expression_type(index, scope, functions)?;
+            if idx_ty != ValueType::Int {
+                return Err(sem_err(
+                    SEM_TYPE_MISMATCH,
+                    format!("index access requires Int index, got {:?}.", idx_ty),
+                ));
+            }
+            match base_ty {
+                ValueType::List(elem_ty) => Ok((*elem_ty).clone()),
+                ValueType::Text => Ok(ValueType::Char),
+                other => Err(sem_err(
+                    SEM_TYPE_MISMATCH,
+                    format!("index access is supported only for List/Text, got {:?}.", other),
+                )),
+            }
+        }
         Expression::Call { name, args } => {
             if name == "len" {
                 if args.len() != 1 {
@@ -727,6 +747,9 @@ fn contains_variable(expr: &Expression, name: &str) -> bool {
             fields.values().any(|v| contains_variable(v, name))
         }
         Expression::Call { args, .. } => args.iter().any(|a| contains_variable(a, name)),
+        Expression::Index { base, index } => {
+            contains_variable(base, name) || contains_variable(index, name)
+        }
         Expression::ListLiteral(items) => items.iter().any(|a| contains_variable(a, name)),
         _ => false,
     }

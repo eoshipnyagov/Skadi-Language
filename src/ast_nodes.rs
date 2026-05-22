@@ -108,6 +108,7 @@ pub enum Expression {
     LiteralFloat(f32),// Floating point literal
     LiteralBool(bool),
     ListLiteral(Vec<Expression>),
+    Index { base: Box<Expression>, index: Box<Expression> },
     VariableReference(String), // Usage of a defined variable name
     Call { name: String, args: Vec<Expression> },
     BinaryOp { 
