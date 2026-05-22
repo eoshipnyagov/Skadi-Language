@@ -114,7 +114,7 @@ fn emit_text_runtime(out: &mut String) {
     out.push_str("}\n\n");
 }
 
-fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool) {
+fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_join: bool) {
     if need_is_dir {
     out.push_str("static bool sk_fs_is_dir(const char *path) {\n");
     out.push_str("    if (!path) return false;\n");
@@ -139,6 +139,24 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool) {
     out.push_str("    closedir(dir);\n");
     out.push_str("    return out;\n");
     out.push_str("}\n\n");
+    }
+    if need_join {
+        out.push_str("static char* sk_fs_join(const char *a, const char *b) {\n");
+        out.push_str("    const char *left = a ? a : \"\";\n");
+        out.push_str("    const char *right = b ? b : \"\";\n");
+        out.push_str("    size_t alen = strlen(left);\n");
+        out.push_str("    size_t blen = strlen(right);\n");
+        out.push_str("    bool need_sep = alen > 0 && left[alen - 1] != '/' && left[alen - 1] != '\\\\';\n");
+        out.push_str("    size_t n = alen + (need_sep ? 1 : 0) + blen;\n");
+        out.push_str("    char *outp = (char*)malloc(n + 1);\n");
+        out.push_str("    if (!outp) return strdup(\"\");\n");
+        out.push_str("    memcpy(outp, left, alen);\n");
+        out.push_str("    size_t p = alen;\n");
+        out.push_str("    if (need_sep) outp[p++] = '/';\n");
+        out.push_str("    memcpy(outp + p, right, blen);\n");
+        out.push_str("    outp[n] = '\\0';\n");
+        out.push_str("    return outp;\n");
+        out.push_str("}\n\n");
     }
 }
 
@@ -178,14 +196,24 @@ fn emit_io_runtime(out: &mut String) {
     out.push_str("    fclose(f);\n");
     out.push_str("    return w == n ? 0 : 1;\n");
     out.push_str("}\n\n");
+    out.push_str("static SkadiList_text sk_args(int argc, char **argv) {\n");
+    out.push_str("    SkadiList_text out = sk_list_text_new();\n");
+    out.push_str("    for (int i = 1; i < argc; ++i) {\n");
+    out.push_str("        char *v = strdup(argv[i] ? argv[i] : \"\");\n");
+    out.push_str("        if (!v) continue;\n");
+    out.push_str("        (void)sk_list_text_push(&out, v);\n");
+    out.push_str("    }\n");
+    out.push_str("    return out;\n");
+    out.push_str("}\n\n");
 }
 
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
-    let (needs_fs_list, needs_fs_is_dir) = program_uses_fs_runtime(program);
+    let (needs_fs_list, needs_fs_is_dir, needs_fs_join) = program_uses_fs_runtime(program);
     let needs_list_runtime = program_uses_list_runtime(program) || needs_fs_list;
     let needs_text_runtime = program_uses_text_runtime(program);
     let needs_io_runtime = program_uses_io_runtime(program);
+    let needs_args_runtime = program_uses_args_runtime(program);
     out.push_str("#include <stdio.h>\n\n");
     if needs_list_runtime || needs_text_runtime {
         out.push_str("#include <stddef.h>\n");
@@ -193,10 +221,10 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
     out.push_str("#include <stdint.h>\n");
     out.push_str("#include <stdbool.h>\n\n");
-    if needs_text_runtime {
+    if needs_text_runtime || needs_fs_list || needs_fs_join || needs_io_runtime || needs_args_runtime {
         out.push_str("#include <string.h>\n\n");
     }
-    if needs_fs_list || needs_fs_is_dir {
+    if needs_fs_list || needs_fs_is_dir || needs_fs_join {
         out.push_str("#include <dirent.h>\n");
         out.push_str("#include <sys/stat.h>\n\n");
     }
@@ -206,8 +234,8 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     if needs_text_runtime {
         emit_text_runtime(&mut out);
     }
-    if needs_fs_list || needs_fs_is_dir {
-        emit_fs_runtime(&mut out, needs_fs_list, needs_fs_is_dir);
+    if needs_fs_list || needs_fs_is_dir || needs_fs_join {
+        emit_fs_runtime(&mut out, needs_fs_list, needs_fs_is_dir, needs_fs_join);
     }
     if needs_io_runtime {
         emit_io_runtime(&mut out);
@@ -221,7 +249,11 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         }
     }
 
-    out.push_str("int main(void) {\n");
+    if needs_args_runtime {
+        out.push_str("int main(int argc, char **argv) {\n");
+    } else {
+        out.push_str("int main(void) {\n");
+    }
     let mut declared: HashMap<String, String> = HashMap::new();
     for stmt in &program.statements {
         if !matches!(stmt, Statement::FunctionDef { .. }) {
@@ -319,129 +351,146 @@ fn program_uses_list_runtime(program: &Program) -> bool {
     program.statements.iter().any(statement_needs_list)
 }
 
-fn expression_uses_fs_call(expr: &Expression) -> (bool, bool) {
+fn expression_uses_fs_call(expr: &Expression) -> (bool, bool, bool) {
     match expr {
         Expression::Call { name, args } => {
             let mut needs_list = name == "fs.list";
             let mut needs_is_dir = name == "fs.is_dir";
+            let mut needs_join = name == "fs.join";
             for a in args {
-                let (l, d) = expression_uses_fs_call(a);
+                let (l, d, j) = expression_uses_fs_call(a);
                 needs_list |= l;
                 needs_is_dir |= d;
+                needs_join |= j;
             }
-            (needs_list, needs_is_dir)
+            (needs_list, needs_is_dir, needs_join)
         }
         Expression::BinaryOp { left, right, .. } => {
-            let (mut l1, mut d1) = expression_uses_fs_call(left);
+            let (mut l1, mut d1, mut j1) = expression_uses_fs_call(left);
             if let Some(r) = right {
-                let (l2, d2) = expression_uses_fs_call(r);
+                let (l2, d2, j2) = expression_uses_fs_call(r);
                 l1 |= l2;
                 d1 |= d2;
+                j1 |= j2;
             }
-            (l1, d1)
+            (l1, d1, j1)
         }
         Expression::Index { base, index } => {
-            let (l1, d1) = expression_uses_fs_call(base);
-            let (l2, d2) = expression_uses_fs_call(index);
-            (l1 || l2, d1 || d2)
+            let (l1, d1, j1) = expression_uses_fs_call(base);
+            let (l2, d2, j2) = expression_uses_fs_call(index);
+            (l1 || l2, d1 || d2, j1 || j2)
         }
         Expression::ListLiteral(items) => {
             let mut nl = false;
             let mut nd = false;
+            let mut nj = false;
             for it in items {
-                let (l, d) = expression_uses_fs_call(it);
+                let (l, d, j) = expression_uses_fs_call(it);
                 nl |= l;
                 nd |= d;
+                nj |= j;
             }
-            (nl, nd)
+            (nl, nd, nj)
         }
         Expression::StructConstruction { fields } => {
             let mut nl = false;
             let mut nd = false;
+            let mut nj = false;
             for v in fields.values() {
-                let (l, d) = expression_uses_fs_call(v);
+                let (l, d, j) = expression_uses_fs_call(v);
                 nl |= l;
                 nd |= d;
+                nj |= j;
             }
-            (nl, nd)
+            (nl, nd, nj)
         }
-        _ => (false, false),
+        _ => (false, false, false),
     }
 }
 
-fn program_uses_fs_runtime(program: &Program) -> (bool, bool) {
-    fn statements_uses_fs(statements: &[Statement]) -> (bool, bool) {
+fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
+    fn statements_uses_fs(statements: &[Statement]) -> (bool, bool, bool) {
         let mut nl = false;
         let mut nd = false;
+        let mut nj = false;
         for s in statements {
-            let (l, d) = stmt_uses_fs(s);
+            let (l, d, j) = stmt_uses_fs(s);
             nl |= l;
             nd |= d;
+            nj |= j;
         }
-        (nl, nd)
+        (nl, nd, nj)
     }
-    fn block_uses_fs(block: &BlockStatement) -> (bool, bool) {
+    fn block_uses_fs(block: &BlockStatement) -> (bool, bool, bool) {
         statements_uses_fs(&block.statements)
     }
-    fn stmt_uses_fs(stmt: &Statement) -> (bool, bool) {
+    fn stmt_uses_fs(stmt: &Statement) -> (bool, bool, bool) {
         match stmt {
             Statement::VarDecl { value, .. } => expression_uses_fs_call(value),
             Statement::Assignment { value, .. } => expression_uses_fs_call(value),
             Statement::IfStatement { condition, then_block, else_block, .. } => {
-                let (mut nl, mut nd) = expression_uses_fs_call(condition);
-                let (l2, d2) = block_uses_fs(then_block);
+                let (mut nl, mut nd, mut nj) = expression_uses_fs_call(condition);
+                let (l2, d2, j2) = block_uses_fs(then_block);
                 nl |= l2;
                 nd |= d2;
+                nj |= j2;
                 if let Some(b) = else_block {
-                    let (l3, d3) = block_uses_fs(b);
+                    let (l3, d3, j3) = block_uses_fs(b);
                     nl |= l3;
                     nd |= d3;
+                    nj |= j3;
                 }
-                (nl, nd)
+                (nl, nd, nj)
             }
             Statement::ForLoop { condition, body, .. } => {
-                let (mut nl, mut nd) = condition
+                let (mut nl, mut nd, mut nj) = condition
                     .as_ref()
                     .map(|e| expression_uses_fs_call(e))
-                    .unwrap_or((false, false));
-                let (l2, d2) = block_uses_fs(body);
+                    .unwrap_or((false, false, false));
+                let (l2, d2, j2) = block_uses_fs(body);
                 nl |= l2;
                 nd |= d2;
-                (nl, nd)
+                nj |= j2;
+                (nl, nd, nj)
             }
             Statement::WhenBlock { when_expression, cases, else_block, .. } => {
-                let (mut nl, mut nd) = expression_uses_fs_call(when_expression);
+                let (mut nl, mut nd, mut nj) = expression_uses_fs_call(when_expression);
                 for (_, b) in cases {
-                    let (l, d) = block_uses_fs(b);
+                    let (l, d, j) = block_uses_fs(b);
                     nl |= l;
                     nd |= d;
+                    nj |= j;
                 }
                 if let Some(b) = else_block {
-                    let (l, d) = block_uses_fs(b);
+                    let (l, d, j) = block_uses_fs(b);
                     nl |= l;
                     nd |= d;
+                    nj |= j;
                 }
-                (nl, nd)
+                (nl, nd, nj)
             }
             Statement::WhileLoop { condition, body, .. } => {
-                let (mut nl, mut nd) = expression_uses_fs_call(condition);
-                let (l2, d2) = block_uses_fs(body);
+                let (mut nl, mut nd, mut nj) = expression_uses_fs_call(condition);
+                let (l2, d2, j2) = block_uses_fs(body);
                 nl |= l2;
                 nd |= d2;
-                (nl, nd)
+                nj |= j2;
+                (nl, nd, nj)
             }
             Statement::LoopStatement { body, .. } => block_uses_fs(body),
             Statement::DangerAssignOnError { args, on_error, .. }
             | Statement::DangerCallOnError { args, on_error, .. } => {
                 let mut nl = false;
                 let mut nd = false;
+                let mut nj = false;
                 for a in args {
-                    let (l, d) = expression_uses_fs_call(a);
+                    let (l, d, j) = expression_uses_fs_call(a);
                     nl |= l;
                     nd |= d;
+                    nj |= j;
                 }
-                let (l2, d2) = block_uses_fs(on_error);
-                (nl || l2, nd || d2)
+                let (l2, d2, j2) = block_uses_fs(on_error);
+                (nl || l2, nd || d2, nj || j2)
             }
             Statement::ListPush { value, .. } => expression_uses_fs_call(value),
             Statement::ListPopOnError { on_error, .. }
@@ -451,25 +500,27 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool) {
             Statement::ReturnStatement { value, .. } => value
                 .as_ref()
                 .map(|v| expression_uses_fs_call(v))
-                .unwrap_or((false, false)),
-            _ => (false, false),
+                .unwrap_or((false, false, false)),
+            _ => (false, false, false),
         }
     }
 
     let mut nl = false;
     let mut nd = false;
+    let mut nj = false;
     for s in &program.statements {
-        let (l, d) = stmt_uses_fs(s);
+        let (l, d, j) = stmt_uses_fs(s);
         nl |= l;
         nd |= d;
+        nj |= j;
     }
-    (nl, nd)
+    (nl, nd, nj)
 }
 
 fn expression_uses_io_call(expr: &Expression) -> bool {
     match expr {
         Expression::Call { name, args } => {
-            let is_io = matches!(name.as_str(), "output" | "input" | "read" | "write");
+            let is_io = matches!(name.as_str(), "output" | "input" | "read" | "write" | "args");
             is_io || args.iter().any(expression_uses_io_call)
         }
         Expression::BinaryOp { left, right, .. } => {
@@ -481,6 +532,24 @@ fn expression_uses_io_call(expr: &Expression) -> bool {
         }
         Expression::ListLiteral(items) => items.iter().any(expression_uses_io_call),
         Expression::StructConstruction { fields } => fields.values().any(|v| expression_uses_io_call(v)),
+        _ => false,
+    }
+}
+
+fn expression_uses_args_call(expr: &Expression) -> bool {
+    match expr {
+        Expression::Call { name, args } => {
+            name == "args" || args.iter().any(expression_uses_args_call)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_args_call(left)
+                || right.as_deref().map(expression_uses_args_call).unwrap_or(false)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_args_call(base) || expression_uses_args_call(index)
+        }
+        Expression::ListLiteral(items) => items.iter().any(expression_uses_args_call),
+        Expression::StructConstruction { fields } => fields.values().any(|v| expression_uses_args_call(v)),
         _ => false,
     }
 }
@@ -531,6 +600,54 @@ fn program_uses_io_runtime(program: &Program) -> bool {
         }
     }
     program.statements.iter().any(stmt_uses_io)
+}
+
+fn program_uses_args_runtime(program: &Program) -> bool {
+    fn stmt_uses_args(stmt: &Statement) -> bool {
+        match stmt {
+            Statement::VarDecl { value, .. } => expression_uses_args_call(value),
+            Statement::Assignment { value, .. } => expression_uses_args_call(value),
+            Statement::ExpressionStatement { expr, .. } => expression_uses_args_call(expr),
+            Statement::IfStatement { condition, then_block, else_block, .. } => {
+                expression_uses_args_call(condition)
+                    || then_block.statements.iter().any(stmt_uses_args)
+                    || else_block
+                        .as_ref()
+                        .map(|b| b.statements.iter().any(stmt_uses_args))
+                        .unwrap_or(false)
+            }
+            Statement::ForLoop { condition, body, .. } => {
+                condition.as_ref().map(|e| expression_uses_args_call(e)).unwrap_or(false)
+                    || body.statements.iter().any(stmt_uses_args)
+            }
+            Statement::WhenBlock { when_expression, cases, else_block, .. } => {
+                expression_uses_args_call(when_expression)
+                    || cases.iter().any(|(_, b)| b.statements.iter().any(stmt_uses_args))
+                    || else_block
+                        .as_ref()
+                        .map(|b| b.statements.iter().any(stmt_uses_args))
+                        .unwrap_or(false)
+            }
+            Statement::WhileLoop { condition, body, .. } => {
+                expression_uses_args_call(condition) || body.statements.iter().any(stmt_uses_args)
+            }
+            Statement::LoopStatement { body, .. } => body.statements.iter().any(stmt_uses_args),
+            Statement::DangerAssignOnError { args, on_error, .. }
+            | Statement::DangerCallOnError { args, on_error, .. } => {
+                args.iter().any(expression_uses_args_call) || on_error.statements.iter().any(stmt_uses_args)
+            }
+            Statement::ListPush { value, .. } => expression_uses_args_call(value),
+            Statement::ListPopOnError { on_error, .. } => on_error.statements.iter().any(stmt_uses_args),
+            Statement::ReturnStatement { value, .. } => {
+                value.as_ref().map(|v| expression_uses_args_call(v)).unwrap_or(false)
+            }
+            Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
+                statements.iter().any(stmt_uses_args)
+            }
+            _ => false,
+        }
+    }
+    program.statements.iter().any(stmt_uses_args)
 }
 
 fn emit_error_code_enum(program: &Program, out: &mut String) {
@@ -1002,7 +1119,7 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
         "Float" | "f64" => "double",
         "bool" => "bool",
         "char" => "char",
-        "Text" => "const char*",
+        "Text" | "Path" => "const char*",
         _ => "int64_t",
     }
 }
@@ -1075,6 +1192,14 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     Builtin::FsIsDir if args.len() == 1 => {
                         let path = emit_expr(&args[0], declared);
                         return format!("sk_fs_is_dir({})", path);
+                    }
+                    Builtin::FsJoin if args.len() == 2 => {
+                        let a = emit_expr(&args[0], declared);
+                        let b = emit_expr(&args[1], declared);
+                        return format!("sk_fs_join({}, {})", a, b);
+                    }
+                    Builtin::Args if args.is_empty() => {
+                        return "sk_args(argc, argv)".to_string();
                     }
                     Builtin::Output if args.len() == 1 => {
                         let rendered = emit_expr(&args[0], declared);

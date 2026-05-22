@@ -554,3 +554,14 @@ new Int ok = write("b.txt", body)
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
 }
+
+#[test]
+fn semantic_allows_args_and_fs_join() {
+    let src = r#"
+new Text List a = args()
+new Text p = fs.join(".", "src")
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}

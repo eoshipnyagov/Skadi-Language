@@ -136,7 +136,7 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "Float" | "f64" | "f32" => ValueType::Float,
         "bool" => ValueType::Bool,
         "char" => ValueType::Char,
-        "Text" => ValueType::Text,
+        "Text" | "Path" => ValueType::Text,
         _ => ValueType::Unknown,
     }
 }
@@ -796,6 +796,18 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Bool)
                     }
+                    Builtin::FsJoin => {
+                        let a = infer_expression_type(&args[0], scope, functions)?;
+                        let b = infer_expression_type(&args[1], scope, functions)?;
+                        if a != ValueType::Text || b != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'fs.join' expects (Text, Text), got ({:?}, {:?}).", a, b),
+                            ));
+                        }
+                        Ok(ValueType::Text)
+                    }
+                    Builtin::Args => Ok(ValueType::List(Box::new(ValueType::Text))),
                     Builtin::Output => {
                         let ty = infer_expression_type(&args[0], scope, functions)?;
                         match ty {

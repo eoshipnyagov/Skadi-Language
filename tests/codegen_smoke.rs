@@ -307,3 +307,19 @@ new Int ok = write("out.txt", body)
     assert!(c.contains("const char* body = sk_read_file(\"in.txt\");"));
     assert!(c.contains("int64_t ok = sk_write_file(\"out.txt\", body);"));
 }
+
+#[test]
+fn codegen_emits_args_and_fs_join_shape() {
+    let src = r#"
+new Text List cli_args = args()
+new Text p = fs.join(".", "src")
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int main(int argc, char **argv) {"));
+    assert!(c.contains("SkadiList_text cli_args = sk_list_text_new();"));
+    assert!(c.contains("cli_args = sk_args(argc, argv);"));
+    assert!(c.contains("const char* p = sk_fs_join(\".\", \"src\");"));
+}
