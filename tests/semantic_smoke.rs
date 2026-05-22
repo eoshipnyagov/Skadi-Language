@@ -410,6 +410,69 @@ new bool has = contains(t, 1)
 }
 
 #[test]
+fn semantic_rejects_find_wrong_arg_count() {
+    let src = r#"
+new Text t = "weather"
+new Int idx = find(t)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-033"));
+    assert!(err.contains("builtin 'find' expects 2 arguments"));
+}
+
+#[test]
+fn semantic_rejects_find_type_mismatch() {
+    let src = r#"
+new Text t = "weather"
+new Int idx = find(t, 10)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("builtin 'find' expects (Text, Text)"));
+}
+
+#[test]
+fn semantic_rejects_slice_wrong_arg_count() {
+    let src = r#"
+new Text t = "weather"
+new Text s = slice(t, 1)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-033"));
+    assert!(err.contains("builtin 'slice' expects 3 arguments"));
+}
+
+#[test]
+fn semantic_rejects_slice_type_mismatch() {
+    let src = r#"
+new Text t = "weather"
+new Text s = slice(t, true, 3)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("builtin 'slice' expects (Text, Int, Int)"));
+}
+
+#[test]
+fn semantic_allows_slice_with_start_greater_than_end() {
+    let src = r#"
+new Text t = "weather"
+new Text s = slice(t, 5, 2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
 fn semantic_for_infers_item_type_from_list() {
     let src = r#"
 new i32 List samples = [10, 20, 30]
