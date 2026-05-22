@@ -640,9 +640,10 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
     let mut idx = start_index + 1;
     let mut declared_type: Option<String> = None;
 
-    // Supports both:
+    // Supports:
     // new x = 1
     // new Int x = 1
+    // new i32 List xs = [1, 2, 3]
     if idx + 2 < tokens.len()
         && tokens[idx].kind() == TokenKind::Identifier
         && tokens[idx + 1].kind() == TokenKind::Identifier
@@ -650,6 +651,16 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
     {
         declared_type = Some(tokens[idx].lexeme.clone());
         idx += 1;
+    }
+    if idx + 3 < tokens.len()
+        && tokens[idx].kind() == TokenKind::Identifier
+        && tokens[idx + 1].kind() == TokenKind::Identifier
+        && tokens[idx + 1].lexeme == "List"
+        && tokens[idx + 2].kind() == TokenKind::Identifier
+        && tokens[idx + 3].kind() == TokenKind::OpAssignment
+    {
+        declared_type = Some(format!("{} List", tokens[idx].lexeme));
+        idx += 2;
     }
 
     if idx >= tokens.len() || tokens[idx].kind() != TokenKind::Identifier {

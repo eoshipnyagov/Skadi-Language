@@ -540,6 +540,12 @@ fn infer_expression_type(
         Expression::LiteralInt(_) => Ok(ValueType::Int),
         Expression::LiteralFloat(_) => Ok(ValueType::Float),
         Expression::LiteralBool(_) => Ok(ValueType::Bool),
+        Expression::ListLiteral(items) => {
+            for item in items {
+                let _ = infer_expression_type(item, scope, functions)?;
+            }
+            Ok(ValueType::Unknown)
+        }
         Expression::VariableReference(name) => scope
             .get(name)
             .copied()
@@ -667,6 +673,7 @@ fn contains_variable(expr: &Expression, name: &str) -> bool {
             fields.values().any(|v| contains_variable(v, name))
         }
         Expression::Call { args, .. } => args.iter().any(|a| contains_variable(a, name)),
+        Expression::ListLiteral(items) => items.iter().any(|a| contains_variable(a, name)),
         _ => false,
     }
 }

@@ -478,5 +478,6 @@ fn emit_expr(expr: &Expression) -> String {
             }
         }
         Expression::StructConstruction { .. } => "0 /* TODO(v1): struct literal */".to_string(),
+        Expression::ListLiteral(_) => "0 /* TODO(v1): list literal */".to_string(),
     }
 }

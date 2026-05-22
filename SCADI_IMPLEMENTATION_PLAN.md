@@ -108,6 +108,32 @@ Exit criteria:
 - Updated grammar/spec section for the reduced core subset.
 - Implementation plan updated to prioritize only frozen core features.
 
+## Phase 7 - List/Text v1 Realization
+Status: in progress
+
+Tasks:
+- Freeze accepted syntax/typing in RFCs (`docs/RFC_LIST.md`, `docs/RFC_TEXT.md`).
+- Parser + AST:
+  - support `new <Type> List <name> = ...`
+  - support list literals `[a, b, c]`
+  - support `Text` indexing syntax shape in parser pipeline
+- Semantic:
+  - enforce list declaration/type rules from RFC
+  - validate `len(List)` / `len(Text)` and index argument types
+  - validate `push`/`pop` signatures and `danger` usage contract
+- Codegen/runtime (C):
+  - define `List`/`Text` runtime ABI
+  - lower list/text operations to runtime calls
+  - implement minimal runtime helpers for v1 operations
+- Diagnostics:
+  - add stable semantic/runtime-facing codes for List/Text errors
+  - cover expected failure modes in tests
+
+Exit criteria:
+- Parser accepts canonical List/Text v1 examples from RFC docs.
+- Semantic pass validates all agreed v1 rules.
+- C backend can build and run at least one e2e list/text fixture.
+
 ## Risk Register
 1. Contract drift between lexer token kinds and parser expectations.
 Mitigation: freeze shared enums in `common_types.rs`, change only with tests.

@@ -196,6 +196,22 @@ fn parses_typed_new_declaration() {
 }
 
 #[test]
+fn parses_typed_list_new_declaration_with_literal() {
+    let src = "new i32 List xs = [1, 2, 3]\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::VarDecl { name, declared_type, value, .. } = &program.statements[0] else {
+        panic!("expected VarDecl");
+    };
+    assert_eq!(name, "xs");
+    assert_eq!(declared_type.as_deref(), Some("i32 List"));
+    let Expression::ListLiteral(items) = &**value else {
+        panic!("expected ListLiteral");
+    };
+    assert_eq!(items.len(), 3);
+}
+
+#[test]
 fn parses_typed_function_signature() {
     let src = r#"
 fn add(Int a, Int b) Int {

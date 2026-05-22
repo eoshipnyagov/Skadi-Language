@@ -91,6 +91,39 @@ impl<'a> ExprParser<'a> {
             return Ok(expr);
         }
 
+        if tok.kind == TokenKind::OpPunctuation && tok.lexeme == "[" {
+            self.idx += 1;
+            let mut items = Vec::new();
+            if self.idx < self.end
+                && self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                && self.tokens[self.idx].lexeme == "]"
+            {
+                self.idx += 1;
+                return Ok(Expression::ListLiteral(items));
+            }
+            loop {
+                let item = self.parse_bp(0)?;
+                items.push(item);
+                if self.idx >= self.end {
+                    return Err(parse_err("SC-PARSE-207", "expected ']' to close list literal."));
+                }
+                if self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                    && self.tokens[self.idx].lexeme == ","
+                {
+                    self.idx += 1;
+                    continue;
+                }
+                if self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                    && self.tokens[self.idx].lexeme == "]"
+                {
+                    self.idx += 1;
+                    break;
+                }
+                return Err(parse_err("SC-PARSE-208", "expected ',' or ']' in list literal."));
+            }
+            return Ok(Expression::ListLiteral(items));
+        }
+
         self.idx += 1;
         match tok.kind {
             TokenKind::TypeInt => {
