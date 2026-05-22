@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ast_nodes::{BlockStatement, Expression, FunctionParam, Program, Statement};
+use crate::builtins::{builtin_arity, builtin_from_name, Builtin};
 use crate::diagnostics::{format_diagnostic, DiagnosticKind};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -703,82 +704,74 @@ fn infer_expression_type(
             }
         }
         Expression::Call { name, args } => {
-            if name == "len" {
-                if args.len() != 1 {
+            if let Some(builtin) = builtin_from_name(name) {
+                let expected_arity = builtin_arity(builtin);
+                if args.len() != expected_arity {
                     return Err(sem_err(
                         SEM_BUILTIN_ARG,
-                        format!("builtin 'len' expects 1 argument, got {}.", args.len()),
+                        format!(
+                            "builtin '{}' expects {} arguments, got {}.",
+                            name,
+                            expected_arity,
+                            args.len()
+                        ),
                     ));
                 }
-                let arg_ty = infer_expression_type(&args[0], scope, functions)?;
-                return match arg_ty {
-                    ValueType::List(_) | ValueType::Text => Ok(ValueType::Int),
-                    _ => Err(sem_err(
-                        SEM_TYPE_MISMATCH,
-                        format!("builtin 'len' expects List or Text, got {:?}.", arg_ty),
-                    )),
+                return match builtin {
+                    Builtin::Len => {
+                        let arg_ty = infer_expression_type(&args[0], scope, functions)?;
+                        match arg_ty {
+                            ValueType::List(_) | ValueType::Text => Ok(ValueType::Int),
+                            _ => Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'len' expects List or Text, got {:?}.", arg_ty),
+                            )),
+                        }
+                    }
+                    Builtin::Contains => {
+                        let hay_ty = infer_expression_type(&args[0], scope, functions)?;
+                        let needle_ty = infer_expression_type(&args[1], scope, functions)?;
+                        if hay_ty != ValueType::Text || needle_ty != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin 'contains' expects (Text, Text), got ({:?}, {:?}).",
+                                    hay_ty, needle_ty
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Bool)
+                    }
+                    Builtin::Find => {
+                        let hay_ty = infer_expression_type(&args[0], scope, functions)?;
+                        let needle_ty = infer_expression_type(&args[1], scope, functions)?;
+                        if hay_ty != ValueType::Text || needle_ty != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin 'find' expects (Text, Text), got ({:?}, {:?}).",
+                                    hay_ty, needle_ty
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Int)
+                    }
+                    Builtin::Slice => {
+                        let text_ty = infer_expression_type(&args[0], scope, functions)?;
+                        let start_ty = infer_expression_type(&args[1], scope, functions)?;
+                        let end_ty = infer_expression_type(&args[2], scope, functions)?;
+                        if text_ty != ValueType::Text || start_ty != ValueType::Int || end_ty != ValueType::Int {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin 'slice' expects (Text, Int, Int), got ({:?}, {:?}, {:?}).",
+                                    text_ty, start_ty, end_ty
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Text)
+                    }
                 };
-            }
-            if name == "contains" {
-                if args.len() != 2 {
-                    return Err(sem_err(
-                        SEM_BUILTIN_ARG,
-                        format!("builtin 'contains' expects 2 arguments, got {}.", args.len()),
-                    ));
-                }
-                let hay_ty = infer_expression_type(&args[0], scope, functions)?;
-                let needle_ty = infer_expression_type(&args[1], scope, functions)?;
-                if hay_ty != ValueType::Text || needle_ty != ValueType::Text {
-                    return Err(sem_err(
-                        SEM_TYPE_MISMATCH,
-                        format!(
-                            "builtin 'contains' expects (Text, Text), got ({:?}, {:?}).",
-                            hay_ty, needle_ty
-                        ),
-                    ));
-                }
-                return Ok(ValueType::Bool);
-            }
-            if name == "find" {
-                if args.len() != 2 {
-                    return Err(sem_err(
-                        SEM_BUILTIN_ARG,
-                        format!("builtin 'find' expects 2 arguments, got {}.", args.len()),
-                    ));
-                }
-                let hay_ty = infer_expression_type(&args[0], scope, functions)?;
-                let needle_ty = infer_expression_type(&args[1], scope, functions)?;
-                if hay_ty != ValueType::Text || needle_ty != ValueType::Text {
-                    return Err(sem_err(
-                        SEM_TYPE_MISMATCH,
-                        format!(
-                            "builtin 'find' expects (Text, Text), got ({:?}, {:?}).",
-                            hay_ty, needle_ty
-                        ),
-                    ));
-                }
-                return Ok(ValueType::Int);
-            }
-            if name == "slice" {
-                if args.len() != 3 {
-                    return Err(sem_err(
-                        SEM_BUILTIN_ARG,
-                        format!("builtin 'slice' expects 3 arguments, got {}.", args.len()),
-                    ));
-                }
-                let text_ty = infer_expression_type(&args[0], scope, functions)?;
-                let start_ty = infer_expression_type(&args[1], scope, functions)?;
-                let end_ty = infer_expression_type(&args[2], scope, functions)?;
-                if text_ty != ValueType::Text || start_ty != ValueType::Int || end_ty != ValueType::Int {
-                    return Err(sem_err(
-                        SEM_TYPE_MISMATCH,
-                        format!(
-                            "builtin 'slice' expects (Text, Int, Int), got ({:?}, {:?}, {:?}).",
-                            text_ty, start_ty, end_ty
-                        ),
-                    ));
-                }
-                return Ok(ValueType::Text);
             }
             let Some(sig) = functions.get(name) else {
                 return Err(sem_err(

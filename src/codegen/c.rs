@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
+use crate::builtins::{builtin_from_name, Builtin};
 
 struct FunctionContext {
     is_danger: bool,
@@ -725,33 +726,38 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             format!("{}.data[{}]", base_rendered, index_rendered)
         }
         Expression::Call { name, args } => {
-            if name == "len" && args.len() == 1 {
-                let arg_rendered = emit_expr(&args[0], declared);
-                if let Expression::VariableReference(var_name) = &args[0]
-                    && declared
-                        .get(var_name)
-                        .map(|t| t.as_str() == "Text")
-                        .unwrap_or(false)
-                {
-                    return format!("((int64_t)strlen({}))", arg_rendered);
+            if let Some(builtin) = builtin_from_name(name) {
+                match builtin {
+                    Builtin::Len if args.len() == 1 => {
+                        let arg_rendered = emit_expr(&args[0], declared);
+                        if let Expression::VariableReference(var_name) = &args[0]
+                            && declared
+                                .get(var_name)
+                                .map(|t| t.as_str() == "Text")
+                                .unwrap_or(false)
+                        {
+                            return format!("((int64_t)strlen({}))", arg_rendered);
+                        }
+                        return format!("((int64_t){}.len)", arg_rendered);
+                    }
+                    Builtin::Contains if args.len() == 2 => {
+                        let hay = emit_expr(&args[0], declared);
+                        let needle = emit_expr(&args[1], declared);
+                        return format!("(strstr({}, {}) != NULL)", hay, needle);
+                    }
+                    Builtin::Find if args.len() == 2 => {
+                        let hay = emit_expr(&args[0], declared);
+                        let needle = emit_expr(&args[1], declared);
+                        return format!("sk_text_find({}, {})", hay, needle);
+                    }
+                    Builtin::Slice if args.len() == 3 => {
+                        let text = emit_expr(&args[0], declared);
+                        let start = emit_expr(&args[1], declared);
+                        let end = emit_expr(&args[2], declared);
+                        return format!("sk_text_slice({}, {}, {})", text, start, end);
+                    }
+                    _ => {}
                 }
-                return format!("((int64_t){}.len)", arg_rendered);
-            }
-            if name == "contains" && args.len() == 2 {
-                let hay = emit_expr(&args[0], declared);
-                let needle = emit_expr(&args[1], declared);
-                return format!("(strstr({}, {}) != NULL)", hay, needle);
-            }
-            if name == "find" && args.len() == 2 {
-                let hay = emit_expr(&args[0], declared);
-                let needle = emit_expr(&args[1], declared);
-                return format!("sk_text_find({}, {})", hay, needle);
-            }
-            if name == "slice" && args.len() == 3 {
-                let text = emit_expr(&args[0], declared);
-                let start = emit_expr(&args[1], declared);
-                let end = emit_expr(&args[2], declared);
-                return format!("sk_text_slice({}, {}, {})", text, start, end);
             }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", name, rendered.join(", "))
