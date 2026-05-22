@@ -4,6 +4,10 @@ use crate::common_types::{Token, TokenKind};
 mod expressions;
 mod statements;
 
+fn token_loc(token: &Token) -> String {
+    format!("line {}, col {}", token.line, token.col)
+}
+
 fn parse_statement_at(
     tokens: &[Token],
     current_token_index: usize,
@@ -36,10 +40,11 @@ fn parse_statement_at(
         }
         _ => {
             return Err(format!(
-                "Unsupported statement start token at index {}: {:?} ('{}')",
-                current_token_index,
+                "Parse error at {}: unsupported statement start token {:?} ('{}') [index {}]",
+                token_loc(start_token),
                 start_token.kind(),
-                start_token.lexeme
+                start_token.lexeme,
+                current_token_index
             ));
         }
     };
@@ -47,10 +52,16 @@ fn parse_statement_at(
     match parse_result {
         Ok((statement, consumed_count)) if consumed_count > 0 => Ok((statement, consumed_count)),
         Ok(_) => Err(format!(
-            "Parser consumed zero tokens at index {}. Aborting to prevent infinite loop.",
+            "Parse error at {}: parser consumed zero tokens [index {}].",
+            token_loc(start_token),
             current_token_index
         )),
-        Err(e) => Err(format!("Parse error at token index {}: {}", current_token_index, e)),
+        Err(e) => Err(format!(
+            "Parse error at {} [index {}]: {}",
+            token_loc(start_token),
+            current_token_index,
+            e
+        )),
     }
 }
 

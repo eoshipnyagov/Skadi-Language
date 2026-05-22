@@ -296,3 +296,12 @@ when x {
     assert_eq!(cases[1].0.len(), 2);
     assert!(else_block.is_some());
 }
+
+#[test]
+fn parse_error_reports_line_and_col() {
+    let src = "fn broken(a, b\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let err = parse_program(&tokens).expect_err("parse should fail");
+    assert!(err.contains("line"));
+    assert!(err.contains("col"));
+}
