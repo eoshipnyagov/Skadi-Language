@@ -69,10 +69,10 @@ fn program_uses_for_loop(program: &Program) -> bool {
                         .map(|b| block_has_for(b))
                         .unwrap_or(false)
             }
-            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body } => block_has_for(body),
+            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => block_has_for(body),
             Statement::DangerAssignOnError { on_error, .. }
             | Statement::DangerCallOnError { on_error, .. } => block_has_for(on_error),
-            Statement::BlockStatement { statements } | Statement::OnErrorBlock { statements } => {
+            Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
                 statements.iter().any(statement_has_for)
             }
             _ => false,
@@ -83,7 +83,7 @@ fn program_uses_for_loop(program: &Program) -> bool {
 
 fn emit_error_code_enum(program: &Program, out: &mut String) {
     for stmt in &program.statements {
-        if let Statement::LabelDecl { name, variants } = stmt {
+        if let Statement::LabelDecl { name, variants, .. } = stmt {
             if name == "ErrorCode" && !variants.is_empty() {
                 out.push_str("typedef enum ErrorCode {\n");
                 for (i, v) in variants.iter().enumerate() {
@@ -166,7 +166,7 @@ fn emit_statement(
 ) {
     let pad = "    ".repeat(indent);
     match stmt {
-        Statement::Assignment { target, value } => {
+        Statement::Assignment { target, value, .. } => {
             let expr = emit_expr(value);
             out.push_str(&pad);
             out.push_str(target);
@@ -174,7 +174,7 @@ fn emit_statement(
             out.push_str(&expr);
             out.push_str(";\n");
         }
-        Statement::IfStatement { condition, then_block, else_block } => {
+        Statement::IfStatement { condition, then_block, else_block, .. } => {
             out.push_str(&pad);
             out.push_str("if (");
             out.push_str(&emit_expr(condition));
@@ -192,7 +192,7 @@ fn emit_statement(
             }
             out.push('\n');
         }
-        Statement::WhileLoop { condition, body } => {
+        Statement::WhileLoop { condition, body, .. } => {
             out.push_str(&pad);
             out.push_str("while (");
             out.push_str(&emit_expr(condition));
@@ -202,7 +202,7 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str("}\n");
         }
-        Statement::LoopStatement { body } => {
+        Statement::LoopStatement { body, .. } => {
             out.push_str(&pad);
             out.push_str("while (1) {\n");
             let mut inner = declared.clone();
@@ -245,13 +245,13 @@ fn emit_statement(
             out.push_str(name);
             out.push_str(" */\n");
         }
-        Statement::StructDecl { name } => {
+        Statement::StructDecl { name, .. } => {
             out.push_str(&pad);
             out.push_str("/* struct ");
             out.push_str(name);
             out.push_str(" TODO(v1): C struct lowering */\n");
         }
-        Statement::OnBlock { trigger } => {
+        Statement::OnBlock { trigger, .. } => {
             out.push_str(&pad);
             out.push_str("/* on ");
             out.push_str(trigger);
@@ -262,6 +262,7 @@ fn emit_statement(
             call_name,
             args,
             on_error,
+            ..
         } => {
             out.push_str(&pad);
             out.push_str("/* TODO(v1): danger call lowering */\n");
@@ -290,6 +291,7 @@ fn emit_statement(
             call_name,
             args,
             on_error,
+            ..
         } => {
             out.push_str(&pad);
             out.push_str("/* TODO(v1): danger call lowering */\n");
@@ -309,7 +311,7 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str("}\n");
         }
-        Statement::ReturnStatement { value } => {
+        Statement::ReturnStatement { value, .. } => {
             if let Some(ctx) = fn_ctx {
                 if ctx.is_danger {
                     match (ctx.return_type.is_some(), value) {
@@ -350,7 +352,7 @@ fn emit_statement(
             }
             out.push_str(";\n");
         }
-        Statement::ReturnError { code } => {
+        Statement::ReturnError { code, .. } => {
             out.push_str(&pad);
             out.push_str("return ErrorCode_");
             out.push_str(code);
@@ -360,6 +362,7 @@ fn emit_statement(
             when_expression,
             cases,
             else_block,
+            ..
         } => {
             if cases.is_empty() {
                 if let Some(else_block) = else_block {
@@ -421,7 +424,7 @@ fn emit_statement(
             out.push_str(";\n");
             declared.insert(name.clone());
         }
-        Statement::BlockStatement { statements } | Statement::OnErrorBlock { statements } => {
+        Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
             let mut inner = declared.clone();
             for s in statements {
                 emit_statement(s, out, indent, &mut inner, fn_ctx);

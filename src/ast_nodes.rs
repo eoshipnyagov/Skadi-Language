@@ -39,47 +39,52 @@ pub struct FunctionParam {
 
 #[derive(Debug)]
 pub enum Statement {
-    VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String> },
-    Assignment { target: String, value: Box<Expression> },
+    VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String>, loc: Location },
+    Assignment { target: String, value: Box<Expression>, loc: Location },
     FunctionDef { 
         name: String, 
         params: Vec<FunctionParam>, 
         body: Box<BlockStatement>, 
         returns: Option<String>, // Type of return
-        is_danger: bool 
+        is_danger: bool,
+        loc: Location
     },
-    IfStatement { condition: Box<Expression>, then_block: Box<BlockStatement>, else_block: Option<Box<BlockStatement>> },
+    IfStatement { condition: Box<Expression>, then_block: Box<BlockStatement>, else_block: Option<Box<BlockStatement>>, loc: Location },
     ForLoop { 
         initialization: Option<Box<Expression>>, 
         condition: Option<Box<Expression>>, 
         update: Option<Box<Expression>>, 
-        body: Box<BlockStatement> 
+        body: Box<BlockStatement>,
+        loc: Location
     },
     WhenBlock {
         when_expression: Box<Expression>,
         cases: Vec<(Vec<Expression>, Box<BlockStatement>)>,
-        else_block: Option<Box<BlockStatement>>
+        else_block: Option<Box<BlockStatement>>,
+        loc: Location
     },
-    WhileLoop { condition: Box<Expression>, body: Box<BlockStatement> },
-    LoopStatement { body: Box<BlockStatement> },
-    LabelDecl { name: String, variants: Vec<String> },
-    StructDecl { name: String },
-    OnBlock { trigger: String },
+    WhileLoop { condition: Box<Expression>, body: Box<BlockStatement>, loc: Location },
+    LoopStatement { body: Box<BlockStatement>, loc: Location },
+    LabelDecl { name: String, variants: Vec<String>, loc: Location },
+    StructDecl { name: String, loc: Location },
+    OnBlock { trigger: String, loc: Location },
     DangerAssignOnError {
         target: String,
         call_name: String,
         args: Vec<Expression>,
         on_error: Box<BlockStatement>,
+        loc: Location,
     },
     DangerCallOnError {
         call_name: String,
         args: Vec<Expression>,
         on_error: Box<BlockStatement>,
+        loc: Location,
     },
-    ReturnError { code: String },
-    ReturnStatement { value: Option<Box<Expression>> },
-    BlockStatement { statements: Vec<Statement> },
-    OnErrorBlock { statements: Vec<Statement> }, // For 'on error' context
+    ReturnError { code: String, loc: Location },
+    ReturnStatement { value: Option<Box<Expression>>, loc: Location },
+    BlockStatement { statements: Vec<Statement>, loc: Location },
+    OnErrorBlock { statements: Vec<Statement>, loc: Location }, // For 'on error' context
 }
 
 

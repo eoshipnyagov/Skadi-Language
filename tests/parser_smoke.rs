@@ -18,7 +18,7 @@ struct Sensor {
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 2);
     match &program.statements[0] {
-        Statement::LabelDecl { name, variants } => {
+        Statement::LabelDecl { name, variants, .. } => {
             assert_eq!(name, "Status");
             assert!(variants.contains(&"Ok".to_string()));
             assert!(variants.contains(&"Error".to_string()));
@@ -26,7 +26,7 @@ struct Sensor {
         _ => panic!("expected LabelDecl"),
     }
     match &program.statements[1] {
-        Statement::StructDecl { name } => assert_eq!(name, "Sensor"),
+        Statement::StructDecl { name, .. } => assert_eq!(name, "Sensor"),
         _ => panic!("expected StructDecl"),
     }
 }
@@ -42,7 +42,7 @@ on interrupt timer0 {
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 1);
     match &program.statements[0] {
-        Statement::OnBlock { trigger } => assert_eq!(trigger, "interrupt"),
+        Statement::OnBlock { trigger, .. } => assert_eq!(trigger, "interrupt"),
         _ => panic!("expected OnBlock"),
     }
 }
@@ -227,7 +227,7 @@ x = parse_value(x) on error {
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 2);
     match &program.statements[1] {
-        Statement::DangerAssignOnError { target, call_name, args, on_error } => {
+        Statement::DangerAssignOnError { target, call_name, args, on_error, .. } => {
             assert_eq!(target, "x");
             assert_eq!(call_name, "parse_value");
             assert_eq!(args.len(), 1);

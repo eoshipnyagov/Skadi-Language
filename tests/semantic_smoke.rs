@@ -16,6 +16,8 @@ fn semantic_fails_for_use_before_definition() {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("line"));
+    assert!(err.contains("col"));
     assert!(err.contains("Use-before-definition"));
     assert!(err.contains("b"));
 }

@@ -2,7 +2,7 @@
 // Parser Logic Helpers (Rust)
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
-use crate::ast_nodes::{BlockStatement, FunctionParam, ScopeManager, Statement};
+use crate::ast_nodes::{BlockStatement, FunctionParam, Location, ScopeManager, Statement};
 use crate::common_types::{Token, TokenKind};
 
 use super::expressions::parse_expression_range;
@@ -68,6 +68,7 @@ pub fn parse_function_declaration(
     _scope: &ScopeManager,
 ) -> ParseResult<Statement> {
     let mut current_index = start_index;
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     let mut is_danger = false;
 
     if current_index < tokens.len()
@@ -172,6 +173,7 @@ pub fn parse_function_declaration(
         .into(),
         returns,
         is_danger,
+        loc,
     };
 
     Ok((stmt, current_index - start_index))
@@ -179,6 +181,7 @@ pub fn parse_function_declaration(
 
 pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
     let mut current_index = start_index;
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
 
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordFor {
         return Err("Expected 'for' keyword to start loop.".into());
@@ -209,6 +212,7 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
             condition: Some(Box::new(collection_expr)),
             update: None,
             body: Box::new(BlockStatement { statements: body_statements }),
+            loc,
         };
         return Ok((stmt, current_index - start_index));
     }
@@ -253,6 +257,7 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
             condition: None,
             update: None,
             body: Box::new(BlockStatement { statements: body_statements }),
+            loc,
         },
         current_index - start_index,
     ))
@@ -260,6 +265,7 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
 
 pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
     let mut current_index = start_index;
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
 
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordWhen {
         return Err("Expected 'when' keyword to start statement.".into());
@@ -336,12 +342,14 @@ pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &Scope
         when_expression: Box::new(when_expression),
         cases,
         else_block,
+        loc,
     };
 
     Ok((stmt, current_index - start_index))
 }
 
 pub fn parse_if_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordIf {
         return Err("Expected 'if' keyword.".into());
     }
@@ -387,12 +395,14 @@ pub fn parse_if_statement(tokens: &[Token], start_index: usize) -> ParseResult<S
                 statements: then_statements,
             }),
             else_block,
+            loc,
         },
         consumed_to - start_index,
     ))
 }
 
 pub fn parse_while_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordWhile {
         return Err("Expected 'while' keyword.".into());
     }
@@ -413,12 +423,14 @@ pub fn parse_while_statement(tokens: &[Token], start_index: usize) -> ParseResul
             body: Box::new(BlockStatement {
                 statements: body_statements,
             }),
+            loc,
         },
         block_end + 1 - start_index,
     ))
 }
 
 pub fn parse_loop_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordLoop {
         return Err("Expected 'loop' keyword.".into());
     }
@@ -433,12 +445,14 @@ pub fn parse_loop_statement(tokens: &[Token], start_index: usize) -> ParseResult
             body: Box::new(BlockStatement {
                 statements: body_statements,
             }),
+            loc,
         },
         block_end + 1 - start_index,
     ))
 }
 
 pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordReturn {
         return Err("Expected 'return' keyword.".into());
     }
@@ -452,6 +466,7 @@ pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResu
         return Ok((
             Statement::ReturnError {
                 code: tokens[expr_start + 1].lexeme.clone(),
+                loc,
             },
             3,
         ));
@@ -472,12 +487,13 @@ pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResu
     };
 
     Ok((
-        Statement::ReturnStatement { value },
+        Statement::ReturnStatement { value, loc },
         (cursor - start_index).max(1),
     ))
 }
 
 pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index + 1 >= tokens.len() {
         return Err("Incomplete assignment.".into());
     }
@@ -500,6 +516,7 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
         Statement::Assignment {
             target: target_name,
             value: Box::new(value),
+            loc,
         },
         (cursor - start_index).max(2),
     ))
@@ -545,6 +562,7 @@ fn parse_call_expression(tokens: &[Token], start: usize, end: usize) -> Result<(
 }
 
 pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     let mut line_end = start_index;
     while line_end < tokens.len() {
         if tokens[line_end].kind() == TokenKind::NewLine || tokens[line_end].lexeme == "}" {
@@ -581,6 +599,7 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
                     on_error: Box::new(BlockStatement {
                         statements: on_error_statements,
                     }),
+                    loc,
                 },
                 block_end + 1 - start_index,
             ));
@@ -594,6 +613,7 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
                 on_error: Box::new(BlockStatement {
                     statements: on_error_statements,
                 }),
+                loc,
             },
             block_end + 1 - start_index,
         ));
@@ -603,6 +623,7 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
 }
 
 pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordNew {
         return Err("Expected 'new' keyword.".into());
     }
@@ -647,12 +668,14 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
             value: Box::new(value),
             is_fixed: false,
             declared_type,
+            loc,
         },
         (cursor - start_index).max(4),
     ))
 }
 
 pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordLabel {
         return Err("Expected 'label' keyword.".into());
     }
@@ -676,12 +699,14 @@ pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseRes
         Statement::LabelDecl {
             name: tokens[start_index + 1].lexeme.clone(),
             variants,
+            loc,
         },
         close + 1 - start_index,
     ))
 }
 
 pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordStruct {
         return Err("Expected 'struct' keyword.".into());
     }
@@ -696,12 +721,14 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
     Ok((
         Statement::StructDecl {
             name: tokens[start_index + 1].lexeme.clone(),
+            loc,
         },
         close + 1 - start_index,
     ))
 }
 
 pub fn parse_on_block_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordOnError {
         return Err("Expected 'on' keyword.".into());
     }
@@ -719,7 +746,7 @@ pub fn parse_on_block_statement(tokens: &[Token], start_index: usize) -> ParseRe
         "unknown".to_string()
     };
     Ok((
-        Statement::OnBlock { trigger },
+        Statement::OnBlock { trigger, loc },
         close + 1 - start_index,
     ))
 }
