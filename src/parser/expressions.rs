@@ -1,6 +1,10 @@
 use crate::ast_nodes::Expression;
 use crate::common_types::{Token, TokenKind};
 
+fn parse_err(code: &str, message: impl AsRef<str>) -> String {
+    format!("[{}] {}", code, message.as_ref())
+}
+
 struct ExprParser<'a> {
     tokens: &'a [Token],
     idx: usize,
@@ -50,7 +54,7 @@ impl<'a> ExprParser<'a> {
 
     fn parse_prefix(&mut self) -> Result<Expression, String> {
         if self.idx >= self.end {
-            return Err("Expected expression, found end of input.".into());
+            return Err(parse_err("SC-PARSE-201", "expected expression, found end of input."));
         }
         let tok = &self.tokens[self.idx];
 
@@ -81,7 +85,7 @@ impl<'a> ExprParser<'a> {
                 || self.tokens[self.idx].kind != TokenKind::OpPunctuation
                 || self.tokens[self.idx].lexeme != ")"
             {
-                return Err("Expected ')' to close grouped expression.".into());
+                return Err(parse_err("SC-PARSE-202", "expected ')' to close grouped expression."));
             }
             self.idx += 1;
             return Ok(expr);
@@ -119,7 +123,7 @@ impl<'a> ExprParser<'a> {
                         let arg = self.parse_bp(0)?;
                         args.push(arg);
                         if self.idx >= self.end {
-                            return Err("Expected ')' to close function call.".into());
+                            return Err(parse_err("SC-PARSE-203", "expected ')' to close function call."));
                         }
                         if self.tokens[self.idx].kind == TokenKind::OpPunctuation
                             && self.tokens[self.idx].lexeme == ","
@@ -133,7 +137,7 @@ impl<'a> ExprParser<'a> {
                             self.idx += 1;
                             break;
                         }
-                        return Err("Expected ',' or ')' in argument list.".into());
+                        return Err(parse_err("SC-PARSE-204", "expected ',' or ')' in argument list."));
                     }
                     Ok(Expression::Call {
                         name: tok.lexeme.clone(),
@@ -146,9 +150,9 @@ impl<'a> ExprParser<'a> {
             TokenKind::TypeString | TokenKind::TypeChar => {
                 Ok(Expression::VariableReference(tok.lexeme.clone()))
             }
-            _ => Err(format!(
-                "Unexpected token in expression: {:?} ('{}')",
-                tok.kind, tok.lexeme
+            _ => Err(parse_err(
+                "SC-PARSE-205",
+                format!("unexpected token in expression: {:?} ('{}')", tok.kind, tok.lexeme),
             )),
         }
     }
@@ -172,7 +176,7 @@ fn infix_binding_power(op: &str) -> (u8, u8) {
 
 pub fn parse_expression_range(tokens: &[Token], start: usize, end: usize) -> Result<Expression, String> {
     if start >= end {
-        return Err("Expected expression, found empty range.".into());
+        return Err(parse_err("SC-PARSE-206", "expected expression, found empty range."));
     }
     ExprParser::new(tokens, start, end).parse()
 }
