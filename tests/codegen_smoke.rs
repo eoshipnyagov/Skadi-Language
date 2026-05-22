@@ -182,6 +182,22 @@ for item in items {
 }
 
 #[test]
+fn codegen_lowers_for_in_with_typed_list_element() {
+    let src = r#"
+new u8 List items = [1, 2, 3]
+for item in items {
+    new Int x = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("for (size_t __i = 0; __i < items.len; ++__i) {"));
+    assert!(c.contains("uint8_t item = items.data[__i];"));
+}
+
+#[test]
 fn codegen_emits_list_runtime_push_pop_shape() {
     let src = r#"
 new i32 List xs = [1, 2]

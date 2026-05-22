@@ -296,12 +296,21 @@ fn emit_statement(
                     _ => "item".to_string(),
                 };
                 let coll_expr = emit_expr(coll);
+                let item_c_ty = match coll.as_ref() {
+                    Expression::VariableReference(coll_name) => declared
+                        .get(coll_name)
+                        .and_then(|t| list_elem_from_decl(t))
+                        .and_then(|elem| list_meta(elem).map(|(c_ty, _)| c_ty))
+                        .unwrap_or("int64_t"),
+                    _ => "int64_t",
+                };
                 out.push_str(&pad);
                 out.push_str("for (size_t __i = 0; __i < ");
                 out.push_str(&coll_expr);
                 out.push_str(".len; ++__i) {\n");
                 out.push_str(&"    ".repeat(indent + 1));
-                out.push_str("int64_t ");
+                out.push_str(item_c_ty);
+                out.push(' ');
                 out.push_str(&var_name);
                 out.push_str(" = ");
                 out.push_str(&coll_expr);
