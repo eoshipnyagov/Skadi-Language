@@ -17,6 +17,7 @@ impl std::fmt::Display for LexError {
             "{}",
             format_diagnostic(
                 DiagnosticKind::Lex,
+                Some("SC-LEX-001"),
                 &self.message,
                 Some(self.line),
                 Some(self.col),

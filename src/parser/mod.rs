@@ -38,6 +38,7 @@ fn parse_statement_at(
         _ => {
             return Err(format_diagnostic(
                 DiagnosticKind::Parse,
+                Some("SC-PARSE-001"),
                 format!(
                     "unsupported statement start token {:?} ('{}')",
                     start_token.kind(),
@@ -54,6 +55,7 @@ fn parse_statement_at(
         Ok((statement, consumed_count)) if consumed_count > 0 => Ok((statement, consumed_count)),
         Ok(_) => Err(format_diagnostic(
             DiagnosticKind::Parse,
+            Some("SC-PARSE-002"),
             "parser consumed zero tokens.",
             Some(start_token.line),
             Some(start_token.col),
@@ -61,6 +63,7 @@ fn parse_statement_at(
         )),
         Err(e) => Err(format_diagnostic(
             DiagnosticKind::Parse,
+            Some("SC-PARSE-003"),
             e,
             Some(start_token.line),
             Some(start_token.col),

@@ -326,7 +326,7 @@ impl<'a> Lexer<'a> {
                 // Unknown character
                 self.advance();
                 Some(Err(LexError {
-                    message: format!("Unexpected character '{}'", c),
+                    message: format!("unexpected character '{}'", c),
                     line,
                     col,
                 }))

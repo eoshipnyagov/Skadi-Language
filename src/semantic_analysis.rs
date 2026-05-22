@@ -48,9 +48,23 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
 
 fn err_at(stmt: &Statement, msg: String) -> String {
     if let Some((line, col)) = statement_loc(stmt) {
-        format_diagnostic(DiagnosticKind::Semantic, msg, Some(line), Some(col), None)
+        format_diagnostic(
+            DiagnosticKind::Semantic,
+            Some("SC-SEM-001"),
+            msg,
+            Some(line),
+            Some(col),
+            None,
+        )
     } else {
-        format_diagnostic(DiagnosticKind::Semantic, msg, None, None, None)
+        format_diagnostic(
+            DiagnosticKind::Semantic,
+            Some("SC-SEM-001"),
+            msg,
+            None,
+            None,
+            None,
+        )
     }
 }
 
@@ -121,7 +135,7 @@ fn validate_call_args(
 ) -> Result<(), String> {
     if args.len() != sig.param_types.len() {
         return Err(format!(
-            "Argument count mismatch for '{}': expected {}, got {}.",
+            "argument count mismatch for '{}': expected {}, got {}.",
             name,
             sig.param_types.len(),
             args.len()
@@ -131,7 +145,7 @@ fn validate_call_args(
         let actual_ty = infer_expression_type(arg, scope, functions)?;
         if !can_assign(expected_ty, actual_ty) {
             return Err(format!(
-                "Argument type mismatch for '{}': expected {:?}, got {:?}.",
+                "argument type mismatch for '{}': expected {:?}, got {:?}.",
                 name, expected_ty, actual_ty
             ));
         }
@@ -169,13 +183,13 @@ fn analyze_statement(
             if scope.contains_key(name) {
                 return Err(format!(
                     "{}",
-                    err_at(stmt, format!("Redeclaration in same scope: '{}' is already defined.", name))
+                    err_at(stmt, format!("redeclaration in same scope: '{}' is already defined.", name))
                 ));
             }
             if contains_variable(value, name) {
                 return Err(err_at(
                     stmt,
-                    format!("Invalid initialization: '{}' is used in its own initializing expression.", name),
+                    format!("invalid initialization: '{}' is used in its own initializing expression.", name),
                 ));
             }
             let value_ty = infer_expression_type(value, scope, functions)?;
@@ -187,7 +201,7 @@ fn analyze_statement(
                         err_at(
                             stmt,
                             format!(
-                                "Type mismatch in declaration '{}': cannot assign {:?} to {:?}.",
+                                "type mismatch in declaration '{}': cannot assign {:?} to {:?}.",
                                 name, value_ty, declared
                             ),
                         )
@@ -206,7 +220,7 @@ fn analyze_statement(
                     "{}",
                     err_at(
                         stmt,
-                        format!("Use-before-definition: '{}' is not defined in current scope.", target),
+                        format!("use-before-definition: '{}' is not defined in current scope.", target),
                     )
                 ));
             };
@@ -217,7 +231,7 @@ fn analyze_statement(
                     err_at(
                         stmt,
                         format!(
-                            "Type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
+                            "type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
                             target, value_ty, target_ty
                         ),
                     )
@@ -234,7 +248,7 @@ fn analyze_statement(
                 fn_scope.insert(p.name.clone(), pty);
             }
             let Some(sig) = functions.get(name) else {
-                return Err(format!("Internal error: missing function signature for '{}'.", name));
+                return Err(format!("internal error: missing function signature for '{}'.", name));
             };
             let local_ctx = FnContext {
                 is_danger: sig.is_danger,
@@ -305,7 +319,7 @@ fn analyze_statement(
                     let case_ty = infer_expression_type(expr, scope, functions)?;
                     if !can_assign(when_ty, case_ty) && !can_assign(case_ty, when_ty) {
                         return Err(format!(
-                            "Type mismatch in when-case: case type {:?} incompatible with when type {:?}.",
+                            "type mismatch in when-case: case type {:?} incompatible with when type {:?}.",
                             case_ty, when_ty
                         ));
                     }
@@ -340,7 +354,7 @@ fn analyze_statement(
                 return Err(
                     err_at(
                         stmt,
-                        "Unsupported context: 'on error { ... }' is not yet semantically bound to a danger call."
+                        "unsupported context: 'on error { ... }' is not yet semantically bound to a danger call."
                             .to_string(),
                     ),
                 );
@@ -355,7 +369,7 @@ fn analyze_statement(
             ..
         } => {
             let Some(sig) = functions.get(call_name) else {
-                return Err(format!("Unknown function '{}' in on error call.", call_name));
+                return Err(format!("unknown function '{}' in on error call.", call_name));
             };
             if !sig.is_danger {
                 return Err(format!(
@@ -371,7 +385,7 @@ fn analyze_statement(
                     "{}",
                     err_at(
                         stmt,
-                        format!("Use-before-definition: '{}' is not defined in current scope.", target),
+                        format!("use-before-definition: '{}' is not defined in current scope.", target),
                     )
                 ));
             }
@@ -386,7 +400,7 @@ fn analyze_statement(
             ..
         } => {
             let Some(sig) = functions.get(call_name) else {
-                return Err(format!("Unknown function '{}' in on error call.", call_name));
+                return Err(format!("unknown function '{}' in on error call.", call_name));
             };
             if !sig.is_danger {
                 return Err(format!(
@@ -409,7 +423,7 @@ fn analyze_statement(
                 return Err(err_at(stmt, "return error requires label ErrorCode declaration.".to_string()));
             };
             if !error_codes.iter().any(|v| v == code) {
-                return Err(err_at(stmt, format!("Unknown ErrorCode variant: '{}'.", code)));
+                return Err(err_at(stmt, format!("unknown ErrorCode variant: '{}'.", code)));
             }
             Ok(())
         }
@@ -420,7 +434,7 @@ fn analyze_statement(
                     if let Some(expected) = ctx.return_type {
                         if !can_assign(expected, actual) {
                             return Err(format!(
-                                "Type mismatch in return: cannot return {:?} where {:?} expected.",
+                                "type mismatch in return: cannot return {:?} where {:?} expected.",
                                 actual, expected
                             ));
                         }
@@ -428,7 +442,7 @@ fn analyze_statement(
                 } else if !ctx.is_danger && ctx.return_type.is_some() {
                     return Err(err_at(
                         stmt,
-                        "Non-danger function with return type must return a value.".to_string(),
+                        "non-danger function with return type must return a value.".to_string(),
                     ));
                 }
             } else if let Some(expr) = value {
@@ -470,10 +484,10 @@ fn infer_expression_type(
         Expression::VariableReference(name) => scope
             .get(name)
             .copied()
-            .ok_or_else(|| format!("Use-before-definition: '{}' is not defined in current scope.", name)),
+            .ok_or_else(|| format!("use-before-definition: '{}' is not defined in current scope.", name)),
         Expression::Call { name, args } => {
             let Some(sig) = functions.get(name) else {
-                return Err(format!("Unknown function '{}' in expression call.", name));
+                return Err(format!("unknown function '{}' in expression call.", name));
             };
             validate_call_args(name, args, sig, scope, functions)?;
             Ok(sig.return_type.unwrap_or(ValueType::Unknown))
@@ -484,14 +498,14 @@ fn infer_expression_type(
                 if lt == ValueType::Int || lt == ValueType::Float {
                     return Ok(lt);
                 }
-                return Err("Unary '-' requires numeric operand.".to_string());
+                return Err("unary '-' requires numeric operand.".to_string());
             }
             if op == "not" {
                 let lt = infer_expression_type(left, scope, functions)?;
                 if lt == ValueType::Bool || lt == ValueType::Int {
                     return Ok(ValueType::Bool);
                 }
-                return Err("Unary 'not' requires bool/int operand.".to_string());
+                return Err("unary 'not' requires bool/int operand.".to_string());
             }
             let lt = infer_expression_type(left, scope, functions)?;
             let rt = if let Some(r) = right {
@@ -510,7 +524,7 @@ fn infer_expression_type(
                             Ok(ValueType::Int)
                         }
                     } else {
-                        Err(format!("Operator '{}' requires numeric operands.", op))
+                        Err(format!("operator '{}' requires numeric operands.", op))
                     }
                 }
                 "==" | "!=" | "<" | ">" | "<=" | ">=" => Ok(ValueType::Bool),
@@ -520,7 +534,7 @@ fn infer_expression_type(
                     {
                         Ok(ValueType::Bool)
                     } else {
-                        Err(format!("Operator '{}' requires bool/int operands.", op))
+                        Err(format!("operator '{}' requires bool/int operands.", op))
                     }
                 }
                 _ => Ok(ValueType::Unknown),

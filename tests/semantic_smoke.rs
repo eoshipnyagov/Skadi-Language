@@ -18,7 +18,7 @@ fn semantic_fails_for_use_before_definition() {
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("line"));
     assert!(err.contains("col"));
-    assert!(err.contains("Use-before-definition"));
+    assert!(err.contains("use-before-definition"));
     assert!(err.contains("b"));
 }
 
@@ -28,7 +28,7 @@ fn semantic_fails_for_redeclaration_in_same_scope() {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("Redeclaration in same scope"));
+    assert!(err.contains("redeclaration in same scope"));
     assert!(err.contains("a"));
 }
 
@@ -38,7 +38,7 @@ fn semantic_fails_for_self_reference_on_initialization() {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("Invalid initialization"));
+    assert!(err.contains("invalid initialization"));
     assert!(err.contains("x"));
 }
 
@@ -77,7 +77,7 @@ fn f() {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("Use-before-definition"));
+    assert!(err.contains("use-before-definition"));
     assert!(err.contains("z"));
 }
 
@@ -157,7 +157,7 @@ danger fn parse_value(bool x) Int {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("Unknown ErrorCode variant"));
+    assert!(err.contains("unknown ErrorCode variant"));
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn semantic_rejects_assignment_type_mismatch_bool_to_int() {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("Type mismatch in assignment"));
+    assert!(err.contains("type mismatch in assignment"));
 }
 
 #[test]
@@ -242,7 +242,7 @@ x = parse_value(x) on error {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("Argument type mismatch"));
+    assert!(err.contains("argument type mismatch"));
 }
 
 #[test]
@@ -257,7 +257,7 @@ new Int y = add(x)
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("Argument count mismatch"));
+    assert!(err.contains("argument count mismatch"));
 }
 
 #[test]
@@ -273,5 +273,5 @@ when x {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("Type mismatch in when-case"));
+    assert!(err.contains("type mismatch in when-case"));
 }

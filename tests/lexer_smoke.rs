@@ -7,5 +7,5 @@ fn lex_error_reports_line_and_col_in_unified_style() {
     let rendered = err.to_string();
     assert!(rendered.contains("Lex error at line"));
     assert!(rendered.contains("col"));
-    assert!(rendered.contains("Unexpected character"));
+    assert!(rendered.contains("unexpected character"));
 }
