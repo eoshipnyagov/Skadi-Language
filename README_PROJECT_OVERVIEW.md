@@ -32,6 +32,9 @@ Top-level:
 - `Scadi_design.txt` - Skadi v1.1 specification
 - `example_meteostation.txt` - integration-style sample program
 - `docs/SKADI_STYLE_PRINCIPLES.md` - accepted style/design baseline for syntax decisions
+- `docs/SKADI_SYNTAX_STATUS.md` - current implemented syntax snapshot
+- `docs/RFC_LIST.md` - draft contract for `List`
+- `docs/RFC_TEXT.md` - draft contract for `Text`
 
 Source tree (`src/`):
 - `lib.rs` - module wiring for compiler components
