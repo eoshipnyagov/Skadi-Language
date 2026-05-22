@@ -9,17 +9,42 @@ struct FunctionContext {
 
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
-    let needs_list_runtime = program_uses_for_loop(program);
+    let needs_list_runtime = program_uses_list_runtime(program);
     out.push_str("#include <stdio.h>\n\n");
     if needs_list_runtime {
         out.push_str("#include <stddef.h>\n");
+        out.push_str("#include <stdlib.h>\n");
     }
     out.push_str("#include <stdint.h>\n");
     out.push_str("#include <stdbool.h>\n\n");
     if needs_list_runtime {
         out.push_str(
-            "typedef struct {\n    int64_t *data;\n    size_t len;\n} SkadiListInt;\n\n",
+            "typedef struct {\n    int64_t *data;\n    size_t len;\n    size_t cap;\n} SkadiListInt64;\n\n",
         );
+        out.push_str("static SkadiListInt64 sk_list_i64_new(void) {\n");
+        out.push_str("    SkadiListInt64 xs;\n");
+        out.push_str("    xs.data = NULL;\n");
+        out.push_str("    xs.len = 0;\n");
+        out.push_str("    xs.cap = 0;\n");
+        out.push_str("    return xs;\n");
+        out.push_str("}\n\n");
+        out.push_str("static int sk_list_i64_push(SkadiListInt64 *xs, int64_t v) {\n");
+        out.push_str("    if (xs->len == xs->cap) {\n");
+        out.push_str("        size_t next = xs->cap == 0 ? 4 : xs->cap * 2;\n");
+        out.push_str("        int64_t *p = (int64_t*)realloc(xs->data, next * sizeof(int64_t));\n");
+        out.push_str("        if (!p) return 1;\n");
+        out.push_str("        xs->data = p;\n");
+        out.push_str("        xs->cap = next;\n");
+        out.push_str("    }\n");
+        out.push_str("    xs->data[xs->len++] = v;\n");
+        out.push_str("    return 0;\n");
+        out.push_str("}\n\n");
+        out.push_str("static int sk_list_i64_pop(SkadiListInt64 *xs, int64_t *out) {\n");
+        out.push_str("    if (xs->len == 0) return 1;\n");
+        out.push_str("    *out = xs->data[xs->len - 1];\n");
+        out.push_str("    xs->len -= 1;\n");
+        out.push_str("    return 0;\n");
+        out.push_str("}\n\n");
     }
     emit_error_code_enum(program, &mut out);
 
@@ -43,13 +68,18 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     out
 }
 
-fn program_uses_for_loop(program: &Program) -> bool {
+fn program_uses_list_runtime(program: &Program) -> bool {
     fn block_has_for(block: &BlockStatement) -> bool {
-        block.statements.iter().any(statement_has_for)
+        block.statements.iter().any(statement_needs_list)
     }
-    fn statement_has_for(stmt: &Statement) -> bool {
+    fn statement_needs_list(stmt: &Statement) -> bool {
         match stmt {
             Statement::ForLoop { .. } => true,
+            Statement::VarDecl { declared_type, .. } => declared_type
+                .as_deref()
+                .map(|t| t.ends_with(" List"))
+                .unwrap_or(false),
+            Statement::ListPush { .. } | Statement::ListPopOnError { .. } => true,
             Statement::FunctionDef { body, .. } => block_has_for(body),
             Statement::IfStatement {
                 then_block,
@@ -72,14 +102,13 @@ fn program_uses_for_loop(program: &Program) -> bool {
             Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => block_has_for(body),
             Statement::DangerAssignOnError { on_error, .. }
             | Statement::DangerCallOnError { on_error, .. } => block_has_for(on_error),
-            Statement::ListPopOnError { on_error, .. } => block_has_for(on_error),
             Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
-                statements.iter().any(statement_has_for)
+                statements.iter().any(statement_needs_list)
             }
             _ => false,
         }
     }
-    program.statements.iter().any(statement_has_for)
+    program.statements.iter().any(statement_needs_list)
 }
 
 fn emit_error_code_enum(program: &Program, out: &mut String) {
@@ -314,11 +343,11 @@ fn emit_statement(
         }
         Statement::ListPush { list_name, value, .. } => {
             out.push_str(&pad);
-            out.push_str("/* TODO(v1): list runtime push */ ");
+            out.push_str("(void)sk_list_i64_push(&");
             out.push_str(list_name);
-            out.push_str("; ");
+            out.push_str(", ");
             out.push_str(&emit_expr(value));
-            out.push('\n');
+            out.push_str(");\n");
         }
         Statement::ListPopOnError {
             target,
@@ -327,13 +356,15 @@ fn emit_statement(
             ..
         } => {
             out.push_str(&pad);
-            out.push_str("/* TODO(v1): list runtime pop with error path */ ");
-            out.push_str(target);
-            out.push_str(" = ");
+            out.push_str("if (sk_list_i64_pop(&");
             out.push_str(list_name);
-            out.push_str(";\n");
+            out.push_str(", &");
+            out.push_str(target);
+            out.push_str(") != 0) {\n");
             let mut inner = declared.clone();
             emit_block(on_error, out, indent + 1, &mut inner, fn_ctx);
+            out.push_str(&pad);
+            out.push_str("}\n");
         }
         Statement::ReturnStatement { value, .. } => {
             if let Some(ctx) = fn_ctx {
@@ -439,6 +470,28 @@ fn emit_statement(
             }
         }
         Statement::VarDecl { name, value, declared_type, .. } => {
+            if declared_type
+                .as_deref()
+                .map(|t| t.ends_with(" List"))
+                .unwrap_or(false)
+            {
+                out.push_str(&pad);
+                out.push_str("SkadiListInt64 ");
+                out.push_str(name);
+                out.push_str(" = sk_list_i64_new();\n");
+                if let Expression::ListLiteral(items) = value.as_ref() {
+                    for item in items {
+                        out.push_str(&pad);
+                        out.push_str("(void)sk_list_i64_push(&");
+                        out.push_str(name);
+                        out.push_str(", ");
+                        out.push_str(&emit_expr(item));
+                        out.push_str(");\n");
+                    }
+                }
+                declared.insert(name.clone());
+                return;
+            }
             out.push_str(&pad);
             out.push_str(map_skadi_type_to_c(declared_type.as_deref()));
             out.push(' ');
@@ -459,6 +512,7 @@ fn emit_statement(
 
 fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
     match skadi_type.unwrap_or("Int") {
+        t if t.ends_with(" List") => "SkadiListInt64",
         "Int" | "i64" => "int64_t",
         "Float" | "f64" => "double",
         "bool" => "bool",
@@ -475,9 +529,12 @@ fn emit_expr(expr: &Expression) -> String {
         }
         Expression::VariableReference(name) => name.clone(),
         Expression::Index { base, index } => {
-            format!("{}[{}]", emit_expr(base), emit_expr(index))
+            format!("{}.data[{}]", emit_expr(base), emit_expr(index))
         }
         Expression::Call { name, args } => {
+            if name == "len" && args.len() == 1 {
+                return format!("((int64_t){}.len)", emit_expr(&args[0]));
+            }
             let rendered: Vec<String> = args.iter().map(emit_expr).collect();
             format!("{}({})", name, rendered.join(", "))
         }

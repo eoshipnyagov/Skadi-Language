@@ -180,3 +180,25 @@ for item in items {
     assert!(c.contains("for (size_t __i = 0; __i < items.len; ++__i) {"));
     assert!(c.contains("int64_t item = items.data[__i];"));
 }
+
+#[test]
+fn codegen_emits_list_runtime_push_pop_shape() {
+    let src = r#"
+new i32 List xs = [1, 2]
+new i32 x = 0
+xs.push(3)
+x = xs.pop() on error {
+    x = 0
+}
+new Int n = len(xs)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("typedef struct {"));
+    assert!(c.contains("SkadiListInt64 xs = sk_list_i64_new();"));
+    assert!(c.contains("sk_list_i64_push(&xs, 3)"));
+    assert!(c.contains("if (sk_list_i64_pop(&xs, &x) != 0) {"));
+    assert!(c.contains("int64_t n = ((int64_t)xs.len);"));
+}
