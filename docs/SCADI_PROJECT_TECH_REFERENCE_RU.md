@@ -358,3 +358,8 @@
 - полноценная runtime-модель событий/конкурентности,
 - полное lowering для struct/advanced memory model,
 - финальный контракт error-flow для индексации (сейчас fail-soft runtime fallback).
+
+Принятое design-направление (1.x):
+- текущие `read(path)` / `write(path, data)` и `args()` остаются рабочим промежуточным слоем,
+- планируется переход к унифицированной stream-модели I/O:
+  `read(stream)` / `write(stream, data)` с общим контрактом для файлов/консоли/CLI-входов.
