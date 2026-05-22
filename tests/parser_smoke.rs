@@ -245,6 +245,20 @@ new i32 x = xs[1]
 }
 
 #[test]
+fn parses_text_literal_declaration() {
+    let src = r#"
+new Text t = "hello"
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::VarDecl { declared_type, value, .. } = &program.statements[0] else {
+        panic!("expected VarDecl");
+    };
+    assert_eq!(declared_type.as_deref(), Some("Text"));
+    assert!(matches!(**value, Expression::LiteralString(_)));
+}
+
+#[test]
 fn parses_list_push_statement() {
     let src = r#"
 new i32 List xs = [1, 2]

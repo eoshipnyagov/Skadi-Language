@@ -602,6 +602,7 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
         "Float" | "f64" => "double",
         "bool" => "bool",
         "char" => "char",
+        "Text" => "const char*",
         _ => "int64_t",
     }
 }
@@ -613,6 +614,7 @@ fn emit_expr(expr: &Expression) -> String {
         Expression::LiteralBool(v) => {
             if *v { "true".to_string() } else { "false".to_string() }
         }
+        Expression::LiteralString(s) => s.clone(),
         Expression::VariableReference(name) => name.clone(),
         Expression::Index { base, index } => {
             format!("{}.data[{}]", emit_expr(base), emit_expr(index))

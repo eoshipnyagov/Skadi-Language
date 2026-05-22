@@ -370,3 +370,15 @@ xs.push(true)
     assert!(err.contains("SC-SEM-020"));
     assert!(err.contains("type mismatch in list push"));
 }
+
+#[test]
+fn semantic_allows_text_len_and_index() {
+    let src = r#"
+new Text t = "weather"
+new Int n = len(t)
+new char c = t[0]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}

@@ -199,9 +199,8 @@ impl<'a> ExprParser<'a> {
                     Ok(Expression::VariableReference(tok.lexeme.clone()))
                 }
             }
-            TokenKind::TypeString | TokenKind::TypeChar => {
-                Ok(Expression::VariableReference(tok.lexeme.clone()))
-            }
+            TokenKind::TypeString => Ok(Expression::LiteralString(tok.lexeme.clone())),
+            TokenKind::TypeChar => Ok(Expression::VariableReference(tok.lexeme.clone())),
             _ => Err(parse_err(
                 "SC-PARSE-205",
                 format!("unexpected token in expression: {:?} ('{}')", tok.kind, tok.lexeme),

@@ -637,6 +637,7 @@ fn infer_expression_type(
         Expression::LiteralInt(_) => Ok(ValueType::Int),
         Expression::LiteralFloat(_) => Ok(ValueType::Float),
         Expression::LiteralBool(_) => Ok(ValueType::Bool),
+        Expression::LiteralString(_) => Ok(ValueType::Text),
         Expression::ListLiteral(items) => {
             if items.is_empty() {
                 return Ok(ValueType::List(Box::new(ValueType::Unknown)));
@@ -826,6 +827,7 @@ fn contains_variable(expr: &Expression, name: &str) -> bool {
             contains_variable(base, name) || contains_variable(index, name)
         }
         Expression::ListLiteral(items) => items.iter().any(|a| contains_variable(a, name)),
+        Expression::LiteralString(_) => false,
         _ => false,
     }
 }
