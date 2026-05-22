@@ -81,6 +81,17 @@ pub enum Statement {
         on_error: Box<BlockStatement>,
         loc: Location,
     },
+    ListPush {
+        list_name: String,
+        value: Box<Expression>,
+        loc: Location,
+    },
+    ListPopOnError {
+        target: String,
+        list_name: String,
+        on_error: Box<BlockStatement>,
+        loc: Location,
+    },
     ReturnError { code: String, loc: Location },
     ReturnStatement { value: Option<Box<Expression>>, loc: Location },
     BlockStatement { statements: Vec<Statement>, loc: Location },

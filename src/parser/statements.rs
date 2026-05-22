@@ -584,6 +584,26 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
             && tokens[i + 1].lexeme == "error"
     });
 
+    if on_idx.is_none()
+        && start_index + 5 < line_end
+        && tokens[start_index].kind() == TokenKind::Identifier
+        && tokens[start_index + 1].lexeme == "."
+        && tokens[start_index + 2].kind() == TokenKind::Identifier
+        && tokens[start_index + 2].lexeme == "push"
+        && tokens[start_index + 3].lexeme == "("
+        && tokens[line_end - 1].lexeme == ")"
+    {
+        let value = parse_expression_range(tokens, start_index + 4, line_end - 1)?;
+        return Ok((
+            Statement::ListPush {
+                list_name: tokens[start_index].lexeme.clone(),
+                value: Box::new(value),
+                loc,
+            },
+            line_end - start_index,
+        ));
+    }
+
     if let Some(on_idx) = on_idx {
         let block_open = on_idx + 2;
         if block_open >= tokens.len() || tokens[block_open].lexeme != "{" {
@@ -591,6 +611,29 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
         }
         let block_end = find_block_end(tokens, block_open)?;
         let on_error_statements = parse_statements_range(tokens, block_open + 1, block_end)?;
+
+        if start_index + 7 <= on_idx
+            && tokens[start_index].kind() == TokenKind::Identifier
+            && tokens[start_index + 1].kind() == TokenKind::OpAssignment
+            && tokens[start_index + 2].kind() == TokenKind::Identifier
+            && tokens[start_index + 3].lexeme == "."
+            && tokens[start_index + 4].kind() == TokenKind::Identifier
+            && tokens[start_index + 4].lexeme == "pop"
+            && tokens[start_index + 5].lexeme == "("
+            && tokens[start_index + 6].lexeme == ")"
+        {
+            return Ok((
+                Statement::ListPopOnError {
+                    target: tokens[start_index].lexeme.clone(),
+                    list_name: tokens[start_index + 2].lexeme.clone(),
+                    on_error: Box::new(BlockStatement {
+                        statements: on_error_statements,
+                    }),
+                    loc,
+                },
+                block_end + 1 - start_index,
+            ));
+        }
 
         if start_index + 2 < on_idx
             && tokens[start_index].kind() == TokenKind::Identifier

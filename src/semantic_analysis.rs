@@ -55,6 +55,8 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
         | Statement::OnBlock { loc, .. }
         | Statement::DangerAssignOnError { loc, .. }
         | Statement::DangerCallOnError { loc, .. }
+        | Statement::ListPush { loc, .. }
+        | Statement::ListPopOnError { loc, .. }
         | Statement::ReturnError { loc, .. }
         | Statement::ReturnStatement { loc, .. }
         | Statement::BlockStatement { loc, .. }
@@ -476,6 +478,79 @@ fn analyze_statement(
                 ));
             }
             validate_call_args(call_name, args, sig, scope, functions)?;
+            let mut on_error_scope = scope.clone();
+            analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
+        }
+        Statement::ListPush { list_name, value, .. } => {
+            let Some(list_ty) = scope.get(list_name).cloned() else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined in current scope.", list_name),
+                ));
+            };
+            let value_ty = infer_expression_type(value, scope, functions)?;
+            match list_ty {
+                ValueType::List(elem_ty) => {
+                    if !can_assign(&elem_ty, &value_ty) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TYPE_MISMATCH,
+                            format!(
+                                "type mismatch in list push '{}': cannot push {:?} into {:?}.",
+                                list_name, value_ty, elem_ty
+                            ),
+                        ));
+                    }
+                    Ok(())
+                }
+                other => Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!("push is supported only for List, got {:?}.", other),
+                )),
+            }
+        }
+        Statement::ListPopOnError {
+            target,
+            list_name,
+            on_error,
+            ..
+        } => {
+            let Some(target_ty) = scope.get(target).cloned() else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined in current scope.", target),
+                ));
+            };
+            let Some(list_ty) = scope.get(list_name).cloned() else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined in current scope.", list_name),
+                ));
+            };
+            let elem_ty = match list_ty {
+                ValueType::List(elem_ty) => (*elem_ty).clone(),
+                other => {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!("pop is supported only for List, got {:?}.", other),
+                    ))
+                }
+            };
+            if !can_assign(&target_ty, &elem_ty) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "type mismatch in list pop '{}': cannot assign {:?} to {:?}.",
+                        list_name, elem_ty, target_ty
+                    ),
+                ));
+            }
             let mut on_error_scope = scope.clone();
             analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
         }

@@ -342,3 +342,31 @@ new i32 x = xs[true]
     assert!(err.contains("SC-SEM-020"));
     assert!(err.contains("index access requires Int index"));
 }
+
+#[test]
+fn semantic_allows_list_push_and_pop_on_error() {
+    let src = r#"
+new i32 List xs = [1, 2]
+new i32 x = 0
+xs.push(3)
+x = xs.pop() on error {
+    x = 0
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_list_push_type_mismatch() {
+    let src = r#"
+new i32 List xs = [1, 2]
+xs.push(true)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("type mismatch in list push"));
+}

@@ -226,6 +226,31 @@ new i32 x = xs[1]
 }
 
 #[test]
+fn parses_list_push_statement() {
+    let src = r#"
+new i32 List xs = [1, 2]
+xs.push(3)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert!(matches!(program.statements[1], Statement::ListPush { .. }));
+}
+
+#[test]
+fn parses_list_pop_on_error_statement() {
+    let src = r#"
+new i32 List xs = [1, 2]
+new i32 x = 0
+x = xs.pop() on error {
+    x = 0
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert!(matches!(program.statements[2], Statement::ListPopOnError { .. }));
+}
+
+#[test]
 fn parses_typed_function_signature() {
     let src = r#"
 fn add(Int a, Int b) Int {

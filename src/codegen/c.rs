@@ -72,6 +72,7 @@ fn program_uses_for_loop(program: &Program) -> bool {
             Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => block_has_for(body),
             Statement::DangerAssignOnError { on_error, .. }
             | Statement::DangerCallOnError { on_error, .. } => block_has_for(on_error),
+            Statement::ListPopOnError { on_error, .. } => block_has_for(on_error),
             Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
                 statements.iter().any(statement_has_for)
             }
@@ -310,6 +311,29 @@ fn emit_statement(
             emit_block(on_error, out, indent + 1, &mut inner, fn_ctx);
             out.push_str(&pad);
             out.push_str("}\n");
+        }
+        Statement::ListPush { list_name, value, .. } => {
+            out.push_str(&pad);
+            out.push_str("/* TODO(v1): list runtime push */ ");
+            out.push_str(list_name);
+            out.push_str("; ");
+            out.push_str(&emit_expr(value));
+            out.push('\n');
+        }
+        Statement::ListPopOnError {
+            target,
+            list_name,
+            on_error,
+            ..
+        } => {
+            out.push_str(&pad);
+            out.push_str("/* TODO(v1): list runtime pop with error path */ ");
+            out.push_str(target);
+            out.push_str(" = ");
+            out.push_str(list_name);
+            out.push_str(";\n");
+            let mut inner = declared.clone();
+            emit_block(on_error, out, indent + 1, &mut inner, fn_ctx);
         }
         Statement::ReturnStatement { value, .. } => {
             if let Some(ctx) = fn_ctx {
