@@ -240,3 +240,19 @@ bb.push(true)
     assert!(c.contains("sk_list_f64_push(&fd, 3.5)"));
     assert!(c.contains("sk_list_bool_push(&bb, true)"));
 }
+
+#[test]
+fn codegen_emits_text_len_and_index_shape() {
+    let src = r#"
+new Text t = "weather"
+new Int n = len(t)
+new char c = t[0]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("const char* t = \"weather\";"));
+    assert!(c.contains("int64_t n = ((int64_t)strlen(t));"));
+    assert!(c.contains("char c = t[0];"));
+}

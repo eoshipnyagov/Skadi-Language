@@ -77,6 +77,7 @@ fn emit_list_runtime(out: &mut String) {
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
     let needs_list_runtime = program_uses_list_runtime(program);
+    let needs_text_runtime = program_uses_text_runtime(program);
     out.push_str("#include <stdio.h>\n\n");
     if needs_list_runtime {
         out.push_str("#include <stddef.h>\n");
@@ -84,6 +85,9 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
     out.push_str("#include <stdint.h>\n");
     out.push_str("#include <stdbool.h>\n\n");
+    if needs_text_runtime {
+        out.push_str("#include <string.h>\n\n");
+    }
     if needs_list_runtime {
         emit_list_runtime(&mut out);
     }
@@ -107,6 +111,48 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     out.push_str("}\n");
 
     out
+}
+
+fn program_uses_text_runtime(program: &Program) -> bool {
+    fn block_has_text(block: &BlockStatement) -> bool {
+        block.statements.iter().any(statement_has_text)
+    }
+    fn statement_has_text(stmt: &Statement) -> bool {
+        match stmt {
+            Statement::VarDecl { declared_type, .. } => declared_type
+                .as_deref()
+                .map(|t| t == "Text")
+                .unwrap_or(false),
+            Statement::FunctionDef { body, .. } => block_has_text(body),
+            Statement::IfStatement {
+                then_block,
+                else_block,
+                ..
+            } => {
+                block_has_text(then_block)
+                    || else_block
+                        .as_ref()
+                        .map(|b| block_has_text(b))
+                        .unwrap_or(false)
+            }
+            Statement::WhenBlock { cases, else_block, .. } => {
+                cases.iter().any(|(_, b)| block_has_text(b))
+                    || else_block
+                        .as_ref()
+                        .map(|b| block_has_text(b))
+                        .unwrap_or(false)
+            }
+            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => block_has_text(body),
+            Statement::DangerAssignOnError { on_error, .. }
+            | Statement::DangerCallOnError { on_error, .. }
+            | Statement::ListPopOnError { on_error, .. } => block_has_text(on_error),
+            Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
+                statements.iter().any(statement_has_text)
+            }
+            _ => false,
+        }
+    }
+    program.statements.iter().any(statement_has_text)
 }
 
 fn program_uses_list_runtime(program: &Program) -> bool {
@@ -246,7 +292,7 @@ fn emit_statement(
     let pad = "    ".repeat(indent);
     match stmt {
         Statement::Assignment { target, value, .. } => {
-            let expr = emit_expr(value);
+            let expr = emit_expr(value, declared);
             out.push_str(&pad);
             out.push_str(target);
             out.push_str(" = ");
@@ -256,7 +302,7 @@ fn emit_statement(
         Statement::IfStatement { condition, then_block, else_block, .. } => {
             out.push_str(&pad);
             out.push_str("if (");
-            out.push_str(&emit_expr(condition));
+            out.push_str(&emit_expr(condition, declared));
             out.push_str(") {\n");
             let mut then_decl = declared.clone();
             emit_block(then_block, out, indent + 1, &mut then_decl, fn_ctx);
@@ -274,7 +320,7 @@ fn emit_statement(
         Statement::WhileLoop { condition, body, .. } => {
             out.push_str(&pad);
             out.push_str("while (");
-            out.push_str(&emit_expr(condition));
+            out.push_str(&emit_expr(condition, declared));
             out.push_str(") {\n");
             let mut inner = declared.clone();
             emit_block(body, out, indent + 1, &mut inner, fn_ctx);
@@ -295,7 +341,7 @@ fn emit_statement(
                     Expression::VariableReference(v) => v.clone(),
                     _ => "item".to_string(),
                 };
-                let coll_expr = emit_expr(coll);
+                let coll_expr = emit_expr(coll, declared);
                 let item_c_ty = match coll.as_ref() {
                     Expression::VariableReference(coll_name) => declared
                         .get(coll_name)
@@ -362,7 +408,7 @@ fn emit_statement(
                 if i > 0 {
                     out.push_str(", ");
                 }
-                out.push_str(&emit_expr(a));
+                out.push_str(&emit_expr(a, declared));
             }
             if !args.is_empty() {
                 out.push_str(", ");
@@ -391,7 +437,7 @@ fn emit_statement(
                 if i > 0 {
                     out.push_str(", ");
                 }
-                out.push_str(&emit_expr(a));
+                out.push_str(&emit_expr(a, declared));
             }
             out.push_str(") != 0) {\n");
             let mut inner = declared.clone();
@@ -411,7 +457,7 @@ fn emit_statement(
             out.push_str("_push(&");
             out.push_str(list_name);
             out.push_str(", ");
-            out.push_str(&emit_expr(value));
+            out.push_str(&emit_expr(value, declared));
             out.push_str(");\n");
         }
         Statement::ListPopOnError {
@@ -445,7 +491,7 @@ fn emit_statement(
                         (true, Some(expr)) => {
                             out.push_str(&pad);
                             out.push_str("*out = ");
-                            out.push_str(&emit_expr(expr));
+                            out.push_str(&emit_expr(expr, declared));
                             out.push_str(";\n");
                             out.push_str(&pad);
                             out.push_str("return 0;\n");
@@ -459,7 +505,7 @@ fn emit_statement(
                         (false, Some(expr)) => {
                             out.push_str(&pad);
                             out.push_str("return ");
-                            out.push_str(&emit_expr(expr));
+                            out.push_str(&emit_expr(expr, declared));
                             out.push_str(";\n");
                             return;
                         }
@@ -475,7 +521,7 @@ fn emit_statement(
             out.push_str("return");
             if let Some(expr) = value {
                 out.push(' ');
-                out.push_str(&emit_expr(expr));
+                out.push_str(&emit_expr(expr, declared));
             }
             out.push_str(";\n");
         }
@@ -497,7 +543,7 @@ fn emit_statement(
                 }
                 return;
             }
-            let when_expr = emit_expr(when_expression);
+            let when_expr = emit_expr(when_expression, declared);
             let when_tmp = format!("__when_tmp_{}", indent);
             out.push_str(&pad);
             out.push_str("int64_t ");
@@ -522,7 +568,7 @@ fn emit_statement(
                         out.push('(');
                         out.push_str(&when_tmp);
                         out.push_str(" == ");
-                        out.push_str(&emit_expr(expr));
+                        out.push_str(&emit_expr(expr, declared));
                         out.push(')');
                     }
                 }
@@ -562,7 +608,7 @@ fn emit_statement(
                             out.push_str("_push(&");
                             out.push_str(name);
                             out.push_str(", ");
-                            out.push_str(&emit_expr(item));
+                            out.push_str(&emit_expr(item, declared));
                             out.push_str(");\n");
                         }
                     }
@@ -575,7 +621,7 @@ fn emit_statement(
             out.push(' ');
             out.push_str(name);
             out.push_str(" = ");
-            out.push_str(&emit_expr(value));
+            out.push_str(&emit_expr(value, declared));
             out.push_str(";\n");
             declared.insert(name.clone(), declared_type.clone().unwrap_or_else(|| "Int".to_string()));
         }
@@ -607,7 +653,7 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
     }
 }
 
-fn emit_expr(expr: &Expression) -> String {
+fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
     match expr {
         Expression::LiteralInt(v) => v.to_string(),
         Expression::LiteralFloat(v) => v.to_string(),
@@ -617,17 +663,36 @@ fn emit_expr(expr: &Expression) -> String {
         Expression::LiteralString(s) => s.clone(),
         Expression::VariableReference(name) => name.clone(),
         Expression::Index { base, index } => {
-            format!("{}.data[{}]", emit_expr(base), emit_expr(index))
+            let base_rendered = emit_expr(base, declared);
+            let index_rendered = emit_expr(index, declared);
+            if let Expression::VariableReference(name) = base.as_ref()
+                && declared
+                    .get(name)
+                    .map(|t| t.as_str() == "Text")
+                    .unwrap_or(false)
+            {
+                return format!("{}[{}]", base_rendered, index_rendered);
+            }
+            format!("{}.data[{}]", base_rendered, index_rendered)
         }
         Expression::Call { name, args } => {
             if name == "len" && args.len() == 1 {
-                return format!("((int64_t){}.len)", emit_expr(&args[0]));
+                let arg_rendered = emit_expr(&args[0], declared);
+                if let Expression::VariableReference(var_name) = &args[0]
+                    && declared
+                        .get(var_name)
+                        .map(|t| t.as_str() == "Text")
+                        .unwrap_or(false)
+                {
+                    return format!("((int64_t)strlen({}))", arg_rendered);
+                }
+                return format!("((int64_t){}.len)", arg_rendered);
             }
-            let rendered: Vec<String> = args.iter().map(emit_expr).collect();
+            let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", name, rendered.join(", "))
         }
         Expression::BinaryOp { op, left, right } => {
-            let l = emit_expr(left);
+            let l = emit_expr(left, declared);
             if op == "neg" {
                 return format!("(-{})", l);
             }
@@ -635,7 +700,7 @@ fn emit_expr(expr: &Expression) -> String {
                 return format!("(!{})", l);
             }
             if let Some(r) = right {
-                let rr = emit_expr(r);
+                let rr = emit_expr(r, declared);
                 let c_op = match op.as_str() {
                     "and" => "&&",
                     "or" => "||",
