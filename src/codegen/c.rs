@@ -74,12 +74,31 @@ fn emit_list_runtime(out: &mut String) {
     }
 }
 
+fn emit_text_runtime(out: &mut String) {
+    out.push_str("static char* sk_text_slice(const char *s, int64_t start, int64_t end) {\n");
+    out.push_str("    if (!s) return NULL;\n");
+    out.push_str("    int64_t n = (int64_t)strlen(s);\n");
+    out.push_str("    if (start < 0) start = 0;\n");
+    out.push_str("    if (end < start) end = start;\n");
+    out.push_str("    if (start > n) start = n;\n");
+    out.push_str("    if (end > n) end = n;\n");
+    out.push_str("    size_t len = (size_t)(end - start);\n");
+    out.push_str("    char *out = (char*)malloc(len + 1);\n");
+    out.push_str("    if (!out) return NULL;\n");
+    out.push_str("    if (len > 0) {\n");
+    out.push_str("        memcpy(out, s + start, len);\n");
+    out.push_str("    }\n");
+    out.push_str("    out[len] = '\\0';\n");
+    out.push_str("    return out;\n");
+    out.push_str("}\n\n");
+}
+
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
     let needs_list_runtime = program_uses_list_runtime(program);
     let needs_text_runtime = program_uses_text_runtime(program);
     out.push_str("#include <stdio.h>\n\n");
-    if needs_list_runtime {
+    if needs_list_runtime || needs_text_runtime {
         out.push_str("#include <stddef.h>\n");
         out.push_str("#include <stdlib.h>\n");
     }
@@ -90,6 +109,9 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
     if needs_list_runtime {
         emit_list_runtime(&mut out);
+    }
+    if needs_text_runtime {
+        emit_text_runtime(&mut out);
     }
     emit_error_code_enum(program, &mut out);
 
@@ -704,8 +726,8 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             if name == "slice" && args.len() == 3 {
                 let text = emit_expr(&args[0], declared);
                 let start = emit_expr(&args[1], declared);
-                let _end = emit_expr(&args[2], declared);
-                return format!("({} + (size_t)({}))", text, start);
+                let end = emit_expr(&args[2], declared);
+                return format!("sk_text_slice({}, {}, {})", text, start, end);
             }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", name, rendered.join(", "))

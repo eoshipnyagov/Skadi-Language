@@ -271,5 +271,5 @@ new Text tail = slice(t, 3, 7)
     let c = transpile_program_to_c(&program);
     assert!(c.contains("bool has = (strstr(t, \"station\") != NULL);"));
     assert!(c.contains("int64_t idx = ((strstr(t, \"ther\") != NULL) ? (int64_t)(strstr(t, \"ther\") - t) : (int64_t)-1);"));
-    assert!(c.contains("const char* tail = (t + (size_t)(3));"));
+    assert!(c.contains("const char* tail = sk_text_slice(t, 3, 7);"));
 }
