@@ -382,3 +382,32 @@ new char c = t[0]
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
 }
+
+#[test]
+fn semantic_for_infers_item_type_from_list() {
+    let src = r#"
+new i32 List samples = [10, 20, 30]
+new Int sum = 0
+for item in samples {
+    sum = sum + item
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_for_over_non_collection() {
+    let src = r#"
+new Int x = 1
+for item in x {
+    x = x + 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("expects List or Text collection"));
+}

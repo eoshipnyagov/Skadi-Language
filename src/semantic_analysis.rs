@@ -340,7 +340,25 @@ fn analyze_statement(
             let mut loop_scope = scope.clone();
             if let Some(init) = initialization {
                 if let Expression::VariableReference(name) = init.as_ref() {
-                    loop_scope.insert(name.clone(), ValueType::Unknown);
+                    let inferred_item_ty = if let Some(coll) = condition {
+                        match infer_expression_type(coll, &loop_scope, functions)? {
+                            ValueType::List(elem_ty) => (*elem_ty).clone(),
+                            ValueType::Text => ValueType::Char,
+                            other => {
+                                return Err(err_at_code(
+                                    stmt,
+                                    SEM_TYPE_MISMATCH,
+                                    format!(
+                                        "for/iterate expects List or Text collection, got {:?}.",
+                                        other
+                                    ),
+                                ))
+                            }
+                        }
+                    } else {
+                        ValueType::Unknown
+                    };
+                    loop_scope.insert(name.clone(), inferred_item_ty);
                 } else {
                     let _ = infer_expression_type(init, &loop_scope, functions)?;
                 }

@@ -16,7 +16,7 @@ fn program_list_for_len_and_push() {
 new i32 List samples = [10, 20, 30]
 new Int sum = 0
 for item in samples {
-    sum = sum + 1
+    sum = sum + item
 }
 samples.push(40)
 new Int count = len(samples)
