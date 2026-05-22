@@ -1,19 +1,38 @@
-// Scadi tree utility (current core version)
+// Scadi tree utility (core v0.1 version)
+//
 // Supported flags:
-//   --dirs-only
-//   --show-files
+//   --dirs-only   -> show only directories
+//   --show-files  -> force file output (overrides --dirs-only)
+//   --depth-1     -> max recursion depth = 1
+//   --depth-2     -> max recursion depth = 2
+//   --depth-3     -> max recursion depth = 3
+//   --depth-4     -> max recursion depth = 4
+//   --depth-5     -> max recursion depth = 5
+// If no depth flag is provided, depth is unlimited.
+//
+// Build/run examples (from project root):
+//   cargo run -- --input example_tree.scadi --emit-c example_tree.c
+//   gcc example_tree.c -o example_tree.exe
+//   .\example_tree.exe
+//   .\example_tree.exe --dirs-only
+//   .\example_tree.exe --show-files
+//   .\example_tree.exe --dirs-only --depth-3
 
-fn walk(Text path, bool dirs_only) {
-    output(path)
+fn walk(Text path, bool dirs_only, Int max_depth, Int current_depth) {
+    new Text dir_line = concat("[D] ", path)
+    output(dir_line)
 
-    new Text List entries = fs.list(path)
-    for entry in entries {
-        new Text full = fs.join(path, entry)
-        if fs.is_dir(full) {
-            walk(full, dirs_only)
-        } else {
-            if not dirs_only {
-                output(full)
+    if not (max_depth >= 0 and current_depth >= max_depth) {
+        new Text List entries = fs.list(path)
+        for entry in entries {
+            new Text full = fs.join(path, entry)
+            if fs.is_dir(full) {
+                walk(full, dirs_only, max_depth, current_depth + 1)
+            } else {
+                if not dirs_only {
+                    new Text file_line = concat("[F] ", full)
+                    output(file_line)
+                }
             }
         }
     }
@@ -22,6 +41,7 @@ fn walk(Text path, bool dirs_only) {
 new Text List cli_args = args()
 new bool dirs_only = false
 new bool show_files = false
+new Int max_depth = -1
 new Int i = 0
 while i < len(cli_args) {
     new Text arg = cli_args[i]
@@ -31,6 +51,21 @@ while i < len(cli_args) {
     if arg == "--show-files" {
         show_files = true
     }
+    if arg == "--depth-1" {
+        max_depth = 1
+    }
+    if arg == "--depth-2" {
+        max_depth = 2
+    }
+    if arg == "--depth-3" {
+        max_depth = 3
+    }
+    if arg == "--depth-4" {
+        max_depth = 4
+    }
+    if arg == "--depth-5" {
+        max_depth = 5
+    }
     i = i + 1
 }
 
@@ -39,4 +74,4 @@ if show_files {
     dirs_only = false
 }
 
-walk(".", dirs_only)
+walk(".", dirs_only, max_depth, 0)
