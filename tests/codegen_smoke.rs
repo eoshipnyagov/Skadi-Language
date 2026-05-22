@@ -289,3 +289,21 @@ new bool d = fs.is_dir(root)
     assert!(c.contains("entries = sk_fs_list(root);"));
     assert!(c.contains("bool d = sk_fs_is_dir(root);"));
 }
+
+#[test]
+fn codegen_emits_output_input_read_write_shape() {
+    let src = r#"
+output("hello")
+new Text name = input("name: ")
+new Text body = read("in.txt")
+new Int ok = write("out.txt", body)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_output_text(\"hello\");"));
+    assert!(c.contains("const char* name = sk_input(\"name: \");"));
+    assert!(c.contains("const char* body = sk_read_file(\"in.txt\");"));
+    assert!(c.contains("int64_t ok = sk_write_file(\"out.txt\", body);"));
+}

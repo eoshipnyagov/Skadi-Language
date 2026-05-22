@@ -413,3 +413,14 @@ new Text List entries = fs.list(root)
     assert_eq!(name, "fs.list");
     assert_eq!(args.len(), 1);
 }
+
+#[test]
+fn parses_output_call_as_expression_statement() {
+    let src = r#"
+output("hello")
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 1);
+    assert!(matches!(program.statements[0], Statement::ExpressionStatement { .. }));
+}

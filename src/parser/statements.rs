@@ -718,6 +718,25 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
         ));
     }
 
+    if start_index < line_end
+        && (
+            (start_index + 1 < line_end && tokens[start_index + 1].lexeme == "(")
+            || (start_index + 3 < line_end
+                && tokens[start_index + 1].lexeme == "."
+                && tokens[start_index + 2].kind() == TokenKind::Identifier
+                && tokens[start_index + 3].lexeme == "(")
+        )
+    {
+        let expr = parse_expression_range(tokens, start_index, line_end)?;
+        return Ok((
+            Statement::ExpressionStatement {
+                expr: Box::new(expr),
+                loc,
+            },
+            line_end - start_index,
+        ));
+    }
+
     parse_assignment_statement(tokens, start_index)
 }
 

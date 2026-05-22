@@ -541,3 +541,16 @@ new Text List entries = fs.list(x)
     assert!(err.contains("SC-SEM-020"));
     assert!(err.contains("builtin 'fs.list' expects (Text)"));
 }
+
+#[test]
+fn semantic_allows_io_builtins() {
+    let src = r#"
+output("hello")
+new Text name = input("name: ")
+new Text body = read("a.txt")
+new Int ok = write("b.txt", body)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}

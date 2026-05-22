@@ -6,6 +6,10 @@ pub enum Builtin {
     Slice,
     FsList,
     FsIsDir,
+    Output,
+    Input,
+    Read,
+    Write,
     // Math track (reserved for 1.x activation):
     // Sin,
     // Cos,
@@ -17,6 +21,7 @@ pub enum Builtin {
 pub enum BuiltinCategory {
     CoreCollectionText,
     CoreFilesystem,
+    CoreIo,
     Math,
 }
 
@@ -70,6 +75,34 @@ const BUILTIN_SPECS: &[BuiltinSpec] = &[
         name: "fs.is_dir",
         arity: 1,
         category: BuiltinCategory::CoreFilesystem,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Output,
+        name: "output",
+        arity: 1,
+        category: BuiltinCategory::CoreIo,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Input,
+        name: "input",
+        arity: 1,
+        category: BuiltinCategory::CoreIo,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Read,
+        name: "read",
+        arity: 1,
+        category: BuiltinCategory::CoreIo,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Write,
+        name: "write",
+        arity: 2,
+        category: BuiltinCategory::CoreIo,
         enabled: true,
     },
     // Reserved (disabled) math builtins for 1.x:

@@ -60,6 +60,7 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
         | Statement::ListPopOnError { loc, .. }
         | Statement::ReturnError { loc, .. }
         | Statement::ReturnStatement { loc, .. }
+        | Statement::ExpressionStatement { loc, .. }
         | Statement::BlockStatement { loc, .. }
         | Statement::OnErrorBlock { loc, .. } => Some((loc.line, loc.column)),
     }
@@ -625,6 +626,10 @@ fn analyze_statement(
             }
             Ok(())
         }
+        Statement::ExpressionStatement { expr, .. } => {
+            let _ = infer_expression_type(expr, scope, functions)?;
+            Ok(())
+        }
         Statement::LabelDecl { .. } | Statement::StructDecl { .. } => Ok(()),
     }
 }
@@ -790,6 +795,47 @@ fn infer_expression_type(
                             ));
                         }
                         Ok(ValueType::Bool)
+                    }
+                    Builtin::Output => {
+                        let ty = infer_expression_type(&args[0], scope, functions)?;
+                        match ty {
+                            ValueType::Int | ValueType::Float | ValueType::Bool | ValueType::Char | ValueType::Text => Ok(ValueType::Int),
+                            _ => Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'output' unsupported argument type: {:?}.", ty),
+                            )),
+                        }
+                    }
+                    Builtin::Input => {
+                        let ty = infer_expression_type(&args[0], scope, functions)?;
+                        if ty != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'input' expects (Text), got ({:?}).", ty),
+                            ));
+                        }
+                        Ok(ValueType::Text)
+                    }
+                    Builtin::Read => {
+                        let ty = infer_expression_type(&args[0], scope, functions)?;
+                        if ty != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'read' expects (Text), got ({:?}).", ty),
+                            ));
+                        }
+                        Ok(ValueType::Text)
+                    }
+                    Builtin::Write => {
+                        let p = infer_expression_type(&args[0], scope, functions)?;
+                        let d = infer_expression_type(&args[1], scope, functions)?;
+                        if p != ValueType::Text || d != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'write' expects (Text, Text), got ({:?}, {:?}).", p, d),
+                            ));
+                        }
+                        Ok(ValueType::Int)
                     }
                 };
             }

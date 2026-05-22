@@ -94,6 +94,7 @@ pub enum Statement {
     },
     ReturnError { code: String, loc: Location },
     ReturnStatement { value: Option<Box<Expression>>, loc: Location },
+    ExpressionStatement { expr: Box<Expression>, loc: Location },
     BlockStatement { statements: Vec<Statement>, loc: Location },
     OnErrorBlock { statements: Vec<Statement>, loc: Location }, // For 'on error' context
 }

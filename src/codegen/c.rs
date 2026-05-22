@@ -142,11 +142,50 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool) {
     }
 }
 
+fn emit_io_runtime(out: &mut String) {
+    out.push_str("static int sk_output_text(const char *s) { printf(\"%s\\n\", s ? s : \"\"); return 0; }\n");
+    out.push_str("static int sk_output_int(int64_t v) { printf(\"%lld\\n\", (long long)v); return 0; }\n");
+    out.push_str("static int sk_output_float(double v) { printf(\"%f\\n\", v); return 0; }\n");
+    out.push_str("static int sk_output_bool(bool v) { printf(\"%s\\n\", v ? \"true\" : \"false\"); return 0; }\n");
+    out.push_str("static int sk_output_char(char v) { printf(\"%c\\n\", v); return 0; }\n\n");
+    out.push_str("static char* sk_input(const char *prompt) {\n");
+    out.push_str("    if (prompt) printf(\"%s\", prompt);\n");
+    out.push_str("    char buf[4096];\n");
+    out.push_str("    if (!fgets(buf, sizeof(buf), stdin)) return strdup(\"\");\n");
+    out.push_str("    size_t n = strlen(buf);\n");
+    out.push_str("    if (n > 0 && buf[n - 1] == '\\n') buf[n - 1] = '\\0';\n");
+    out.push_str("    return strdup(buf);\n");
+    out.push_str("}\n\n");
+    out.push_str("static char* sk_read_file(const char *path) {\n");
+    out.push_str("    FILE *f = fopen(path, \"rb\");\n");
+    out.push_str("    if (!f) return strdup(\"\");\n");
+    out.push_str("    fseek(f, 0, SEEK_END);\n");
+    out.push_str("    long n = ftell(f);\n");
+    out.push_str("    fseek(f, 0, SEEK_SET);\n");
+    out.push_str("    if (n < 0) { fclose(f); return strdup(\"\"); }\n");
+    out.push_str("    char *buf = (char*)malloc((size_t)n + 1);\n");
+    out.push_str("    if (!buf) { fclose(f); return strdup(\"\"); }\n");
+    out.push_str("    size_t r = fread(buf, 1, (size_t)n, f);\n");
+    out.push_str("    buf[r] = '\\0';\n");
+    out.push_str("    fclose(f);\n");
+    out.push_str("    return buf;\n");
+    out.push_str("}\n\n");
+    out.push_str("static int sk_write_file(const char *path, const char *data) {\n");
+    out.push_str("    FILE *f = fopen(path, \"wb\");\n");
+    out.push_str("    if (!f) return 1;\n");
+    out.push_str("    size_t n = data ? strlen(data) : 0;\n");
+    out.push_str("    size_t w = fwrite(data ? data : \"\", 1, n, f);\n");
+    out.push_str("    fclose(f);\n");
+    out.push_str("    return w == n ? 0 : 1;\n");
+    out.push_str("}\n\n");
+}
+
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
     let (needs_fs_list, needs_fs_is_dir) = program_uses_fs_runtime(program);
     let needs_list_runtime = program_uses_list_runtime(program) || needs_fs_list;
     let needs_text_runtime = program_uses_text_runtime(program);
+    let needs_io_runtime = program_uses_io_runtime(program);
     out.push_str("#include <stdio.h>\n\n");
     if needs_list_runtime || needs_text_runtime {
         out.push_str("#include <stddef.h>\n");
@@ -169,6 +208,9 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
     if needs_fs_list || needs_fs_is_dir {
         emit_fs_runtime(&mut out, needs_fs_list, needs_fs_is_dir);
+    }
+    if needs_io_runtime {
+        emit_io_runtime(&mut out);
     }
     emit_error_code_enum(program, &mut out);
 
@@ -422,6 +464,73 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool) {
         nd |= d;
     }
     (nl, nd)
+}
+
+fn expression_uses_io_call(expr: &Expression) -> bool {
+    match expr {
+        Expression::Call { name, args } => {
+            let is_io = matches!(name.as_str(), "output" | "input" | "read" | "write");
+            is_io || args.iter().any(expression_uses_io_call)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_io_call(left)
+                || right.as_deref().map(expression_uses_io_call).unwrap_or(false)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_io_call(base) || expression_uses_io_call(index)
+        }
+        Expression::ListLiteral(items) => items.iter().any(expression_uses_io_call),
+        Expression::StructConstruction { fields } => fields.values().any(|v| expression_uses_io_call(v)),
+        _ => false,
+    }
+}
+
+fn program_uses_io_runtime(program: &Program) -> bool {
+    fn stmt_uses_io(stmt: &Statement) -> bool {
+        match stmt {
+            Statement::VarDecl { value, .. } => expression_uses_io_call(value),
+            Statement::Assignment { value, .. } => expression_uses_io_call(value),
+            Statement::ExpressionStatement { expr, .. } => expression_uses_io_call(expr),
+            Statement::IfStatement { condition, then_block, else_block, .. } => {
+                expression_uses_io_call(condition)
+                    || then_block.statements.iter().any(stmt_uses_io)
+                    || else_block
+                        .as_ref()
+                        .map(|b| b.statements.iter().any(stmt_uses_io))
+                        .unwrap_or(false)
+            }
+            Statement::ForLoop { condition, body, .. } => {
+                condition.as_ref().map(|e| expression_uses_io_call(e)).unwrap_or(false)
+                    || body.statements.iter().any(stmt_uses_io)
+            }
+            Statement::WhenBlock { when_expression, cases, else_block, .. } => {
+                expression_uses_io_call(when_expression)
+                    || cases.iter().any(|(_, b)| b.statements.iter().any(stmt_uses_io))
+                    || else_block
+                        .as_ref()
+                        .map(|b| b.statements.iter().any(stmt_uses_io))
+                        .unwrap_or(false)
+            }
+            Statement::WhileLoop { condition, body, .. } => {
+                expression_uses_io_call(condition) || body.statements.iter().any(stmt_uses_io)
+            }
+            Statement::LoopStatement { body, .. } => body.statements.iter().any(stmt_uses_io),
+            Statement::DangerAssignOnError { args, on_error, .. }
+            | Statement::DangerCallOnError { args, on_error, .. } => {
+                args.iter().any(expression_uses_io_call) || on_error.statements.iter().any(stmt_uses_io)
+            }
+            Statement::ListPush { value, .. } => expression_uses_io_call(value),
+            Statement::ListPopOnError { on_error, .. } => on_error.statements.iter().any(stmt_uses_io),
+            Statement::ReturnStatement { value, .. } => {
+                value.as_ref().map(|v| expression_uses_io_call(v)).unwrap_or(false)
+            }
+            Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
+                statements.iter().any(stmt_uses_io)
+            }
+            _ => false,
+        }
+    }
+    program.statements.iter().any(stmt_uses_io)
 }
 
 fn emit_error_code_enum(program: &Program, out: &mut String) {
@@ -759,6 +868,11 @@ fn emit_statement(
             }
             out.push_str(";\n");
         }
+        Statement::ExpressionStatement { expr, .. } => {
+            out.push_str(&pad);
+            out.push_str(&emit_expr(expr, declared));
+            out.push_str(";\n");
+        }
         Statement::ReturnError { code, .. } => {
             out.push_str(&pad);
             out.push_str("return ErrorCode_");
@@ -961,6 +1075,38 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     Builtin::FsIsDir if args.len() == 1 => {
                         let path = emit_expr(&args[0], declared);
                         return format!("sk_fs_is_dir({})", path);
+                    }
+                    Builtin::Output if args.len() == 1 => {
+                        let rendered = emit_expr(&args[0], declared);
+                        return match args[0] {
+                            Expression::LiteralFloat(_) => format!("sk_output_float({})", rendered),
+                            Expression::LiteralBool(_) => format!("sk_output_bool({})", rendered),
+                            Expression::LiteralString(_) => format!("sk_output_text({})", rendered),
+                            Expression::LiteralInt(_) => format!("sk_output_int({})", rendered),
+                            Expression::VariableReference(ref n) => {
+                                match declared.get(n).map(String::as_str).unwrap_or("Int") {
+                                    "Float" | "f32" | "f64" => format!("sk_output_float({})", rendered),
+                                    "bool" => format!("sk_output_bool({})", rendered),
+                                    "char" => format!("sk_output_char({})", rendered),
+                                    "Text" => format!("sk_output_text({})", rendered),
+                                    _ => format!("sk_output_int({})", rendered),
+                                }
+                            }
+                            _ => format!("sk_output_int({})", rendered),
+                        };
+                    }
+                    Builtin::Input if args.len() == 1 => {
+                        let prompt = emit_expr(&args[0], declared);
+                        return format!("sk_input({})", prompt);
+                    }
+                    Builtin::Read if args.len() == 1 => {
+                        let path = emit_expr(&args[0], declared);
+                        return format!("sk_read_file({})", path);
+                    }
+                    Builtin::Write if args.len() == 2 => {
+                        let path = emit_expr(&args[0], declared);
+                        let data = emit_expr(&args[1], declared);
+                        return format!("sk_write_file({}, {})", path, data);
                     }
                     _ => {}
                 }
