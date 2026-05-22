@@ -410,6 +410,19 @@ new bool has = contains(t, 1)
 }
 
 #[test]
+fn semantic_rejects_contains_wrong_arg_count() {
+    let src = r#"
+new Text t = "weather"
+new bool has = contains(t)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-033"));
+    assert!(err.contains("builtin 'contains' expects 2 arguments"));
+}
+
+#[test]
 fn semantic_rejects_find_wrong_arg_count() {
     let src = r#"
 new Text t = "weather"
