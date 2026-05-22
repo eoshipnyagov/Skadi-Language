@@ -513,3 +513,31 @@ for item in x {
     assert!(err.contains("SC-SEM-020"));
     assert!(err.contains("expects List or Text collection"));
 }
+
+#[test]
+fn semantic_allows_fs_list_and_is_dir_builtins() {
+    let src = r#"
+new Text root = "."
+new Text List entries = fs.list(root)
+new bool d = fs.is_dir(root)
+for e in entries {
+    d = fs.is_dir(e)
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_fs_list_non_text_argument() {
+    let src = r#"
+new Int x = 1
+new Text List entries = fs.list(x)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("builtin 'fs.list' expects (Text)"));
+}

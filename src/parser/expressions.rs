@@ -155,6 +155,15 @@ impl<'a> ExprParser<'a> {
             }
             TokenKind::TypeBool => Ok(Expression::LiteralBool(tok.lexeme == "true")),
             TokenKind::Identifier => {
+                let mut call_name = tok.lexeme.clone();
+                if self.idx + 1 < self.end
+                    && self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                    && self.tokens[self.idx].lexeme == "."
+                    && self.tokens[self.idx + 1].kind == TokenKind::Identifier
+                {
+                    call_name = format!("{}.{}", tok.lexeme, self.tokens[self.idx + 1].lexeme);
+                    self.idx += 2;
+                }
                 if self.idx < self.end
                     && self.tokens[self.idx].kind == TokenKind::OpPunctuation
                     && self.tokens[self.idx].lexeme == "("
@@ -167,7 +176,7 @@ impl<'a> ExprParser<'a> {
                     {
                         self.idx += 1;
                         return Ok(Expression::Call {
-                            name: tok.lexeme.clone(),
+                            name: call_name,
                             args,
                         });
                     }
@@ -192,7 +201,7 @@ impl<'a> ExprParser<'a> {
                         return Err(parse_err("SC-PARSE-204", "expected ',' or ')' in argument list."));
                     }
                     Ok(Expression::Call {
-                        name: tok.lexeme.clone(),
+                        name: call_name,
                         args,
                     })
                 } else {

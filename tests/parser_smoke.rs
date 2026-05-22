@@ -395,3 +395,21 @@ fn parse_error_reports_line_and_col() {
     assert!(err.contains("line"));
     assert!(err.contains("col"));
 }
+
+#[test]
+fn parses_dotted_builtin_call_expression() {
+    let src = r#"
+new Text root = "."
+new Text List entries = fs.list(root)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::VarDecl { value, .. } = &program.statements[1] else {
+        panic!("expected VarDecl");
+    };
+    let Expression::Call { name, args } = &**value else {
+        panic!("expected Call");
+    };
+    assert_eq!(name, "fs.list");
+    assert_eq!(args.len(), 1);
+}

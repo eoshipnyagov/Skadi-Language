@@ -4,6 +4,8 @@ pub enum Builtin {
     Contains,
     Find,
     Slice,
+    FsList,
+    FsIsDir,
     // Math track (reserved for 1.x activation):
     // Sin,
     // Cos,
@@ -14,6 +16,7 @@ pub enum Builtin {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuiltinCategory {
     CoreCollectionText,
+    CoreFilesystem,
     Math,
 }
 
@@ -53,6 +56,20 @@ const BUILTIN_SPECS: &[BuiltinSpec] = &[
         name: "slice",
         arity: 3,
         category: BuiltinCategory::CoreCollectionText,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::FsList,
+        name: "fs.list",
+        arity: 1,
+        category: BuiltinCategory::CoreFilesystem,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::FsIsDir,
+        name: "fs.is_dir",
+        arity: 1,
+        category: BuiltinCategory::CoreFilesystem,
         enabled: true,
     },
     // Reserved (disabled) math builtins for 1.x:

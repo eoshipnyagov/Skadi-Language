@@ -273,3 +273,19 @@ new Text tail = slice(t, 3, 7)
     assert!(c.contains("int64_t idx = sk_text_find(t, \"ther\");"));
     assert!(c.contains("const char* tail = sk_text_slice(t, 3, 7);"));
 }
+
+#[test]
+fn codegen_emits_fs_list_and_is_dir_shape() {
+    let src = r#"
+new Text root = "."
+new Text List entries = fs.list(root)
+new bool d = fs.is_dir(root)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("SkadiList_text entries = sk_list_text_new();"));
+    assert!(c.contains("entries = sk_fs_list(root);"));
+    assert!(c.contains("bool d = sk_fs_is_dir(root);"));
+}

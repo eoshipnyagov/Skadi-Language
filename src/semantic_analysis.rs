@@ -771,6 +771,26 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Text)
                     }
+                    Builtin::FsList => {
+                        let path_ty = infer_expression_type(&args[0], scope, functions)?;
+                        if path_ty != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'fs.list' expects (Text), got ({:?}).", path_ty),
+                            ));
+                        }
+                        Ok(ValueType::List(Box::new(ValueType::Text)))
+                    }
+                    Builtin::FsIsDir => {
+                        let path_ty = infer_expression_type(&args[0], scope, functions)?;
+                        if path_ty != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'fs.is_dir' expects (Text), got ({:?}).", path_ty),
+                            ));
+                        }
+                        Ok(ValueType::Bool)
+                    }
                 };
             }
             let Some(sig) = functions.get(name) else {
