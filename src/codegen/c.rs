@@ -71,10 +71,23 @@ fn emit_list_runtime(out: &mut String) {
         out.push_str("    xs->len -= 1;\n");
         out.push_str("    return 0;\n");
         out.push_str("}\n\n");
+        out.push_str(&format!(
+            "static {} sk_list_{}_get(const SkadiList_{} *xs, int64_t idx) {{\n",
+            c_ty, suffix, suffix
+        ));
+        out.push_str("    if (!xs || idx < 0 || (size_t)idx >= xs->len) return 0;\n");
+        out.push_str("    return xs->data[(size_t)idx];\n");
+        out.push_str("}\n\n");
     }
 }
 
 fn emit_text_runtime(out: &mut String) {
+    out.push_str("static char sk_text_char_at(const char *s, int64_t idx) {\n");
+    out.push_str("    if (!s || idx < 0) return '\\0';\n");
+    out.push_str("    size_t n = strlen(s);\n");
+    out.push_str("    if ((size_t)idx >= n) return '\\0';\n");
+    out.push_str("    return s[(size_t)idx];\n");
+    out.push_str("}\n\n");
     out.push_str("static int64_t sk_text_find(const char *s, const char *needle) {\n");
     out.push_str("    if (!s || !needle) return -1;\n");
     out.push_str("    const char *p = strstr(s, needle);\n");
@@ -699,7 +712,15 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     .map(|t| t.as_str() == "Text")
                     .unwrap_or(false)
             {
-                return format!("{}[{}]", base_rendered, index_rendered);
+                return format!("sk_text_char_at({}, {})", base_rendered, index_rendered);
+            }
+            if let Expression::VariableReference(name) = base.as_ref()
+                && let Some(suffix) = declared
+                    .get(name)
+                    .and_then(|t| list_elem_from_decl(t))
+                    .and_then(|elem| list_meta(elem).map(|(_, s)| s))
+            {
+                return format!("sk_list_{}_get(&{}, {})", suffix, base_rendered, index_rendered);
             }
             format!("{}.data[{}]", base_rendered, index_rendered)
         }

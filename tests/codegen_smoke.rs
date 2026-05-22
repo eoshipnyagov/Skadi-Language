@@ -254,7 +254,7 @@ new char c = t[0]
     let c = transpile_program_to_c(&program);
     assert!(c.contains("const char* t = \"weather\";"));
     assert!(c.contains("int64_t n = ((int64_t)strlen(t));"));
-    assert!(c.contains("char c = t[0];"));
+    assert!(c.contains("char c = sk_text_char_at(t, 0);"));
 }
 
 #[test]

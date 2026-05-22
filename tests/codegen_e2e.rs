@@ -263,3 +263,67 @@ when mode {
     let _ = fs::remove_file(c_path);
     let _ = fs::remove_file(exe_path);
 }
+
+#[test]
+fn e2e_skadi_checked_index_bounds_build_and_run() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new i32 List xs = [5, 6]
+new i32 ok = xs[1]
+new i32 out = xs[42]
+new Text t = "xy"
+new char c_ok = t[1]
+new char c_out = t[10]
+new Int sum = ok + out
+if c_ok == c_out {
+    sum = sum + 1
+} else {
+    sum = sum + 2
+}
+"#;
+
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time")
+        .as_millis();
+    let mut c_path: PathBuf = std::env::temp_dir();
+    c_path.push(format!("scadi_e2e_checked_index_{stamp}.c"));
+    let mut exe_path: PathBuf = std::env::temp_dir();
+    exe_path.push(format!("scadi_e2e_checked_index_{stamp}"));
+    if cfg!(windows) {
+        exe_path.set_extension("exe");
+    }
+
+    fs::write(&c_path, c).expect("write C source");
+
+    let compile = Command::new(compiler)
+        .arg(&c_path)
+        .arg("-o")
+        .arg(&exe_path)
+        .output()
+        .expect("run C compiler");
+    assert!(
+        compile.status.success(),
+        "C compile failed: {}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+
+    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    assert!(
+        run.status.success(),
+        "Binary execution failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let _ = fs::remove_file(c_path);
+    let _ = fs::remove_file(exe_path);
+}

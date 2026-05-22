@@ -95,3 +95,20 @@ iterate values as v {
     assert!(c.contains("for (size_t __i = 0; __i < values.len; ++__i) {"));
     assert!(c.contains("int32_t v = values.data[__i];"));
 }
+
+#[test]
+fn program_checked_index_lowering_shapes() {
+    let src = r#"
+new i32 List xs = [1, 2, 3]
+new i32 a = xs[1]
+new i32 b = xs[99]
+new Text t = "abc"
+new char c1 = t[0]
+new char c2 = t[9]
+"#;
+    let c = compile_pipeline(src);
+    assert!(c.contains("int32_t a = sk_list_i32_get(&xs, 1);"));
+    assert!(c.contains("int32_t b = sk_list_i32_get(&xs, 99);"));
+    assert!(c.contains("char c1 = sk_text_char_at(t, 0);"));
+    assert!(c.contains("char c2 = sk_text_char_at(t, 9);"));
+}
