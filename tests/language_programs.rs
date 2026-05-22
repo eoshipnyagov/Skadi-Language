@@ -112,3 +112,16 @@ new char c2 = t[9]
     assert!(c.contains("char c1 = sk_text_char_at(t, 0);"));
     assert!(c.contains("char c2 = sk_text_char_at(t, 9);"));
 }
+
+#[test]
+fn program_tree_utility_pipeline_shape() {
+    let src = include_str!("../example_tree.scadi");
+    let c = compile_pipeline(src);
+    assert!(c.contains("SkadiList_text cli_args = sk_list_text_new();"));
+    assert!(c.contains("cli_args = sk_args(argc, argv);"));
+    assert!(c.contains("SkadiList_text entries = sk_list_text_new();"));
+    assert!(c.contains("entries = sk_fs_list(path);"));
+    assert!(c.contains("bool dirs_only = false;"));
+    assert!(c.contains("bool show_files = false;"));
+    assert!(c.contains("if ((arg == \"--dirs-only\")) {"));
+}

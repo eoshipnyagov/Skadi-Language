@@ -428,6 +428,7 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
         match stmt {
             Statement::VarDecl { value, .. } => expression_uses_fs_call(value),
             Statement::Assignment { value, .. } => expression_uses_fs_call(value),
+            Statement::FunctionDef { body, .. } => block_uses_fs(body),
             Statement::IfStatement { condition, then_block, else_block, .. } => {
                 let (mut nl, mut nd, mut nj) = expression_uses_fs_call(condition);
                 let (l2, d2, j2) = block_uses_fs(then_block);
@@ -559,6 +560,7 @@ fn program_uses_io_runtime(program: &Program) -> bool {
         match stmt {
             Statement::VarDecl { value, .. } => expression_uses_io_call(value),
             Statement::Assignment { value, .. } => expression_uses_io_call(value),
+            Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_io),
             Statement::ExpressionStatement { expr, .. } => expression_uses_io_call(expr),
             Statement::IfStatement { condition, then_block, else_block, .. } => {
                 expression_uses_io_call(condition)
@@ -607,6 +609,7 @@ fn program_uses_args_runtime(program: &Program) -> bool {
         match stmt {
             Statement::VarDecl { value, .. } => expression_uses_args_call(value),
             Statement::Assignment { value, .. } => expression_uses_args_call(value),
+            Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_args),
             Statement::ExpressionStatement { expr, .. } => expression_uses_args_call(expr),
             Statement::IfStatement { condition, then_block, else_block, .. } => {
                 expression_uses_args_call(condition)

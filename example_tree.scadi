@@ -1,0 +1,42 @@
+// Scadi tree utility (current core version)
+// Supported flags:
+//   --dirs-only
+//   --show-files
+
+fn walk(Text path, bool dirs_only) {
+    output(path)
+
+    new Text List entries = fs.list(path)
+    for entry in entries {
+        new Text full = fs.join(path, entry)
+        if fs.is_dir(full) {
+            walk(full, dirs_only)
+        } else {
+            if not dirs_only {
+                output(full)
+            }
+        }
+    }
+}
+
+new Text List cli_args = args()
+new bool dirs_only = false
+new bool show_files = false
+new Int i = 0
+while i < len(cli_args) {
+    new Text arg = cli_args[i]
+    if arg == "--dirs-only" {
+        dirs_only = true
+    }
+    if arg == "--show-files" {
+        show_files = true
+    }
+    i = i + 1
+}
+
+// If --show-files is set, force files output even when --dirs-only is also present.
+if show_files {
+    dirs_only = false
+}
+
+walk(".", dirs_only)
