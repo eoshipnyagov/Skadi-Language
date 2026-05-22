@@ -46,3 +46,18 @@ When location data is not available:
 - `SC-SEM-050` return-path/return-form rule
 - `SC-SEM-051` `ErrorCode` label/variant rule
 - `SC-SEM-900` internal semantic consistency error
+
+## Parse code map (current)
+
+- `SC-PARSE-001..003` parser entry/wrapper diagnostics (`parser/mod.rs`)
+- `SC-PARSE-101..148` statement-level parser diagnostics (`parser/statements.rs`)
+- `SC-PARSE-201..206` expression parser diagnostics (`parser/expressions.rs`)
+
+### Parse code ranges
+
+- `SC-PARSE-10x`: block/function structure and signature expectations
+- `SC-PARSE-11x`: loop/when structural expectations
+- `SC-PARSE-12x`: if/while/loop/return statement expectations
+- `SC-PARSE-13x`: assignment and danger-call shape expectations
+- `SC-PARSE-14x`: declaration/on-block structural expectations
+- `SC-PARSE-20x`: expression parsing expectations and unexpected tokens
