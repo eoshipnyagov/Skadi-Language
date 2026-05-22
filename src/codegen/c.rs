@@ -1,10 +1,77 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
 
 struct FunctionContext {
     is_danger: bool,
     return_type: Option<String>,
+}
+
+const LIST_TYPE_MAP: [(&str, &str, &str); 11] = [
+    ("i8", "int8_t", "i8"),
+    ("i16", "int16_t", "i16"),
+    ("i32", "int32_t", "i32"),
+    ("i64", "int64_t", "i64"),
+    ("u8", "uint8_t", "u8"),
+    ("u16", "uint16_t", "u16"),
+    ("u32", "uint32_t", "u32"),
+    ("u64", "uint64_t", "u64"),
+    ("f32", "float", "f32"),
+    ("f64", "double", "f64"),
+    ("bool", "bool", "bool"),
+];
+
+fn list_elem_from_decl(t: &str) -> Option<&str> {
+    t.strip_suffix(" List").map(str::trim)
+}
+
+fn list_meta(elem: &str) -> Option<(&'static str, &'static str)> {
+    LIST_TYPE_MAP
+        .iter()
+        .find(|(name, _, _)| *name == elem)
+        .map(|(_, c_ty, suffix)| (*c_ty, *suffix))
+}
+
+fn emit_list_runtime(out: &mut String) {
+    for (_, c_ty, suffix) in LIST_TYPE_MAP {
+        out.push_str(&format!(
+            "typedef struct {{\n    {} *data;\n    size_t len;\n    size_t cap;\n}} SkadiList_{};\n\n",
+            c_ty, suffix
+        ));
+        out.push_str(&format!("static SkadiList_{} sk_list_{}_new(void) {{\n", suffix, suffix));
+        out.push_str(&format!("    SkadiList_{} xs;\n", suffix));
+        out.push_str("    xs.data = NULL;\n");
+        out.push_str("    xs.len = 0;\n");
+        out.push_str("    xs.cap = 0;\n");
+        out.push_str("    return xs;\n");
+        out.push_str("}\n\n");
+        out.push_str(&format!(
+            "static int sk_list_{}_push(SkadiList_{} *xs, {} v) {{\n",
+            suffix, suffix, c_ty
+        ));
+        out.push_str("    if (xs->len == xs->cap) {\n");
+        out.push_str("        size_t next = xs->cap == 0 ? 4 : xs->cap * 2;\n");
+        out.push_str(&format!(
+            "        {} *p = ({0}*)realloc(xs->data, next * sizeof({0}));\n",
+            c_ty
+        ));
+        out.push_str("        if (!p) return 1;\n");
+        out.push_str("        xs->data = p;\n");
+        out.push_str("        xs->cap = next;\n");
+        out.push_str("    }\n");
+        out.push_str("    xs->data[xs->len++] = v;\n");
+        out.push_str("    return 0;\n");
+        out.push_str("}\n\n");
+        out.push_str(&format!(
+            "static int sk_list_{}_pop(SkadiList_{} *xs, {} *out) {{\n",
+            suffix, suffix, c_ty
+        ));
+        out.push_str("    if (xs->len == 0) return 1;\n");
+        out.push_str("    *out = xs->data[xs->len - 1];\n");
+        out.push_str("    xs->len -= 1;\n");
+        out.push_str("    return 0;\n");
+        out.push_str("}\n\n");
+    }
 }
 
 pub fn transpile_program_to_c(program: &Program) -> String {
@@ -18,33 +85,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     out.push_str("#include <stdint.h>\n");
     out.push_str("#include <stdbool.h>\n\n");
     if needs_list_runtime {
-        out.push_str(
-            "typedef struct {\n    int64_t *data;\n    size_t len;\n    size_t cap;\n} SkadiListInt64;\n\n",
-        );
-        out.push_str("static SkadiListInt64 sk_list_i64_new(void) {\n");
-        out.push_str("    SkadiListInt64 xs;\n");
-        out.push_str("    xs.data = NULL;\n");
-        out.push_str("    xs.len = 0;\n");
-        out.push_str("    xs.cap = 0;\n");
-        out.push_str("    return xs;\n");
-        out.push_str("}\n\n");
-        out.push_str("static int sk_list_i64_push(SkadiListInt64 *xs, int64_t v) {\n");
-        out.push_str("    if (xs->len == xs->cap) {\n");
-        out.push_str("        size_t next = xs->cap == 0 ? 4 : xs->cap * 2;\n");
-        out.push_str("        int64_t *p = (int64_t*)realloc(xs->data, next * sizeof(int64_t));\n");
-        out.push_str("        if (!p) return 1;\n");
-        out.push_str("        xs->data = p;\n");
-        out.push_str("        xs->cap = next;\n");
-        out.push_str("    }\n");
-        out.push_str("    xs->data[xs->len++] = v;\n");
-        out.push_str("    return 0;\n");
-        out.push_str("}\n\n");
-        out.push_str("static int sk_list_i64_pop(SkadiListInt64 *xs, int64_t *out) {\n");
-        out.push_str("    if (xs->len == 0) return 1;\n");
-        out.push_str("    *out = xs->data[xs->len - 1];\n");
-        out.push_str("    xs->len -= 1;\n");
-        out.push_str("    return 0;\n");
-        out.push_str("}\n\n");
+        emit_list_runtime(&mut out);
     }
     emit_error_code_enum(program, &mut out);
 
@@ -56,7 +97,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
 
     out.push_str("int main(void) {\n");
-    let mut declared = HashSet::new();
+    let mut declared: HashMap<String, String> = HashMap::new();
     for stmt in &program.statements {
         if !matches!(stmt, Statement::FunctionDef { .. }) {
             emit_statement(stmt, &mut out, 1, &mut declared, None);
@@ -164,7 +205,15 @@ fn emit_function(stmt: &Statement, out: &mut String) {
             out.push_str(" *out");
         }
         out.push_str(") {\n");
-        let mut declared: HashSet<String> = params.iter().map(|p| p.name.clone()).collect();
+        let mut declared: HashMap<String, String> = params
+            .iter()
+            .map(|p| {
+                (
+                    p.name.clone(),
+                    p.param_type.clone().unwrap_or_else(|| "Int".to_string()),
+                )
+            })
+            .collect();
         let fn_ctx = FunctionContext {
             is_danger: *is_danger,
             return_type: returns.clone(),
@@ -179,7 +228,7 @@ fn emit_block(
     block: &BlockStatement,
     out: &mut String,
     indent: usize,
-    declared: &mut HashSet<String>,
+    declared: &mut HashMap<String, String>,
     fn_ctx: Option<&FunctionContext>,
 ) {
     for stmt in &block.statements {
@@ -191,7 +240,7 @@ fn emit_statement(
     stmt: &Statement,
     out: &mut String,
     indent: usize,
-    declared: &mut HashSet<String>,
+    declared: &mut HashMap<String, String>,
     fn_ctx: Option<&FunctionContext>,
 ) {
     let pad = "    ".repeat(indent);
@@ -259,7 +308,7 @@ fn emit_statement(
                 out.push_str(".data[__i]");
                 out.push_str(";\n");
                 let mut inner = declared.clone();
-                inner.insert(var_name);
+                inner.insert(var_name, "Int".to_string());
                 emit_block(body, out, indent + 1, &mut inner, fn_ctx);
                 out.push_str(&pad);
                 out.push_str("}\n");
@@ -342,8 +391,15 @@ fn emit_statement(
             out.push_str("}\n");
         }
         Statement::ListPush { list_name, value, .. } => {
+            let suffix = declared
+                .get(list_name)
+                .and_then(|t| list_elem_from_decl(t))
+                .and_then(|elem| list_meta(elem).map(|(_, s)| s))
+                .unwrap_or("i64");
             out.push_str(&pad);
-            out.push_str("(void)sk_list_i64_push(&");
+            out.push_str("(void)sk_list_");
+            out.push_str(suffix);
+            out.push_str("_push(&");
             out.push_str(list_name);
             out.push_str(", ");
             out.push_str(&emit_expr(value));
@@ -355,8 +411,15 @@ fn emit_statement(
             on_error,
             ..
         } => {
+            let suffix = declared
+                .get(list_name)
+                .and_then(|t| list_elem_from_decl(t))
+                .and_then(|elem| list_meta(elem).map(|(_, s)| s))
+                .unwrap_or("i64");
             out.push_str(&pad);
-            out.push_str("if (sk_list_i64_pop(&");
+            out.push_str("if (sk_list_");
+            out.push_str(suffix);
+            out.push_str("_pop(&");
             out.push_str(list_name);
             out.push_str(", &");
             out.push_str(target);
@@ -470,27 +533,33 @@ fn emit_statement(
             }
         }
         Statement::VarDecl { name, value, declared_type, .. } => {
-            if declared_type
-                .as_deref()
-                .map(|t| t.ends_with(" List"))
-                .unwrap_or(false)
-            {
-                out.push_str(&pad);
-                out.push_str("SkadiListInt64 ");
-                out.push_str(name);
-                out.push_str(" = sk_list_i64_new();\n");
-                if let Expression::ListLiteral(items) = value.as_ref() {
-                    for item in items {
-                        out.push_str(&pad);
-                        out.push_str("(void)sk_list_i64_push(&");
-                        out.push_str(name);
-                        out.push_str(", ");
-                        out.push_str(&emit_expr(item));
-                        out.push_str(");\n");
+            if let Some(dt) = declared_type.as_deref() {
+                if let Some(elem) = list_elem_from_decl(dt)
+                    && let Some((_, suffix)) = list_meta(elem)
+                {
+                    out.push_str(&pad);
+                    out.push_str("SkadiList_");
+                    out.push_str(suffix);
+                    out.push(' ');
+                    out.push_str(name);
+                    out.push_str(" = sk_list_");
+                    out.push_str(suffix);
+                    out.push_str("_new();\n");
+                    if let Expression::ListLiteral(items) = value.as_ref() {
+                        for item in items {
+                            out.push_str(&pad);
+                            out.push_str("(void)sk_list_");
+                            out.push_str(suffix);
+                            out.push_str("_push(&");
+                            out.push_str(name);
+                            out.push_str(", ");
+                            out.push_str(&emit_expr(item));
+                            out.push_str(");\n");
+                        }
                     }
+                    declared.insert(name.clone(), dt.to_string());
+                    return;
                 }
-                declared.insert(name.clone());
-                return;
             }
             out.push_str(&pad);
             out.push_str(map_skadi_type_to_c(declared_type.as_deref()));
@@ -499,7 +568,7 @@ fn emit_statement(
             out.push_str(" = ");
             out.push_str(&emit_expr(value));
             out.push_str(";\n");
-            declared.insert(name.clone());
+            declared.insert(name.clone(), declared_type.clone().unwrap_or_else(|| "Int".to_string()));
         }
         Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
             let mut inner = declared.clone();
@@ -512,10 +581,18 @@ fn emit_statement(
 
 fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
     match skadi_type.unwrap_or("Int") {
-        t if t.ends_with(" List") => "SkadiListInt64",
+        "i8" => "int8_t",
+        "i16" => "int16_t",
+        "i32" => "int32_t",
         "Int" | "i64" => "int64_t",
+        "u8" => "uint8_t",
+        "u16" => "uint16_t",
+        "u32" => "uint32_t",
+        "u64" => "uint64_t",
+        "f32" => "float",
         "Float" | "f64" => "double",
         "bool" => "bool",
+        "char" => "char",
         _ => "int64_t",
     }
 }

@@ -197,8 +197,30 @@ new Int n = len(xs)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("typedef struct {"));
-    assert!(c.contains("SkadiListInt64 xs = sk_list_i64_new();"));
-    assert!(c.contains("sk_list_i64_push(&xs, 3)"));
-    assert!(c.contains("if (sk_list_i64_pop(&xs, &x) != 0) {"));
+    assert!(c.contains("SkadiList_i32 xs = sk_list_i32_new();"));
+    assert!(c.contains("sk_list_i32_push(&xs, 3)"));
+    assert!(c.contains("if (sk_list_i32_pop(&xs, &x) != 0) {"));
     assert!(c.contains("int64_t n = ((int64_t)xs.len);"));
+}
+
+#[test]
+fn codegen_emits_list_runtime_for_multiple_scalar_types() {
+    let src = r#"
+new u8 List bu = [1, 2]
+new f64 List fd = [1.0, 2.0]
+new bool List bb = [true, false]
+bu.push(3)
+fd.push(3.5)
+bb.push(true)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("SkadiList_u8 bu = sk_list_u8_new();"));
+    assert!(c.contains("SkadiList_f64 fd = sk_list_f64_new();"));
+    assert!(c.contains("SkadiList_bool bb = sk_list_bool_new();"));
+    assert!(c.contains("sk_list_u8_push(&bu, 3)"));
+    assert!(c.contains("sk_list_f64_push(&fd, 3.5)"));
+    assert!(c.contains("sk_list_bool_push(&bb, true)"));
 }
