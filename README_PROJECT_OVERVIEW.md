@@ -29,6 +29,7 @@
 - `docs/TEST_COVERAGE_MATRIX.md` — покрытие тестами,
 - `docs/RFC_LIST.md` — контракт `List`,
 - `docs/RFC_TEXT.md` — контракт `Text`,
+- `docs/RFC_MATH_VECTOR_CORE.md` — математика/векторы/матрицы (целевой v1 трек),
 - `docs/SKADI_TO_C_SCOPE.md` — scope transpile в C,
 - `SCADI_IMPLEMENTATION_PLAN.md` — roadmap.
 
