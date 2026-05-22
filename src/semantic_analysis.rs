@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ast_nodes::{BlockStatement, Expression, FunctionParam, Program, Statement};
+use crate::diagnostics::{format_diagnostic, DiagnosticKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ValueType {
@@ -47,9 +48,9 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
 
 fn err_at(stmt: &Statement, msg: String) -> String {
     if let Some((line, col)) = statement_loc(stmt) {
-        format!("Semantic error at line {}, col {}: {}", line, col, msg)
+        format_diagnostic(DiagnosticKind::Semantic, msg, Some(line), Some(col), None)
     } else {
-        format!("Semantic error: {}", msg)
+        format_diagnostic(DiagnosticKind::Semantic, msg, None, None, None)
     }
 }
 

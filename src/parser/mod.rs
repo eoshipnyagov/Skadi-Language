@@ -1,12 +1,9 @@
 use crate::ast_nodes::{Program, ScopeManager, Statement};
 use crate::common_types::{Token, TokenKind};
+use crate::diagnostics::{format_diagnostic, DiagnosticKind};
 
 mod expressions;
 mod statements;
-
-fn token_loc(token: &Token) -> String {
-    format!("line {}, col {}", token.line, token.col)
-}
 
 fn parse_statement_at(
     tokens: &[Token],
@@ -39,28 +36,35 @@ fn parse_statement_at(
             statements::parse_identifier_led_statement(tokens, current_token_index)
         }
         _ => {
-            return Err(format!(
-                "Parse error at {}: unsupported statement start token {:?} ('{}') [index {}]",
-                token_loc(start_token),
-                start_token.kind(),
-                start_token.lexeme,
-                current_token_index
+            return Err(format_diagnostic(
+                DiagnosticKind::Parse,
+                format!(
+                    "unsupported statement start token {:?} ('{}')",
+                    start_token.kind(),
+                    start_token.lexeme
+                ),
+                Some(start_token.line),
+                Some(start_token.col),
+                Some(current_token_index),
             ));
         }
     };
 
     match parse_result {
         Ok((statement, consumed_count)) if consumed_count > 0 => Ok((statement, consumed_count)),
-        Ok(_) => Err(format!(
-            "Parse error at {}: parser consumed zero tokens [index {}].",
-            token_loc(start_token),
-            current_token_index
+        Ok(_) => Err(format_diagnostic(
+            DiagnosticKind::Parse,
+            "parser consumed zero tokens.",
+            Some(start_token.line),
+            Some(start_token.col),
+            Some(current_token_index),
         )),
-        Err(e) => Err(format!(
-            "Parse error at {} [index {}]: {}",
-            token_loc(start_token),
-            current_token_index,
-            e
+        Err(e) => Err(format_diagnostic(
+            DiagnosticKind::Parse,
+            e,
+            Some(start_token.line),
+            Some(start_token.col),
+            Some(current_token_index),
         )),
     }
 }
