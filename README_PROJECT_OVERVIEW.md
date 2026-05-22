@@ -1,104 +1,77 @@
-# Skadi Compiler Project Overview
+# Scadi Compiler: Project Overview
 
-## 1. Purpose
-This repository contains a Rust prototype of the Skadi compiler.
+Дата обновления: 2026-05-22
 
-Primary goal of the current stage:
-- make the compiler pipeline stable and testable,
-- lock core contracts (tokens and AST),
-- move from a partial prototype to a working MVP compiler flow.
+## 1. Что это за репозиторий
 
-Language source of truth:
-- `Scadi_design.txt` (Skadi Language Specification v1.1)
+Это рабочий прототип компилятора языка Scadi на Rust.  
+Текущая цель этапа: стабильный и тестируемый пайплайн
+`lexer -> parser -> semantic -> C transpiler`.
 
-## 2. Current Status (as of 2026-05-20)
-Implemented and working:
-- project builds with `cargo check`,
-- lexer module structure is in place and usable,
-- parser supports core top-level constructs and expression parsing via Pratt parser,
-- semantic analysis includes baseline scope checks (`use-before-definition`, redeclaration, self-reference init),
-- regression tests for parser/semantic smoke scenarios are in place.
+## 2. Текущее состояние
 
-Still in progress:
-- parser and semantic stages are not yet feature-complete vs full spec,
-- diagnostics are not yet fully standardized around source spans,
-- some legacy helper methods remain unused and need cleanup.
+Сейчас реализовано:
+- лексический анализ (токенизация, диагностика),
+- синтаксический анализ (AST для core-конструкций),
+- семантические проверки типов и контекстов,
+- генерация C-кода для поддерживаемого подмножества языка,
+- развитый набор тестов (smoke, negative, conformance, e2e).
 
-## 3. Repository Structure
-Top-level:
-- `Cargo.toml` - Rust package config
-- `README_PROJECT_OVERVIEW.md` - project snapshot and architecture overview
-- `SCADI_IMPLEMENTATION_PLAN.md` - implementation roadmap and phase tracking
-- `Scadi_design.txt` - Skadi v1.1 specification
-- `example_meteostation.txt` - integration-style sample program
-- `docs/SKADI_STYLE_PRINCIPLES.md` - accepted style/design baseline for syntax decisions
-- `docs/SKADI_SYNTAX_STATUS.md` - current implemented syntax snapshot
-- `docs/RFC_LIST.md` - draft contract for `List`
-- `docs/RFC_TEXT.md` - draft contract for `Text`
+## 3. Куда смотреть в первую очередь
 
-Source tree (`src/`):
-- `lib.rs` - module wiring for compiler components
-- `main.rs` - executable pipeline runner (`lex -> parse -> semantic`)
-- `common_types.rs` - shared token contracts and common lexical types
-- `lexer/mod.rs` - lexer module entry and re-exports
-- `lexer/core.rs` - lexer implementation (`Lexer`, `lex`)
-- `lexer/structures.rs` - lexer-related shared structures/errors
-- `ast_nodes.rs` - AST node types and scope manager scaffold
-- `parser/mod.rs` - parser orchestration over token stream
-- `parser/statements.rs` - statement/declaration parsing logic
-- `parser/expressions.rs` - Pratt parser for expressions
-- `semantic_analysis.rs` - semantic analysis pass (current baseline checks)
+Документация языка (RU):
+- `docs/SCADI_LANGUAGE_REFERENCE_RU.md`
 
-Tests (`tests/`):
-- `parser_smoke.rs` - parser integration smoke tests
-- `semantic_smoke.rs` - semantic integration smoke tests
-- `fixtures/` - fixture snippets used by tests
+Техническая документация проекта (RU):
+- `docs/SCADI_PROJECT_TECH_REFERENCE_RU.md`
 
-## 4. Compilation Pipeline Target
-Target architecture (MVP -> full):
-1. Source file loading
-2. Lexing (`source -> Vec<Token>`)
-3. Parsing (`Vec<Token> -> AST Program`)
-4. Semantic analysis (`AST -> validated AST / diagnostics`)
-5. Future: code generation backend (IR / WASM / native)
+Дополнительно:
+- `docs/TEST_COVERAGE_MATRIX.md` — покрытие тестами,
+- `docs/RFC_LIST.md` — контракт `List`,
+- `docs/RFC_TEXT.md` — контракт `Text`,
+- `docs/SKADI_TO_C_SCOPE.md` — scope transpile в C,
+- `SCADI_IMPLEMENTATION_PLAN.md` — roadmap.
 
-Current executable (`main.rs`) runs stages 2-4 for the sample source.
+## 4. Структура кода
 
-## 5. Development Principles
-- Keep `Scadi_design.txt` as the functional baseline.
-- Keep style decisions aligned with `docs/SKADI_STYLE_PRINCIPLES.md`.
-- Ship in vertical slices (end-to-end capability for a small subset).
-- Add tests whenever behavior is promoted from scaffold to implemented logic.
+- `src/main.rs` — CLI-вход, запуск пайплайна.
+- `src/lib.rs` — wiring модулей.
+- `src/lexer/*` — лексер.
+- `src/parser/*` — парсер.
+- `src/semantic_analysis.rs` — семантическая валидация.
+- `src/codegen/c.rs` — транспиляция в C.
+- `tests/*` — полный контур тестов.
 
-## 6. Short-Term Priorities
-1. Complete parser coverage for core statements and error forms.
-2. Strengthen semantic checks for function and block scopes.
-3. Normalize diagnostics with consistent source locations.
-4. Expand fixture-based regression coverage.
+## 5. Как запустить
 
-## 7. How To Run
-Validation build:
+Проверка сборки:
 ```bash
 cargo check
 ```
 
-Run test suite:
+Все тесты:
 ```bash
 cargo test
 ```
 
-Run executable pipeline:
+Запуск пайплайна:
 ```bash
-cargo run
+cargo run -- --input example_meteostation.txt --print-c
 ```
 
-## 8. Related Planning Files
-- `SCADI_IMPLEMENTATION_PLAN.md`
-- `docs/SKADI_STYLE_PRINCIPLES.md`
+Запись сгенерированного C в файл:
+```bash
+cargo run -- --input example_meteostation.txt --emit-c out.c
+```
 
-## 9. Near-Term Design Revisit
-In the near term, language design should be revisited before broad feature expansion.
-Focus:
-- narrow v1 scope to a smaller "Skadi Core" subset,
-- keep one canonical syntax path per feature,
-- postpone high-complexity runtime/memory features until core compiler stages are stable.
+## 6. Ключевые ограничения текущей версии
+
+- Это прототип и транспилятор в C, а не финальный native backend.
+- Часть языкового дизайна (из `Scadi_design.txt`) пока не реализована полностью.
+- Runtime-поведение ряда операций пока временное (fail-soft для некоторых out-of-range индексаций).
+
+## 7. Ближайший приоритет развития
+
+- завершить и зафиксировать контракт ошибок runtime,
+- дорасширить синтаксис/семантику до согласованного v1-подмножества,
+- держать “один feature = parser + semantic + codegen + tests + docs”.
