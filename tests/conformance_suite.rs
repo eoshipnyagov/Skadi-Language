@@ -140,3 +140,31 @@ label ErrorCode {
     let err = semantic_err(src);
     assert!(err.contains("must start with 'Ok'"));
 }
+
+#[test]
+fn conformance_typed_function_calls_family() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+new Int x = 10
+new Int y = add(x, 2)
+"#;
+    let c = pipeline_ok(src);
+    assert!(c.contains("int64_t add(int64_t a, int64_t b)"));
+    assert!(c.contains("int64_t y = add(x, 2);"));
+}
+
+#[test]
+fn conformance_typed_function_argument_mismatch_rejected() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+new bool x = true
+new Int y = add(x, 2)
+"#;
+    let err = semantic_err(src);
+    assert!(err.contains("SC-SEM-032"));
+    assert!(err.contains("argument type mismatch"));
+}
