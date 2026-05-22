@@ -75,6 +75,12 @@ fn emit_list_runtime(out: &mut String) {
 }
 
 fn emit_text_runtime(out: &mut String) {
+    out.push_str("static int64_t sk_text_find(const char *s, const char *needle) {\n");
+    out.push_str("    if (!s || !needle) return -1;\n");
+    out.push_str("    const char *p = strstr(s, needle);\n");
+    out.push_str("    if (!p) return -1;\n");
+    out.push_str("    return (int64_t)(p - s);\n");
+    out.push_str("}\n\n");
     out.push_str("static char* sk_text_slice(const char *s, int64_t start, int64_t end) {\n");
     out.push_str("    if (!s) return NULL;\n");
     out.push_str("    int64_t n = (int64_t)strlen(s);\n");
@@ -718,10 +724,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             if name == "find" && args.len() == 2 {
                 let hay = emit_expr(&args[0], declared);
                 let needle = emit_expr(&args[1], declared);
-                return format!(
-                    "((strstr({0}, {1}) != NULL) ? (int64_t)(strstr({0}, {1}) - {0}) : (int64_t)-1)",
-                    hay, needle
-                );
+                return format!("sk_text_find({}, {})", hay, needle);
             }
             if name == "slice" && args.len() == 3 {
                 let text = emit_expr(&args[0], declared);

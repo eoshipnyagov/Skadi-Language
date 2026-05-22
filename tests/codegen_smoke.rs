@@ -270,6 +270,6 @@ new Text tail = slice(t, 3, 7)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("bool has = (strstr(t, \"station\") != NULL);"));
-    assert!(c.contains("int64_t idx = ((strstr(t, \"ther\") != NULL) ? (int64_t)(strstr(t, \"ther\") - t) : (int64_t)-1);"));
+    assert!(c.contains("int64_t idx = sk_text_find(t, \"ther\");"));
     assert!(c.contains("const char* tail = sk_text_slice(t, 3, 7);"));
 }
