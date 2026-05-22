@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use crate::ast_nodes::{BlockStatement, Expression, FunctionParam, Program, Statement};
 use crate::diagnostics::{format_diagnostic, DiagnosticKind};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum ValueType {
     Int,
     Float,
     Bool,
+    Text,
+    List(Box<ValueType>),
     Unknown,
 }
 
@@ -18,7 +20,7 @@ struct FunctionSig {
     param_types: Vec<ValueType>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct FnContext {
     is_danger: bool,
     return_type: Option<ValueType>,
@@ -31,6 +33,7 @@ const SEM_TYPE_MISMATCH: &str = "SC-SEM-020";
 const SEM_UNKNOWN_FUNCTION: &str = "SC-SEM-030";
 const SEM_ARG_COUNT: &str = "SC-SEM-031";
 const SEM_ARG_TYPE: &str = "SC-SEM-032";
+const SEM_BUILTIN_ARG: &str = "SC-SEM-033";
 const SEM_INVALID_CONTEXT: &str = "SC-SEM-040";
 const SEM_RETURN_RULE: &str = "SC-SEM-050";
 const SEM_ERRORCODE_RULE: &str = "SC-SEM-051";
@@ -122,17 +125,34 @@ fn validate_error_code_label(labels: &HashMap<String, Vec<String>>) -> Result<()
     Ok(())
 }
 
-fn parse_type_name(name: &str) -> ValueType {
+fn parse_primitive_type_name(name: &str) -> ValueType {
     match name {
         "Int" | "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" => ValueType::Int,
         "Float" | "f64" | "f32" => ValueType::Float,
         "bool" => ValueType::Bool,
+        "Text" => ValueType::Text,
         _ => ValueType::Unknown,
     }
 }
 
-fn can_assign(target: ValueType, source: ValueType) -> bool {
-    target == source || (target == ValueType::Float && source == ValueType::Int)
+fn parse_type_name(name: &str) -> ValueType {
+    if let Some(elem) = name.strip_suffix(" List") {
+        return ValueType::List(Box::new(parse_primitive_type_name(elem.trim())));
+    }
+    parse_primitive_type_name(name)
+}
+
+fn can_assign(target: &ValueType, source: &ValueType) -> bool {
+    if target == source {
+        return true;
+    }
+    match (target, source) {
+        (ValueType::Float, ValueType::Int) => true,
+        (ValueType::List(t), ValueType::List(s)) => {
+            **s == ValueType::Unknown || can_assign(t, s)
+        }
+        _ => false,
+    }
 }
 
 fn validate_call_args(
@@ -152,9 +172,9 @@ fn validate_call_args(
             args.len()
         )));
     }
-    for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().copied()) {
+    for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().cloned()) {
         let actual_ty = infer_expression_type(arg, scope, functions)?;
-        if !can_assign(expected_ty, actual_ty) {
+        if !can_assign(&expected_ty, &actual_ty) {
             return Err(sem_err(
                 SEM_ARG_TYPE,
                 format!(
@@ -174,7 +194,7 @@ fn analyze_statements(
     fn_ctx: Option<FnContext>,
 ) -> Result<(), String> {
     for stmt in statements {
-        analyze_statement(stmt, scope, functions, labels, fn_ctx)?;
+        analyze_statement(stmt, scope, functions, labels, fn_ctx.clone())?;
     }
     Ok(())
 }
@@ -210,7 +230,7 @@ fn analyze_statement(
             let value_ty = infer_expression_type(value, scope, functions)?;
             let final_ty = if let Some(tn) = declared_type {
                 let declared = parse_type_name(tn);
-                if !can_assign(declared, value_ty) {
+                if !can_assign(&declared, &value_ty) {
                     return Err(format!(
                         "{}",
                         err_at_code(
@@ -231,7 +251,7 @@ fn analyze_statement(
             Ok(())
         }
         Statement::Assignment { target, value, .. } => {
-            let Some(target_ty) = scope.get(target).copied() else {
+            let Some(target_ty) = scope.get(target).cloned() else {
                 return Err(format!(
                     "{}",
                     err_at_code(
@@ -242,7 +262,7 @@ fn analyze_statement(
                 ));
             };
             let value_ty = infer_expression_type(value, scope, functions)?;
-            if !can_assign(target_ty, value_ty) {
+            if !can_assign(&target_ty, &value_ty) {
                 return Err(format!(
                     "{}",
                     err_at_code(
@@ -273,7 +293,7 @@ fn analyze_statement(
             };
             let local_ctx = FnContext {
                 is_danger: sig.is_danger,
-                return_type: sig.return_type,
+                return_type: sig.return_type.clone(),
             };
             analyze_block(body, &mut fn_scope, functions, labels, Some(local_ctx))?;
             if sig.is_danger && !block_guarantees_termination(body) {
@@ -299,10 +319,10 @@ fn analyze_statement(
                 return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, "if condition must be bool.".to_string()));
             }
             let mut then_scope = scope.clone();
-            analyze_block(then_block, &mut then_scope, functions, labels, fn_ctx)?;
+            analyze_block(then_block, &mut then_scope, functions, labels, fn_ctx.clone())?;
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, fn_ctx)?;
+                analyze_block(else_block, &mut else_scope, functions, labels, fn_ctx.clone())?;
             }
             Ok(())
         }
@@ -339,7 +359,7 @@ fn analyze_statement(
             for (case_exprs, block) in cases {
                 for expr in case_exprs {
                     let case_ty = infer_expression_type(expr, scope, functions)?;
-                    if !can_assign(when_ty, case_ty) && !can_assign(case_ty, when_ty) {
+                    if !can_assign(&when_ty, &case_ty) && !can_assign(&case_ty, &when_ty) {
                         return Err(err_at_code(
                             stmt,
                             SEM_TYPE_MISMATCH,
@@ -351,11 +371,11 @@ fn analyze_statement(
                     }
                 }
                 let mut case_scope = scope.clone();
-                analyze_block(block, &mut case_scope, functions, labels, fn_ctx)?;
+                analyze_block(block, &mut case_scope, functions, labels, fn_ctx.clone())?;
             }
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, fn_ctx)?;
+                analyze_block(else_block, &mut else_scope, functions, labels, fn_ctx.clone())?;
             }
             Ok(())
         }
@@ -485,8 +505,8 @@ fn analyze_statement(
             if let Some(ctx) = fn_ctx {
                 if let Some(expr) = value {
                     let actual = infer_expression_type(expr, scope, functions)?;
-                    if let Some(expected) = ctx.return_type {
-                        if !can_assign(expected, actual) {
+                    if let Some(expected) = ctx.return_type.as_ref() {
+                        if !can_assign(expected, &actual) {
                             return Err(err_at_code(
                                 stmt,
                                 SEM_TYPE_MISMATCH,
@@ -541,16 +561,50 @@ fn infer_expression_type(
         Expression::LiteralFloat(_) => Ok(ValueType::Float),
         Expression::LiteralBool(_) => Ok(ValueType::Bool),
         Expression::ListLiteral(items) => {
-            for item in items {
-                let _ = infer_expression_type(item, scope, functions)?;
+            if items.is_empty() {
+                return Ok(ValueType::List(Box::new(ValueType::Unknown)));
             }
-            Ok(ValueType::Unknown)
+            let mut elem_ty = infer_expression_type(&items[0], scope, functions)?;
+            for item in &items[1..] {
+                let item_ty = infer_expression_type(item, scope, functions)?;
+                if can_assign(&elem_ty, &item_ty) {
+                    continue;
+                }
+                if can_assign(&item_ty, &elem_ty) {
+                    elem_ty = item_ty;
+                    continue;
+                }
+                return Err(sem_err(
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "type mismatch in list literal: cannot mix {:?} and {:?}.",
+                        elem_ty, item_ty
+                    ),
+                ));
+            }
+            Ok(ValueType::List(Box::new(elem_ty)))
         }
         Expression::VariableReference(name) => scope
             .get(name)
-            .copied()
+            .cloned()
             .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", name))),
         Expression::Call { name, args } => {
+            if name == "len" {
+                if args.len() != 1 {
+                    return Err(sem_err(
+                        SEM_BUILTIN_ARG,
+                        format!("builtin 'len' expects 1 argument, got {}.", args.len()),
+                    ));
+                }
+                let arg_ty = infer_expression_type(&args[0], scope, functions)?;
+                return match arg_ty {
+                    ValueType::List(_) | ValueType::Text => Ok(ValueType::Int),
+                    _ => Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!("builtin 'len' expects List or Text, got {:?}.", arg_ty),
+                    )),
+                };
+            }
             let Some(sig) = functions.get(name) else {
                 return Err(sem_err(
                     SEM_UNKNOWN_FUNCTION,
@@ -558,7 +612,7 @@ fn infer_expression_type(
                 ));
             };
             validate_call_args(name, args, sig, scope, functions)?;
-            Ok(sig.return_type.unwrap_or(ValueType::Unknown))
+            Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown))
         }
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {

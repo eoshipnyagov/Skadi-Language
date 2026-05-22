@@ -282,3 +282,39 @@ when x {
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("type mismatch in when-case"));
 }
+
+#[test]
+fn semantic_allows_typed_list_literal_and_len() {
+    let src = r#"
+new i32 List xs = [1, 2, 3]
+new Int n = len(xs)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_mixed_type_list_literal() {
+    let src = r#"
+new i32 List xs = [1, true]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("type mismatch in list literal"));
+}
+
+#[test]
+fn semantic_rejects_len_on_non_list_non_text() {
+    let src = r#"
+new Int x = 1
+new Int n = len(x)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("builtin 'len' expects List or Text"));
+}
