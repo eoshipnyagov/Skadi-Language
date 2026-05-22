@@ -40,6 +40,7 @@ Reduce punctuation-heavy forms when a readable keyword form is clearer.
 Examples of accepted direction:
 - `returns` instead of `->`
 - keyword-based constructs where they improve immediate comprehension
+- candidate loop prose form: `iterate collection as item` (experimental, not active in v1)
 
 ## Scope Discipline
 Do not expand syntax surface area during v1 unless it directly supports the core user flow.

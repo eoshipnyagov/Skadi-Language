@@ -30,7 +30,10 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - `loop` - `Stable`
 - `for item in collection` - `Partial`
   - lowering assumes list runtime shape: `collection.len` + `collection.data[i]`
-  - element type currently lowered as `int64_t` in codegen
+  - element type is lowered from declared list element type in codegen
+- `iterate collection as item` - `Planned (Experimental syntax idea)`
+  - readability-oriented candidate for future `for-in` replacement
+  - currently **not parsed** by compiler
 - `when / is / else` - `Stable` (MVP)
   - lowers to `if / else if / else`
   - `is a, b` supported
