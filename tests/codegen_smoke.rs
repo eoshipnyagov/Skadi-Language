@@ -256,3 +256,20 @@ new char c = t[0]
     assert!(c.contains("int64_t n = ((int64_t)strlen(t));"));
     assert!(c.contains("char c = t[0];"));
 }
+
+#[test]
+fn codegen_emits_text_contains_find_slice_shape() {
+    let src = r#"
+new Text t = "weather station"
+new bool has = contains(t, "station")
+new Int idx = find(t, "ther")
+new Text tail = slice(t, 3, 7)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("bool has = (strstr(t, \"station\") != NULL);"));
+    assert!(c.contains("int64_t idx = ((strstr(t, \"ther\") != NULL) ? (int64_t)(strstr(t, \"ther\") - t) : (int64_t)-1);"));
+    assert!(c.contains("const char* tail = (t + (size_t)(3));"));
+}

@@ -688,6 +688,25 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 }
                 return format!("((int64_t){}.len)", arg_rendered);
             }
+            if name == "contains" && args.len() == 2 {
+                let hay = emit_expr(&args[0], declared);
+                let needle = emit_expr(&args[1], declared);
+                return format!("(strstr({}, {}) != NULL)", hay, needle);
+            }
+            if name == "find" && args.len() == 2 {
+                let hay = emit_expr(&args[0], declared);
+                let needle = emit_expr(&args[1], declared);
+                return format!(
+                    "((strstr({0}, {1}) != NULL) ? (int64_t)(strstr({0}, {1}) - {0}) : (int64_t)-1)",
+                    hay, needle
+                );
+            }
+            if name == "slice" && args.len() == 3 {
+                let text = emit_expr(&args[0], declared);
+                let start = emit_expr(&args[1], declared);
+                let _end = emit_expr(&args[2], declared);
+                return format!("({} + (size_t)({}))", text, start);
+            }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", name, rendered.join(", "))
         }
