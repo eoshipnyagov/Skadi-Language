@@ -1,78 +1,58 @@
-# RFC Draft: `List` Type
+# RFC: `List` v1 Baseline
 
-Status: Draft
+Status: Accepted (v1 baseline)
 Date: 2026-05-22
-Owner: TBD
+Owner: Scadi core
 
-## 1. Problem
-`List` is planned as a core high-level type, but the language currently has no finalized contract for:
-- syntax
-- operations
-- runtime shape
-- error behavior
-- interaction with chunk memory model
+## 1. Final syntax (v1)
 
-Without this contract, compiler/runtime work risks rework.
+- Typed declaration uses type-before-name style:
+  - `new i32 List xs = [1, 2, 3]`
+  - `new Float List values = []`
+- `List(T)` is not user-facing syntax in v1.
+- Indexing:
+  - read: `x = xs[i]`
+  - write: `xs[i] = 42`
 
-## 2. Goals for v1
-- provide one minimal, coherent `List` model
-- support predictable lowering to C
-- support core flow use cases:
-  - declaration/init
-  - indexing
-  - `len`
-  - append/remove (minimal mutating API)
-  - `for item in list`
+## 2. Final API surface (v1)
 
-## 3. Non-Goals for v1
-- advanced functional API (`map/filter/reduce`)
-- persistent/immutable lists
-- concurrent lock-free list structures
-- allocator tuning APIs exposed to users
+- `len(xs)` -> returns list length (`Int`)
+- `xs.push(v)` -> append one value of list element type
+- `xs.pop()` -> returns element, must be used with `on error` when empty:
+  - `v = xs.pop() on error { ... }`
 
-## 4. Open Syntax Questions
-1. Type notation:
-- option A: `List(Int)`
-- option B: `List[Int]`
+## 3. Type rules (v1)
 
-2. Construction:
-- option A: `new List(Int) xs = []`
-- option B: `xs = List(Int)`
+- Element type is mandatory in declaration (`new <Type> List <name> = ...`).
+- Literal elements must be assignable to declared element type.
+- `xs[i]` requires integer index type.
+- Assigned value for `xs[i] = v` must be assignable to element type.
+- `push(v)` requires `v` assignable to element type.
 
-3. Method surface:
-- `xs.push(v)`, `xs.pop()`, `xs.len`, `xs[i]`
+## 4. Error behavior (v1)
 
-## 5. Proposed Minimal Runtime Shape (C)
-Per-element-type specialization, e.g.:
-- `SkadiListInt { int64_t* data; size_t len; size_t cap; }`
-- `SkadiListFloat { double* data; size_t len; size_t cap; }`
-- `SkadiListBool { bool* data; size_t len; size_t cap; }`
+- Empty `pop()` is a recoverable runtime error (danger flow).
+- Out-of-bounds indexing is a recoverable runtime error (danger flow).
+- Runtime growth failure is a recoverable runtime error (danger flow).
 
-## 6. Error Semantics
-Questions to decide:
-1. out-of-bounds index -> `danger` error vs runtime abort
-2. `pop()` on empty -> `danger` error vs sentinel value
-3. allocation growth failure -> `danger` error code
+Exact `ErrorCode` naming is finalized in runtime/codegen phase.
 
-Recommendation: explicit `danger` codes for all recoverable runtime failures.
+## 5. Explicit non-goals (v1)
 
-## 7. Memory Model Integration
-Must define:
-- where list buffer lives relative to chunk
-- growth policy
-- what happens on chunk pressure
-- how `allow drop` may interact with list storage
+- `map/filter/reduce`
+- list comprehensions
+- immutable/persistent list variants
+- advanced allocator tuning surface
 
-## 8. Compiler Work Items After RFC Approval
-1. parser support for final chosen list syntax
-2. semantic type representation for generic element type
-3. type checks for indexing/method calls
-4. codegen for list runtime helpers
-5. tests: parser + semantic + codegen + e2e
+## 6. Canonical examples
 
-## 9. Decision Checklist
-- [ ] syntax finalized
-- [ ] core API finalized
-- [ ] error semantics finalized
-- [ ] C runtime ABI finalized
-- [ ] chunk-memory interaction finalized
+```skadi
+new i32 List xs = [1, 2, 3]
+new i32 first = xs[0]
+xs[1] = 10
+new Int n = len(xs)
+xs.push(99)
+new i32 last = xs.pop() on error {
+    last = 0
+}
+```
