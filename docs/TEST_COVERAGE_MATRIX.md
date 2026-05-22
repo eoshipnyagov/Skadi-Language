@@ -29,13 +29,15 @@ This file tracks test coverage for language elements in the current Rust prototy
 - C compiler e2e tests
   - `tests/codegen_e2e.rs`
   - C output compiles and produced binaries run for representative programs
+  - includes edge scenarios for `Text` bounds/empty-needle and `List` + `when` flow
 
 ## 2. Partially covered / pending deep checks
 
 - Runtime error behavior for out-of-range index access
   - typing is validated, runtime trap/recovery path is not fully implemented/verified yet
 - Runtime error behavior for list pop/index boundary faults
-  - `pop` error flow shape exists, but broader boundary matrix is pending
+  - `pop` on empty list e2e flow is covered
+  - index boundary runtime checks are still pending implementation
 - `on interrupt` / `on event` runtime semantics
   - parse-level coverage exists, runtime binding remains TODO
 - Struct lowering semantics
