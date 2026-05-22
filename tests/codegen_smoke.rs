@@ -323,3 +323,21 @@ new Text p = fs.join(".", "src")
     assert!(c.contains("cli_args = sk_args(argc, argv);"));
     assert!(c.contains("const char* p = sk_fs_join(\".\", \"src\");"));
 }
+
+#[test]
+fn codegen_emits_concat_and_text_compare_shape() {
+    let src = r#"
+new Text a = "ab"
+new Text b = "cd"
+new Text c = concat(a, b)
+if c == "abcd" {
+    output(c)
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("const char* c = sk_text_concat(a, b);"));
+    assert!(c.contains("if ((strcmp(c, \"abcd\") == 0)) {"));
+}

@@ -776,6 +776,17 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Text)
                     }
+                    Builtin::Concat => {
+                        let a = infer_expression_type(&args[0], scope, functions)?;
+                        let b = infer_expression_type(&args[1], scope, functions)?;
+                        if a != ValueType::Text || b != ValueType::Text {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'concat' expects (Text, Text), got ({:?}, {:?}).", a, b),
+                            ));
+                        }
+                        Ok(ValueType::Text)
+                    }
                     Builtin::FsList => {
                         let path_ty = infer_expression_type(&args[0], scope, functions)?;
                         if path_ty != ValueType::Text {

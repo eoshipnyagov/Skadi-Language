@@ -112,6 +112,18 @@ fn emit_text_runtime(out: &mut String) {
     out.push_str("    out[len] = '\\0';\n");
     out.push_str("    return out;\n");
     out.push_str("}\n\n");
+    out.push_str("static char* sk_text_concat(const char *a, const char *b) {\n");
+    out.push_str("    const char *left = a ? a : \"\";\n");
+    out.push_str("    const char *right = b ? b : \"\";\n");
+    out.push_str("    size_t alen = strlen(left);\n");
+    out.push_str("    size_t blen = strlen(right);\n");
+    out.push_str("    char *out = (char*)malloc(alen + blen + 1);\n");
+    out.push_str("    if (!out) return strdup(\"\");\n");
+    out.push_str("    memcpy(out, left, alen);\n");
+    out.push_str("    memcpy(out + alen, right, blen);\n");
+    out.push_str("    out[alen + blen] = '\\0';\n");
+    out.push_str("    return out;\n");
+    out.push_str("}\n\n");
 }
 
 fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_join: bool) {
@@ -1127,6 +1139,21 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
     }
 }
 
+fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
+    match expr {
+        Expression::LiteralString(_) => true,
+        Expression::VariableReference(name) => declared
+            .get(name)
+            .map(|t| t.as_str() == "Text" || t.as_str() == "Path")
+            .unwrap_or(false),
+        Expression::Call { name, .. } => matches!(
+            name.as_str(),
+            "input" | "read" | "slice" | "concat" | "fs.join"
+        ),
+        _ => false,
+    }
+}
+
 fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
     match expr {
         Expression::LiteralInt(v) => v.to_string(),
@@ -1188,6 +1215,11 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                         let end = emit_expr(&args[2], declared);
                         return format!("sk_text_slice({}, {}, {})", text, start, end);
                     }
+                    Builtin::Concat if args.len() == 2 => {
+                        let a = emit_expr(&args[0], declared);
+                        let b = emit_expr(&args[1], declared);
+                        return format!("sk_text_concat({}, {})", a, b);
+                    }
                     Builtin::FsList if args.len() == 1 => {
                         let path = emit_expr(&args[0], declared);
                         return format!("sk_fs_list({})", path);
@@ -1243,15 +1275,27 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             format!("{}({})", name, rendered.join(", "))
         }
         Expression::BinaryOp { op, left, right } => {
-            let l = emit_expr(left, declared);
             if op == "neg" {
-                return format!("(-{})", l);
+                if let Some(r) = right {
+                    return format!("(-{})", emit_expr(r, declared));
+                }
+                return format!("(-{})", emit_expr(left, declared));
             }
             if op == "not" {
-                return format!("(!{})", l);
+                if let Some(r) = right {
+                    return format!("(!{})", emit_expr(r, declared));
+                }
+                return format!("(!{})", emit_expr(left, declared));
             }
+            let l = emit_expr(left, declared);
             if let Some(r) = right {
                 let rr = emit_expr(r, declared);
+                if (op == "==" || op == "!=") && is_text_expr(left, declared) && is_text_expr(r, declared) {
+                    if op == "==" {
+                        return format!("(strcmp({}, {}) == 0)", l, rr);
+                    }
+                    return format!("(strcmp({}, {}) != 0)", l, rr);
+                }
                 let c_op = match op.as_str() {
                     "and" => "&&",
                     "or" => "||",

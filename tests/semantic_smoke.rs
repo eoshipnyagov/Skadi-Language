@@ -565,3 +565,15 @@ new Text p = fs.join(".", "src")
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
 }
+
+#[test]
+fn semantic_allows_concat_text_builtin() {
+    let src = r#"
+new Text a = "ab"
+new Text b = "cd"
+new Text c = concat(a, b)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
