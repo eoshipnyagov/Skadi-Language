@@ -267,6 +267,55 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
     ))
 }
 
+pub fn parse_iterate_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
+    let mut current_index = start_index;
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+
+    if current_index >= tokens.len()
+        || tokens[current_index].kind() != TokenKind::Identifier
+        || tokens[current_index].lexeme != "iterate"
+    {
+        return Err(parse_err("SC-PARSE-149", "expected 'iterate' keyword."));
+    }
+    current_index += 1;
+
+    let collection_start = current_index;
+    while current_index < tokens.len()
+        && !(tokens[current_index].kind() == TokenKind::Identifier && tokens[current_index].lexeme == "as")
+    {
+        current_index += 1;
+    }
+    if current_index >= tokens.len() || current_index == collection_start {
+        return Err(parse_err("SC-PARSE-150", "iterate loop expected collection before 'as'."));
+    }
+    let collection_expr = parse_expression_range(tokens, collection_start, current_index)?;
+    current_index += 1; // skip 'as'
+
+    if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::Identifier {
+        return Err(parse_err("SC-PARSE-151", "iterate loop expected item identifier after 'as'."));
+    }
+    let loop_var = tokens[current_index].lexeme.clone();
+    current_index += 1;
+
+    if current_index >= tokens.len() || tokens[current_index].lexeme != "{" {
+        return Err(parse_err("SC-PARSE-152", "iterate loop expected '{' to begin body."));
+    }
+    let block_end = find_block_end(tokens, current_index)?;
+    let body_statements = parse_statements_range(tokens, current_index + 1, block_end)?;
+    current_index = block_end + 1;
+
+    Ok((
+        Statement::ForLoop {
+            initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(loop_var))),
+            condition: Some(Box::new(collection_expr)),
+            update: None,
+            body: Box::new(BlockStatement { statements: body_statements }),
+            loc,
+        },
+        current_index - start_index,
+    ))
+}
+
 pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
     let mut current_index = start_index;
     let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };

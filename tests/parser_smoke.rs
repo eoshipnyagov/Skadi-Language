@@ -184,6 +184,25 @@ fn add(a, b) {
 }
 
 #[test]
+fn parses_iterate_as_loop_alias() {
+    let src = r#"
+iterate items as item {
+    x = item
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 1);
+    match &program.statements[0] {
+        Statement::ForLoop { initialization, condition, .. } => {
+            assert!(initialization.is_some());
+            assert!(condition.is_some());
+        }
+        _ => panic!("expected ForLoop"),
+    }
+}
+
+#[test]
 fn parses_typed_new_declaration() {
     let src = "new Float t = 21.5\n";
     let tokens = lex(src).expect("lex should succeed");

@@ -81,3 +81,17 @@ when mode {
     assert!(c.contains("return ErrorCode_ZeroDivision;"));
     assert!(c.contains("else if ((__when_tmp_1 == 2) || (__when_tmp_1 == 3)) {"));
 }
+
+#[test]
+fn program_iterate_as_alias_works_in_pipeline() {
+    let src = r#"
+new i32 List values = [1, 2, 3]
+new Int total = 0
+iterate values as v {
+    total = total + 1
+}
+"#;
+    let c = compile_pipeline(src);
+    assert!(c.contains("for (size_t __i = 0; __i < values.len; ++__i) {"));
+    assert!(c.contains("int32_t v = values.data[__i];"));
+}

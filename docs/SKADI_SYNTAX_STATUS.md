@@ -31,9 +31,9 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - `for item in collection` - `Partial`
   - lowering assumes list runtime shape: `collection.len` + `collection.data[i]`
   - element type is lowered from declared list element type in codegen
-- `iterate collection as item` - `Planned (Experimental syntax idea)`
-  - readability-oriented candidate for future `for-in` replacement
-  - currently **not parsed** by compiler
+- `iterate collection as item` - `Partial` (alias)
+  - parsed as an alias of `for item in collection`
+  - currently lowers through the same `ForLoop` path
 - `when / is / else` - `Stable` (MVP)
   - lowers to `if / else if / else`
   - `is a, b` supported

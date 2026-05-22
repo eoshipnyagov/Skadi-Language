@@ -43,6 +43,10 @@ Exact `ErrorCode` naming is finalized in runtime/codegen phase.
 - list comprehensions
 - immutable/persistent list variants
 - advanced allocator tuning surface
+- mutation-safety policy for modifying a list during active iteration (e.g., `pop` in loop body)
+  - candidate v2 decisions:
+  - `A)` forbid structural mutation of iterated list
+  - `B)` allow with defined dynamic-length semantics
 
 ## 6. Canonical examples
 
