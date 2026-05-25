@@ -123,5 +123,6 @@ fn program_tree_utility_pipeline_shape() {
     assert!(c.contains("entries = sk_fs_list(path);"));
     assert!(c.contains("bool dirs_only = false;"));
     assert!(c.contains("bool show_files = false;"));
-    assert!(c.contains("if ((strcmp(arg, \"--dirs-only\") == 0)) {"));
+    assert!(c.contains("strcmp(__when_tmp_"));
+    assert!(c.contains("\"--dirs-only\") == 0"));
 }

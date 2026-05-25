@@ -1025,8 +1025,14 @@ fn emit_statement(
             }
             let when_expr = emit_expr(when_expression, declared);
             let when_tmp = format!("__when_tmp_{}", indent);
+            let when_is_text = is_text_expr(when_expression, declared)
+                || cases.iter().any(|(case_exprs, _)| case_exprs.iter().any(|e| is_text_expr(e, declared)));
             out.push_str(&pad);
-            out.push_str("int64_t ");
+            if when_is_text {
+                out.push_str("const char* ");
+            } else {
+                out.push_str("int64_t ");
+            }
             out.push_str(&when_tmp);
             out.push_str(" = ");
             out.push_str(&when_expr);
@@ -1045,11 +1051,19 @@ fn emit_statement(
                         if j > 0 {
                             out.push_str(" || ");
                         }
-                        out.push('(');
-                        out.push_str(&when_tmp);
-                        out.push_str(" == ");
-                        out.push_str(&emit_expr(expr, declared));
-                        out.push(')');
+                        if when_is_text {
+                            out.push_str("(strcmp(");
+                            out.push_str(&when_tmp);
+                            out.push_str(", ");
+                            out.push_str(&emit_expr(expr, declared));
+                            out.push_str(") == 0)");
+                        } else {
+                            out.push('(');
+                            out.push_str(&when_tmp);
+                            out.push_str(" == ");
+                            out.push_str(&emit_expr(expr, declared));
+                            out.push(')');
+                        }
                     }
                 }
                 out.push_str(") {\n");

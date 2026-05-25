@@ -1,0 +1,37 @@
+// bench_03_find_count.scadi
+// Count substring occurrences in file content.
+//
+// Usage:
+//   bench_03_find_count.scadi <file> <needle>
+
+new Text List cli_args = args()
+new Text path = "example_meteostation.txt"
+new Text needle = "temperature"
+
+if len(cli_args) > 0 {
+    path = cli_args[0]
+}
+if len(cli_args) > 1 {
+    needle = cli_args[1]
+}
+
+new Text data = read(path)
+new Int count = 0
+new Int start = 0
+new Int data_len = len(data)
+new Int needle_len = len(needle)
+
+while start < data_len {
+    new Int pos = find(slice(data, start, data_len), needle)
+    if pos < 0 {
+        start = data_len
+    } else {
+        count = count + 1
+        start = start + pos + needle_len
+    }
+}
+
+output(concat("file: ", path))
+output(concat("needle: ", needle))
+output("count:")
+output(count)

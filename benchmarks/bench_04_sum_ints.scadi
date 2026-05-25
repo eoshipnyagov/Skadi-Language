@@ -1,0 +1,41 @@
+// bench_04_sum_ints.scadi
+// CPU/List benchmark: fill list with ints and sum them.
+//
+// Usage:
+//   bench_04_sum_ints.scadi [--small|--medium|--large]
+
+new Text List cli_args = args()
+new Int n = 200000
+if len(cli_args) > 0 {
+    when cli_args[0] {
+        is "--small" {
+            n = 50000
+        }
+        is "--medium" {
+            n = 200000
+        }
+        is "--large" {
+            n = 500000
+        }
+        else {
+            n = 200000
+        }
+    }
+}
+
+new Int List xs = []
+new Int i = 0
+while i < n {
+    xs.push(i)
+    i = i + 1
+}
+
+new Int sum = 0
+for v in xs {
+    sum = sum + v
+}
+
+output("n:")
+output(n)
+output("sum:")
+output(sum)

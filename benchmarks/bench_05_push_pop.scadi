@@ -1,0 +1,49 @@
+// bench_05_push_pop.scadi
+// List stack benchmark: push N values then pop all with on error contract.
+//
+// Usage:
+//   bench_05_push_pop.scadi [--small|--medium|--large]
+
+new Text List cli_args = args()
+new Int n = 200000
+if len(cli_args) > 0 {
+    when cli_args[0] {
+        is "--small" {
+            n = 50000
+        }
+        is "--medium" {
+            n = 200000
+        }
+        is "--large" {
+            n = 500000
+        }
+        else {
+            n = 200000
+        }
+    }
+}
+
+new Int List stack = []
+new Int i = 0
+while i < n {
+    stack.push(i mod 1024)
+    i = i + 1
+}
+
+new Int popped = 0
+new Int value = 0
+new Int j = 0
+while j < n {
+    value = stack.pop() on error {
+        j = n
+    }
+    if j < n {
+        popped = popped + 1
+        j = j + 1
+    }
+}
+
+output("n:")
+output(n)
+output("popped:")
+output(popped)

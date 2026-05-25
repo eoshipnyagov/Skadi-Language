@@ -1,0 +1,35 @@
+// bench_02_read_stats.scadi
+// Read a file and print basic text stats.
+//
+// Usage:
+//   bench_02_read_stats.scadi <file>
+
+new Text List cli_args = args()
+new Text path = "example_meteostation.txt"
+if len(cli_args) > 0 {
+    path = cli_args[0]
+}
+
+new Text data = read(path)
+new Int n = len(data)
+new Int lines = 0
+new Int start = 0
+while start < n {
+    new Int pos = find(slice(data, start, n), "\n")
+    if pos < 0 {
+        start = n
+    } else {
+        lines = lines + 1
+        start = start + pos + 1
+    }
+}
+
+if n > 0 {
+    lines = lines + 1
+}
+
+output(concat("file: ", path))
+output("chars:")
+output(n)
+output("lines:")
+output(lines)

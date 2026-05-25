@@ -45,26 +45,31 @@ new Int max_depth = -1
 new Int i = 0
 while i < len(cli_args) {
     new Text arg = cli_args[i]
-    if arg == "--dirs-only" {
-        dirs_only = true
-    }
-    if arg == "--show-files" {
-        show_files = true
-    }
-    if arg == "--depth-1" {
-        max_depth = 1
-    }
-    if arg == "--depth-2" {
-        max_depth = 2
-    }
-    if arg == "--depth-3" {
-        max_depth = 3
-    }
-    if arg == "--depth-4" {
-        max_depth = 4
-    }
-    if arg == "--depth-5" {
-        max_depth = 5
+    when arg {
+        is "--dirs-only" {
+            dirs_only = true
+        }
+        is "--show-files" {
+            show_files = true
+        }
+        is "--depth-1" {
+            max_depth = 1
+        }
+        is "--depth-2" {
+            max_depth = 2
+        }
+        is "--depth-3" {
+            max_depth = 3
+        }
+        is "--depth-4" {
+            max_depth = 4
+        }
+        is "--depth-5" {
+            max_depth = 5
+        }
+        else {
+            // ignore unknown flags in this demo utility
+        }
     }
     i = i + 1
 }
