@@ -1,0 +1,30 @@
+{
+  "name": "scadi-syntax",
+  "displayName": "Scadi Syntax",
+  "description": "Syntax highlighting for Scadi language",
+  "version": "0.1.0",
+  "publisher": "scadi-local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "scadi",
+        "aliases": ["Scadi", "scadi"],
+        "extensions": [".scadi"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "scadi",
+        "scopeName": "source.scadi",
+        "path": "./syntaxes/scadi.tmLanguage.json"
+      }
+    ]
+  }
+}

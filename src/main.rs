@@ -1,12 +1,56 @@
 use std::fs;
+use std::process::Command;
 use v01::codegen::transpile_program_to_c;
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::semantic_analyze;
 
+fn print_usage() {
+    println!("Scadi compiler (current toolchain)");
+    println!("Usage:");
+    println!("  cargo run -- --input <file.scadi> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]");
+    println!("  cargo run -- <file.scadi> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]");
+    println!();
+    println!("Options:");
+    println!("  --input <path>      Source .scadi file");
+    println!("  --emit-c <path>     Write generated C code to file");
+    println!("  --emit-exe <path>   Build native executable via gcc/clang");
+    println!("  --print-c           Print generated C to stdout");
+    println!("  --help              Show this help");
+}
+
+fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
+    let candidates = ["gcc", "clang"];
+    let mut last_err: Option<String> = None;
+
+    for compiler in candidates {
+        let output = Command::new(compiler).arg(c_path).arg("-o").arg(exe_path).output();
+        match output {
+            Ok(out) => {
+                if out.status.success() {
+                    return Ok(());
+                }
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                last_err = Some(format!(
+                    "{} failed with status {}: {}",
+                    compiler,
+                    out.status,
+                    stderr.trim()
+                ));
+            }
+            Err(e) => {
+                last_err = Some(format!("failed to run {}: {}", compiler, e));
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| "no C compiler found (tried gcc, clang)".to_string()))
+}
+
 fn main() {
     let mut input_file = "example_meteostation.txt".to_string();
     let mut emit_c_path: Option<String> = None;
+    let mut emit_exe_path: Option<String> = None;
     let mut print_c = false;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -21,9 +65,21 @@ fn main() {
                 emit_c_path = Some(args[i + 1].clone());
                 i += 2;
             }
+            "--emit-exe" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Missing value for --emit-exe");
+                    return;
+                }
+                emit_exe_path = Some(args[i + 1].clone());
+                i += 2;
+            }
             "--print-c" => {
                 print_c = true;
                 i += 1;
+            }
+            "--help" => {
+                print_usage();
+                return;
             }
             "--input" => {
                 if i + 1 >= args.len() {
@@ -72,6 +128,28 @@ fn main() {
                                 match fs::write(&path, c_code.as_bytes()) {
                                     Ok(_) => println!("C output written to {}", path),
                                     Err(e) => eprintln!("Failed to write C output to '{}': {}", path, e),
+                                }
+                            }
+
+                            if let Some(exe_path) = emit_exe_path {
+                                let temp_c_path = format!("{}.scadi_tmp.c", exe_path);
+                                match fs::write(&temp_c_path, c_code.as_bytes()) {
+                                    Ok(_) => {
+                                        match compile_c_to_exe(&temp_c_path, &exe_path) {
+                                            Ok(()) => println!("Executable built: {}", exe_path),
+                                            Err(e) => eprintln!("Failed to build executable '{}': {}", exe_path, e),
+                                        }
+                                        if let Err(e) = fs::remove_file(&temp_c_path) {
+                                            eprintln!(
+                                                "Warning: failed to remove temporary C file '{}': {}",
+                                                temp_c_path, e
+                                            );
+                                        }
+                                    }
+                                    Err(e) => eprintln!(
+                                        "Failed to write temporary C file '{}': {}",
+                                        temp_c_path, e
+                                    ),
                                 }
                             }
                         }

@@ -1,0 +1,85 @@
+{
+  "scopeName": "source.scadi",
+  "name": "Scadi",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#constants" },
+    { "include": "#operators" },
+    { "include": "#function-call" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.scadi", "match": "//.*$" },
+        {
+          "name": "comment.block.scadi",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.scadi",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.scadi", "match": "\\\\." },
+            { "name": "variable.interpolation.scadi", "match": "__[A-Za-z_][A-Za-z0-9_]*__" }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.integer.scadi", "match": "\\b\\d+\\b" },
+        { "name": "constant.numeric.float.scadi", "match": "\\b\\d+\\.\\d+\\b" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.scadi",
+          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|on|event|interrupt|error|danger|run|wait|fn|struct|label|new|fixed|const|hide|local|allow|drop|direct)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.scadi",
+          "match": "\\b(Int|Float|Byte|bool|char|Text|String|Path|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.scadi",
+          "match": "\\b(true|false|null|PI|E)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.scadi",
+          "match": "\\b(and|or|not|xor|div|mod)\\b|==|!=|<=|>=|\\+\\=|\\-\\=|\\*\\=|\\/\\=|\\+\\+|\\-\\-|=|<|>|\\+|\\-|\\*|\\/|\\^"
+        }
+      ]
+    },
+    "function-call": {
+      "patterns": [
+        {
+          "name": "entity.name.function.scadi",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()"
+        }
+      ]
+    }
+  }
+}
