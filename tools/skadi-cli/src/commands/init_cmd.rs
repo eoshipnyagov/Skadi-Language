@@ -10,7 +10,7 @@ pub fn run(_args: &[String]) -> Result<(), String> {
 
     let main_path = src.join("main.scadi");
     if !main_path.exists() {
-        fs::write(&main_path, "fn main() {\n    output(\"Hello from Skadi!\")\n}\n")
+        fs::write(&main_path, "output(\"Hello from Skadi!\")\n")
             .map_err(|e| format!("write {} failed: {e}", main_path.display()))?;
     }
 

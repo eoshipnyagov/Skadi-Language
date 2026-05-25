@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const TEMPLATE_MAIN: &str = "fn main() {\n    output(\"Hello from Skadi!\")\n}\n";
+const TEMPLATE_MAIN: &str = "output(\"Hello from Skadi!\")\n";
 const TEMPLATE_TOML: &str = "[package]\nname = \"__NAME__\"\nversion = \"0.1.0\"\nedition = \"v1\"\n\n[build]\nentry = \"src/main.scadi\"\n";
 
 pub fn run(args: &[String]) -> Result<(), String> {

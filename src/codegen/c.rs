@@ -210,7 +210,7 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_jo
     }
 }
 
-fn emit_io_runtime(out: &mut String) {
+fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
     out.push_str("static int sk_output_text(const char *s) { printf(\"%s\\n\", s ? s : \"\"); return 0; }\n");
     out.push_str("static int sk_output_int(int64_t v) { printf(\"%lld\\n\", (long long)v); return 0; }\n");
     out.push_str("static int sk_output_float(double v) { printf(\"%f\\n\", v); return 0; }\n");
@@ -246,15 +246,17 @@ fn emit_io_runtime(out: &mut String) {
     out.push_str("    fclose(f);\n");
     out.push_str("    return w == n ? 0 : 1;\n");
     out.push_str("}\n\n");
-    out.push_str("static SkadiList_text sk_args(int argc, char **argv) {\n");
-    out.push_str("    SkadiList_text out = sk_list_text_new();\n");
-    out.push_str("    for (int i = 1; i < argc; ++i) {\n");
-    out.push_str("        char *v = strdup(argv[i] ? argv[i] : \"\");\n");
-    out.push_str("        if (!v) continue;\n");
-    out.push_str("        (void)sk_list_text_push(&out, v);\n");
-    out.push_str("    }\n");
-    out.push_str("    return out;\n");
-    out.push_str("}\n\n");
+    if needs_args_runtime {
+        out.push_str("static SkadiList_text sk_args(int argc, char **argv) {\n");
+        out.push_str("    SkadiList_text out = sk_list_text_new();\n");
+        out.push_str("    for (int i = 1; i < argc; ++i) {\n");
+        out.push_str("        char *v = strdup(argv[i] ? argv[i] : \"\");\n");
+        out.push_str("        if (!v) continue;\n");
+        out.push_str("        (void)sk_list_text_push(&out, v);\n");
+        out.push_str("    }\n");
+        out.push_str("    return out;\n");
+        out.push_str("}\n\n");
+    }
 }
 
 pub fn transpile_program_to_c(program: &Program) -> String {
@@ -266,7 +268,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
     out.push_str("#include <stdio.h>\n\n");
-    if needs_list_runtime || needs_text_runtime {
+    if needs_list_runtime || needs_text_runtime || needs_io_runtime {
         out.push_str("#include <stddef.h>\n");
         out.push_str("#include <stdlib.h>\n");
     }
@@ -289,7 +291,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         emit_fs_runtime(&mut out, needs_fs_list, needs_fs_is_dir, needs_fs_join);
     }
     if needs_io_runtime {
-        emit_io_runtime(&mut out);
+        emit_io_runtime(&mut out, needs_args_runtime);
     }
     emit_struct_declarations(program, &mut out);
     emit_error_code_enum(program, &mut out);
