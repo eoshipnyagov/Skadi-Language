@@ -61,7 +61,9 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - Checked scalars: `Int`, `Float`, `bool`
 - implicit widening: `Int -> Float` allowed
 - bool conditions in `if/while` are required
-- `List` and `Text` are intentionally **not finalized** yet
+- `List` and `Text` behavior is frozen for v1 in dedicated contracts:
+  - `TEXT_V1_CONTRACT_RU.md`
+  - `ON_ERROR_V1_MATRIX_RU.md`
 
 ## Indexing Contract (Frozen for v1)
 - `xs[i]` for `List` is `fail-soft` in runtime:
@@ -94,3 +96,4 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 
 ## Design Note
 Keyword naming may change later. This file tracks the implemented parser contract now, not a final language freeze.
+Canonical writing style for v1 is frozen in `SYNTAX_CANONICAL_MATRIX_V1_RU.md`.

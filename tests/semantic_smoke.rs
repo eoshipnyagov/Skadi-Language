@@ -678,6 +678,47 @@ new Text c = concat(a, b)
 }
 
 #[test]
+fn style_warnings_prefer_iterate_over_for_in_showcase() {
+    let src = r#"
+new i32 List xs = [1, 2]
+for item in xs {
+    new Int x = item
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let warnings = semantic_style_warnings(&program);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("prefer 'iterate <collection> as <item>'")),
+        "expected iterate-style warning, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn style_warnings_prefer_bool_and_char_canonical_names() {
+    let src = r#"
+new bool ok = true
+new char ch = 'a'
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let warnings = semantic_style_warnings(&program);
+    assert!(
+        warnings.iter().any(|w| w.contains("prefer 'Bool' over 'bool'")),
+        "expected Bool warning, got: {:?}",
+        warnings
+    );
+    assert!(
+        warnings.iter().any(|w| w.contains("prefer 'Char' over 'char'")),
+        "expected Char warning, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
 fn semantic_rejects_on_error_for_read_builtin() {
     let src = r#"
 new Text body = ""
