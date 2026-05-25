@@ -11,23 +11,41 @@ pub struct CompilerInvocation {
 pub struct TargetProfile {
     pub triple: &'static str,
     pub description: &'static str,
+    pub output_kind: OutputKind,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputKind {
+    WindowsExe,
+    LinuxElf,
+}
+
+const HOST_OUTPUT_KIND: OutputKind = if cfg!(windows) {
+    OutputKind::WindowsExe
+} else {
+    OutputKind::LinuxElf
+};
+
+const PROFILES: [TargetProfile; 3] = [
+    TargetProfile {
+        triple: "host",
+        description: "Current host toolchain auto-detection",
+        output_kind: HOST_OUTPUT_KIND,
+    },
+    TargetProfile {
+        triple: "x86_64-w64-mingw32",
+        description: "Windows via MinGW GCC",
+        output_kind: OutputKind::WindowsExe,
+    },
+    TargetProfile {
+        triple: "x86_64-unknown-linux-gnu",
+        description: "Linux GNU via cross GCC/Clang",
+        output_kind: OutputKind::LinuxElf,
+    },
+];
+
 pub fn builtin_profiles() -> &'static [TargetProfile] {
-    &[
-        TargetProfile {
-            triple: "host",
-            description: "Current host toolchain auto-detection",
-        },
-        TargetProfile {
-            triple: "x86_64-w64-mingw32",
-            description: "Windows via MinGW GCC",
-        },
-        TargetProfile {
-            triple: "x86_64-unknown-linux-gnu",
-            description: "Linux GNU via cross GCC/Clang",
-        },
-    ]
+    &PROFILES
 }
 
 pub fn resolve_profile(target: &str) -> Result<TargetProfile, String> {
@@ -97,4 +115,17 @@ pub fn candidate_invocations(target: &str, c_path: &Path, exe_path: &Path) -> Re
 
 pub fn detect_compiler(program: &str) -> bool {
     Command::new(program).arg("--version").output().is_ok()
+}
+
+pub fn target_hint(triple: &str) -> &'static str {
+    match triple {
+        "host" => "Install at least one host C compiler (gcc/clang/cc or cl on Windows).",
+        "x86_64-w64-mingw32" => {
+            "Install MinGW-w64 cross compiler (x86_64-w64-mingw32-gcc) or provide compatible gcc in PATH."
+        }
+        "x86_64-unknown-linux-gnu" => {
+            "Install x86_64-linux-gnu-gcc cross toolchain or clang with Linux target support."
+        }
+        _ => "Install matching target toolchain and ensure compiler is available in PATH.",
+    }
 }

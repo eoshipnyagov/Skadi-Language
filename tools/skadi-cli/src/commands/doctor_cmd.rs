@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::targets::{builtin_profiles, candidate_invocations, detect_compiler};
+use crate::targets::{builtin_profiles, candidate_invocations, detect_compiler, target_hint};
 
 pub fn run(_args: &[String]) -> Result<(), String> {
     println!("skadi doctor");
@@ -25,6 +25,7 @@ pub fn run(_args: &[String]) -> Result<(), String> {
         }
         if !ok {
             println!("        no available compiler found for {}", profile.triple);
+            println!("        hint: {}", target_hint(profile.triple));
         }
     }
     Ok(())
