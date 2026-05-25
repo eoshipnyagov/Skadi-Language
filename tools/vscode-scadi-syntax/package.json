@@ -4,9 +4,17 @@
   "description": "Syntax highlighting for Scadi language",
   "version": "0.1.0",
   "publisher": "scadi-local",
+  "license": "UNLICENSED",
   "engines": {
     "vscode": "^1.85.0"
   },
+  "files": [
+    "LICENSE",
+    "language-configuration.json",
+    "package.json",
+    "README.md",
+    "syntaxes/**"
+  ],
   "categories": [
     "Programming Languages"
   ],

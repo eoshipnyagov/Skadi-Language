@@ -5,21 +5,23 @@
     { "include": "#comments" },
     { "include": "#strings" },
     { "include": "#numbers" },
-    { "include": "#keywords" },
-    { "include": "#types" },
+    { "include": "#function-declaration" },
+    { "include": "#type-declaration" },
+    { "include": "#control-keywords" },
+    { "include": "#modifiers" },
+    { "include": "#builtins" },
     { "include": "#constants" },
-    { "include": "#operators" },
-    { "include": "#function-call" }
+    { "include": "#types" },
+    { "include": "#member-call" },
+    { "include": "#member-access" },
+    { "include": "#function-call" },
+    { "include": "#operators" }
   ],
   "repository": {
     "comments": {
       "patterns": [
         { "name": "comment.line.double-slash.scadi", "match": "//.*$" },
-        {
-          "name": "comment.block.scadi",
-          "begin": "/\\*",
-          "end": "\\*/"
-        }
+        { "name": "comment.block.scadi", "begin": "/\\*", "end": "\\*/" }
       ]
     },
     "strings": {
@@ -37,15 +39,55 @@
     },
     "numbers": {
       "patterns": [
-        { "name": "constant.numeric.integer.scadi", "match": "\\b\\d+\\b" },
-        { "name": "constant.numeric.float.scadi", "match": "\\b\\d+\\.\\d+\\b" }
+        { "name": "constant.numeric.float.scadi", "match": "\\b\\d+\\.\\d+\\b" },
+        { "name": "constant.numeric.integer.scadi", "match": "\\b\\d+\\b" }
       ]
     },
-    "keywords": {
+    "function-declaration": {
+      "patterns": [
+        {
+          "name": "meta.function.declaration.scadi",
+          "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.function.scadi" },
+            "2": { "name": "entity.name.function.scadi" }
+          }
+        }
+      ]
+    },
+    "type-declaration": {
+      "patterns": [
+        {
+          "name": "meta.type.declaration.struct.scadi",
+          "match": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.scadi" },
+            "2": { "name": "entity.name.type.scadi" }
+          }
+        },
+        {
+          "name": "meta.type.declaration.label.scadi",
+          "match": "\\b(label)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.scadi" },
+            "2": { "name": "entity.name.type.scadi" }
+          }
+        }
+      ]
+    },
+    "control-keywords": {
       "patterns": [
         {
           "name": "keyword.control.scadi",
-          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|on|event|interrupt|error|danger|run|wait|fn|struct|label|new|fixed|const|hide|local|allow|drop|direct)\\b"
+          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|on|event|interrupt|error|run|wait)\\b"
+        }
+      ]
+    },
+    "modifiers": {
+      "patterns": [
+        {
+          "name": "storage.modifier.scadi",
+          "match": "\\b(danger|new|fixed|const|hide|local|allow|drop|direct|my)\\b"
         }
       ]
     },
@@ -62,6 +104,44 @@
         {
           "name": "constant.language.scadi",
           "match": "\\b(true|false|null|PI|E)\\b"
+        },
+        {
+          "name": "constant.other.error-code.scadi",
+          "match": "\\b[A-Z][A-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.scadi",
+          "match": "\\b(output|print|input|read|write|len|find|slice|concat|args|delay|sleep)\\b(?=\\s*\\()"
+        },
+        {
+          "name": "support.function.builtin.fs.scadi",
+          "match": "\\bfs\\.(list|read|write|is_dir|join)\\b"
+        }
+      ]
+    },
+    "member-call": {
+      "patterns": [
+        {
+          "name": "meta.member.call.scadi",
+          "match": "\\.\\s*(push|pop|send|receive|signal|toggle)\\b(?=\\s*\\()",
+          "captures": {
+            "1": { "name": "support.function.method.scadi" }
+          }
+        }
+      ]
+    },
+    "member-access": {
+      "patterns": [
+        {
+          "name": "variable.other.member.scadi",
+          "match": "\\.\\s*([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "variable.other.property.scadi" }
+          }
         }
       ]
     },
