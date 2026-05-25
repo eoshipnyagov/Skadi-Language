@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crate::pipeline::{compile_c_to_exe, compile_to_c};
 use crate::project::{ensure_build_dir, load_project};
+use crate::targets::resolve_profile;
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut target = "host".to_string();
@@ -19,6 +20,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         i += 1;
     }
 
+    let profile = resolve_profile(&target)?;
     let project = load_project()?;
     let c_code = compile_to_c(&project.entry)?;
     let build_dir = ensure_build_dir(&project.root)?;
@@ -32,6 +34,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     let exe_path: PathBuf = build_dir.join(exe_name);
     compile_c_to_exe(&c_path, &exe_path, &target)?;
-    println!("build ok: {}", exe_path.display());
+    println!("build ok [{}]: {}", profile.triple, exe_path.display());
     Ok(())
 }

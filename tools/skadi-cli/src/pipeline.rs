@@ -6,6 +6,7 @@ use v01::codegen::transpile_program_to_c;
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
+use crate::targets::{candidate_invocations, resolve_profile};
 
 pub fn compile_to_c(entry_path: &Path) -> Result<String, String> {
     let source = fs::read_to_string(entry_path)
@@ -20,63 +21,23 @@ pub fn compile_to_c(entry_path: &Path) -> Result<String, String> {
 }
 
 pub fn compile_c_to_exe(c_path: &Path, exe_path: &Path, target: &str) -> Result<(), String> {
-    if target != "host" {
-        return Err(format!("target '{target}' is not implemented yet (only host)."));
-    }
+    let _profile = resolve_profile(target)?;
 
     let mut last_err = String::new();
-
-    let mut candidates: Vec<(&str, Vec<String>)> = vec![
-        (
-            "gcc",
-            vec![
-                c_path.display().to_string(),
-                "-o".to_string(),
-                exe_path.display().to_string(),
-            ],
-        ),
-        (
-            "clang",
-            vec![
-                c_path.display().to_string(),
-                "-o".to_string(),
-                exe_path.display().to_string(),
-            ],
-        ),
-        (
-            "cc",
-            vec![
-                c_path.display().to_string(),
-                "-o".to_string(),
-                exe_path.display().to_string(),
-            ],
-        ),
-    ];
-
-    if cfg!(windows) {
-        candidates.push((
-            "cl",
-            vec![
-                "/nologo".to_string(),
-                c_path.display().to_string(),
-                format!("/Fe:{}", exe_path.display()),
-            ],
-        ));
-    }
-
-    for (compiler, args) in candidates {
-        let out = Command::new(compiler).args(&args).output();
+    let candidates = candidate_invocations(target, c_path, exe_path)?;
+    for inv in candidates {
+        let out = Command::new(&inv.program).args(&inv.args).output();
         match out {
             Ok(r) if r.status.success() => return Ok(()),
             Ok(r) => {
                 last_err = format!(
                     "{} failed: {}",
-                    compiler,
+                    inv.program,
                     String::from_utf8_lossy(&r.stderr).trim()
                 );
             }
             Err(e) => {
-                last_err = format!("failed to run {}: {}", compiler, e);
+                last_err = format!("failed to run {}: {}", inv.program, e);
             }
         }
     }

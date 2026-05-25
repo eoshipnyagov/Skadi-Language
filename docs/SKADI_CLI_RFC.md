@@ -48,4 +48,9 @@ entry = "src/main.scadi"
 4. `run` wraps build+exec. ✅
 5. `target list` and `--target` mapping (host-only compile for now). ◑
 6. `tui` expanded from minimal wizard to full flow. ◑
-7. `format`, `doctor` production behavior. ☐
+7. `format`, `doctor` production behavior. ◑
+
+Current built-in target profiles:
+- `host`
+- `x86_64-w64-mingw32`
+- `x86_64-unknown-linux-gnu`
