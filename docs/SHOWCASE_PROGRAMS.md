@@ -41,8 +41,8 @@ cargo run -- --input benchmarks/bench_05_push_pop.scadi --emit-exe bench_05_push
 
 ```powershell
 .\bench_01_tree.exe --dirs-only --depth-3
-.\bench_02_read_stats.exe example_meteostation.txt
-.\bench_03_find_count.exe example_meteostation.txt temperature
+.\bench_02_read_stats.exe --input example_meteostation.txt
+.\bench_03_find_count.exe --input example_meteostation.txt --needle temperature
 .\bench_04_sum_ints.exe --medium
 .\bench_05_push_pop.exe --medium
 ```

@@ -2,12 +2,23 @@
 // Read a file and print basic text stats.
 //
 // Usage:
-//   bench_02_read_stats.scadi <file>
+//   bench_02_read_stats.scadi [--input <file>]
 
 new Text List cli_args = args()
 new Text path = "example_meteostation.txt"
-if len(cli_args) > 0 {
-    path = cli_args[0]
+new Int i = 0
+while i < len(cli_args) {
+    new Text arg = cli_args[i]
+    when arg {
+        is "--input" {
+            if i + 1 < len(cli_args) {
+                path = cli_args[i + 1]
+                i = i + 1
+            }
+        }
+        else { }
+    }
+    i = i + 1
 }
 
 new Text data = read(path)
