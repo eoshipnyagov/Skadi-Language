@@ -341,3 +341,24 @@ if c == "abcd" {
     assert!(c.contains("const char* c = sk_text_concat(a, b);"));
     assert!(c.contains("if ((strcmp(c, \"abcd\") == 0)) {"));
 }
+
+#[test]
+fn codegen_emits_struct_typedef_and_typed_literal() {
+    let src = r#"
+struct Sensor {
+    Int id
+    Text name
+}
+
+new Sensor s = {id = 7, name = "cpu"}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("typedef struct {"));
+    assert!(c.contains("int64_t id;"));
+    assert!(c.contains("const char* name;"));
+    assert!(c.contains("} Sensor;"));
+    assert!(c.contains("Sensor s = (Sensor){.id = 7, .name = \"cpu\"};"));
+}

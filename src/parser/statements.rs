@@ -2,7 +2,7 @@
 // Parser Logic Helpers (Rust)
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
-use crate::ast_nodes::{BlockStatement, ForLoopStyle, FunctionParam, Location, ScopeManager, Statement};
+use crate::ast_nodes::{BlockStatement, ForLoopStyle, FunctionParam, Location, ScopeManager, Statement, StructField};
 use crate::common_types::{Token, TokenKind};
 
 use super::expressions::parse_expression_range;
@@ -900,9 +900,57 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
         return Err(parse_err("SC-PARSE-146", "struct declaration expected '{'."));
     }
     let close = find_block_end(tokens, open)?;
+    let mut fields: Vec<StructField> = Vec::new();
+    let mut cursor = open + 1;
+    while cursor < close {
+        if tokens[cursor].kind() == TokenKind::NewLine {
+            cursor += 1;
+            continue;
+        }
+        if tokens[cursor].kind() == TokenKind::Identifier && tokens[cursor].lexeme == "hide" {
+            cursor += 1;
+            continue;
+        }
+        if tokens[cursor].kind() == TokenKind::KeywordFn {
+            while cursor < close && tokens[cursor].lexeme != "{" {
+                cursor += 1;
+            }
+            if cursor < close && tokens[cursor].lexeme == "{" {
+                let method_end = find_block_end(tokens, cursor)?;
+                cursor = method_end + 1;
+                continue;
+            }
+            break;
+        }
+        if cursor + 1 < close
+            && tokens[cursor].kind() == TokenKind::Identifier
+            && tokens[cursor + 1].kind() == TokenKind::Identifier
+        {
+            let field_type = tokens[cursor].lexeme.clone();
+            let first_name = tokens[cursor + 1].lexeme.clone();
+            fields.push(StructField {
+                field_type: field_type.clone(),
+                name: first_name,
+            });
+            cursor += 2;
+            while cursor + 1 < close
+                && tokens[cursor].lexeme == ","
+                && tokens[cursor + 1].kind() == TokenKind::Identifier
+            {
+                fields.push(StructField {
+                    field_type: field_type.clone(),
+                    name: tokens[cursor + 1].lexeme.clone(),
+                });
+                cursor += 2;
+            }
+            continue;
+        }
+        cursor += 1;
+    }
     Ok((
         Statement::StructDecl {
             name: tokens[start_index + 1].lexeme.clone(),
+            fields,
             loc,
         },
         close + 1 - start_index,

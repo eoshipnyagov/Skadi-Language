@@ -259,6 +259,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     if needs_io_runtime {
         emit_io_runtime(&mut out);
     }
+    emit_struct_declarations(program, &mut out);
     emit_error_code_enum(program, &mut out);
 
     for stmt in &program.statements {
@@ -283,6 +284,25 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     out.push_str("}\n");
 
     out
+}
+
+fn emit_struct_declarations(program: &Program, out: &mut String) {
+    for stmt in &program.statements {
+        if let Statement::StructDecl { name, fields, .. } = stmt {
+            out.push_str("typedef struct {\n");
+            for field in fields {
+                let c_ty = map_skadi_type_to_c(Some(field.field_type.as_str()));
+                out.push_str("    ");
+                out.push_str(&c_ty);
+                out.push(' ');
+                out.push_str(&field.name);
+                out.push_str(";\n");
+            }
+            out.push_str("} ");
+            out.push_str(name);
+            out.push_str(";\n\n");
+        }
+    }
 }
 
 fn program_uses_text_runtime(program: &Program) -> bool {
@@ -704,7 +724,7 @@ fn emit_function(stmt: &Statement, out: &mut String) {
         if *is_danger {
             out.push_str("int");
         } else {
-            out.push_str(map_skadi_type_to_c(returns.as_deref()));
+            out.push_str(&map_skadi_type_to_c(returns.as_deref()));
         }
         out.push(' ');
         out.push_str(name);
@@ -713,7 +733,7 @@ fn emit_function(stmt: &Statement, out: &mut String) {
             if i > 0 {
                 out.push_str(", ");
             }
-            out.push_str(map_skadi_type_to_c(p.param_type.as_deref()));
+            out.push_str(&map_skadi_type_to_c(p.param_type.as_deref()));
             out.push(' ');
             out.push_str(&p.name);
         }
@@ -721,7 +741,7 @@ fn emit_function(stmt: &Statement, out: &mut String) {
             if !params.is_empty() {
                 out.push_str(", ");
             }
-            out.push_str(map_skadi_type_to_c(Some(ret_ty)));
+            out.push_str(&map_skadi_type_to_c(Some(ret_ty)));
             out.push_str(" *out");
         }
         out.push_str(") {\n");
@@ -865,7 +885,7 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str("/* struct ");
             out.push_str(name);
-            out.push_str(" TODO(v1): C struct lowering */\n");
+            out.push_str(" lowered as typedef above */\n");
         }
         Statement::OnBlock { trigger, .. } => {
             out.push_str(&pad);
@@ -1124,7 +1144,20 @@ fn emit_statement(
                 }
             }
             out.push_str(&pad);
-            out.push_str(map_skadi_type_to_c(declared_type.as_deref()));
+            if let Some(dt) = declared_type.as_deref()
+                && let Expression::StructConstruction { fields } = value.as_ref()
+            {
+                out.push_str(&pad);
+                out.push_str(&map_skadi_type_to_c(Some(dt)));
+                out.push(' ');
+                out.push_str(name);
+                out.push_str(" = ");
+                out.push_str(&emit_struct_literal(fields, Some(dt), declared));
+                out.push_str(";\n");
+                declared.insert(name.clone(), dt.to_string());
+                return;
+            }
+            out.push_str(&map_skadi_type_to_c(declared_type.as_deref()));
             out.push(' ');
             out.push_str(name);
             out.push_str(" = ");
@@ -1141,23 +1174,51 @@ fn emit_statement(
     }
 }
 
-fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
+fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
     match skadi_type.unwrap_or("Int") {
-        "i8" => "int8_t",
-        "i16" => "int16_t",
-        "i32" => "int32_t",
-        "Int" | "i64" => "int64_t",
-        "u8" => "uint8_t",
-        "u16" => "uint16_t",
-        "u32" => "uint32_t",
-        "u64" => "uint64_t",
-        "f32" => "float",
-        "Float" | "f64" => "double",
-        "bool" | "Bool" => "bool",
-        "char" | "Char" => "char",
-        "Text" | "Path" => "const char*",
-        _ => "int64_t",
+        "i8" => "int8_t".to_string(),
+        "i16" => "int16_t".to_string(),
+        "i32" => "int32_t".to_string(),
+        "Int" | "i64" => "int64_t".to_string(),
+        "u8" => "uint8_t".to_string(),
+        "u16" => "uint16_t".to_string(),
+        "u32" => "uint32_t".to_string(),
+        "u64" => "uint64_t".to_string(),
+        "f32" => "float".to_string(),
+        "Float" | "f64" => "double".to_string(),
+        "bool" | "Bool" => "bool".to_string(),
+        "char" | "Char" => "char".to_string(),
+        "Text" | "Path" => "const char*".to_string(),
+        other => other.to_string(),
     }
+}
+
+fn emit_struct_literal(
+    fields: &std::collections::HashMap<String, Box<Expression>>,
+    type_name: Option<&str>,
+    declared: &HashMap<String, String>,
+) -> String {
+    let mut keys: Vec<&String> = fields.keys().collect();
+    keys.sort();
+    let mut body = String::new();
+    let prefix = type_name.map(|t| format!("({})", t)).unwrap_or_default();
+    body.push_str(&prefix);
+    body.push('{');
+    for (i, k) in keys.iter().enumerate() {
+        if i > 0 {
+            body.push_str(", ");
+        }
+        body.push('.');
+        body.push_str(k);
+        body.push_str(" = ");
+        if let Some(v) = fields.get(*k) {
+            body.push_str(&emit_expr(v, declared));
+        } else {
+            body.push('0');
+        }
+    }
+    body.push('}');
+    body
 }
 
 fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
@@ -1330,7 +1391,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 format!("({})", l)
             }
         }
-        Expression::StructConstruction { .. } => "0 /* TODO(v1): struct literal */".to_string(),
+        Expression::StructConstruction { fields } => emit_struct_literal(fields, None, declared),
         Expression::ListLiteral(_) => "0 /* TODO(v1): list literal */".to_string(),
     }
 }

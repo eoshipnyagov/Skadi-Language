@@ -37,6 +37,12 @@ pub struct FunctionParam {
     pub param_type: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct StructField {
+    pub field_type: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ForLoopStyle {
     ForIn,
@@ -74,7 +80,7 @@ pub enum Statement {
     WhileLoop { condition: Box<Expression>, body: Box<BlockStatement>, loc: Location },
     LoopStatement { body: Box<BlockStatement>, loc: Location },
     LabelDecl { name: String, variants: Vec<String>, loc: Location },
-    StructDecl { name: String, loc: Location },
+    StructDecl { name: String, fields: Vec<StructField>, loc: Location },
     OnBlock { trigger: String, loc: Location },
     DangerAssignOnError {
         target: String,

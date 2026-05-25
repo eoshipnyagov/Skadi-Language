@@ -11,7 +11,8 @@ label Status {
 }
 
 struct Sensor {
-    u8 address
+    Int id
+    Text name
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
@@ -26,7 +27,14 @@ struct Sensor {
         _ => panic!("expected LabelDecl"),
     }
     match &program.statements[1] {
-        Statement::StructDecl { name, .. } => assert_eq!(name, "Sensor"),
+        Statement::StructDecl { name, fields, .. } => {
+            assert_eq!(name, "Sensor");
+            assert_eq!(fields.len(), 2);
+            assert_eq!(fields[0].field_type, "Int");
+            assert_eq!(fields[0].name, "id");
+            assert_eq!(fields[1].field_type, "Text");
+            assert_eq!(fields[1].name, "name");
+        }
         _ => panic!("expected StructDecl"),
     }
 }
