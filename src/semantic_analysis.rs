@@ -12,6 +12,7 @@ enum ValueType {
     Char,
     Text,
     List(Box<ValueType>),
+    Struct(String),
     Unknown,
 }
 
@@ -26,6 +27,13 @@ struct FunctionSig {
 struct FnContext {
     is_danger: bool,
     return_type: Option<ValueType>,
+    self_struct: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct StructInfo {
+    fields: HashMap<String, ValueType>,
+    methods: HashMap<String, FunctionSig>,
 }
 
 const SEM_REDECLARATION: &str = "SC-SEM-010";
@@ -89,6 +97,7 @@ fn err_at_code(stmt: &Statement, code: &'static str, msg: String) -> String {
 pub fn semantic_analyze(program: &Program) -> Result<(), String> {
     let mut functions: HashMap<String, FunctionSig> = HashMap::new();
     let mut labels: HashMap<String, Vec<String>> = HashMap::new();
+    let mut structs: HashMap<String, StructInfo> = HashMap::new();
 
     for stmt in &program.statements {
         if let Statement::FunctionDef {
@@ -111,12 +120,49 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         if let Statement::LabelDecl { name, variants, .. } = stmt {
             labels.insert(name.clone(), variants.clone());
         }
+        if let Statement::StructDecl {
+            name,
+            fields,
+            methods,
+            ..
+        } = stmt
+        {
+            let mut fmap = HashMap::new();
+            for f in fields {
+                fmap.insert(f.name.clone(), parse_type_name(&f.field_type));
+            }
+            let mut mmap = HashMap::new();
+            for m in methods {
+                mmap.insert(
+                    m.name.clone(),
+                    FunctionSig {
+                        is_danger: m.is_danger,
+                        return_type: m.returns.as_deref().map(parse_type_name).or(Some(ValueType::Int)),
+                        param_types: m.params.iter().map(param_type_or_default).collect(),
+                    },
+                );
+            }
+            structs.insert(
+                name.clone(),
+                StructInfo {
+                    fields: fmap,
+                    methods: mmap,
+                },
+            );
+        }
     }
 
     validate_error_code_label(&labels)?;
 
     let mut scope: HashMap<String, ValueType> = HashMap::new();
-    analyze_statements(&program.statements, &mut scope, &functions, &labels, None)
+    analyze_statements(
+        &program.statements,
+        &mut scope,
+        &functions,
+        &labels,
+        &structs,
+        None,
+    )
 }
 
 pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
@@ -313,6 +359,8 @@ fn validate_call_args(
     sig: &FunctionSig,
     scope: &HashMap<String, ValueType>,
     functions: &HashMap<String, FunctionSig>,
+    structs: &HashMap<String, StructInfo>,
+    fn_ctx: Option<&FnContext>,
 ) -> Result<(), String> {
     if args.len() != sig.param_types.len() {
         return Err(sem_err(
@@ -325,7 +373,7 @@ fn validate_call_args(
         )));
     }
     for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().cloned()) {
-        let actual_ty = infer_expression_type(arg, scope, functions)?;
+        let actual_ty = infer_expression_type(arg, scope, functions, structs, fn_ctx)?;
         if !can_assign(&expected_ty, &actual_ty) {
             return Err(sem_err(
                 SEM_ARG_TYPE,
@@ -338,15 +386,25 @@ fn validate_call_args(
     Ok(())
 }
 
+fn parse_declared_type_name(name: &str) -> ValueType {
+    let parsed = parse_type_name(name);
+    if parsed == ValueType::Unknown {
+        ValueType::Struct(name.to_string())
+    } else {
+        parsed
+    }
+}
+
 fn analyze_statements(
     statements: &[Statement],
     scope: &mut HashMap<String, ValueType>,
     functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
+    structs: &HashMap<String, StructInfo>,
     fn_ctx: Option<FnContext>,
 ) -> Result<(), String> {
     for stmt in statements {
-        analyze_statement(stmt, scope, functions, labels, fn_ctx.clone())?;
+        analyze_statement(stmt, scope, functions, labels, structs, fn_ctx.clone())?;
     }
     Ok(())
 }
@@ -356,6 +414,7 @@ fn analyze_statement(
     scope: &mut HashMap<String, ValueType>,
     functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
+    structs: &HashMap<String, StructInfo>,
     fn_ctx: Option<FnContext>,
 ) -> Result<(), String> {
     match stmt {
@@ -379,9 +438,9 @@ fn analyze_statement(
                     format!("invalid initialization: '{}' is used in its own initializing expression.", name),
                 ));
             }
-            let value_ty = infer_expression_type(value, scope, functions)?;
+            let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             let final_ty = if let Some(tn) = declared_type {
-                let declared = parse_type_name(tn);
+                let declared = parse_declared_type_name(tn);
                 if !can_assign(&declared, &value_ty) {
                     return Err(format!(
                         "{}",
@@ -413,7 +472,7 @@ fn analyze_statement(
                     )
                 ));
             };
-            let value_ty = infer_expression_type(value, scope, functions)?;
+            let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             if !can_assign(&target_ty, &value_ty) {
                 return Err(format!(
                     "{}",
@@ -429,15 +488,37 @@ fn analyze_statement(
             }
             Ok(())
         }
-        Statement::FieldAssignment { object, value, .. } => {
-            if !scope.contains_key(object) && object != "my" {
+        Statement::FieldAssignment { object, field, value, .. } => {
+            let owner_ty = if object == "my" {
+                let Some(ctx) = fn_ctx.as_ref() else {
+                    return Err(err_at_code(stmt, SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                };
+                let Some(self_name) = ctx.self_struct.as_ref() else {
+                    return Err(err_at_code(stmt, SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                };
+                ValueType::Struct(self_name.clone())
+            } else if let Some(v) = scope.get(object).cloned() {
+                v
+            } else {
                 return Err(err_at_code(
                     stmt,
                     SEM_USE_BEFORE_DEF,
                     format!("use-before-definition: '{}' is not defined in current scope.", object),
                 ));
+            };
+            let ValueType::Struct(owner) = owner_ty else {
+                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("field assignment requires struct receiver, got {:?}.", owner_ty)));
+            };
+            let Some(info) = structs.get(&owner) else {
+                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("unknown struct type '{}'.", owner)));
+            };
+            let Some(field_ty) = info.fields.get(field).cloned() else {
+                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("unknown field '{}.{}'.", owner, field)));
+            };
+            let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
+            if !can_assign(&field_ty, &value_ty) {
+                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("type mismatch in field assignment '{}.{}': cannot assign {:?} to {:?}.", owner, field, value_ty, field_ty)));
             }
-            let _ = infer_expression_type(value, scope, functions)?;
             Ok(())
         }
         Statement::FunctionDef {
@@ -457,8 +538,9 @@ fn analyze_statement(
             let local_ctx = FnContext {
                 is_danger: sig.is_danger,
                 return_type: sig.return_type.clone(),
+                self_struct: None,
             };
-            analyze_block(body, &mut fn_scope, functions, labels, Some(local_ctx))?;
+            analyze_block(body, &mut fn_scope, functions, labels, structs, Some(local_ctx))?;
             if sig.is_danger && !block_guarantees_termination(body) {
                 return Err(format!(
                     "{}",
@@ -477,15 +559,15 @@ fn analyze_statement(
             else_block,
             ..
         } => {
-            let cty = infer_expression_type(condition, scope, functions)?;
+            let cty = infer_expression_type(condition, scope, functions, structs, fn_ctx.as_ref())?;
             if cty != ValueType::Bool {
                 return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, "if condition must be bool.".to_string()));
             }
             let mut then_scope = scope.clone();
-            analyze_block(then_block, &mut then_scope, functions, labels, fn_ctx.clone())?;
+            analyze_block(then_block, &mut then_scope, functions, labels, structs, fn_ctx.clone())?;
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, fn_ctx.clone())?;
+                analyze_block(else_block, &mut else_scope, functions, labels, structs, fn_ctx.clone())?;
             }
             Ok(())
         }
@@ -500,7 +582,7 @@ fn analyze_statement(
             if let Some(init) = initialization {
                 if let Expression::VariableReference(name) = init.as_ref() {
                     let inferred_item_ty = if let Some(coll) = condition {
-                        match infer_expression_type(coll, &loop_scope, functions)? {
+                        match infer_expression_type(coll, &loop_scope, functions, structs, fn_ctx.as_ref())? {
                             ValueType::List(elem_ty) => (*elem_ty).clone(),
                             ValueType::Text => ValueType::Char,
                             other => {
@@ -519,16 +601,16 @@ fn analyze_statement(
                     };
                     loop_scope.insert(name.clone(), inferred_item_ty);
                 } else {
-                    let _ = infer_expression_type(init, &loop_scope, functions)?;
+                    let _ = infer_expression_type(init, &loop_scope, functions, structs, fn_ctx.as_ref())?;
                 }
             }
             if let Some(cond) = condition {
-                let _ = infer_expression_type(cond, &loop_scope, functions)?;
+                let _ = infer_expression_type(cond, &loop_scope, functions, structs, fn_ctx.as_ref())?;
             }
             if let Some(upd) = update {
-                let _ = infer_expression_type(upd, &loop_scope, functions)?;
+                let _ = infer_expression_type(upd, &loop_scope, functions, structs, fn_ctx.as_ref())?;
             }
-            analyze_block(body, &mut loop_scope, functions, labels, fn_ctx)
+            analyze_block(body, &mut loop_scope, functions, labels, structs, fn_ctx)
         }
         Statement::WhenBlock {
             when_expression,
@@ -536,10 +618,10 @@ fn analyze_statement(
             else_block,
             ..
         } => {
-            let when_ty = infer_expression_type(when_expression, scope, functions)?;
+            let when_ty = infer_expression_type(when_expression, scope, functions, structs, fn_ctx.as_ref())?;
             for (case_exprs, block) in cases {
                 for expr in case_exprs {
-                    let case_ty = infer_expression_type(expr, scope, functions)?;
+                    let case_ty = infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
                     if !can_assign(&when_ty, &case_ty) && !can_assign(&case_ty, &when_ty) {
                         return Err(err_at_code(
                             stmt,
@@ -552,16 +634,16 @@ fn analyze_statement(
                     }
                 }
                 let mut case_scope = scope.clone();
-                analyze_block(block, &mut case_scope, functions, labels, fn_ctx.clone())?;
+                analyze_block(block, &mut case_scope, functions, labels, structs, fn_ctx.clone())?;
             }
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, fn_ctx.clone())?;
+                analyze_block(else_block, &mut else_scope, functions, labels, structs, fn_ctx.clone())?;
             }
             Ok(())
         }
         Statement::WhileLoop { condition, body, .. } => {
-            let cty = infer_expression_type(condition, scope, functions)?;
+            let cty = infer_expression_type(condition, scope, functions, structs, fn_ctx.as_ref())?;
             if cty != ValueType::Bool {
                 return Err(err_at_code(
                     stmt,
@@ -570,15 +652,15 @@ fn analyze_statement(
                 ));
             }
             let mut while_scope = scope.clone();
-            analyze_block(body, &mut while_scope, functions, labels, fn_ctx)
+            analyze_block(body, &mut while_scope, functions, labels, structs, fn_ctx)
         }
         Statement::LoopStatement { body, .. } => {
             let mut local_scope = scope.clone();
-            analyze_block(body, &mut local_scope, functions, labels, fn_ctx)
+            analyze_block(body, &mut local_scope, functions, labels, structs, fn_ctx)
         }
         Statement::OnErrorBlock { statements, .. } | Statement::BlockStatement { statements, .. } => {
             let mut local_scope = scope.clone();
-            analyze_statements(statements, &mut local_scope, functions, labels, fn_ctx)
+            analyze_statements(statements, &mut local_scope, functions, labels, structs, fn_ctx)
         }
         Statement::OnBlock { trigger, .. } => {
             if trigger == "error" {
@@ -627,9 +709,9 @@ fn analyze_statement(
                     )
                 ));
             }
-            validate_call_args(call_name, args, sig, scope, functions)?;
+            validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx)
         }
         Statement::DangerCallOnError {
             call_name,
@@ -654,9 +736,9 @@ fn analyze_statement(
                     )
                 ));
             }
-            validate_call_args(call_name, args, sig, scope, functions)?;
+            validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx)
         }
         Statement::ListPush { list_name, value, .. } => {
             let Some(list_ty) = scope.get(list_name).cloned() else {
@@ -666,7 +748,7 @@ fn analyze_statement(
                     format!("use-before-definition: '{}' is not defined in current scope.", list_name),
                 ));
             };
-            let value_ty = infer_expression_type(value, scope, functions)?;
+            let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             match list_ty {
                 ValueType::List(elem_ty) => {
                     if !can_assign(&elem_ty, &value_ty) {
@@ -729,7 +811,7 @@ fn analyze_statement(
                 ));
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, fn_ctx)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx)
         }
         Statement::ReturnError { code, .. } => {
             if fn_ctx.map(|c| c.is_danger) != Some(true) {
@@ -756,9 +838,9 @@ fn analyze_statement(
             Ok(())
         }
         Statement::ReturnStatement { value, .. } => {
-            if let Some(ctx) = fn_ctx {
+            if let Some(ref ctx) = fn_ctx {
                 if let Some(expr) = value {
-                    let actual = infer_expression_type(expr, scope, functions)?;
+                    let actual = infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
                     if let Some(expected) = ctx.return_type.as_ref() {
                         if !can_assign(expected, &actual) {
                             return Err(err_at_code(
@@ -779,15 +861,31 @@ fn analyze_statement(
                     ));
                 }
             } else if let Some(expr) = value {
-                let _ = infer_expression_type(expr, scope, functions)?;
+                let _ = infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
             }
             Ok(())
         }
         Statement::ExpressionStatement { expr, .. } => {
-            let _ = infer_expression_type(expr, scope, functions)?;
+            let _ = infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
             Ok(())
         }
-        Statement::LabelDecl { .. } | Statement::StructDecl { .. } => Ok(()),
+        Statement::StructDecl { name, methods, .. } => {
+            for m in methods {
+                let mut method_scope = scope.clone();
+                method_scope.insert("my".to_string(), ValueType::Struct(name.clone()));
+                for p in &m.params {
+                    method_scope.insert(p.name.clone(), param_type_or_default(p));
+                }
+                let method_ctx = FnContext {
+                    is_danger: m.is_danger,
+                    return_type: m.returns.as_deref().map(parse_type_name).or(Some(ValueType::Int)),
+                    self_struct: Some(name.clone()),
+                };
+                analyze_block(&m.body, &mut method_scope, functions, labels, structs, Some(method_ctx))?;
+            }
+            Ok(())
+        }
+        Statement::LabelDecl { .. } => Ok(()),
     }
 }
 
@@ -796,9 +894,10 @@ fn analyze_block(
     scope: &mut HashMap<String, ValueType>,
     functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
+    structs: &HashMap<String, StructInfo>,
     fn_ctx: Option<FnContext>,
 ) -> Result<(), String> {
-    analyze_statements(&block.statements, scope, functions, labels, fn_ctx)
+    analyze_statements(&block.statements, scope, functions, labels, structs, fn_ctx)
 }
 
 fn param_type_or_default(param: &FunctionParam) -> ValueType {
@@ -813,6 +912,8 @@ fn infer_expression_type(
     expr: &Expression,
     scope: &HashMap<String, ValueType>,
     functions: &HashMap<String, FunctionSig>,
+    structs: &HashMap<String, StructInfo>,
+    fn_ctx: Option<&FnContext>,
 ) -> Result<ValueType, String> {
     match expr {
         Expression::LiteralInt(_) => Ok(ValueType::Int),
@@ -823,9 +924,9 @@ fn infer_expression_type(
             if items.is_empty() {
                 return Ok(ValueType::List(Box::new(ValueType::Unknown)));
             }
-            let mut elem_ty = infer_expression_type(&items[0], scope, functions)?;
+            let mut elem_ty = infer_expression_type(&items[0], scope, functions, structs, fn_ctx)?;
             for item in &items[1..] {
-                let item_ty = infer_expression_type(item, scope, functions)?;
+                let item_ty = infer_expression_type(item, scope, functions, structs, fn_ctx)?;
                 if can_assign(&elem_ty, &item_ty) {
                     continue;
                 }
@@ -848,18 +949,40 @@ fn infer_expression_type(
             .cloned()
             .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", name))),
         Expression::MemberAccess { base, .. } => {
-            if base == "my" {
-                Ok(ValueType::Unknown)
+            let owner_ty = if base == "my" {
+                if let Some(ctx) = fn_ctx {
+                    if let Some(self_name) = ctx.self_struct.as_ref() {
+                        ValueType::Struct(self_name.clone())
+                    } else {
+                        return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                    }
+                } else {
+                    return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                }
             } else {
                 scope
                     .get(base)
                     .cloned()
-                    .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", base)))
+                    .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", base)))?
+            };
+            if let Expression::MemberAccess { field, .. } = expr {
+                let ValueType::Struct(owner) = owner_ty else {
+                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("member access requires struct receiver, got {:?}.", owner_ty)));
+                };
+                let Some(info) = structs.get(&owner) else {
+                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown struct type '{}'.", owner)));
+                };
+                let Some(ft) = info.fields.get(field) else {
+                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown field '{}.{}'.", owner, field)));
+                };
+                Ok(ft.clone())
+            } else {
+                Ok(ValueType::Unknown)
             }
         }
         Expression::Index { base, index } => {
-            let base_ty = infer_expression_type(base, scope, functions)?;
-            let idx_ty = infer_expression_type(index, scope, functions)?;
+            let base_ty = infer_expression_type(base, scope, functions, structs, fn_ctx)?;
+            let idx_ty = infer_expression_type(index, scope, functions, structs, fn_ctx)?;
             if idx_ty != ValueType::Int {
                 return Err(sem_err(
                     SEM_TYPE_MISMATCH,
@@ -891,7 +1014,7 @@ fn infer_expression_type(
                 }
                 return match builtin {
                     Builtin::Len => {
-                        let arg_ty = infer_expression_type(&args[0], scope, functions)?;
+                        let arg_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         match arg_ty {
                             ValueType::List(_) | ValueType::Text => Ok(ValueType::Int),
                             _ => Err(sem_err(
@@ -901,8 +1024,8 @@ fn infer_expression_type(
                         }
                     }
                     Builtin::Contains => {
-                        let hay_ty = infer_expression_type(&args[0], scope, functions)?;
-                        let needle_ty = infer_expression_type(&args[1], scope, functions)?;
+                        let hay_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let needle_ty = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
                         if hay_ty != ValueType::Text || needle_ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -915,8 +1038,8 @@ fn infer_expression_type(
                         Ok(ValueType::Bool)
                     }
                     Builtin::Find => {
-                        let hay_ty = infer_expression_type(&args[0], scope, functions)?;
-                        let needle_ty = infer_expression_type(&args[1], scope, functions)?;
+                        let hay_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let needle_ty = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
                         if hay_ty != ValueType::Text || needle_ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -929,9 +1052,9 @@ fn infer_expression_type(
                         Ok(ValueType::Int)
                     }
                     Builtin::Slice => {
-                        let text_ty = infer_expression_type(&args[0], scope, functions)?;
-                        let start_ty = infer_expression_type(&args[1], scope, functions)?;
-                        let end_ty = infer_expression_type(&args[2], scope, functions)?;
+                        let text_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let start_ty = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
+                        let end_ty = infer_expression_type(&args[2], scope, functions, structs, fn_ctx)?;
                         if text_ty != ValueType::Text || start_ty != ValueType::Int || end_ty != ValueType::Int {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -944,8 +1067,8 @@ fn infer_expression_type(
                         Ok(ValueType::Text)
                     }
                     Builtin::Concat => {
-                        let a = infer_expression_type(&args[0], scope, functions)?;
-                        let b = infer_expression_type(&args[1], scope, functions)?;
+                        let a = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let b = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
                         if a != ValueType::Text || b != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -955,7 +1078,7 @@ fn infer_expression_type(
                         Ok(ValueType::Text)
                     }
                     Builtin::FsList => {
-                        let path_ty = infer_expression_type(&args[0], scope, functions)?;
+                        let path_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         if path_ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -965,7 +1088,7 @@ fn infer_expression_type(
                         Ok(ValueType::List(Box::new(ValueType::Text)))
                     }
                     Builtin::FsIsDir => {
-                        let path_ty = infer_expression_type(&args[0], scope, functions)?;
+                        let path_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         if path_ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -975,8 +1098,8 @@ fn infer_expression_type(
                         Ok(ValueType::Bool)
                     }
                     Builtin::FsJoin => {
-                        let a = infer_expression_type(&args[0], scope, functions)?;
-                        let b = infer_expression_type(&args[1], scope, functions)?;
+                        let a = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let b = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
                         if a != ValueType::Text || b != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -987,7 +1110,7 @@ fn infer_expression_type(
                     }
                     Builtin::Args => Ok(ValueType::List(Box::new(ValueType::Text))),
                     Builtin::Output => {
-                        let ty = infer_expression_type(&args[0], scope, functions)?;
+                        let ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         match ty {
                             ValueType::Int | ValueType::Float | ValueType::Bool | ValueType::Char | ValueType::Text => Ok(ValueType::Int),
                             _ => Err(sem_err(
@@ -997,7 +1120,7 @@ fn infer_expression_type(
                         }
                     }
                     Builtin::Input => {
-                        let ty = infer_expression_type(&args[0], scope, functions)?;
+                        let ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         if ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1007,7 +1130,7 @@ fn infer_expression_type(
                         Ok(ValueType::Text)
                     }
                     Builtin::Read => {
-                        let ty = infer_expression_type(&args[0], scope, functions)?;
+                        let ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         if ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1017,8 +1140,8 @@ fn infer_expression_type(
                         Ok(ValueType::Text)
                     }
                     Builtin::Write => {
-                        let p = infer_expression_type(&args[0], scope, functions)?;
-                        let d = infer_expression_type(&args[1], scope, functions)?;
+                        let p = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let d = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
                         if p != ValueType::Text || d != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1029,13 +1152,42 @@ fn infer_expression_type(
                     }
                 };
             }
-            if let Some((base, _method)) = name.split_once('.') {
-                if base == "my" || scope.contains_key(base) {
-                    for arg in args {
-                        let _ = infer_expression_type(arg, scope, functions)?;
+            if let Some((base, method)) = name.split_once('.') {
+                let owner_ty = if base == "my" {
+                    if let Some(ctx) = fn_ctx {
+                        if let Some(self_name) = ctx.self_struct.as_ref() {
+                            ValueType::Struct(self_name.clone())
+                        } else {
+                            return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                        }
+                    } else {
+                        return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
                     }
-                    return Ok(ValueType::Unknown);
+                } else {
+                    scope
+                        .get(base)
+                        .cloned()
+                        .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", base)))?
+                };
+                let ValueType::Struct(owner) = owner_ty else {
+                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("method call requires struct receiver, got {:?}.", owner_ty)));
+                };
+                let Some(info) = structs.get(&owner) else {
+                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown struct type '{}'.", owner)));
+                };
+                let Some(sig) = info.methods.get(method) else {
+                    return Err(sem_err(SEM_UNKNOWN_FUNCTION, format!("unknown method '{}.{}'.", owner, method)));
+                };
+                if args.len() != sig.param_types.len() {
+                    return Err(sem_err(SEM_ARG_COUNT, format!("argument count mismatch for '{}.{}': expected {}, got {}.", owner, method, sig.param_types.len(), args.len())));
                 }
+                for (arg, expected_ty) in args.iter().zip(sig.param_types.iter()) {
+                    let actual_ty = infer_expression_type(arg, scope, functions, structs, fn_ctx)?;
+                    if !can_assign(expected_ty, &actual_ty) {
+                        return Err(sem_err(SEM_ARG_TYPE, format!("argument type mismatch for '{}.{}': expected {:?}, got {:?}.", owner, method, expected_ty, actual_ty)));
+                    }
+                }
+                return Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown));
             }
             let Some(sig) = functions.get(name) else {
                 return Err(sem_err(
@@ -1043,12 +1195,12 @@ fn infer_expression_type(
                     format!("unknown function '{}' in expression call.", name),
                 ));
             };
-            validate_call_args(name, args, sig, scope, functions)?;
+            validate_call_args(name, args, sig, scope, functions, structs, fn_ctx)?;
             Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown))
         }
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {
-                let lt = infer_expression_type(left, scope, functions)?;
+                let lt = infer_expression_type(left, scope, functions, structs, fn_ctx)?;
                 if lt == ValueType::Int || lt == ValueType::Float {
                     return Ok(lt);
                 }
@@ -1058,7 +1210,7 @@ fn infer_expression_type(
                 ));
             }
             if op == "not" {
-                let lt = infer_expression_type(left, scope, functions)?;
+                let lt = infer_expression_type(left, scope, functions, structs, fn_ctx)?;
                 if lt == ValueType::Bool || lt == ValueType::Int {
                     return Ok(ValueType::Bool);
                 }
@@ -1067,9 +1219,9 @@ fn infer_expression_type(
                     "unary 'not' requires bool/int operand.".to_string(),
                 ));
             }
-            let lt = infer_expression_type(left, scope, functions)?;
+            let lt = infer_expression_type(left, scope, functions, structs, fn_ctx)?;
             let rt = if let Some(r) = right {
-                infer_expression_type(r, scope, functions)?
+                infer_expression_type(r, scope, functions, structs, fn_ctx)?
             } else {
                 ValueType::Unknown
             };
@@ -1108,7 +1260,7 @@ fn infer_expression_type(
         }
         Expression::StructConstruction { fields } => {
             for value in fields.values() {
-                let _ = infer_expression_type(value, scope, functions)?;
+                let _ = infer_expression_type(value, scope, functions, structs, fn_ctx)?;
             }
             Ok(ValueType::Unknown)
         }

@@ -580,6 +580,39 @@ new result = {value, status}
 }
 
 #[test]
+fn semantic_rejects_my_outside_struct_method() {
+    let src = r#"
+new Int x = 1
+new Int y = my.value
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-040"));
+    assert!(err.contains("my is only allowed inside struct methods"));
+}
+
+#[test]
+fn semantic_rejects_unknown_struct_method_call() {
+    let src = r#"
+struct Counter {
+    Int value
+    fn inc(Int d) Int {
+        my.value = my.value + d
+        return my.value
+    }
+}
+new Counter c = {value = 1}
+new Int y = c.dec(1)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-030"));
+    assert!(err.contains("unknown method 'Counter.dec'"));
+}
+
+#[test]
 fn semantic_allows_concat_text_builtin() {
     let src = r#"
 new Text a = "ab"
