@@ -613,6 +613,38 @@ new Int y = c.dec(1)
 }
 
 #[test]
+fn semantic_accepts_struct_list_push_and_index() {
+    let src = r#"
+struct Account {
+    Int balance
+}
+new Account List accounts = []
+new Account a = {balance = 1}
+accounts.push(a)
+new Account x = accounts[0]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_wrong_type_push_into_struct_list() {
+    let src = r#"
+struct Account {
+    Int balance
+}
+new Account List accounts = []
+accounts.push(1)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("type mismatch in list push"));
+}
+
+#[test]
 fn semantic_allows_concat_text_builtin() {
     let src = r#"
 new Text a = "ab"

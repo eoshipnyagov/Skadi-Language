@@ -41,52 +41,77 @@ fn list_meta(elem: &str) -> Option<(&'static str, &'static str)> {
         .map(|(_, c_ty, suffix)| (*c_ty, *suffix))
 }
 
-fn emit_list_runtime(out: &mut String) {
+fn list_meta_dynamic(elem: &str) -> (String, String) {
+    if let Some((c_ty, suffix)) = list_meta(elem) {
+        return (c_ty.to_string(), suffix.to_string());
+    }
+    (elem.to_string(), elem.to_string())
+}
+
+fn collect_struct_names(program: &Program) -> Vec<String> {
+    program
+        .statements
+        .iter()
+        .filter_map(|s| match s {
+            Statement::StructDecl { name, .. } => Some(name.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
+    out.push_str(&format!(
+        "typedef struct {{\n    {} *data;\n    size_t len;\n    size_t cap;\n}} SkadiList_{};\n\n",
+        c_ty, suffix
+    ));
+    out.push_str(&format!("static SkadiList_{} sk_list_{}_new(void) {{\n", suffix, suffix));
+    out.push_str(&format!("    SkadiList_{} xs;\n", suffix));
+    out.push_str("    xs.data = NULL;\n");
+    out.push_str("    xs.len = 0;\n");
+    out.push_str("    xs.cap = 0;\n");
+    out.push_str("    return xs;\n");
+    out.push_str("}\n\n");
+    out.push_str(&format!(
+        "static int sk_list_{}_push(SkadiList_{} *xs, {} v) {{\n",
+        suffix, suffix, c_ty
+    ));
+    out.push_str("    if (xs->len == xs->cap) {\n");
+    out.push_str("        size_t next = xs->cap == 0 ? 4 : xs->cap * 2;\n");
+    out.push_str(&format!(
+        "        {} *p = ({0}*)realloc(xs->data, next * sizeof({0}));\n",
+        c_ty
+    ));
+    out.push_str("        if (!p) return 1;\n");
+    out.push_str("        xs->data = p;\n");
+    out.push_str("        xs->cap = next;\n");
+    out.push_str("    }\n");
+    out.push_str("    xs->data[xs->len++] = v;\n");
+    out.push_str("    return 0;\n");
+    out.push_str("}\n\n");
+    out.push_str(&format!(
+        "static int sk_list_{}_pop(SkadiList_{} *xs, {} *out) {{\n",
+        suffix, suffix, c_ty
+    ));
+    out.push_str("    if (xs->len == 0) return 1;\n");
+    out.push_str("    *out = xs->data[xs->len - 1];\n");
+    out.push_str("    xs->len -= 1;\n");
+    out.push_str("    return 0;\n");
+    out.push_str("}\n\n");
+    out.push_str(&format!(
+        "static {} sk_list_{}_get(const SkadiList_{} *xs, int64_t idx) {{\n",
+        c_ty, suffix, suffix
+    ));
+    out.push_str("    if (!xs || idx < 0 || (size_t)idx >= xs->len) return 0;\n");
+    out.push_str("    return xs->data[(size_t)idx];\n");
+    out.push_str("}\n\n");
+}
+
+fn emit_list_runtime(out: &mut String, struct_names: &[String]) {
     for (_, c_ty, suffix) in LIST_TYPE_MAP {
-        out.push_str(&format!(
-            "typedef struct {{\n    {} *data;\n    size_t len;\n    size_t cap;\n}} SkadiList_{};\n\n",
-            c_ty, suffix
-        ));
-        out.push_str(&format!("static SkadiList_{} sk_list_{}_new(void) {{\n", suffix, suffix));
-        out.push_str(&format!("    SkadiList_{} xs;\n", suffix));
-        out.push_str("    xs.data = NULL;\n");
-        out.push_str("    xs.len = 0;\n");
-        out.push_str("    xs.cap = 0;\n");
-        out.push_str("    return xs;\n");
-        out.push_str("}\n\n");
-        out.push_str(&format!(
-            "static int sk_list_{}_push(SkadiList_{} *xs, {} v) {{\n",
-            suffix, suffix, c_ty
-        ));
-        out.push_str("    if (xs->len == xs->cap) {\n");
-        out.push_str("        size_t next = xs->cap == 0 ? 4 : xs->cap * 2;\n");
-        out.push_str(&format!(
-            "        {} *p = ({0}*)realloc(xs->data, next * sizeof({0}));\n",
-            c_ty
-        ));
-        out.push_str("        if (!p) return 1;\n");
-        out.push_str("        xs->data = p;\n");
-        out.push_str("        xs->cap = next;\n");
-        out.push_str("    }\n");
-        out.push_str("    xs->data[xs->len++] = v;\n");
-        out.push_str("    return 0;\n");
-        out.push_str("}\n\n");
-        out.push_str(&format!(
-            "static int sk_list_{}_pop(SkadiList_{} *xs, {} *out) {{\n",
-            suffix, suffix, c_ty
-        ));
-        out.push_str("    if (xs->len == 0) return 1;\n");
-        out.push_str("    *out = xs->data[xs->len - 1];\n");
-        out.push_str("    xs->len -= 1;\n");
-        out.push_str("    return 0;\n");
-        out.push_str("}\n\n");
-        out.push_str(&format!(
-            "static {} sk_list_{}_get(const SkadiList_{} *xs, int64_t idx) {{\n",
-            c_ty, suffix, suffix
-        ));
-        out.push_str("    if (!xs || idx < 0 || (size_t)idx >= xs->len) return 0;\n");
-        out.push_str("    return xs->data[(size_t)idx];\n");
-        out.push_str("}\n\n");
+        emit_list_helpers_for(out, c_ty, suffix);
+    }
+    for struct_name in struct_names {
+        emit_list_helpers_for(out, struct_name, struct_name);
     }
 }
 
@@ -228,6 +253,7 @@ fn emit_io_runtime(out: &mut String) {
 
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
+    let struct_names = collect_struct_names(program);
     let (needs_fs_list, needs_fs_is_dir, needs_fs_join) = program_uses_fs_runtime(program);
     let needs_list_runtime = program_uses_list_runtime(program) || needs_fs_list;
     let needs_text_runtime = program_uses_text_runtime(program);
@@ -248,7 +274,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         out.push_str("#include <sys/stat.h>\n\n");
     }
     if needs_list_runtime {
-        emit_list_runtime(&mut out);
+        emit_list_runtime(&mut out, &struct_names);
     }
     if needs_text_runtime {
         emit_text_runtime(&mut out);
@@ -907,9 +933,9 @@ fn emit_statement(
                     Expression::VariableReference(coll_name) => declared
                         .get(coll_name)
                         .and_then(|t| list_elem_from_decl(t))
-                        .and_then(|elem| list_meta(elem).map(|(c_ty, _)| c_ty))
-                        .unwrap_or("int64_t"),
-                    _ => "int64_t",
+                        .map(|elem| list_meta_dynamic(elem).0)
+                        .unwrap_or_else(|| "int64_t".to_string()),
+                    _ => "int64_t".to_string(),
                 };
                 let item_decl_ty = match coll.as_ref() {
                     Expression::VariableReference(coll_name) => declared
@@ -924,7 +950,7 @@ fn emit_statement(
                 out.push_str(&coll_expr);
                 out.push_str(".len; ++__i) {\n");
                 out.push_str(&"    ".repeat(indent + 1));
-                out.push_str(item_c_ty);
+                out.push_str(&item_c_ty);
                 out.push(' ');
                 out.push_str(&var_name);
                 out.push_str(" = ");
@@ -1018,11 +1044,11 @@ fn emit_statement(
             let suffix = declared
                 .get(list_name)
                 .and_then(|t| list_elem_from_decl(t))
-                .and_then(|elem| list_meta(elem).map(|(_, s)| s))
-                .unwrap_or("i64");
+                .map(|elem| list_meta_dynamic(elem).1)
+                .unwrap_or_else(|| "i64".to_string());
             out.push_str(&pad);
             out.push_str("(void)sk_list_");
-            out.push_str(suffix);
+            out.push_str(&suffix);
             out.push_str("_push(&");
             out.push_str(list_name);
             out.push_str(", ");
@@ -1038,11 +1064,11 @@ fn emit_statement(
             let suffix = declared
                 .get(list_name)
                 .and_then(|t| list_elem_from_decl(t))
-                .and_then(|elem| list_meta(elem).map(|(_, s)| s))
-                .unwrap_or("i64");
+                .map(|elem| list_meta_dynamic(elem).1)
+                .unwrap_or_else(|| "i64".to_string());
             out.push_str(&pad);
             out.push_str("if (sk_list_");
-            out.push_str(suffix);
+            out.push_str(&suffix);
             out.push_str("_pop(&");
             out.push_str(list_name);
             out.push_str(", &");
@@ -1178,21 +1204,25 @@ fn emit_statement(
         Statement::VarDecl { name, value, declared_type, .. } => {
             if let Some(dt) = declared_type.as_deref() {
                 if let Some(elem) = list_elem_from_decl(dt)
-                    && let Some((_, suffix)) = list_meta(elem)
+                    && {
+                        let _ = elem;
+                        true
+                    }
                 {
+                    let suffix = list_meta_dynamic(elem).1;
                     out.push_str(&pad);
                     out.push_str("SkadiList_");
-                    out.push_str(suffix);
+                    out.push_str(&suffix);
                     out.push(' ');
                     out.push_str(name);
                     out.push_str(" = sk_list_");
-                    out.push_str(suffix);
+                    out.push_str(&suffix);
                     out.push_str("_new();\n");
                     if let Expression::ListLiteral(items) = value.as_ref() {
                         for item in items {
                             out.push_str(&pad);
                             out.push_str("(void)sk_list_");
-                            out.push_str(suffix);
+                            out.push_str(&suffix);
                             out.push_str("_push(&");
                             out.push_str(name);
                             out.push_str(", ");
@@ -1335,7 +1365,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 && let Some(suffix) = declared
                     .get(name)
                     .and_then(|t| list_elem_from_decl(t))
-                    .and_then(|elem| list_meta(elem).map(|(_, s)| s))
+                    .map(|elem| list_meta_dynamic(elem).1)
             {
                 return format!("sk_list_{}_get(&{}, {})", suffix, base_rendered, index_rendered);
             }

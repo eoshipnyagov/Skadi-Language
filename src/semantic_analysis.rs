@@ -386,9 +386,17 @@ fn validate_call_args(
     Ok(())
 }
 
-fn parse_declared_type_name(name: &str) -> ValueType {
+fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -> ValueType {
+    if let Some(elem) = name.strip_suffix(" List") {
+        let elem = elem.trim();
+        let parsed_elem = parse_type_name(elem);
+        if parsed_elem == ValueType::Unknown && structs.contains_key(elem) {
+            return ValueType::List(Box::new(ValueType::Struct(elem.to_string())));
+        }
+        return ValueType::List(Box::new(parsed_elem));
+    }
     let parsed = parse_type_name(name);
-    if parsed == ValueType::Unknown {
+    if parsed == ValueType::Unknown && structs.contains_key(name) {
         ValueType::Struct(name.to_string())
     } else {
         parsed
@@ -440,7 +448,7 @@ fn analyze_statement(
             }
             let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             let final_ty = if let Some(tn) = declared_type {
-                let declared = parse_declared_type_name(tn);
+                let declared = parse_declared_type_name(tn, structs);
                 if !can_assign(&declared, &value_ty) {
                     return Err(format!(
                         "{}",

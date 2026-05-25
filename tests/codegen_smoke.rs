@@ -385,3 +385,26 @@ new Int next = c.inc(2)
     assert!(c.contains("my->value = (my->value + delta);"));
     assert!(c.contains("int64_t next = Counter_inc(&c, 2);"));
 }
+
+#[test]
+fn codegen_emits_struct_list_runtime_shape() {
+    let src = r#"
+struct Account {
+    Int balance
+}
+
+new Account List accounts = []
+new Account a = {balance = 10}
+accounts.push(a)
+new Account first = accounts[0]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("typedef struct {"));
+    assert!(c.contains("} SkadiList_Account;"));
+    assert!(c.contains("SkadiList_Account accounts = sk_list_Account_new();"));
+    assert!(c.contains("sk_list_Account_push(&accounts, a)"));
+    assert!(c.contains("Account first = sk_list_Account_get(&accounts, 0);"));
+}
