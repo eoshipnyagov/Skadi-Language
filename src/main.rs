@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+use std::process::exit;
 use v01::codegen::transpile_program_to_c;
 use v01::lexer::lex;
 use v01::parser::parse_program;
@@ -21,7 +22,7 @@ fn print_usage() {
 
 fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
     let candidates = ["gcc", "clang"];
-    let mut last_err: Option<String> = None;
+    let mut errs: Vec<String> = Vec::new();
 
     for compiler in candidates {
         let output = Command::new(compiler).arg(c_path).arg("-o").arg(exe_path).output();
@@ -31,7 +32,7 @@ fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
                     return Ok(());
                 }
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                last_err = Some(format!(
+                errs.push(format!(
                     "{} failed with status {}: {}",
                     compiler,
                     out.status,
@@ -39,15 +40,23 @@ fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
                 ));
             }
             Err(e) => {
-                last_err = Some(format!("failed to run {}: {}", compiler, e));
+                errs.push(format!("failed to run {}: {}", compiler, e));
             }
         }
     }
 
-    Err(last_err.unwrap_or_else(|| "no C compiler found (tried gcc, clang)".to_string()))
+    if errs.is_empty() {
+        Err("no C compiler found (tried gcc, clang)".to_string())
+    } else {
+        Err(format!(
+            "no working C compiler found (tried gcc, clang): {}",
+            errs.join(" | ")
+        ))
+    }
 }
 
 fn main() {
+    let mut had_error = false;
     let mut input_file = "example_meteostation.txt".to_string();
     let mut emit_c_path: Option<String> = None;
     let mut emit_exe_path: Option<String> = None;
@@ -60,7 +69,7 @@ fn main() {
             "--emit-c" => {
                 if i + 1 >= args.len() {
                     eprintln!("Missing value for --emit-c");
-                    return;
+                    exit(2);
                 }
                 emit_c_path = Some(args[i + 1].clone());
                 i += 2;
@@ -68,7 +77,7 @@ fn main() {
             "--emit-exe" => {
                 if i + 1 >= args.len() {
                     eprintln!("Missing value for --emit-exe");
-                    return;
+                    exit(2);
                 }
                 emit_exe_path = Some(args[i + 1].clone());
                 i += 2;
@@ -84,14 +93,14 @@ fn main() {
             "--input" => {
                 if i + 1 >= args.len() {
                     eprintln!("Missing value for --input");
-                    return;
+                    exit(2);
                 }
                 input_file = args[i + 1].clone();
                 i += 2;
             }
             other if other.starts_with("--") => {
                 eprintln!("Unknown option: {}", other);
-                return;
+                exit(2);
             }
             path => {
                 input_file = path.to_string();
@@ -104,7 +113,7 @@ fn main() {
         Ok(code) => code,
         Err(e) => {
             eprintln!("Failed to read '{}': {}", input_file, e);
-            return;
+            exit(1);
         }
     };
 
@@ -130,7 +139,10 @@ fn main() {
                             if let Some(path) = emit_c_path {
                                 match fs::write(&path, c_code.as_bytes()) {
                                     Ok(_) => println!("C output written to {}", path),
-                                    Err(e) => eprintln!("Failed to write C output to '{}': {}", path, e),
+                                    Err(e) => {
+                                        eprintln!("Failed to write C output to '{}': {}", path, e);
+                                        had_error = true;
+                                    }
                                 }
                             }
 
@@ -140,7 +152,10 @@ fn main() {
                                     Ok(_) => {
                                         match compile_c_to_exe(&temp_c_path, &exe_path) {
                                             Ok(()) => println!("Executable built: {}", exe_path),
-                                            Err(e) => eprintln!("Failed to build executable '{}': {}", exe_path, e),
+                                            Err(e) => {
+                                                eprintln!("Failed to build executable '{}': {}", exe_path, e);
+                                                had_error = true;
+                                            }
                                         }
                                         if let Err(e) = fs::remove_file(&temp_c_path) {
                                             eprintln!(
@@ -149,24 +164,36 @@ fn main() {
                                             );
                                         }
                                     }
-                                    Err(e) => eprintln!(
-                                        "Failed to write temporary C file '{}': {}",
-                                        temp_c_path, e
-                                    ),
+                                    Err(e) => {
+                                        eprintln!(
+                                            "Failed to write temporary C file '{}': {}",
+                                            temp_c_path, e
+                                        );
+                                        had_error = true;
+                                    }
                                 }
                             }
                         }
-                        Err(e) => eprintln!("Semantic analysis failed: {}", e),
+                        Err(e) => {
+                            eprintln!("Semantic analysis failed: {}", e);
+                            had_error = true;
+                        }
                     }
                 }
                 Err(e) => {
                     eprintln!("Parsing failed: {}", e);
+                    had_error = true;
                 }
             }
         }
         Err(e) => {
             eprintln!("Lexing failed: {}", e);
+            had_error = true;
         }
+    }
+
+    if had_error {
+        exit(1);
     }
 }
 
