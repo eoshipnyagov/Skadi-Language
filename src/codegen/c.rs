@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
 use crate::builtins::{builtin_from_name, Builtin};
@@ -33,6 +33,7 @@ fn list_meta(elem: &str) -> Option<(&'static str, &'static str)> {
         "Float" => "f64",
         "Bool" => "bool",
         "Char" => "char",
+        "Path" => "Text",
         other => other,
     };
     LIST_TYPE_MAP
@@ -107,11 +108,16 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
 }
 
 fn emit_list_runtime(out: &mut String, struct_names: &[String]) {
+    let mut emitted_suffixes: HashSet<String> = HashSet::new();
     for (_, c_ty, suffix) in LIST_TYPE_MAP {
-        emit_list_helpers_for(out, c_ty, suffix);
+        if emitted_suffixes.insert(suffix.to_string()) {
+            emit_list_helpers_for(out, c_ty, suffix);
+        }
     }
     for struct_name in struct_names {
-        emit_list_helpers_for(out, struct_name, struct_name);
+        if emitted_suffixes.insert(struct_name.clone()) {
+            emit_list_helpers_for(out, struct_name, struct_name);
+        }
     }
 }
 

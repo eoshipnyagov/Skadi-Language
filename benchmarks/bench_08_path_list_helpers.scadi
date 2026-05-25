@@ -1,0 +1,14 @@
+fn main() {
+    new Path root = "."
+    new Path List entries = fs.list(root)
+
+    output("entries in __root__:")
+    iterate entries as entry {
+        new Path full = fs.join(root, entry)
+        if fs.is_dir(full) {
+            output("[dir]  __entry__")
+        } else {
+            output("[file] __entry__")
+        }
+    }
+}

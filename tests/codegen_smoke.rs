@@ -291,6 +291,21 @@ new bool d = fs.is_dir(root)
 }
 
 #[test]
+fn codegen_lowers_path_list_to_text_list_runtime_shape() {
+    let src = r#"
+new Path List entries = fs.list(".")
+new Path first = entries[0]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("SkadiList_text entries = sk_list_text_new();"));
+    assert!(c.contains("entries = sk_fs_list(\".\");"));
+    assert!(c.contains("const char* first = sk_list_text_get(&entries, 0);"));
+}
+
+#[test]
 fn codegen_emits_output_input_read_write_shape() {
     let src = r#"
 output("hello")
