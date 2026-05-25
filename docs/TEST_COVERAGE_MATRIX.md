@@ -32,6 +32,7 @@ This file tracks test coverage for language elements in the current Rust prototy
   - C output compiles and produced binaries run for representative programs
   - includes edge scenarios for `Text` bounds/empty-needle and `List` + `when` flow
   - includes sanitizer-backed stress scenario (`ASan/UBSan`) when compiler supports flags
+  - memory contract tie-in: validates no sanitizer-detected crashes/UB for current runtime allocation model
 - Edge matrix conformance set
   - `tests/edge_matrix.rs`
   - includes:
