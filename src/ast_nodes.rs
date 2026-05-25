@@ -43,6 +43,15 @@ pub struct StructField {
     pub name: String,
 }
 
+#[derive(Debug)]
+pub struct StructMethod {
+    pub name: String,
+    pub params: Vec<FunctionParam>,
+    pub body: Box<BlockStatement>,
+    pub returns: Option<String>,
+    pub is_danger: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ForLoopStyle {
     ForIn,
@@ -54,6 +63,7 @@ pub enum ForLoopStyle {
 pub enum Statement {
     VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String>, loc: Location },
     Assignment { target: String, value: Box<Expression>, loc: Location },
+    FieldAssignment { object: String, field: String, value: Box<Expression>, loc: Location },
     FunctionDef { 
         name: String, 
         params: Vec<FunctionParam>, 
@@ -80,7 +90,7 @@ pub enum Statement {
     WhileLoop { condition: Box<Expression>, body: Box<BlockStatement>, loc: Location },
     LoopStatement { body: Box<BlockStatement>, loc: Location },
     LabelDecl { name: String, variants: Vec<String>, loc: Location },
-    StructDecl { name: String, fields: Vec<StructField>, loc: Location },
+    StructDecl { name: String, fields: Vec<StructField>, methods: Vec<StructMethod>, loc: Location },
     OnBlock { trigger: String, loc: Location },
     DangerAssignOnError {
         target: String,
@@ -137,6 +147,7 @@ pub enum Expression {
     ListLiteral(Vec<Expression>),
     Index { base: Box<Expression>, index: Box<Expression> },
     VariableReference(String), // Usage of a defined variable name
+    MemberAccess { base: String, field: String },
     Call { name: String, args: Vec<Expression> },
     BinaryOp { 
         op: String,     // Operator (+, -, etc.)

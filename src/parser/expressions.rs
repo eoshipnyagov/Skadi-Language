@@ -206,15 +206,27 @@ impl<'a> ExprParser<'a> {
                 Ok(Expression::LiteralFloat(parsed))
             }
             TokenKind::TypeBool => Ok(Expression::LiteralBool(tok.lexeme == "true")),
-            TokenKind::Identifier => {
+            TokenKind::Identifier | TokenKind::KeywordMy => {
                 let mut call_name = tok.lexeme.clone();
                 if self.idx + 1 < self.end
                     && self.tokens[self.idx].kind == TokenKind::OpPunctuation
                     && self.tokens[self.idx].lexeme == "."
                     && self.tokens[self.idx + 1].kind == TokenKind::Identifier
                 {
-                    call_name = format!("{}.{}", tok.lexeme, self.tokens[self.idx + 1].lexeme);
-                    self.idx += 2;
+                    let member = self.tokens[self.idx + 1].lexeme.clone();
+                    if self.idx + 2 < self.end
+                        && self.tokens[self.idx + 2].kind == TokenKind::OpPunctuation
+                        && self.tokens[self.idx + 2].lexeme == "("
+                    {
+                        call_name = format!("{}.{}", tok.lexeme, member);
+                        self.idx += 2;
+                    } else {
+                        self.idx += 2;
+                        return Ok(Expression::MemberAccess {
+                            base: tok.lexeme.clone(),
+                            field: member,
+                        });
+                    }
                 }
                 if self.idx < self.end
                     && self.tokens[self.idx].kind == TokenKind::OpPunctuation

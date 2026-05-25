@@ -45,6 +45,7 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
     match stmt {
         Statement::VarDecl { loc, .. }
         | Statement::Assignment { loc, .. }
+        | Statement::FieldAssignment { loc, .. }
         | Statement::FunctionDef { loc, .. }
         | Statement::IfStatement { loc, .. }
         | Statement::ForLoop { loc, .. }
@@ -291,6 +292,9 @@ fn parse_type_name(name: &str) -> ValueType {
 }
 
 fn can_assign(target: &ValueType, source: &ValueType) -> bool {
+    if *source == ValueType::Unknown || *target == ValueType::Unknown {
+        return true;
+    }
     if target == source {
         return true;
     }
@@ -423,6 +427,17 @@ fn analyze_statement(
                     )
                 ));
             }
+            Ok(())
+        }
+        Statement::FieldAssignment { object, value, .. } => {
+            if !scope.contains_key(object) && object != "my" {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined in current scope.", object),
+                ));
+            }
+            let _ = infer_expression_type(value, scope, functions)?;
             Ok(())
         }
         Statement::FunctionDef {
@@ -832,6 +847,16 @@ fn infer_expression_type(
             .get(name)
             .cloned()
             .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", name))),
+        Expression::MemberAccess { base, .. } => {
+            if base == "my" {
+                Ok(ValueType::Unknown)
+            } else {
+                scope
+                    .get(base)
+                    .cloned()
+                    .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", base)))
+            }
+        }
         Expression::Index { base, index } => {
             let base_ty = infer_expression_type(base, scope, functions)?;
             let idx_ty = infer_expression_type(index, scope, functions)?;
@@ -1004,6 +1029,14 @@ fn infer_expression_type(
                     }
                 };
             }
+            if let Some((base, _method)) = name.split_once('.') {
+                if base == "my" || scope.contains_key(base) {
+                    for arg in args {
+                        let _ = infer_expression_type(arg, scope, functions)?;
+                    }
+                    return Ok(ValueType::Unknown);
+                }
+            }
             let Some(sig) = functions.get(name) else {
                 return Err(sem_err(
                     SEM_UNKNOWN_FUNCTION,
@@ -1115,6 +1148,7 @@ fn statement_guarantees_termination(stmt: &Statement) -> bool {
 fn contains_variable(expr: &Expression, name: &str) -> bool {
     match expr {
         Expression::VariableReference(v) => v == name,
+        Expression::MemberAccess { base, .. } => base == name,
         Expression::BinaryOp { left, right, .. } => {
             contains_variable(left, name)
                 || right

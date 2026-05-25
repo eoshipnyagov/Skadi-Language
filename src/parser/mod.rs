@@ -38,6 +38,9 @@ fn parse_statement_at(
         TokenKind::Identifier => {
             statements::parse_identifier_led_statement(tokens, current_token_index)
         }
+        TokenKind::KeywordMy => {
+            statements::parse_identifier_led_statement(tokens, current_token_index)
+        }
         _ => {
             return Err(format_diagnostic(
                 DiagnosticKind::Parse,

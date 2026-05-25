@@ -2,7 +2,7 @@
 // Parser Logic Helpers (Rust)
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
-use crate::ast_nodes::{BlockStatement, ForLoopStyle, FunctionParam, Location, ScopeManager, Statement, StructField};
+use crate::ast_nodes::{BlockStatement, ForLoopStyle, FunctionParam, Location, ScopeManager, Statement, StructField, StructMethod};
 use crate::common_types::{Token, TokenKind};
 
 use super::expressions::parse_expression_range;
@@ -581,7 +581,7 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
     if start_index + 1 >= tokens.len() {
         return Err(parse_err("SC-PARSE-129", "incomplete assignment."));
     }
-    if tokens[start_index].kind() != TokenKind::Identifier {
+    if tokens[start_index].kind() != TokenKind::Identifier && tokens[start_index].kind() != TokenKind::KeywordMy {
         return Err(parse_err("SC-PARSE-130", "assignment must start with identifier."));
     }
     if tokens[start_index + 1].kind() != TokenKind::OpAssignment {
@@ -663,7 +663,7 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
 
     if on_idx.is_none()
         && start_index + 5 < line_end
-        && tokens[start_index].kind() == TokenKind::Identifier
+        && (tokens[start_index].kind() == TokenKind::Identifier || tokens[start_index].kind() == TokenKind::KeywordMy)
         && tokens[start_index + 1].lexeme == "."
         && tokens[start_index + 2].kind() == TokenKind::Identifier
         && tokens[start_index + 2].lexeme == "push"
@@ -743,6 +743,27 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
                 loc,
             },
             block_end + 1 - start_index,
+        ));
+    }
+
+    if start_index < line_end
+        && start_index + 3 < line_end
+        && (tokens[start_index].kind() == TokenKind::Identifier || tokens[start_index].kind() == TokenKind::KeywordMy)
+        && tokens[start_index + 1].lexeme == "."
+        && tokens[start_index + 2].kind() == TokenKind::Identifier
+        && tokens[start_index + 3].kind() == TokenKind::OpAssignment
+    {
+        let object = tokens[start_index].lexeme.clone();
+        let field = tokens[start_index + 2].lexeme.clone();
+        let value = parse_expression_range(tokens, start_index + 4, line_end)?;
+        return Ok((
+            Statement::FieldAssignment {
+                object,
+                field,
+                value: Box::new(value),
+                loc,
+            },
+            line_end - start_index,
         ));
     }
 
@@ -901,6 +922,7 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
     }
     let close = find_block_end(tokens, open)?;
     let mut fields: Vec<StructField> = Vec::new();
+    let mut methods: Vec<StructMethod> = Vec::new();
     let mut cursor = open + 1;
     while cursor < close {
         if tokens[cursor].kind() == TokenKind::NewLine {
@@ -911,16 +933,22 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             cursor += 1;
             continue;
         }
-        if tokens[cursor].kind() == TokenKind::KeywordFn {
-            while cursor < close && tokens[cursor].lexeme != "{" {
-                cursor += 1;
+        let method_start = if tokens[cursor].kind() == TokenKind::Identifier && tokens[cursor].lexeme == "danger" {
+            if cursor + 1 < close && tokens[cursor + 1].kind() == TokenKind::KeywordFn {
+                Some(cursor)
+            } else {
+                None
             }
-            if cursor < close && tokens[cursor].lexeme == "{" {
-                let method_end = find_block_end(tokens, cursor)?;
-                cursor = method_end + 1;
-                continue;
-            }
-            break;
+        } else if tokens[cursor].kind() == TokenKind::KeywordFn {
+            Some(cursor)
+        } else {
+            None
+        };
+        if let Some(ms) = method_start {
+            let (method, consumed) = parse_struct_method(tokens, ms, close)?;
+            methods.push(method);
+            cursor = ms + consumed;
+            continue;
         }
         if cursor + 1 < close
             && tokens[cursor].kind() == TokenKind::Identifier
@@ -951,9 +979,87 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
         Statement::StructDecl {
             name: tokens[start_index + 1].lexeme.clone(),
             fields,
+            methods,
             loc,
         },
         close + 1 - start_index,
+    ))
+}
+
+fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(StructMethod, usize), String> {
+    let mut current_index = start;
+    let mut is_danger = false;
+    if current_index < end
+        && tokens[current_index].kind() == TokenKind::Identifier
+        && tokens[current_index].lexeme == "danger"
+    {
+        is_danger = true;
+        current_index += 1;
+    }
+    if current_index >= end || tokens[current_index].kind() != TokenKind::KeywordFn {
+        return Err(parse_err("SC-PARSE-153", "expected 'fn' in struct method."));
+    }
+    if current_index + 1 >= end || tokens[current_index + 1].kind() != TokenKind::Identifier {
+        return Err(parse_err("SC-PARSE-154", "struct method expected name."));
+    }
+    let name = tokens[current_index + 1].lexeme.clone();
+    if current_index + 2 >= end || tokens[current_index + 2].lexeme != "(" {
+        return Err(parse_err("SC-PARSE-155", "struct method expected '(' after name."));
+    }
+    current_index += 3;
+    let mut params = Vec::new();
+    while current_index < end && tokens[current_index].lexeme != ")" {
+        if tokens[current_index].lexeme == "," {
+            current_index += 1;
+            continue;
+        }
+        if current_index + 1 < end
+            && tokens[current_index].kind() == TokenKind::Identifier
+            && tokens[current_index + 1].kind() == TokenKind::Identifier
+        {
+            params.push(FunctionParam {
+                param_type: Some(tokens[current_index].lexeme.clone()),
+                name: tokens[current_index + 1].lexeme.clone(),
+            });
+            current_index += 2;
+            continue;
+        }
+        if tokens[current_index].kind() == TokenKind::Identifier {
+            params.push(FunctionParam {
+                param_type: None,
+                name: tokens[current_index].lexeme.clone(),
+            });
+        }
+        current_index += 1;
+    }
+    if current_index >= end || tokens[current_index].lexeme != ")" {
+        return Err(parse_err("SC-PARSE-156", "struct method expected ')' after parameters."));
+    }
+    current_index += 1;
+    let mut returns = None;
+    if current_index < end
+        && tokens[current_index].kind() == TokenKind::Identifier
+        && current_index + 1 < end
+        && tokens[current_index + 1].lexeme == "{"
+    {
+        returns = Some(tokens[current_index].lexeme.clone());
+        current_index += 1;
+    }
+    if current_index >= end || tokens[current_index].lexeme != "{" {
+        return Err(parse_err("SC-PARSE-157", "struct method expected '{' body."));
+    }
+    let block_end = find_block_end(tokens, current_index)?;
+    let body_stmts = parse_statements_range(tokens, current_index + 1, block_end)?;
+    let consumed = block_end + 1 - start;
+    Ok((
+        StructMethod {
+            name,
+            params,
+            body: Box::new(BlockStatement { statements: body_stmts }),
+            returns,
+            is_danger,
+        },
+        consumed,
     ))
 }
 

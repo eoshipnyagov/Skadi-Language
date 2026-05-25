@@ -362,3 +362,26 @@ new Sensor s = {id = 7, name = "cpu"}
     assert!(c.contains("} Sensor;"));
     assert!(c.contains("Sensor s = (Sensor){.id = 7, .name = \"cpu\"};"));
 }
+
+#[test]
+fn codegen_emits_struct_method_with_my_and_call_lowering() {
+    let src = r#"
+struct Counter {
+    Int value
+    fn inc(Int delta) Int {
+        my.value = my.value + delta
+        return my.value
+    }
+}
+
+new Counter c = {value = 1}
+new Int next = c.inc(2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int64_t Counter_inc(Counter *my, int64_t delta)"));
+    assert!(c.contains("my->value = (my->value + delta);"));
+    assert!(c.contains("int64_t next = Counter_inc(&c, 2);"));
+}

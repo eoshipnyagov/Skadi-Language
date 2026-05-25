@@ -268,6 +268,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
             out.push('\n');
         }
     }
+    emit_struct_methods(program, &mut out);
 
     if needs_args_runtime {
         out.push_str("int main(int argc, char **argv) {\n");
@@ -301,6 +302,57 @@ fn emit_struct_declarations(program: &Program, out: &mut String) {
             out.push_str("} ");
             out.push_str(name);
             out.push_str(";\n\n");
+        }
+    }
+}
+
+fn emit_struct_methods(program: &Program, out: &mut String) {
+    for stmt in &program.statements {
+        let Statement::StructDecl { name, methods, .. } = stmt else { continue };
+        for method in methods {
+            if method.is_danger {
+                out.push_str("int ");
+            } else {
+                out.push_str(&map_skadi_type_to_c(method.returns.as_deref()));
+                out.push(' ');
+            }
+            out.push_str(name);
+            out.push('_');
+            out.push_str(&method.name);
+            out.push('(');
+            out.push_str(name);
+            out.push_str(" *my");
+            for p in &method.params {
+                out.push_str(", ");
+                out.push_str(&map_skadi_type_to_c(p.param_type.as_deref()));
+                out.push(' ');
+                out.push_str(&p.name);
+            }
+            if method.is_danger && let Some(ret_ty) = method.returns.as_deref() {
+                out.push_str(", ");
+                out.push_str(&map_skadi_type_to_c(Some(ret_ty)));
+                out.push_str(" *out");
+            }
+            out.push_str(") {\n");
+            let mut declared = HashMap::new();
+            declared.insert("my".to_string(), name.clone());
+            for p in &method.params {
+                declared.insert(
+                    p.name.clone(),
+                    p.param_type.clone().unwrap_or_else(|| "Int".to_string()),
+                );
+            }
+            let fn_ctx = FunctionContext {
+                is_danger: method.is_danger,
+                return_type: method.returns.clone(),
+            };
+            emit_block(&method.body, out, 1, &mut declared, Some(&fn_ctx));
+            if method.is_danger {
+                out.push_str("    return 1;\n");
+            } else if method.returns.as_deref().is_some() {
+                out.push_str("    return 0;\n");
+            }
+            out.push_str("}\n\n");
         }
     }
 }
@@ -793,6 +845,21 @@ fn emit_statement(
             out.push_str(&expr);
             out.push_str(";\n");
         }
+        Statement::FieldAssignment {
+            object, field, value, ..
+        } => {
+            out.push_str(&pad);
+            if object == "my" {
+                out.push_str("my->");
+            } else {
+                out.push_str(object);
+                out.push('.');
+            }
+            out.push_str(field);
+            out.push_str(" = ");
+            out.push_str(&emit_expr(value, declared));
+            out.push_str(";\n");
+        }
         Statement::IfStatement { condition, then_block, else_block, .. } => {
             out.push_str(&pad);
             out.push_str("if (");
@@ -1228,6 +1295,7 @@ fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
             .get(name)
             .map(|t| t.as_str() == "Text" || t.as_str() == "Path")
             .unwrap_or(false),
+        Expression::MemberAccess { .. } => false,
         Expression::Call { name, .. } => matches!(
             name.as_str(),
             "input" | "read" | "slice" | "concat" | "fs.join"
@@ -1245,6 +1313,13 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         }
         Expression::LiteralString(s) => s.clone(),
         Expression::VariableReference(name) => name.clone(),
+        Expression::MemberAccess { base, field } => {
+            if base == "my" {
+                format!("my->{}", field)
+            } else {
+                format!("{}.{}", base, field)
+            }
+        }
         Expression::Index { base, index } => {
             let base_rendered = emit_expr(base, declared);
             let index_rendered = emit_expr(index, declared);
@@ -1351,6 +1426,24 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                         return format!("sk_write_file({}, {})", path, data);
                     }
                     _ => {}
+                }
+            }
+            if let Some((obj, method)) = name.split_once(".") {
+                if let Some(obj_ty) = declared.get(obj)
+                    && !matches!(
+                        obj_ty.as_str(),
+                        "Int" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "Float"
+                            | "f32" | "f64" | "bool" | "Bool" | "char" | "Char" | "Text" | "Path"
+                    ) && !obj_ty.ends_with(" List")
+                {
+                    let mut rendered: Vec<String> = Vec::new();
+                    if obj == "my" {
+                        rendered.push("my".to_string());
+                    } else {
+                        rendered.push(format!("&{}", obj));
+                    }
+                    rendered.extend(args.iter().map(|a| emit_expr(a, declared)));
+                    return format!("{}_{}({})", obj_ty, method, rendered.join(", "));
                 }
             }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
