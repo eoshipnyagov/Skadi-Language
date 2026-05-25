@@ -5,16 +5,21 @@ const TEMPLATE_MAIN: &str = "fn main() {\n    output(\"Hello from Skadi!\")\n}\n
 const TEMPLATE_TOML: &str = "[package]\nname = \"__NAME__\"\nversion = \"0.1.0\"\nedition = \"v1\"\n\n[build]\nentry = \"src/main.scadi\"\n";
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    let Some(name) = args.first() else {
+    let Some(input) = args.first() else {
         return Err("Usage: skadi new <project_name>".to_string());
     };
 
-    let root = PathBuf::from(name);
+    let root = PathBuf::from(input);
     if root.exists() {
         return Err(format!("Directory already exists: {}", root.display()));
     }
+    let project_name = root
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "invalid project path/name".to_string())?
+        .to_string();
 
-    create_project(&root, name)?;
+    create_project(&root, &project_name)?;
     println!("Created Skadi project: {}", root.display());
     Ok(())
 }

@@ -1,9 +1,24 @@
 # skadi-cli
 
-Early scaffold of Cargo-like CLI for Skadi.
+Cargo-like CLI for Skadi (early stage).
 
-## Run
+## Current status
+
+- Implemented:
+  - `new`, `init`
+  - `check` (real frontend pipeline: lex/parse/semantic)
+  - `build` (Scadi -> C -> host exe via gcc/clang)
+  - `run` (build + execute)
+  - `target list`, `tui` (minimal)
+- Planned:
+  - full target toolchain support
+  - `format`, `doctor`
+
+## Usage examples
 
 ```powershell
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- help
+cargo run --manifest-path tools/skadi-cli/Cargo.toml -- check
+cargo run --manifest-path tools/skadi-cli/Cargo.toml -- build
+cargo run --manifest-path tools/skadi-cli/Cargo.toml -- run
 ```

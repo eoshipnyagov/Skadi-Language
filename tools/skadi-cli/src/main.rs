@@ -1,4 +1,6 @@
 mod commands;
+mod pipeline;
+mod project;
 
 use std::env;
 
@@ -10,10 +12,10 @@ fn print_help() {
     println!("Commands:");
     println!("  new <name>         Create a new Skadi project");
     println!("  init               Initialize Skadi project in current directory");
-    println!("  check              Run frontend checks (planned)");
-    println!("  build [--target]   Build project (planned)");
-    println!("  run                Build and run project (planned)");
-    println!("  target list        List supported targets (planned)");
+    println!("  check              Run frontend checks");
+    println!("  build [--target]   Build project");
+    println!("  run                Build and run project");
+    println!("  target list        List supported targets");
     println!("  tui                Interactive mode");
     println!("  format             Format source files (planned)");
     println!("  doctor             Verify toolchain environment (planned)");
