@@ -19,7 +19,7 @@ pub fn load_project() -> Result<ProjectConfig, String> {
             .unwrap_or("skadi_project")
             .to_string()
     });
-    let entry_str = extract_string_value(&content, "entry").unwrap_or_else(|| "src/main.scadi".to_string());
+    let entry_str = extract_string_value(&content, "entry").unwrap_or_else(|| "src/main.skd".to_string());
     let entry = root.join(entry_str);
 
     Ok(ProjectConfig { root, name, entry })
@@ -46,3 +46,5 @@ pub fn ensure_build_dir(root: &Path) -> Result<PathBuf, String> {
     fs::create_dir_all(&dir).map_err(|e| format!("create {} failed: {e}", dir.display()))?;
     Ok(dir)
 }
+
+

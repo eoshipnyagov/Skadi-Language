@@ -1,10 +1,10 @@
-# Scadi Compiler: Project Overview
+# Skadi Compiler: Project Overview
 
 Дата обновления: 2026-05-22
 
 ## 1. Что это за репозиторий
 
-Это рабочий прототип компилятора языка Scadi на Rust.  
+Это рабочий прототип компилятора языка Skadi на Rust.  
 Текущая цель этапа: стабильный и тестируемый пайплайн
 `lexer -> parser -> semantic -> C transpiler`.
 
@@ -20,10 +20,10 @@
 ## 3. Куда смотреть в первую очередь
 
 Документация языка (RU):
-- `docs/SCADI_LANGUAGE_REFERENCE_RU.md`
+- `docs/SKADI_LANGUAGE_REFERENCE_RU.md`
 
 Техническая документация проекта (RU):
-- `docs/SCADI_PROJECT_TECH_REFERENCE_RU.md`
+- `docs/SKADI_PROJECT_TECH_REFERENCE_RU.md`
 
 Дополнительно:
 - `docs/TEST_COVERAGE_MATRIX.md` — покрытие тестами,
@@ -31,7 +31,7 @@
 - `docs/RFC_TEXT.md` — контракт `Text`,
 - `docs/RFC_MATH_VECTOR_CORE.md` — математика/векторы/матрицы (целевой v1 трек),
 - `docs/SKADI_TO_C_SCOPE.md` — scope transpile в C,
-- `SCADI_IMPLEMENTATION_PLAN.md` — roadmap.
+- `SKADI_IMPLEMENTATION_PLAN.md` — roadmap.
 
 ## 4. Структура кода
 
@@ -68,7 +68,7 @@ cargo run -- --input example_meteostation.txt --emit-c out.c
 ## 6. Ключевые ограничения текущей версии
 
 - Это прототип и транспилятор в C, а не финальный native backend.
-- Часть языкового дизайна (из `Scadi_design.txt`) пока не реализована полностью.
+- Часть языкового дизайна (из `Skadi_design.txt`) пока не реализована полностью.
 - Runtime-поведение ряда операций пока временное (fail-soft для некоторых out-of-range индексаций).
 
 ## 7. Ближайший приоритет развития
@@ -76,3 +76,4 @@ cargo run -- --input example_meteostation.txt --emit-c out.c
 - завершить и зафиксировать контракт ошибок runtime,
 - дорасширить синтаксис/семантику до согласованного v1-подмножества,
 - держать “один feature = parser + semantic + codegen + tests + docs”.
+

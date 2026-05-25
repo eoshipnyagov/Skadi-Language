@@ -1,8 +1,8 @@
-// bench_04_sum_ints.scadi
+// bench_04_sum_ints.skd
 // CPU/List benchmark: fill list with ints and sum them.
 //
 // Usage:
-//   bench_04_sum_ints.scadi [--small|--medium|--large]
+//   bench_04_sum_ints.skd [--small|--medium|--large]
 
 new Text List cli_args = args()
 new Int n = 200000
@@ -39,3 +39,5 @@ output("n:")
 output(n)
 output("sum:")
 output(sum)
+
+

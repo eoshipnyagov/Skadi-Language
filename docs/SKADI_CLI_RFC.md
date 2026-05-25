@@ -32,7 +32,7 @@ version = "0.1.0"
 edition = "v1"
 
 [build]
-entry = "src/main.scadi"
+entry = "src/main.skd"
 ```
 
 ## Repo layout
@@ -54,3 +54,5 @@ Current built-in target profiles:
 - `host`
 - `x86_64-w64-mingw32`
 - `x86_64-unknown-linux-gnu`
+
+

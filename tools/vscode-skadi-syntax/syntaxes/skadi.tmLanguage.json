@@ -1,6 +1,6 @@
 {
-  "scopeName": "source.scadi",
-  "name": "Scadi",
+  "scopeName": "source.skadi",
+  "name": "Skadi",
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
@@ -21,37 +21,37 @@
   "repository": {
     "comments": {
       "patterns": [
-        { "name": "comment.line.double-slash.scadi", "match": "//.*$" },
-        { "name": "comment.block.scadi", "begin": "/\\*", "end": "\\*/" }
+        { "name": "comment.line.double-slash.skd", "match": "//.*$" },
+        { "name": "comment.block.skd", "begin": "/\\*", "end": "\\*/" }
       ]
     },
     "strings": {
       "patterns": [
         {
-          "name": "string.quoted.double.scadi",
+          "name": "string.quoted.double.skd",
           "begin": "\"",
           "end": "\"",
           "patterns": [
-            { "name": "constant.character.escape.scadi", "match": "\\\\." },
-            { "name": "variable.interpolation.scadi", "match": "__[A-Za-z_][A-Za-z0-9_]*__" }
+            { "name": "constant.character.escape.skd", "match": "\\\\." },
+            { "name": "variable.interpolation.skd", "match": "__[A-Za-z_][A-Za-z0-9_]*__" }
           ]
         }
       ]
     },
     "numbers": {
       "patterns": [
-        { "name": "constant.numeric.float.scadi", "match": "\\b\\d+\\.\\d+\\b" },
-        { "name": "constant.numeric.integer.scadi", "match": "\\b\\d+\\b" }
+        { "name": "constant.numeric.float.skd", "match": "\\b\\d+\\.\\d+\\b" },
+        { "name": "constant.numeric.integer.skd", "match": "\\b\\d+\\b" }
       ]
     },
     "function-declaration": {
       "patterns": [
         {
-          "name": "meta.function.declaration.scadi",
+          "name": "meta.function.declaration.skd",
           "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.function.scadi" },
-            "2": { "name": "entity.name.function.scadi" }
+            "1": { "name": "storage.type.function.skd" },
+            "2": { "name": "entity.name.function.skd" }
           }
         }
       ]
@@ -59,19 +59,19 @@
     "type-declaration": {
       "patterns": [
         {
-          "name": "meta.type.declaration.struct.scadi",
+          "name": "meta.type.declaration.struct.skd",
           "match": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.scadi" },
-            "2": { "name": "entity.name.type.scadi" }
+            "1": { "name": "storage.type.skd" },
+            "2": { "name": "entity.name.type.skd" }
           }
         },
         {
-          "name": "meta.type.declaration.label.scadi",
+          "name": "meta.type.declaration.label.skd",
           "match": "\\b(label)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.scadi" },
-            "2": { "name": "entity.name.type.scadi" }
+            "1": { "name": "storage.type.skd" },
+            "2": { "name": "entity.name.type.skd" }
           }
         }
       ]
@@ -79,7 +79,7 @@
     "control-keywords": {
       "patterns": [
         {
-          "name": "keyword.control.scadi",
+          "name": "keyword.control.skd",
           "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|on|event|interrupt|error|run|wait)\\b"
         }
       ]
@@ -87,7 +87,7 @@
     "modifiers": {
       "patterns": [
         {
-          "name": "storage.modifier.scadi",
+          "name": "storage.modifier.skd",
           "match": "\\b(danger|new|fixed|const|hide|local|allow|drop|direct)\\b"
         }
       ]
@@ -95,7 +95,7 @@
     "self-keyword": {
       "patterns": [
         {
-          "name": "variable.language.self.scadi",
+          "name": "variable.language.self.skd",
           "match": "\\bmy\\b"
         }
       ]
@@ -103,7 +103,7 @@
     "types": {
       "patterns": [
         {
-          "name": "storage.type.scadi",
+          "name": "storage.type.skd",
           "match": "\\b(Int|Float|Byte|bool|char|Text|String|Path|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List)\\b"
         }
       ]
@@ -111,11 +111,11 @@
     "constants": {
       "patterns": [
         {
-          "name": "constant.language.scadi",
+          "name": "constant.language.skd",
           "match": "\\b(true|false|null|PI|E)\\b"
         },
         {
-          "name": "constant.other.error-code.scadi",
+          "name": "constant.other.error-code.skd",
           "match": "\\b[A-Z][A-Z0-9_]*\\b"
         }
       ]
@@ -123,11 +123,11 @@
     "builtins": {
       "patterns": [
         {
-          "name": "support.function.builtin.scadi",
+          "name": "support.function.builtin.skd",
           "match": "\\b(output|print|input|read|write|len|find|slice|concat|args|delay|sleep)\\b(?=\\s*\\()"
         },
         {
-          "name": "support.function.builtin.fs.scadi",
+          "name": "support.function.builtin.fs.skd",
           "match": "\\bfs\\.(list|read|write|is_dir|join)\\b"
         }
       ]
@@ -135,10 +135,10 @@
     "member-call": {
       "patterns": [
         {
-          "name": "meta.member.call.scadi",
+          "name": "meta.member.call.skd",
           "match": "\\.\\s*([A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*\\()",
           "captures": {
-            "1": { "name": "support.function.method.scadi" }
+            "1": { "name": "support.function.method.skd" }
           }
         }
       ]
@@ -146,10 +146,10 @@
     "member-access": {
       "patterns": [
         {
-          "name": "variable.other.member.scadi",
+          "name": "variable.other.member.skd",
           "match": "\\.\\s*([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "variable.other.property.scadi" }
+            "1": { "name": "variable.other.property.skd" }
           }
         }
       ]
@@ -157,7 +157,7 @@
     "operators": {
       "patterns": [
         {
-          "name": "keyword.operator.scadi",
+          "name": "keyword.operator.skd",
           "match": "\\b(and|or|not|xor|div|mod)\\b|==|!=|<=|>=|\\+\\=|\\-\\=|\\*\\=|\\/\\=|\\+\\+|\\-\\-|=|<|>|\\+|\\-|\\*|\\/|\\^"
         }
       ]
@@ -165,10 +165,12 @@
     "function-call": {
       "patterns": [
         {
-          "name": "entity.name.function.scadi",
+          "name": "entity.name.function.skd",
           "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()"
         }
       ]
     }
   }
 }
+
+

@@ -7,7 +7,7 @@ Cargo-like CLI for Skadi (early stage).
 - Implemented:
   - `new`, `init`
   - `check` (real frontend pipeline: lex/parse/semantic)
-  - `build` (Scadi -> C -> host exe via gcc/clang)
+  - `build` (Skadi -> C -> host exe via gcc/clang)
   - `run` (build + execute)
   - `target list`, `tui` (minimal)
   - `doctor` (target compiler availability report)
@@ -24,3 +24,4 @@ cargo run --manifest-path tools/skadi-cli/Cargo.toml -- build
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- run
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
 ```
+

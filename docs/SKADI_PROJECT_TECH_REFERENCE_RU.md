@@ -1,4 +1,4 @@
-# Scadi: Техническая Документация Проекта (RU)
+# Skadi: Техническая Документация Проекта (RU)
 
 Дата актуальности: 2026-05-22  
 Версия проекта: текущий `master` (прототип v0.1)
@@ -6,7 +6,7 @@
 ## 1. Как это работает в общих чертах
 
 Компиляторный поток сейчас:
-1. `main.rs` читает входной `.txt`/`.scadi` файл.
+1. `main.rs` читает входной `.txt`/`.skd` файл.
 2. `lexer::lex` превращает текст в `Vec<Token>`.
 3. `parser::parse_program` строит AST (`Program` + `Statement`/`Expression`).
 4. `semantic_analysis::semantic_analyze` валидирует программу по типам и контекстам.
@@ -19,8 +19,8 @@
 Корень:
 - `Cargo.toml` — сборка и зависимости Rust crate.
 - `README_PROJECT_OVERVIEW.md` — краткий обзор проекта.
-- `SCADI_IMPLEMENTATION_PLAN.md` — дорожная карта.
-- `Scadi_design.txt` — дизайн-языка (источник идей/целей).
+- `SKADI_IMPLEMENTATION_PLAN.md` — дорожная карта.
+- `Skadi_design.txt` — дизайн-языка (источник идей/целей).
 - `docs/` — RFC, покрытие, стиль, и эта документация.
 - `tests/` — unit/smoke/integration/e2e тесты.
 
@@ -330,7 +330,7 @@
 - `emit_function` — lower одного function definition.
 - `emit_block` — lower блока statements.
 - `emit_statement` — lower одного statement.
-- `map_skadi_type_to_c` — маппинг типа Scadi в C-тип.
+- `map_skadi_type_to_c` — маппинг типа Skadi в C-тип.
 - `emit_expr` — lower выражения.
 
 ## 5. Тестовая подсистема
@@ -363,3 +363,5 @@
 - текущие `read(path)` / `write(path, data)` и `args()` остаются рабочим промежуточным слоем,
 - планируется переход к унифицированной stream-модели I/O:
   `read(stream)` / `write(stream, data)` с общим контрактом для файлов/консоли/CLI-входов.
+
+

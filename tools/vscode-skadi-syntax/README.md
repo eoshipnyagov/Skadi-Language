@@ -1,25 +1,25 @@
-# Scadi VS Code Syntax (local draft)
+# Skadi VS Code Syntax (local draft)
 
-This folder contains a minimal VS Code syntax-highlighting extension for Scadi.
+This folder contains a minimal VS Code syntax-highlighting extension for Skadi.
 
 ## What is included
 
 - `package.json` (language registration)
 - `language-configuration.json` (comments/brackets/autoclose)
-- `syntaxes/scadi.tmLanguage.json` (TextMate grammar)
+- `syntaxes/skadi.tmLanguage.json` (TextMate grammar)
 
 ## Local usage
 
-1. Open this folder in VS Code extension dev host mode (`F5`) from `tools/vscode-scadi-syntax`.
-2. Open any `.scadi` file.
-3. Choose language mode `Scadi` if needed.
+1. Open this folder in VS Code extension dev host mode (`F5`) from `tools/vscode-skadi-syntax`.
+2. Open any `.skd` file.
+3. Choose language mode `Skadi` if needed.
 
 ## Install from VSIX
 
 1. Build package:
    - `npx @vscode/vsce package --allow-missing-repository`
 2. Install in VS Code:
-   - `code --install-extension scadi-syntax-0.1.0.vsix`
+   - `code --install-extension skadi-syntax-0.1.0.vsix`
 
 ## Current scope
 
@@ -37,3 +37,5 @@ This folder contains a minimal VS Code syntax-highlighting extension for Scadi.
 
 - Add better context-sensitive highlighting for declarations (`fn`, `struct`, `label`, `new`).
 - Add snippets and diagnostics bridge once LSP is introduced.
+
+

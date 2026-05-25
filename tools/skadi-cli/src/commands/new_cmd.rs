@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const TEMPLATE_MAIN: &str = "output(\"Hello from Skadi!\")\n";
-const TEMPLATE_TOML: &str = "[package]\nname = \"__NAME__\"\nversion = \"0.1.0\"\nedition = \"v1\"\n\n[build]\nentry = \"src/main.scadi\"\n";
+const TEMPLATE_TOML: &str = "[package]\nname = \"__NAME__\"\nversion = \"0.1.0\"\nedition = \"v1\"\n\n[build]\nentry = \"src/main.skd\"\n";
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let Some(input) = args.first() else {
@@ -27,7 +27,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 pub fn create_project(root: &Path, name: &str) -> Result<(), String> {
     fs::create_dir_all(root.join("src")).map_err(|e| format!("create dirs failed: {e}"))?;
 
-    let main_path = root.join("src/main.scadi");
+    let main_path = root.join("src/main.skd");
     fs::write(&main_path, TEMPLATE_MAIN).map_err(|e| format!("write {} failed: {e}", main_path.display()))?;
 
     let toml_path = root.join("Skadi.toml");
@@ -39,3 +39,5 @@ pub fn create_project(root: &Path, name: &str) -> Result<(), String> {
 
     Ok(())
 }
+
+

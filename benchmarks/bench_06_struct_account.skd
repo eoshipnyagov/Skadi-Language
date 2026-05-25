@@ -1,4 +1,4 @@
-// bench_06_struct_account.scadi
+// bench_06_struct_account.skd
 // Showcase: structs + methods + `my` + dot-call syntax.
 
 struct Account {
@@ -32,3 +32,5 @@ new Int b2 = acc.withdraw(40)
 output(b2)
 new Text title = acc.snapshot()
 output(title)
+
+

@@ -6,13 +6,13 @@ use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
 
 fn print_usage() {
-    println!("Scadi compiler (current toolchain)");
+    println!("Skadi compiler (current toolchain)");
     println!("Usage:");
-    println!("  cargo run -- --input <file.scadi> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]");
-    println!("  cargo run -- <file.scadi> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]");
+    println!("  cargo run -- --input <file.skd> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]");
+    println!("  cargo run -- <file.skd> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]");
     println!();
     println!("Options:");
-    println!("  --input <path>      Source .scadi file");
+    println!("  --input <path>      Source .skd file");
     println!("  --emit-c <path>     Write generated C code to file");
     println!("  --emit-exe <path>   Build native executable via gcc/clang");
     println!("  --print-c           Print generated C to stdout");
@@ -135,7 +135,7 @@ fn main() {
                             }
 
                             if let Some(exe_path) = emit_exe_path {
-                                let temp_c_path = format!("{}.scadi_tmp.c", exe_path);
+                                let temp_c_path = format!("{}.skd_tmp.c", exe_path);
                                 match fs::write(&temp_c_path, c_code.as_bytes()) {
                                     Ok(_) => {
                                         match compile_c_to_exe(&temp_c_path, &exe_path) {
@@ -169,3 +169,5 @@ fn main() {
         }
     }
 }
+
+

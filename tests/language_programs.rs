@@ -115,7 +115,7 @@ new char c2 = t[9]
 
 #[test]
 fn program_tree_utility_pipeline_shape() {
-    let src = include_str!("../example_tree.scadi");
+    let src = include_str!("../example_tree.skd");
     let c = compile_pipeline(src);
     assert!(c.contains("SkadiList_text cli_args = sk_list_text_new();"));
     assert!(c.contains("cli_args = sk_args(argc, argv);"));
@@ -126,3 +126,5 @@ fn program_tree_utility_pipeline_shape() {
     assert!(c.contains("strcmp(__when_tmp_"));
     assert!(c.contains("\"--dirs-only\") == 0"));
 }
+
+

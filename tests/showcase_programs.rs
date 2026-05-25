@@ -12,7 +12,7 @@ fn compile_pipeline(src: &str) -> String {
 
 #[test]
 fn showcase_tree_compiles() {
-    let src = include_str!("../benchmarks/bench_01_tree.scadi");
+    let src = include_str!("../benchmarks/bench_01_tree.skd");
     assert!(!src.contains("for "));
     assert!(src.contains("iterate "));
     let c = compile_pipeline(src);
@@ -22,7 +22,7 @@ fn showcase_tree_compiles() {
 
 #[test]
 fn showcase_read_stats_compiles() {
-    let src = include_str!("../benchmarks/bench_02_read_stats.scadi");
+    let src = include_str!("../benchmarks/bench_02_read_stats.skd");
     assert!(!src.contains("for "));
     let c = compile_pipeline(src);
     assert!(c.contains("sk_read_file("));
@@ -31,7 +31,7 @@ fn showcase_read_stats_compiles() {
 
 #[test]
 fn showcase_find_count_compiles() {
-    let src = include_str!("../benchmarks/bench_03_find_count.scadi");
+    let src = include_str!("../benchmarks/bench_03_find_count.skd");
     assert!(!src.contains("for "));
     let c = compile_pipeline(src);
     assert!(c.contains("sk_text_slice("));
@@ -40,7 +40,7 @@ fn showcase_find_count_compiles() {
 
 #[test]
 fn showcase_sum_ints_compiles() {
-    let src = include_str!("../benchmarks/bench_04_sum_ints.scadi");
+    let src = include_str!("../benchmarks/bench_04_sum_ints.skd");
     assert!(!src.contains("for "));
     assert!(src.contains("iterate "));
     let c = compile_pipeline(src);
@@ -50,9 +50,11 @@ fn showcase_sum_ints_compiles() {
 
 #[test]
 fn showcase_push_pop_compiles() {
-    let src = include_str!("../benchmarks/bench_05_push_pop.scadi");
+    let src = include_str!("../benchmarks/bench_05_push_pop.skd");
     assert!(!src.contains("for "));
     let c = compile_pipeline(src);
     assert!(c.contains("SkadiList_i64"));
     assert!(c.contains("sk_list_i64_pop("));
 }
+
+

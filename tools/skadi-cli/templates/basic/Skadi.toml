@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "v1"
 
 [build]
-entry = "src/main.scadi"
+entry = "src/main.skd"
+
+

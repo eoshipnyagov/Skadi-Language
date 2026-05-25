@@ -1,4 +1,4 @@
-# Scadi Implementation Plan
+# Skadi Implementation Plan
 
 ## Plan Date
 2026-05-20
@@ -42,7 +42,7 @@ Exit criteria:
 Status: in progress
 
 Tasks:
-- Implement precedence table from `Scadi_design.txt`.
+- Implement precedence table from `Skadi_design.txt`.
 - Add prefix/infix parsing for arithmetic/comparison/logical operators.
 - Support grouped expressions and variable references.
 
@@ -109,7 +109,7 @@ Tasks:
 Status: planned
 
 Tasks:
-- Research and document cross-target build flows for Scadi -> C -> target binary:
+- Research and document cross-target build flows for Skadi -> C -> target binary:
   - AVR (embedded),
   - ESP family (Xtensa/RISC-V depending on chip),
   - ARM targets (including common embedded profiles),
@@ -170,5 +170,6 @@ Mitigation: enforce `docs/SKADI_STYLE_PRINCIPLES.md` as review baseline.
 ## Working Rules
 - Every new grammar feature must include at least one positive and one negative test.
 - Prefer small commits per phase task.
-- Keep `Scadi_design.txt` as the normative grammar reference.
+- Keep `Skadi_design.txt` as the normative grammar reference.
 - Keep syntax choices aligned with `docs/SKADI_STYLE_PRINCIPLES.md`.
+

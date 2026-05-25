@@ -1,6 +1,6 @@
 # Diagnostics Style Guide
 
-This document defines the canonical user-facing diagnostic format for Scadi compiler stages.
+This document defines the canonical user-facing diagnostic format for Skadi compiler stages.
 
 ## Canonical format
 
@@ -61,3 +61,4 @@ When location data is not available:
 - `SC-PARSE-13x`: assignment and danger-call shape expectations
 - `SC-PARSE-14x`: declaration/on-block structural expectations
 - `SC-PARSE-20x`: expression parsing expectations and unexpected tokens
+

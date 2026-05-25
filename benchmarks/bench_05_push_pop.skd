@@ -1,8 +1,8 @@
-// bench_05_push_pop.scadi
+// bench_05_push_pop.skd
 // List stack benchmark: push N values then pop all with on error contract.
 //
 // Usage:
-//   bench_05_push_pop.scadi [--small|--medium|--large]
+//   bench_05_push_pop.skd [--small|--medium|--large]
 
 new Text List cli_args = args()
 new Int n = 200000
@@ -47,3 +47,5 @@ output("n:")
 output(n)
 output("popped:")
 output(popped)
+
+

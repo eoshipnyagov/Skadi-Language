@@ -23,9 +23,9 @@ fn compiler_supports_flags(compiler: &str, flags: &[&str]) -> bool {
         .expect("time")
         .as_millis();
     let mut c_path: PathBuf = std::env::temp_dir();
-    c_path.push(format!("scadi_flag_probe_{stamp}.c"));
+    c_path.push(format!("Skadi_flag_probe_{stamp}.c"));
     let mut exe_path: PathBuf = std::env::temp_dir();
-    exe_path.push(format!("scadi_flag_probe_{stamp}"));
+    exe_path.push(format!("Skadi_flag_probe_{stamp}"));
     if cfg!(windows) {
         exe_path.set_extension("exe");
     }
@@ -106,9 +106,9 @@ new Int y = x + 3
         .expect("time")
         .as_millis();
     let mut c_path: PathBuf = std::env::temp_dir();
-    c_path.push(format!("scadi_e2e_{stamp}.c"));
+    c_path.push(format!("Skadi_e2e_{stamp}.c"));
     let mut exe_path: PathBuf = std::env::temp_dir();
-    exe_path.push(format!("scadi_e2e_{stamp}"));
+    exe_path.push(format!("Skadi_e2e_{stamp}"));
     if cfg!(windows) {
         exe_path.set_extension("exe");
     }
@@ -163,9 +163,9 @@ new Int n = len(part)
         .expect("time")
         .as_millis();
     let mut c_path: PathBuf = std::env::temp_dir();
-    c_path.push(format!("scadi_e2e_text_{stamp}.c"));
+    c_path.push(format!("Skadi_e2e_text_{stamp}.c"));
     let mut exe_path: PathBuf = std::env::temp_dir();
-    exe_path.push(format!("scadi_e2e_text_{stamp}"));
+    exe_path.push(format!("Skadi_e2e_text_{stamp}"));
     if cfg!(windows) {
         exe_path.set_extension("exe");
     }
@@ -222,9 +222,9 @@ new Int n2 = len(s2)
         .expect("time")
         .as_millis();
     let mut c_path: PathBuf = std::env::temp_dir();
-    c_path.push(format!("scadi_e2e_text_edge_{stamp}.c"));
+    c_path.push(format!("Skadi_e2e_text_edge_{stamp}.c"));
     let mut exe_path: PathBuf = std::env::temp_dir();
-    exe_path.push(format!("scadi_e2e_text_edge_{stamp}"));
+    exe_path.push(format!("Skadi_e2e_text_edge_{stamp}"));
     if cfg!(windows) {
         exe_path.set_extension("exe");
     }
@@ -274,7 +274,7 @@ new bool has = contains(t, "рив")
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    compile_c_and_run(compiler, &c, "scadi_e2e_text_utf8_bytes", &[]);
+    compile_c_and_run(compiler, &c, "Skadi_e2e_text_utf8_bytes", &[]);
 }
 
 #[test]
@@ -322,9 +322,9 @@ when mode {
         .expect("time")
         .as_millis();
     let mut c_path: PathBuf = std::env::temp_dir();
-    c_path.push(format!("scadi_e2e_list_when_edge_{stamp}.c"));
+    c_path.push(format!("Skadi_e2e_list_when_edge_{stamp}.c"));
     let mut exe_path: PathBuf = std::env::temp_dir();
-    exe_path.push(format!("scadi_e2e_list_when_edge_{stamp}"));
+    exe_path.push(format!("Skadi_e2e_list_when_edge_{stamp}"));
     if cfg!(windows) {
         exe_path.set_extension("exe");
     }
@@ -386,9 +386,9 @@ if c_ok == c_out {
         .expect("time")
         .as_millis();
     let mut c_path: PathBuf = std::env::temp_dir();
-    c_path.push(format!("scadi_e2e_checked_index_{stamp}.c"));
+    c_path.push(format!("Skadi_e2e_checked_index_{stamp}.c"));
     let mut exe_path: PathBuf = std::env::temp_dir();
-    exe_path.push(format!("scadi_e2e_checked_index_{stamp}"));
+    exe_path.push(format!("Skadi_e2e_checked_index_{stamp}"));
     if cfg!(windows) {
         exe_path.set_extension("exe");
     }
@@ -444,9 +444,9 @@ for e in entries {
         .expect("time")
         .as_millis();
     let mut c_path: PathBuf = std::env::temp_dir();
-    c_path.push(format!("scadi_e2e_fs_{stamp}.c"));
+    c_path.push(format!("Skadi_e2e_fs_{stamp}.c"));
     let mut exe_path: PathBuf = std::env::temp_dir();
-    exe_path.push(format!("scadi_e2e_fs_{stamp}"));
+    exe_path.push(format!("Skadi_e2e_fs_{stamp}"));
     if cfg!(windows) {
         exe_path.set_extension("exe");
     }
@@ -521,5 +521,6 @@ output(msg)
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    compile_c_and_run(compiler, &c, "scadi_e2e_sanitized", &sanitizer_flags);
+    compile_c_and_run(compiler, &c, "Skadi_e2e_sanitized", &sanitizer_flags);
 }
+

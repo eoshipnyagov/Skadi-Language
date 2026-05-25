@@ -2,7 +2,7 @@
 
 Status: Accepted (v1 baseline)
 Date: 2026-05-22
-Owner: Scadi core
+Owner: Skadi core
 
 ## 1. Final syntax (v1)
 
@@ -60,3 +60,4 @@ new i32 last = xs.pop() on error {
     last = 0
 }
 ```
+

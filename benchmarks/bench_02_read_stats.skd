@@ -1,8 +1,8 @@
-// bench_02_read_stats.scadi
+// bench_02_read_stats.skd
 // Read a file and print basic text stats.
 //
 // Usage:
-//   bench_02_read_stats.scadi [--input <file>]
+//   bench_02_read_stats.skd [--input <file>]
 
 new Text List cli_args = args()
 new Text path = "example_meteostation.txt"
@@ -44,3 +44,5 @@ output("chars:")
 output(n)
 output("lines:")
 output(lines)
+
+

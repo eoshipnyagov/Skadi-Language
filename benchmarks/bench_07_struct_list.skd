@@ -1,4 +1,4 @@
-// bench_07_struct_list.scadi
+// bench_07_struct_list.skd
 // Showcase: Struct List + iterate + method calls.
 
 struct Sensor {
@@ -27,3 +27,5 @@ iterate sensors as s {
 }
 
 output(hot_count)
+
+

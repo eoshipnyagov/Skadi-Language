@@ -2,11 +2,11 @@
 
 Status: Draft (proposed for v1 implementation scope)  
 Date: 2026-05-22  
-Owner: Scadi core
+Owner: Skadi core
 
 ## 1. Что уже есть в дизайне
 
-По `Scadi_design.txt` уже зафиксировано:
+По `Skadi_design.txt` уже зафиксировано:
 - составные типы `Vec2`, `Vec3`, `Vec4`,
 - базовая математика в ядре: `sin`, `cos`, `sqrt`, `abs`, `rand`, `PI`, `E`.
 
@@ -56,3 +56,4 @@ Owner: Scadi core
 
 - Финальный синтаксис Matrix2D (новый тип vs алиас над `List(List(T))`).
 - Оптимизированные SIMD/backend-specific lowering для `Vec*`.
+

@@ -1,4 +1,4 @@
-// bench_01_tree.scadi
+// bench_01_tree.skd
 // Recursive directory traversal benchmark utility.
 //
 // Flags:
@@ -51,3 +51,5 @@ if show_files {
 }
 
 walk(".", dirs_only, max_depth, 0)
+
+

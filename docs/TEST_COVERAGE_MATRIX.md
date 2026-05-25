@@ -1,7 +1,7 @@
 # Test Coverage Matrix (Skadi v1 Prototype)
 
 Date: 2026-05-25
-Owner: Scadi core
+Owner: Skadi core
 
 This file tracks test coverage for language elements in the current Rust prototype.
 
@@ -64,3 +64,4 @@ For each newly implemented feature, add:
 2. semantic positive + negative tests (`semantic_smoke`)
 3. codegen shape check (`codegen_smoke`)
 4. at least one integration scenario (`language_programs` or `codegen_e2e`)
+

@@ -2,7 +2,7 @@
 
 Status: Accepted (v1 baseline)
 Date: 2026-05-22
-Owner: Scadi core
+Owner: Skadi core
 
 ## 1. Final syntax (v1)
 
@@ -55,3 +55,4 @@ new bool has = contains(t, "ath")
 new Int idx = find(t, "the")
 new Text part = slice(t, 1, 4)
 ```
+
