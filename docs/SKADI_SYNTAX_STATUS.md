@@ -1,6 +1,6 @@
 # Skadi Syntax Status (Current Snapshot)
 
-Date: 2026-05-22
+Date: 2026-05-25
 Purpose: single source of truth for "what syntax actually works right now" in this repository.
 
 ## Stability Levels
@@ -62,6 +62,14 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - implicit widening: `Int -> Float` allowed
 - bool conditions in `if/while` are required
 - `List` and `Text` are intentionally **not finalized** yet
+
+## Indexing Contract (Frozen for v1)
+- `xs[i]` for `List` is `fail-soft` in runtime:
+  - out-of-range returns default zero value (`0`) for the element C type.
+- `t[i]` for `Text` is `fail-soft` in runtime:
+  - out-of-range returns `'\0'`.
+- `on error` is **not** attached to index access in `v1`.
+- Possible stricter `danger`-style indexing is deferred to `v2+` discussion.
 
 ## Type Naming Canonical Style (v1)
 - Low-level fixed-width numeric types stay lowercase:

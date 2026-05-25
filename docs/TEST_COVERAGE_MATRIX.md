@@ -43,9 +43,9 @@ This file tracks test coverage for language elements in the current Rust prototy
 
 ## 2. Partially covered / pending deep checks
 
-- Runtime error policy for out-of-range accesses (language-level decision)
-  - current C runtime behavior is deterministic and non-crashing for covered cases
-  - final language contract (trap/default/error-return) is not frozen in spec yet
+- Runtime out-of-range policy for indexing
+  - frozen for v1 as fail-soft (`List` index -> `0`, `Text` index -> `'\0'`)
+  - codegen contract tests cover helper behavior shape
 - `on interrupt` / `on event` runtime semantics
   - parse-level coverage exists, runtime binding remains TODO
 - Concurrency primitives (`run`, `wait`, `Link`) and embedded APIs

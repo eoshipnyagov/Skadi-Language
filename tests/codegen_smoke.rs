@@ -423,3 +423,32 @@ new Account first = accounts[0]
     assert!(c.contains("sk_list_Account_push(&accounts, a)"));
     assert!(c.contains("Account first = sk_list_Account_get(&accounts, 0);"));
 }
+
+#[test]
+fn codegen_list_index_runtime_contract_is_fail_soft_zero() {
+    let src = r#"
+new i32 List xs = [1]
+new i32 v = xs[999]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("static int32_t sk_list_i32_get(const SkadiList_i32 *xs, int64_t idx) {"));
+    assert!(c.contains("if (!xs || idx < 0 || (size_t)idx >= xs->len) return 0;"));
+}
+
+#[test]
+fn codegen_text_index_runtime_contract_is_fail_soft_nul() {
+    let src = r#"
+new Text t = "ab"
+new char c = t[999]
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("static char sk_text_char_at(const char *s, int64_t idx) {"));
+    assert!(c.contains("if (!s || idx < 0) return '\\0';"));
+    assert!(c.contains("if ((size_t)idx >= n) return '\\0';"));
+}
