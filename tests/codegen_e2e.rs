@@ -255,6 +255,29 @@ new Int n2 = len(s2)
 }
 
 #[test]
+fn e2e_skadi_text_utf8_byte_semantics_build_and_run() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Text t = "Привет"
+new Int n = len(t)
+new char b0 = t[0]
+new Text head = slice(t, 0, 4)
+new Int idx = find(t, "вет")
+new bool has = contains(t, "рив")
+"#;
+
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    compile_c_and_run(compiler, &c, "scadi_e2e_text_utf8_bytes", &[]);
+}
+
+#[test]
 fn e2e_skadi_list_and_when_edge_build_and_run() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");

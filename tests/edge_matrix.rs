@@ -74,6 +74,20 @@ new Text s1 = slice(t, 10, 2)
 }
 
 #[test]
+fn edge_text_utf8_contract_is_byte_oriented_shape() {
+    let src = r#"
+new Text t = "Пр"
+new Int n = len(t)
+new char b0 = t[0]
+new Text s = slice(t, 0, 2)
+"#;
+    let c = pipeline_ok(src);
+    assert!(c.contains("int64_t n = ((int64_t)strlen(t));"));
+    assert!(c.contains("char b0 = sk_text_char_at(t, 0);"));
+    assert!(c.contains("const char* s = sk_text_slice(t, 0, 2);"));
+}
+
+#[test]
 fn edge_rejects_fs_join_argument_types() {
     let src = r#"
 new Int x = 1

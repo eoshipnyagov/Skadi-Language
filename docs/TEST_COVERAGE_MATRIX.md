@@ -31,6 +31,7 @@ This file tracks test coverage for language elements in the current Rust prototy
   - `tests/codegen_e2e.rs`
   - C output compiles and produced binaries run for representative programs
   - includes edge scenarios for `Text` bounds/empty-needle and `List` + `when` flow
+  - includes UTF-8 text byte-semantics smoke scenario
   - includes sanitizer-backed stress scenario (`ASan/UBSan`) when compiler supports flags
   - memory contract tie-in: validates no sanitizer-detected crashes/UB for current runtime allocation model
 - Edge matrix conformance set
@@ -39,6 +40,7 @@ This file tracks test coverage for language elements in the current Rust prototy
     - numeric List coverage across `i/u/f` families (`8/16/32/64`) and `bool`
     - `Path List` lowering to text runtime helpers
     - extreme text index/slice shapes
+    - UTF-8 text contract shape (byte-oriented `len/index/slice` lowering)
     - negative builtin argument/type checks (`fs.join`, `write`, `args`)
     - struct-list iteration + method calls
     - `danger` + `on error` + explicit `ErrorCode` flow
