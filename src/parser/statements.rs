@@ -532,8 +532,33 @@ pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResu
     }
 
     let mut cursor = expr_start;
+    let mut depth_curly = 0usize;
+    let mut depth_round = 0usize;
+    let mut depth_square = 0usize;
     while cursor < tokens.len() {
-        if tokens[cursor].kind() == TokenKind::NewLine || tokens[cursor].lexeme == "}" {
+        let lx = tokens[cursor].lexeme.as_str();
+        if lx == "{" {
+            depth_curly += 1;
+        } else if lx == "}" {
+            if depth_curly > 0 {
+                depth_curly -= 1;
+            } else if depth_round == 0 && depth_square == 0 {
+                break;
+            }
+        } else if lx == "(" {
+            depth_round += 1;
+        } else if lx == ")" {
+            depth_round = depth_round.saturating_sub(1);
+        } else if lx == "[" {
+            depth_square += 1;
+        } else if lx == "]" {
+            depth_square = depth_square.saturating_sub(1);
+        }
+        if tokens[cursor].kind() == TokenKind::NewLine
+            && depth_curly == 0
+            && depth_round == 0
+            && depth_square == 0
+        {
             break;
         }
         cursor += 1;
@@ -787,8 +812,33 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
     let name = tokens[idx].lexeme.clone();
     let expr_start = idx + 2;
     let mut cursor = expr_start;
+    let mut depth_curly = 0usize;
+    let mut depth_round = 0usize;
+    let mut depth_square = 0usize;
     while cursor < tokens.len() {
-        if tokens[cursor].kind() == TokenKind::NewLine || tokens[cursor].lexeme == "}" {
+        let lx = tokens[cursor].lexeme.as_str();
+        if lx == "{" {
+            depth_curly += 1;
+        } else if lx == "}" {
+            if depth_curly > 0 {
+                depth_curly -= 1;
+            } else if depth_round == 0 && depth_square == 0 {
+                break;
+            }
+        } else if lx == "(" {
+            depth_round += 1;
+        } else if lx == ")" {
+            depth_round = depth_round.saturating_sub(1);
+        } else if lx == "[" {
+            depth_square += 1;
+        } else if lx == "]" {
+            depth_square = depth_square.saturating_sub(1);
+        }
+        if tokens[cursor].kind() == TokenKind::NewLine
+            && depth_curly == 0
+            && depth_round == 0
+            && depth_square == 0
+        {
             break;
         }
         cursor += 1;

@@ -105,6 +105,24 @@ Tasks:
 - Add TODO track for human-readable output formatting API (avoid low-level `%...` formatting noise in everyday code).
   - candidate direction: readable formatter helper for mixed numeric/text output in v1.x.
 
+## Toolchain TODO - Target Compilation
+Status: planned
+
+Tasks:
+- Research and document cross-target build flows for Scadi -> C -> target binary:
+  - AVR (embedded),
+  - ESP family (Xtensa/RISC-V depending on chip),
+  - ARM targets (including common embedded profiles),
+  - Linux targets (x86_64/ARM where practical).
+- Define compiler backend/toolchain matrix:
+  - required C toolchains per target,
+  - minimal build commands,
+  - expected runtime constraints for generated C code.
+- Add first feasibility checklist:
+  - "builds C successfully",
+  - "links target binary",
+  - "runs hello-world style smoke for target environment/emulator where possible".
+
 Exit criteria:
 - Written design decision record for v1 scope cuts and kept features.
 - Updated grammar/spec section for the reduced core subset.

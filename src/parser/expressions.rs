@@ -143,6 +143,58 @@ impl<'a> ExprParser<'a> {
             return Ok(Expression::ListLiteral(items));
         }
 
+        if tok.kind == TokenKind::OpPunctuation && tok.lexeme == "{" {
+            self.idx += 1;
+            let mut fields = std::collections::HashMap::new();
+            if self.idx < self.end
+                && self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                && self.tokens[self.idx].lexeme == "}"
+            {
+                self.idx += 1;
+                return Ok(Expression::StructConstruction { fields });
+            }
+            loop {
+                if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {
+                    return Err(parse_err("SC-PARSE-210", "struct literal expected field name."));
+                }
+                let field_name = self.tokens[self.idx].lexeme.clone();
+                self.idx += 1;
+
+                let field_value = if self.idx < self.end
+                    && self.tokens[self.idx].kind == TokenKind::OpAssignment
+                    && self.tokens[self.idx].lexeme == "="
+                {
+                    self.idx += 1; // skip '='
+                    self.parse_bp(0)?
+                } else {
+                    // Field punning sugar: `{value}` == `{value = value}`
+                    Expression::VariableReference(field_name.clone())
+                };
+                fields.insert(field_name, Box::new(field_value));
+
+                if self.idx >= self.end {
+                    return Err(parse_err("SC-PARSE-211", "expected '}' to close struct literal."));
+                }
+                if self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                    && self.tokens[self.idx].lexeme == ","
+                {
+                    self.idx += 1;
+                    continue;
+                }
+                if self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                    && self.tokens[self.idx].lexeme == "}"
+                {
+                    self.idx += 1;
+                    break;
+                }
+                return Err(parse_err(
+                    "SC-PARSE-212",
+                    "expected ',' or '}' in struct literal.",
+                ));
+            }
+            return Ok(Expression::StructConstruction { fields });
+        }
+
         self.idx += 1;
         match tok.kind {
             TokenKind::TypeInt => {

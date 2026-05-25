@@ -567,6 +567,19 @@ new Text p = fs.join(".", "src")
 }
 
 #[test]
+fn semantic_allows_struct_literal_field_punning_for_defined_vars() {
+    let source = r#"
+new Int value = 10
+new Int status = 1
+new result = {value, status}
+"#;
+    let tokens = v01::lexer::lex(source).expect("lexing should succeed");
+    let program = v01::parser::parse_program(&tokens).expect("parsing should succeed");
+    let result = v01::semantic_analysis::semantic_analyze(&program);
+    assert!(result.is_ok(), "expected semantic success, got: {:?}", result);
+}
+
+#[test]
 fn semantic_allows_concat_text_builtin() {
     let src = r#"
 new Text a = "ab"

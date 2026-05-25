@@ -415,6 +415,26 @@ new Text List entries = fs.list(root)
 }
 
 #[test]
+fn parses_struct_literal_with_field_punning() {
+    let source = r#"
+new Int value = 10
+new Int status = 1
+new result = {value, status}
+"#;
+    let tokens = v01::lexer::lex(source).expect("lexing should succeed");
+    let program = v01::parser::parse_program(&tokens).expect("parsing should succeed");
+
+    let Statement::VarDecl { value, .. } = &program.statements[2] else {
+        panic!("expected var declaration with struct literal");
+    };
+    let Expression::StructConstruction { fields } = &**value else {
+        panic!("expected struct construction expression");
+    };
+    assert!(fields.contains_key("value"));
+    assert!(fields.contains_key("status"));
+}
+
+#[test]
 fn parses_output_call_as_expression_statement() {
     let src = r#"
 output("hello")
