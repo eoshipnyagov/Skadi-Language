@@ -1,0 +1,29 @@
+// bench_07_struct_list.scadi
+// Showcase: Struct List + iterate + method calls.
+
+struct Sensor {
+    Int id
+    Int value
+
+    fn is_hot(Int threshold) Bool {
+        if my.value >= threshold {
+            return true
+        } else {
+            return false
+        }
+    }
+}
+
+new Sensor List sensors = []
+sensors.push({id = 1, value = 17})
+sensors.push({id = 2, value = 33})
+sensors.push({id = 3, value = 29})
+
+new Int hot_count = 0
+iterate sensors as s {
+    if s.is_hot(30) {
+        hot_count = hot_count + 1
+    }
+}
+
+output(hot_count)

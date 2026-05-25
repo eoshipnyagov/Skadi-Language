@@ -648,8 +648,34 @@ fn parse_call_expression(tokens: &[Token], start: usize, end: usize) -> Result<(
 pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
     let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     let mut line_end = start_index;
+    let mut depth_curly = 0usize;
+    let mut depth_round = 0usize;
+    let mut depth_square = 0usize;
     while line_end < tokens.len() {
-        if tokens[line_end].kind() == TokenKind::NewLine || tokens[line_end].lexeme == "}" {
+        let lx = tokens[line_end].lexeme.as_str();
+        if lx == "{" {
+            depth_curly += 1;
+        } else if lx == "}" {
+            if depth_curly > 0 {
+                depth_curly -= 1;
+            } else if depth_round == 0 && depth_square == 0 {
+                break;
+            }
+        } else if lx == "(" {
+            depth_round += 1;
+        } else if lx == ")" {
+            depth_round = depth_round.saturating_sub(1);
+        } else if lx == "[" {
+            depth_square += 1;
+        } else if lx == "]" {
+            depth_square = depth_square.saturating_sub(1);
+        }
+
+        if tokens[line_end].kind() == TokenKind::NewLine
+            && depth_curly == 0
+            && depth_round == 0
+            && depth_square == 0
+        {
             break;
         }
         line_end += 1;

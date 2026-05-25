@@ -1,6 +1,6 @@
 # Scadi Showcase Programs (Draft v0.1)
 
-This folder contains 6 small showcase utilities.
+This folder contains 7 small showcase utilities.
 Goal: verify that different real-world program shapes compile and run through the current Scadi -> C -> EXE pipeline.
 
 ## Programs
@@ -29,6 +29,10 @@ Goal: verify that different real-world program shapes compile and run through th
 - Minimal account simulation with methods.
 - Coverage: `struct`, `my.field`, method calls (`obj.method(...)`), typed struct literal.
 
+7. `bench_07_struct_list.scadi`
+- Struct list traversal with method checks.
+- Coverage: `Struct List`, `push` of struct literals, `iterate ... as ...`, method calls on list item.
+
 ## Build all to EXE
 
 From repo root:
@@ -40,6 +44,7 @@ cargo run -- --input benchmarks/bench_03_find_count.scadi --emit-exe bench_03_fi
 cargo run -- --input benchmarks/bench_04_sum_ints.scadi --emit-exe bench_04_sum_ints.exe
 cargo run -- --input benchmarks/bench_05_push_pop.scadi --emit-exe bench_05_push_pop.exe
 cargo run -- --input benchmarks/bench_06_struct_account.scadi --emit-exe bench_06_struct_account.exe
+cargo run -- --input benchmarks/bench_07_struct_list.scadi --emit-exe bench_07_struct_list.exe
 ```
 
 ## Smoke runs
@@ -51,6 +56,7 @@ cargo run -- --input benchmarks/bench_06_struct_account.scadi --emit-exe bench_0
 .\bench_04_sum_ints.exe --medium
 .\bench_05_push_pop.exe --medium
 .\bench_06_struct_account.exe
+.\bench_07_struct_list.exe
 ```
 
 ## Why this set
