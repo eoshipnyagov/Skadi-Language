@@ -30,7 +30,7 @@ This folder contains a minimal VS Code syntax-highlighting extension for Scadi.
 - control-flow and modifiers (`danger`, `new`, `on error`, etc.)
 - core type names and constants
 - builtins (`output`, `read`, `len`, `slice`, `find`, `concat`, `args`, `fs.*`)
-- member calls/access (`.push()`, `.pop()`, `.signal()`, `.field`)
+- member calls/access (`.push()`, `.pop()`, `.field`, and custom methods like `.inc()`)
 - operators and function call highlighting
 
 ## Next step

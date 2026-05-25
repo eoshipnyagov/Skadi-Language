@@ -166,7 +166,19 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
 }
 
 pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
-    fn is_known_type_name(type_name: &str) -> bool {
+    let user_types: std::collections::HashSet<String> = program
+        .statements
+        .iter()
+        .filter_map(|s| match s {
+            Statement::StructDecl { name, .. } | Statement::LabelDecl { name, .. } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+
+    fn is_known_type_name(type_name: &str, user_types: &std::collections::HashSet<String>) -> bool {
+        if user_types.contains(type_name) {
+            return true;
+        }
         matches!(
             type_name,
             "Int"
@@ -194,8 +206,14 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         )
     }
 
-    fn warn_type_style(type_name: &str, line: u32, col: u32, out: &mut Vec<String>) {
-        if !is_known_type_name(type_name) {
+    fn warn_type_style(
+        type_name: &str,
+        line: u32,
+        col: u32,
+        user_types: &std::collections::HashSet<String>,
+        out: &mut Vec<String>,
+    ) {
+        if !is_known_type_name(type_name, user_types) {
             let msg = format!(
                 "style warning at line {}, col {}: non-canonical type spelling '{}'.",
                 line, col, type_name
@@ -216,7 +234,11 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         }
     }
 
-    fn visit_statements(stmts: &[Statement], out: &mut Vec<String>) {
+    fn visit_statements(
+        stmts: &[Statement],
+        user_types: &std::collections::HashSet<String>,
+        out: &mut Vec<String>,
+    ) {
         for stmt in stmts {
             match stmt {
                 Statement::VarDecl {
@@ -226,9 +248,9 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 } => {
                     if let Some(dt) = declared_type {
                         if let Some(elem) = dt.strip_suffix(" List") {
-                            warn_type_style(elem.trim(), loc.line, loc.column, out);
+                            warn_type_style(elem.trim(), loc.line, loc.column, user_types, out);
                         } else {
-                            warn_type_style(dt, loc.line, loc.column, out);
+                            warn_type_style(dt, loc.line, loc.column, user_types, out);
                         }
                     }
                 }
@@ -241,26 +263,26 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 } => {
                     for p in params {
                         if let Some(pt) = p.param_type.as_deref() {
-                            warn_type_style(pt, loc.line, loc.column, out);
+                            warn_type_style(pt, loc.line, loc.column, user_types, out);
                         }
                     }
                     if let Some(rt) = returns.as_deref() {
                         if let Some(elem) = rt.strip_suffix(" List") {
-                            warn_type_style(elem.trim(), loc.line, loc.column, out);
+                            warn_type_style(elem.trim(), loc.line, loc.column, user_types, out);
                         } else {
-                            warn_type_style(rt, loc.line, loc.column, out);
+                            warn_type_style(rt, loc.line, loc.column, user_types, out);
                         }
                     }
-                    visit_statements(&body.statements, out);
+                    visit_statements(&body.statements, user_types, out);
                 }
                 Statement::IfStatement {
                     then_block,
                     else_block,
                     ..
                 } => {
-                    visit_statements(&then_block.statements, out);
+                    visit_statements(&then_block.statements, user_types, out);
                     if let Some(b) = else_block {
-                        visit_statements(&b.statements, out);
+                        visit_statements(&b.statements, user_types, out);
                     }
                 }
                 Statement::ForLoop { style, body, loc, .. } => {
@@ -270,11 +292,11 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                             loc.line, loc.column
                         ));
                     }
-                    visit_statements(&body.statements, out);
+                    visit_statements(&body.statements, user_types, out);
                 }
                 Statement::WhileLoop { body, .. }
                 | Statement::LoopStatement { body, .. } => {
-                    visit_statements(&body.statements, out);
+                    visit_statements(&body.statements, user_types, out);
                 }
                 Statement::WhenBlock {
                     cases,
@@ -282,20 +304,20 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     ..
                 } => {
                     for (_, b) in cases {
-                        visit_statements(&b.statements, out);
+                        visit_statements(&b.statements, user_types, out);
                     }
                     if let Some(b) = else_block {
-                        visit_statements(&b.statements, out);
+                        visit_statements(&b.statements, user_types, out);
                     }
                 }
                 Statement::OnErrorBlock { statements, .. }
                 | Statement::BlockStatement { statements, .. } => {
-                    visit_statements(statements, out);
+                    visit_statements(statements, user_types, out);
                 }
                 Statement::DangerAssignOnError { on_error, .. }
                 | Statement::DangerCallOnError { on_error, .. }
                 | Statement::ListPopOnError { on_error, .. } => {
-                    visit_statements(&on_error.statements, out);
+                    visit_statements(&on_error.statements, user_types, out);
                 }
                 _ => {}
             }
@@ -303,7 +325,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
     }
 
     let mut warnings = Vec::new();
-    visit_statements(&program.statements, &mut warnings);
+    visit_statements(&program.statements, &user_types, &mut warnings);
     warnings
 }
 

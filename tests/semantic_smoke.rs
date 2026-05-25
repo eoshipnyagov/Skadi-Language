@@ -1,6 +1,6 @@
 use v01::lexer::lex;
 use v01::parser::parse_program;
-use v01::semantic_analysis::semantic_analyze;
+use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
 
 #[test]
 fn semantic_passes_for_defined_variables() {
@@ -642,6 +642,27 @@ accounts.push(1)
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("SC-SEM-020"));
     assert!(err.contains("type mismatch in list push"));
+}
+
+#[test]
+fn style_warnings_allow_user_defined_struct_types() {
+    let src = r#"
+struct Sensor {
+    Int value
+}
+new Sensor s = {value = 1}
+new Sensor List xs = []
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let warnings = semantic_style_warnings(&program);
+    assert!(
+        warnings
+            .iter()
+            .all(|w| !w.contains("non-canonical type spelling 'Sensor'")),
+        "unexpected warning list: {:?}",
+        warnings
+    );
 }
 
 #[test]

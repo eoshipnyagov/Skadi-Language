@@ -9,6 +9,7 @@
     { "include": "#type-declaration" },
     { "include": "#control-keywords" },
     { "include": "#modifiers" },
+    { "include": "#self-keyword" },
     { "include": "#builtins" },
     { "include": "#constants" },
     { "include": "#types" },
@@ -87,7 +88,15 @@
       "patterns": [
         {
           "name": "storage.modifier.scadi",
-          "match": "\\b(danger|new|fixed|const|hide|local|allow|drop|direct|my)\\b"
+          "match": "\\b(danger|new|fixed|const|hide|local|allow|drop|direct)\\b"
+        }
+      ]
+    },
+    "self-keyword": {
+      "patterns": [
+        {
+          "name": "variable.language.self.scadi",
+          "match": "\\bmy\\b"
         }
       ]
     },
@@ -127,7 +136,7 @@
       "patterns": [
         {
           "name": "meta.member.call.scadi",
-          "match": "\\.\\s*(push|pop|send|receive|signal|toggle)\\b(?=\\s*\\()",
+          "match": "\\.\\s*([A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*\\()",
           "captures": {
             "1": { "name": "support.function.method.scadi" }
           }
