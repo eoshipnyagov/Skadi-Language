@@ -1,0 +1,34 @@
+// bench_06_struct_account.scadi
+// Showcase: structs + methods + `my` + dot-call syntax.
+
+struct Account {
+    Int balance
+    Text owner
+
+    fn deposit(Int amount) Int {
+        my.balance = my.balance + amount
+        return my.balance
+    }
+
+    fn withdraw(Int amount) Int {
+        if my.balance >= amount {
+            my.balance = my.balance - amount
+            return my.balance
+        } else {
+            return my.balance
+        }
+    }
+
+    fn snapshot() Text {
+        return concat(my.owner, ":")
+    }
+}
+
+new Account acc = {balance = 100, owner = "Alice"}
+output(acc.balance)
+new Int b1 = acc.deposit(25)
+output(b1)
+new Int b2 = acc.withdraw(40)
+output(b2)
+new Text title = acc.snapshot()
+output(title)
