@@ -44,3 +44,17 @@ x = parse(x) on error
     let err = parse_err(src);
     assert!(err.contains("SC-PARSE-136"));
 }
+
+#[test]
+fn parser_rejects_new_without_initializer() {
+    let src = "new Int x\n";
+    let err = parse_err(src);
+    assert!(err.contains("SC-PARSE"));
+}
+
+#[test]
+fn parser_rejects_iterate_without_block() {
+    let src = "iterate xs as item\n";
+    let err = parse_err(src);
+    assert!(err.contains("SC-PARSE"));
+}

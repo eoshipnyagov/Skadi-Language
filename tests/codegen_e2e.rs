@@ -17,6 +17,73 @@ fn find_c_compiler() -> Option<&'static str> {
     None
 }
 
+fn compiler_supports_flags(compiler: &str, flags: &[&str]) -> bool {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time")
+        .as_millis();
+    let mut c_path: PathBuf = std::env::temp_dir();
+    c_path.push(format!("scadi_flag_probe_{stamp}.c"));
+    let mut exe_path: PathBuf = std::env::temp_dir();
+    exe_path.push(format!("scadi_flag_probe_{stamp}"));
+    if cfg!(windows) {
+        exe_path.set_extension("exe");
+    }
+
+    if fs::write(&c_path, "int main(void){return 0;}\n").is_err() {
+        return false;
+    }
+
+    let mut cmd = Command::new(compiler);
+    cmd.arg(&c_path).arg("-o").arg(&exe_path);
+    for flag in flags {
+        cmd.arg(flag);
+    }
+    let ok = cmd.output().map(|o| o.status.success()).unwrap_or(false);
+
+    let _ = fs::remove_file(c_path);
+    let _ = fs::remove_file(exe_path);
+    ok
+}
+
+fn compile_c_and_run(compiler: &str, c_src: &str, stem: &str, extra_flags: &[&str]) {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time")
+        .as_millis();
+    let mut c_path: PathBuf = std::env::temp_dir();
+    c_path.push(format!("{stem}_{stamp}.c"));
+    let mut exe_path: PathBuf = std::env::temp_dir();
+    exe_path.push(format!("{stem}_{stamp}"));
+    if cfg!(windows) {
+        exe_path.set_extension("exe");
+    }
+
+    fs::write(&c_path, c_src).expect("write C source");
+
+    let mut compile_cmd = Command::new(compiler);
+    compile_cmd.arg(&c_path).arg("-o").arg(&exe_path);
+    for flag in extra_flags {
+        compile_cmd.arg(flag);
+    }
+    let compile = compile_cmd.output().expect("run C compiler");
+    assert!(
+        compile.status.success(),
+        "C compile failed: {}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+
+    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    assert!(
+        run.status.success(),
+        "Binary execution failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let _ = fs::remove_file(c_path);
+    let _ = fs::remove_file(exe_path);
+}
+
 #[test]
 fn e2e_skadi_to_c_binary_builds() {
     let Some(compiler) = find_c_compiler() else {
@@ -384,4 +451,52 @@ for e in entries {
 
     let _ = fs::remove_file(c_path);
     let _ = fs::remove_file(exe_path);
+}
+
+#[test]
+fn e2e_sanitized_runtime_stress_list_text_path() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping sanitizer e2e test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let sanitizer_flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-O1"];
+    if !compiler_supports_flags(compiler, &sanitizer_flags) {
+        eprintln!("Skipping sanitizer e2e test: compiler does not support ASan/UBSan flags.");
+        return;
+    }
+
+    let src = r#"
+new Path root = "."
+new Path List entries = fs.list(root)
+new Int List sizes = []
+new Int total = 0
+
+iterate entries as entry {
+    new Int n = len(entry)
+    sizes.push(n)
+}
+
+new Int i = 0
+while i < len(sizes) {
+    total = total + sizes[i]
+    i = i + 1
+}
+
+new Int x = 0
+while len(sizes) > 0 {
+    x = sizes.pop() on error {
+        x = -1
+    }
+}
+
+new Text msg = concat("total=", "ok")
+output(msg)
+"#;
+
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    compile_c_and_run(compiler, &c, "scadi_e2e_sanitized", &sanitizer_flags);
 }
