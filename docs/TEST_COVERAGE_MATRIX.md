@@ -1,6 +1,6 @@
 # Test Coverage Matrix (Skadi v1 Prototype)
 
-Date: 2026-05-22
+Date: 2026-05-25
 Owner: Scadi core
 
 This file tracks test coverage for language elements in the current Rust prototype.
@@ -30,18 +30,24 @@ This file tracks test coverage for language elements in the current Rust prototy
   - `tests/codegen_e2e.rs`
   - C output compiles and produced binaries run for representative programs
   - includes edge scenarios for `Text` bounds/empty-needle and `List` + `when` flow
+  - includes sanitizer-backed stress scenario (`ASan/UBSan`) when compiler supports flags
+- Edge matrix conformance set
+  - `tests/edge_matrix.rs`
+  - includes:
+    - numeric List coverage across `i/u/f` families (`8/16/32/64`) and `bool`
+    - `Path List` lowering to text runtime helpers
+    - extreme text index/slice shapes
+    - negative builtin argument/type checks (`fs.join`, `write`, `args`)
+    - struct-list iteration + method calls
+    - `danger` + `on error` + explicit `ErrorCode` flow
 
 ## 2. Partially covered / pending deep checks
 
-- Runtime error behavior for out-of-range index access
-  - typing is validated, runtime trap/recovery path is not fully implemented/verified yet
-- Runtime error behavior for list pop/index boundary faults
-  - `pop` on empty list e2e flow is covered
-  - index boundary runtime checks are still pending implementation
+- Runtime error policy for out-of-range accesses (language-level decision)
+  - current C runtime behavior is deterministic and non-crashing for covered cases
+  - final language contract (trap/default/error-return) is not frozen in spec yet
 - `on interrupt` / `on event` runtime semantics
   - parse-level coverage exists, runtime binding remains TODO
-- Struct lowering semantics
-  - parse-level placeholder exists, full semantic/codegen behavior is TODO
 - Concurrency primitives (`run`, `wait`, `Link`) and embedded APIs
   - not implemented in current transpiler/runtime slice
 
