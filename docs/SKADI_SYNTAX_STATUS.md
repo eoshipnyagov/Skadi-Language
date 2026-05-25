@@ -31,6 +31,7 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - `for item in collection` - `Partial`
   - lowering assumes list runtime shape: `collection.len` + `collection.data[i]`
   - element type is lowered from declared list element type in codegen
+  - style note: supported for familiarity/compatibility; `iterate ... as ...` is preferred for showcase style.
 - `iterate collection as item` - `Partial` (alias)
   - parsed as an alias of `for item in collection`
   - currently lowers through the same `ForLoop` path
@@ -61,6 +62,17 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - implicit widening: `Int -> Float` allowed
 - bool conditions in `if/while` are required
 - `List` and `Text` are intentionally **not finalized** yet
+
+## Type Naming Canonical Style (v1)
+- Low-level fixed-width numeric types stay lowercase:
+  - `i8`, `i16`, `i32`, `i64`
+  - `u8`, `u16`, `u32`, `u64`
+  - `f32`, `f64`
+- Readability-oriented/common user-facing types stay capitalized:
+  - `Int`, `Float`, `Bool`, `Char`, `Text`, `Path`, `List`, `Vec2`, `Vec3`, `Vec4`
+- Transitional note:
+  - `bool` and `char` remain accepted as compatibility aliases.
+  - For style docs/examples, prefer readability-first naming (`Bool`, `Char`) and keep fixed-width primitives lowercase.
 
 ## Intentionally Deferred
 - `direct` params

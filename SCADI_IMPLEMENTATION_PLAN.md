@@ -102,6 +102,8 @@ Tasks:
 - Reconfirm semantics for memory model (`allow drop`, chunk budgeting) before deeper implementation.
 - Freeze a reduced "Skadi Core v1" subset and map compiler milestones strictly to that subset.
 - Align all syntax decisions with `docs/SKADI_STYLE_PRINCIPLES.md`.
+- Add TODO track for human-readable output formatting API (avoid low-level `%...` formatting noise in everyday code).
+  - candidate direction: readable formatter helper for mixed numeric/text output in v1.x.
 
 Exit criteria:
 - Written design decision record for v1 scope cuts and kept features.

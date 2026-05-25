@@ -31,7 +31,7 @@ while i < n {
 }
 
 new Int sum = 0
-for v in xs {
+iterate xs as v {
     sum = sum + v
 }
 

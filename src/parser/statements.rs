@@ -2,7 +2,7 @@
 // Parser Logic Helpers (Rust)
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
-use crate::ast_nodes::{BlockStatement, FunctionParam, Location, ScopeManager, Statement};
+use crate::ast_nodes::{BlockStatement, ForLoopStyle, FunctionParam, Location, ScopeManager, Statement};
 use crate::common_types::{Token, TokenKind};
 
 use super::expressions::parse_expression_range;
@@ -215,6 +215,7 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
             initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(loop_var))),
             condition: Some(Box::new(collection_expr)),
             update: None,
+            style: ForLoopStyle::ForIn,
             body: Box::new(BlockStatement { statements: body_statements }),
             loc,
         };
@@ -260,6 +261,7 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
             initialization: None,
             condition: None,
             update: None,
+            style: ForLoopStyle::LegacyCStyle,
             body: Box::new(BlockStatement { statements: body_statements }),
             loc,
         },
@@ -309,6 +311,7 @@ pub fn parse_iterate_loop(tokens: &[Token], start_index: usize, _scope: &ScopeMa
             initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(loop_var))),
             condition: Some(Box::new(collection_expr)),
             update: None,
+            style: ForLoopStyle::IterateAs,
             body: Box::new(BlockStatement { statements: body_statements }),
             loc,
         },

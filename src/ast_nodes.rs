@@ -37,6 +37,13 @@ pub struct FunctionParam {
     pub param_type: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForLoopStyle {
+    ForIn,
+    IterateAs,
+    LegacyCStyle,
+}
+
 #[derive(Debug)]
 pub enum Statement {
     VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String>, loc: Location },
@@ -54,6 +61,7 @@ pub enum Statement {
         initialization: Option<Box<Expression>>, 
         condition: Option<Box<Expression>>, 
         update: Option<Box<Expression>>, 
+        style: ForLoopStyle,
         body: Box<BlockStatement>,
         loc: Location
     },

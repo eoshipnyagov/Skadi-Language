@@ -28,9 +28,16 @@ fn list_elem_from_decl(t: &str) -> Option<&str> {
 }
 
 fn list_meta(elem: &str) -> Option<(&'static str, &'static str)> {
+    let normalized = match elem {
+        "Int" => "i64",
+        "Float" => "f64",
+        "Bool" => "bool",
+        "Char" => "char",
+        other => other,
+    };
     LIST_TYPE_MAP
         .iter()
-        .find(|(name, _, _)| *name == elem)
+        .find(|(name, _, _)| *name == normalized)
         .map(|(_, c_ty, suffix)| (*c_ty, *suffix))
 }
 
@@ -1146,8 +1153,8 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> &'static str {
         "u64" => "uint64_t",
         "f32" => "float",
         "Float" | "f64" => "double",
-        "bool" => "bool",
-        "char" => "char",
+        "bool" | "Bool" => "bool",
+        "char" | "Char" => "char",
         "Text" | "Path" => "const char*",
         _ => "int64_t",
     }
@@ -1260,8 +1267,8 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                             Expression::VariableReference(ref n) => {
                                 match declared.get(n).map(String::as_str).unwrap_or("Int") {
                                     "Float" | "f32" | "f64" => format!("sk_output_float({})", rendered),
-                                    "bool" => format!("sk_output_bool({})", rendered),
-                                    "char" => format!("sk_output_char({})", rendered),
+                                    "bool" | "Bool" => format!("sk_output_bool({})", rendered),
+                                    "char" | "Char" => format!("sk_output_char({})", rendered),
                                     "Text" => format!("sk_output_text({})", rendered),
                                     _ => format!("sk_output_int({})", rendered),
                                 }

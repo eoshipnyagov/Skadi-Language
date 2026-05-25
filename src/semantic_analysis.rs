@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast_nodes::{BlockStatement, Expression, FunctionParam, Program, Statement};
+use crate::ast_nodes::{BlockStatement, Expression, ForLoopStyle, FunctionParam, Program, Statement};
 use crate::builtins::{builtin_arity, builtin_from_name, Builtin};
 use crate::diagnostics::{format_diagnostic, DiagnosticKind};
 
@@ -118,6 +118,148 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
     analyze_statements(&program.statements, &mut scope, &functions, &labels, None)
 }
 
+pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
+    fn is_known_type_name(type_name: &str) -> bool {
+        matches!(
+            type_name,
+            "Int"
+                | "Float"
+                | "Text"
+                | "Path"
+                | "List"
+                | "Vec2"
+                | "Vec3"
+                | "Vec4"
+                | "Bool"
+                | "Char"
+                | "bool"
+                | "char"
+                | "i8"
+                | "i16"
+                | "i32"
+                | "i64"
+                | "u8"
+                | "u16"
+                | "u32"
+                | "u64"
+                | "f32"
+                | "f64"
+        )
+    }
+
+    fn warn_type_style(type_name: &str, line: u32, col: u32, out: &mut Vec<String>) {
+        if !is_known_type_name(type_name) {
+            let msg = format!(
+                "style warning at line {}, col {}: non-canonical type spelling '{}'.",
+                line, col, type_name
+            );
+            out.push(msg);
+            return;
+        }
+        if type_name == "bool" {
+            out.push(format!(
+                "style warning at line {}, col {}: prefer 'Bool' over 'bool' in showcase-style code.",
+                line, col
+            ));
+        } else if type_name == "char" {
+            out.push(format!(
+                "style warning at line {}, col {}: prefer 'Char' over 'char' in showcase-style code.",
+                line, col
+            ));
+        }
+    }
+
+    fn visit_statements(stmts: &[Statement], out: &mut Vec<String>) {
+        for stmt in stmts {
+            match stmt {
+                Statement::VarDecl {
+                    declared_type,
+                    loc,
+                    ..
+                } => {
+                    if let Some(dt) = declared_type {
+                        if let Some(elem) = dt.strip_suffix(" List") {
+                            warn_type_style(elem.trim(), loc.line, loc.column, out);
+                        } else {
+                            warn_type_style(dt, loc.line, loc.column, out);
+                        }
+                    }
+                }
+                Statement::FunctionDef {
+                    params,
+                    returns,
+                    body,
+                    loc,
+                    ..
+                } => {
+                    for p in params {
+                        if let Some(pt) = p.param_type.as_deref() {
+                            warn_type_style(pt, loc.line, loc.column, out);
+                        }
+                    }
+                    if let Some(rt) = returns.as_deref() {
+                        if let Some(elem) = rt.strip_suffix(" List") {
+                            warn_type_style(elem.trim(), loc.line, loc.column, out);
+                        } else {
+                            warn_type_style(rt, loc.line, loc.column, out);
+                        }
+                    }
+                    visit_statements(&body.statements, out);
+                }
+                Statement::IfStatement {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    visit_statements(&then_block.statements, out);
+                    if let Some(b) = else_block {
+                        visit_statements(&b.statements, out);
+                    }
+                }
+                Statement::ForLoop { style, body, loc, .. } => {
+                    if *style == ForLoopStyle::ForIn {
+                        out.push(format!(
+                            "style warning at line {}, col {}: prefer 'iterate <collection> as <item>' over 'for <item> in <collection>' in showcase-style code.",
+                            loc.line, loc.column
+                        ));
+                    }
+                    visit_statements(&body.statements, out);
+                }
+                Statement::WhileLoop { body, .. }
+                | Statement::LoopStatement { body, .. } => {
+                    visit_statements(&body.statements, out);
+                }
+                Statement::WhenBlock {
+                    cases,
+                    else_block,
+                    ..
+                } => {
+                    for (_, b) in cases {
+                        visit_statements(&b.statements, out);
+                    }
+                    if let Some(b) = else_block {
+                        visit_statements(&b.statements, out);
+                    }
+                }
+                Statement::OnErrorBlock { statements, .. }
+                | Statement::BlockStatement { statements, .. } => {
+                    visit_statements(statements, out);
+                }
+                Statement::DangerAssignOnError { on_error, .. }
+                | Statement::DangerCallOnError { on_error, .. }
+                | Statement::ListPopOnError { on_error, .. } => {
+                    visit_statements(&on_error.statements, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut warnings = Vec::new();
+    visit_statements(&program.statements, &mut warnings);
+    warnings
+}
+
 fn validate_error_code_label(labels: &HashMap<String, Vec<String>>) -> Result<(), String> {
     if let Some(error_codes) = labels.get("ErrorCode") {
         if error_codes.is_empty() {
@@ -134,8 +276,8 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
     match name {
         "Int" | "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" => ValueType::Int,
         "Float" | "f64" | "f32" => ValueType::Float,
-        "bool" => ValueType::Bool,
-        "char" => ValueType::Char,
+        "bool" | "Bool" => ValueType::Bool,
+        "char" | "Char" => ValueType::Char,
         "Text" | "Path" => ValueType::Text,
         _ => ValueType::Unknown,
     }

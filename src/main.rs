@@ -3,7 +3,7 @@ use std::process::Command;
 use v01::codegen::transpile_program_to_c;
 use v01::lexer::lex;
 use v01::parser::parse_program;
-use v01::semantic_analysis::semantic_analyze;
+use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
 
 fn print_usage() {
     println!("Scadi compiler (current toolchain)");
@@ -117,6 +117,9 @@ fn main() {
                     match semantic_analyze(&program) {
                         Ok(()) => {
                             println!("Semantic analysis completed successfully.");
+                            for warning in semantic_style_warnings(&program) {
+                                eprintln!("{}", warning);
+                            }
                             let c_code = transpile_program_to_c(&program);
                             println!("C transpilation completed. Output size: {} bytes", c_code.len());
 

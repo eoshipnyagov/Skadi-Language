@@ -12,7 +12,7 @@ fn walk(Text path, bool dirs_only, Int max_depth, Int current_depth) {
 
     if not (max_depth >= 0 and current_depth >= max_depth) {
         new Text List entries = fs.list(path)
-        for entry in entries {
+        iterate entries as entry {
             new Text full = fs.join(path, entry)
             if fs.is_dir(full) {
                 walk(full, dirs_only, max_depth, current_depth + 1)
