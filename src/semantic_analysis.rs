@@ -712,6 +712,13 @@ fn analyze_statement(
             on_error,
             ..
         } => {
+            if builtin_from_name(call_name).is_some() {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!("on error requires danger fn call: builtin '{}' is not danger in v1.", call_name),
+                ));
+            }
             let Some(sig) = functions.get(call_name) else {
                 return Err(err_at_code(
                     stmt,
@@ -749,6 +756,13 @@ fn analyze_statement(
             on_error,
             ..
         } => {
+            if builtin_from_name(call_name).is_some() {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!("on error requires danger fn call: builtin '{}' is not danger in v1.", call_name),
+                ));
+            }
             let Some(sig) = functions.get(call_name) else {
                 return Err(err_at_code(
                     stmt,

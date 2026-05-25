@@ -18,7 +18,8 @@ This file tracks test coverage for language elements in the current Rust prototy
   - `tests/semantic_smoke.rs`
   - includes: type mismatch, scope/redeclaration, use-before-def, call arity/types,
     `danger` + `on error` binding checks, `ErrorCode` rules, list typing, text typing,
-    `for/iterate` item inference, text builtin checks (`len/contains/find/slice`)
+    `for/iterate` item inference, text builtin checks (`len/contains/find/slice`),
+    negative checks for `on error` on non-danger builtins (`read/write/fs.list`)
 - Code generation shape checks
   - `tests/codegen_smoke.rs`
   - includes C lowering of control flow, `when`, list runtime calls, text runtime calls,

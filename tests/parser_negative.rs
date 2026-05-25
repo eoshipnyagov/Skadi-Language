@@ -58,3 +58,15 @@ fn parser_rejects_iterate_without_block() {
     let err = parse_err(src);
     assert!(err.contains("SC-PARSE"));
 }
+
+#[test]
+fn parser_rejects_dotted_builtin_on_error_form() {
+    let src = r#"
+new Text List xs = []
+xs = fs.list(".") on error {
+    xs = []
+}
+"#;
+    let err = parse_err(src);
+    assert!(err.contains("SC-PARSE-134"));
+}

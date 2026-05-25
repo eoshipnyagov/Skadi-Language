@@ -676,3 +676,47 @@ new Text c = concat(a, b)
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
 }
+
+#[test]
+fn semantic_rejects_on_error_for_read_builtin() {
+    let src = r#"
+new Text body = ""
+body = read("a.txt") on error {
+    body = ""
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("on error requires danger fn call"));
+    assert!(err.contains("read"));
+}
+
+#[test]
+fn semantic_rejects_on_error_for_write_builtin() {
+    let src = r#"
+new Int ok = 0
+ok = write("out.txt", "x") on error {
+    ok = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("on error requires danger fn call"));
+    assert!(err.contains("write"));
+}
+
+#[test]
+fn semantic_rejects_on_error_for_output_builtin() {
+    let src = r#"
+output("hello") on error {
+    new Int x = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("on error requires danger fn call"));
+    assert!(err.contains("output"));
+}
