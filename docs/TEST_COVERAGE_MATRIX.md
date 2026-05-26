@@ -1,6 +1,6 @@
 # Test Coverage Matrix (Skadi v1 Prototype)
 
-Date: 2026-05-25
+Date: 2026-05-26
 Owner: Skadi core
 
 This file tracks test coverage for language elements in the current Rust prototype.
@@ -31,10 +31,21 @@ This file tracks test coverage for language elements in the current Rust prototy
 - C compiler e2e tests
   - `tests/codegen_e2e.rs`
   - C output compiles and produced binaries run for representative programs
-  - includes edge scenarios for `Text` bounds/empty-needle and `List` + `when` flow
+  - includes feature-mix scenarios for:
+    - `when + find/len + Text`
+    - `danger/on error` in loops
+    - `List + while + indexing`
+    - `fs.list + fs.is_dir + when`
   - includes UTF-8 text byte-semantics smoke scenario
   - includes sanitizer-backed stress scenario (`ASan/UBSan`) when compiler supports flags
   - memory contract tie-in: validates no sanitizer-detected crashes/UB for current runtime allocation model
+- CLI pipeline mutation-like negative e2e tests
+  - `tools/skadi-cli/src/pipeline.rs` test module
+  - verifies deterministic failure stage + diagnostic code for:
+    - parse errors (`SC-PARSE-*`)
+    - semantic contract errors (`SC-SEM-*`)
+    - native compile failures (`SC-CGEN-001`)
+  - verifies import graph contract diagnostics (`SC-MOD-001`)
 - Edge matrix conformance set
   - `tests/edge_matrix.rs`
   - includes:
@@ -55,6 +66,9 @@ This file tracks test coverage for language elements in the current Rust prototy
   - parse-level coverage exists, runtime binding remains TODO
 - Concurrency primitives (`run`, `wait`, `Link`) and embedded APIs
   - not implemented in current transpiler/runtime slice
+- Full token/construct traceability matrix
+  - TODO: explicit `keyword/lexeme -> lexer/parser/semantic/codegen/e2e` mapping file
+  - goal: no implicit coverage assumptions before v1 freeze
 
 ## 3. Policy for new features
 
