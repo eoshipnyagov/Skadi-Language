@@ -12,6 +12,7 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - `new x = expr` - `Stable`
 - `new Type x = expr` - `Stable` (scalar types: `Int`, `Float`, `bool`)
 - `x = expr` - `Stable` (requires prior declaration)
+- `i++` / `i--` - `Stable` (statement-only; not allowed inside expressions)
 - `return expr` - `Stable`
 - `return` - `Stable` (special behavior in `danger fn`)
 - `return error Code` - `Stable` (only in `danger fn`, with `label ErrorCode`)

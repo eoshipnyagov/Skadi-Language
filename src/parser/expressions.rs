@@ -18,6 +18,16 @@ impl<'a> ExprParser<'a> {
 
     fn parse(mut self) -> Result<Expression, String> {
         let expr = self.parse_bp(0)?;
+        if self.idx < self.end {
+            let tok = &self.tokens[self.idx];
+            return Err(parse_err(
+                "SC-PARSE-213",
+                format!(
+                    "unexpected trailing token in expression: {:?} ('{}')",
+                    tok.kind, tok.lexeme
+                ),
+            ));
+        }
         Ok(expr)
     }
 

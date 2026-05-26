@@ -879,6 +879,15 @@ fn emit_statement(
             out.push_str(&expr);
             out.push_str(";\n");
         }
+        Statement::IncDec { target, is_increment, .. } => {
+            out.push_str(&pad);
+            out.push_str(target);
+            if *is_increment {
+                out.push_str(" += 1;\n");
+            } else {
+                out.push_str(" -= 1;\n");
+            }
+        }
         Statement::FieldAssignment {
             object, field, value, ..
         } => {

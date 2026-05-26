@@ -48,6 +48,7 @@ pub enum TokenKind {
     OpComparison,       // ==, !=, >=, <= (Relational checks)
     OpLogical,          // &&, || (Boolean conjunction/disjunction)
     OpPunctuation,      // :, ., ,, (, ), [, ] (Structural separators and flow operators)
+    OpIncDec,           // ++, -- (statement-only increment/decrement)
 
     // Special Markers
     Whitespace,         // Tokenized whitespace (to be filtered out later)

@@ -273,6 +273,8 @@ impl<'a> Lexer<'a> {
             Some("-=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpAssignment, "-=".into()))); }
             Some("*=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpAssignment, "*=".into()))); }
             Some("/=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpAssignment, "/=".into()))); }
+            Some("++") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpIncDec, "++".into()))); }
+            Some("--") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpIncDec, "--".into()))); }
             _ => {}
         }
 

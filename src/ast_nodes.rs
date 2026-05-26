@@ -63,6 +63,7 @@ pub enum ForLoopStyle {
 pub enum Statement {
     VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String>, loc: Location },
     Assignment { target: String, value: Box<Expression>, loc: Location },
+    IncDec { target: String, is_increment: bool, loc: Location },
     FieldAssignment { object: String, field: String, value: Box<Expression>, loc: Location },
     FunctionDef { 
         name: String, 

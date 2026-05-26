@@ -53,6 +53,7 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
     match stmt {
         Statement::VarDecl { loc, .. }
         | Statement::Assignment { loc, .. }
+        | Statement::IncDec { loc, .. }
         | Statement::FieldAssignment { loc, .. }
         | Statement::FunctionDef { loc, .. }
         | Statement::IfStatement { loc, .. }
@@ -517,6 +518,27 @@ fn analyze_statement(
                 ));
             }
             Ok(())
+        }
+        Statement::IncDec {
+            target,
+            is_increment: _,
+            ..
+        } => {
+            let Some(target_ty) = scope.get(target).cloned() else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined in current scope.", target),
+                ));
+            };
+            match target_ty {
+                ValueType::Int | ValueType::Float => Ok(()),
+                other => Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!("increment/decrement requires numeric variable, got {:?}.", other),
+                )),
+            }
         }
         Statement::FieldAssignment { object, field, value, .. } => {
             let owner_ty = if object == "my" {

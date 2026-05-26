@@ -452,3 +452,27 @@ output("hello")
     assert_eq!(program.statements.len(), 1);
     assert!(matches!(program.statements[0], Statement::ExpressionStatement { .. }));
 }
+
+#[test]
+fn parses_increment_and_decrement_statements() {
+    let src = r#"
+new Int i = 0
+i++
+i--
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert!(matches!(program.statements[1], Statement::IncDec { is_increment: true, .. }));
+    assert!(matches!(program.statements[2], Statement::IncDec { is_increment: false, .. }));
+}
+
+#[test]
+fn rejects_increment_inside_expression() {
+    let src = r#"
+new Int i = 0
+new Int x = i++
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let err = parse_program(&tokens).expect_err("parse should fail");
+    assert!(err.contains("SC-PARSE-213"));
+}

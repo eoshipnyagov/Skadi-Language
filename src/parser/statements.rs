@@ -688,6 +688,22 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
     });
 
     if on_idx.is_none()
+        && start_index + 1 < line_end
+        && tokens[start_index].kind() == TokenKind::Identifier
+        && tokens[start_index + 1].kind() == TokenKind::OpIncDec
+    {
+        let op = tokens[start_index + 1].lexeme.as_str();
+        return Ok((
+            Statement::IncDec {
+                target: tokens[start_index].lexeme.clone(),
+                is_increment: op == "++",
+                loc,
+            },
+            line_end - start_index,
+        ));
+    }
+
+    if on_idx.is_none()
         && start_index + 5 < line_end
         && (tokens[start_index].kind() == TokenKind::Identifier || tokens[start_index].kind() == TokenKind::KeywordMy)
         && tokens[start_index + 1].lexeme == "."

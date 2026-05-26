@@ -761,3 +761,28 @@ output("hello") on error {
     assert!(err.contains("on error requires danger fn call"));
     assert!(err.contains("output"));
 }
+
+#[test]
+fn semantic_allows_increment_for_numeric_variable() {
+    let src = r#"
+new Int i = 0
+i++
+i--
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_increment_for_non_numeric_variable() {
+    let src = r#"
+new Text s = "x"
+s++
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("increment/decrement requires numeric variable"));
+}
