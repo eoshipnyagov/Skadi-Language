@@ -179,6 +179,12 @@ mod tests {
     }
 
     #[test]
+    fn parse_import_line_rejects_alias_form() {
+        let err = parse_import_line(r#"import "./lib.skd" as lib"#).expect_err("must reject");
+        assert!(err.contains("import alias is not supported"));
+    }
+
+    #[test]
     fn load_source_with_imports_merges_files() {
         let root = temp_case_dir("imports_ok");
         let entry = root.join("main.skd");
@@ -207,6 +213,74 @@ mod tests {
 
         let err = load_source_with_imports(&a).expect_err("cycle expected");
         assert!(err.contains("cyclic import detected"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_source_with_imports_detects_self_cycle() {
+        let root = temp_case_dir("imports_self_cycle");
+        let a = root.join("a.skd");
+        fs::write(&a, "import \"./a.skd\"\nnew Int x = 1\n").expect("write a");
+
+        let err = load_source_with_imports(&a).expect_err("self-cycle expected");
+        assert!(err.contains("cyclic import detected"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_source_with_imports_fails_fast_on_missing_file() {
+        let root = temp_case_dir("imports_missing");
+        let entry = root.join("main.skd");
+        fs::write(&entry, "import \"./missing.skd\"\nnew Int x = 1\n").expect("write entry");
+
+        let err = load_source_with_imports(&entry).expect_err("missing import should fail");
+        assert!(err.contains("import path resolution failed"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_source_with_imports_deduplicates_diamond_imports() {
+        let root = temp_case_dir("imports_diamond");
+        let main = root.join("main.skd");
+        let left = root.join("left.skd");
+        let right = root.join("right.skd");
+        let common = root.join("common.skd");
+        fs::write(&common, "fn shared() Int {\n    return 1\n}\n").expect("write common");
+        fs::write(&left, "import \"./common.skd\"\nnew Int l = shared()\n").expect("write left");
+        fs::write(&right, "import \"./common.skd\"\nnew Int r = shared()\n").expect("write right");
+        fs::write(
+            &main,
+            "import \"./left.skd\"\nimport \"./right.skd\"\nnew Int x = l + r\n",
+        )
+        .expect("write main");
+
+        let merged = load_source_with_imports(&main).expect("merge");
+        assert_eq!(merged.matches("fn shared() Int").count(), 1);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_source_with_imports_preserves_deterministic_import_order() {
+        let root = temp_case_dir("imports_order");
+        let main = root.join("main.skd");
+        let one = root.join("one.skd");
+        let two = root.join("two.skd");
+        fs::write(&one, "new Int marker_one = 1\n").expect("write one");
+        fs::write(&two, "new Int marker_two = 2\n").expect("write two");
+        fs::write(
+            &main,
+            "import \"./one.skd\"\nimport \"./two.skd\"\nnew Int m = marker_one + marker_two\n",
+        )
+        .expect("write main");
+
+        let merged = load_source_with_imports(&main).expect("merge");
+        let p1 = merged.find("marker_one").expect("marker one present");
+        let p2 = merged.find("marker_two").expect("marker two present");
+        assert!(p1 < p2, "import order must be stable and line-ordered");
 
         let _ = fs::remove_dir_all(root);
     }
