@@ -9,8 +9,12 @@ use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
 use crate::targets::{candidate_invocations, resolve_profile};
 
+const IMPORT_CONTRACT_HINT: &str =
+    "v1 import contract: only `import \"./relative_path.skd\"` is supported (no module-name import, no alias).";
+
 pub fn compile_to_c(entry_path: &Path) -> Result<String, String> {
-    let source = load_source_with_imports(entry_path)?;
+    let source = load_source_with_imports(entry_path)
+        .map_err(|e| format!("[SC-MOD-001] {e}"))?;
     let tokens = lex(&source).map_err(|e| format!("lex failed: {e}"))?;
     let program = parse_program(&tokens).map_err(|e| format!("parse failed: {e}"))?;
     semantic_analyze(&program).map_err(|e| format!("semantic failed: {e}"))?;
@@ -31,8 +35,13 @@ fn load_source_recursive(
     seen: &mut HashSet<PathBuf>,
     stack: &mut Vec<PathBuf>,
 ) -> Result<String, String> {
-    let abs = fs::canonicalize(path)
-        .map_err(|e| format!("failed to resolve {}: {e}", path.display()))?;
+    let abs = fs::canonicalize(path).map_err(|e| {
+        format!(
+            "import path resolution failed for '{}': {e}. {}",
+            path.display(),
+            IMPORT_CONTRACT_HINT
+        )
+    })?;
 
     if stack.iter().any(|p| p == &abs) {
         let mut chain = stack
@@ -40,7 +49,11 @@ fn load_source_recursive(
             .map(|p| p.display().to_string())
             .collect::<Vec<_>>();
         chain.push(abs.display().to_string());
-        return Err(format!("cyclic import detected: {}", chain.join(" -> ")));
+        return Err(format!(
+            "cyclic import detected: {}. {}",
+            chain.join(" -> "),
+            IMPORT_CONTRACT_HINT
+        ));
     }
 
     if seen.contains(&abs) {
@@ -48,8 +61,13 @@ fn load_source_recursive(
     }
 
     stack.push(abs.clone());
-    let source = fs::read_to_string(&abs)
-        .map_err(|e| format!("failed to read {}: {e}", abs.display()))?;
+    let source = fs::read_to_string(&abs).map_err(|e| {
+        format!(
+            "failed to read import file '{}': {e}. {}",
+            abs.display(),
+            IMPORT_CONTRACT_HINT
+        )
+    })?;
     let base_dir = abs.parent().unwrap_or(Path::new("."));
     let mut merged = String::new();
 
@@ -83,10 +101,25 @@ fn parse_import_line(line: &str) -> Result<Option<String>, String> {
         return Ok(None);
     }
     let rest = trimmed["import ".len()..].trim();
+    if rest.starts_with('"') && rest.contains("\" as ") {
+        return Err(format!(
+            "import alias is not supported in v1: '{}'. {}",
+            line.trim(),
+            IMPORT_CONTRACT_HINT
+        ));
+    }
+    if !rest.starts_with('"') {
+        return Err(format!(
+            "module-name import is not supported in v1: '{}'. {}",
+            line.trim(),
+            IMPORT_CONTRACT_HINT
+        ));
+    }
     if !(rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2) {
         return Err(format!(
-            "unsupported import syntax '{}'; expected: import \"./path/file.skd\"",
-            line.trim()
+            "unsupported import syntax '{}'; expected: import \"./path/file.skd\". {}",
+            line.trim(),
+            IMPORT_CONTRACT_HINT
         ));
     }
     Ok(Some(rest[1..rest.len() - 1].to_string()))
@@ -142,7 +175,7 @@ mod tests {
     #[test]
     fn parse_import_line_rejects_unquoted_path() {
         let err = parse_import_line("import lib").expect_err("must reject");
-        assert!(err.contains("unsupported import syntax"));
+        assert!(err.contains("module-name import is not supported"));
     }
 
     #[test]
