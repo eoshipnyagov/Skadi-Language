@@ -35,6 +35,22 @@ cargo run --manifest-path tools/skadi-cli/Cargo.toml -- run
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
 ```
 
+## From-zero smoke flow (Windows PowerShell)
+
+Run the full newcomer path in a temporary directory:
+
+```powershell
+.\scripts\smoke_from_zero.ps1 -Type console
+```
+
+Other project types:
+
+```powershell
+.\scripts\smoke_from_zero.ps1 -Type game
+.\scripts\smoke_from_zero.ps1 -Type embedded
+.\scripts\smoke_from_zero.ps1 -Type gui
+```
+
 ## V1 module contract (current wave)
 
 - Supported:
