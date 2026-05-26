@@ -28,6 +28,10 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - `if / else if / else` - `Stable`
 - `while` - `Stable`
 - `loop` - `Stable`
+- `break` - `Stable` (only inside loops)
+- `continue` - `Stable` (only inside loops)
+- `pass` - `Stable` (no-op statement)
+- `i++` / `i--` - `Stable` (statement-only, not allowed inside expressions)
 - `for item in collection` - `Partial`
   - lowering assumes list runtime shape: `collection.len` + `collection.data[i]`
   - element type is lowered from declared list element type in codegen

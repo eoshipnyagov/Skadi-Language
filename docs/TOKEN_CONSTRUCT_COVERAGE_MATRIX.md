@@ -51,8 +51,8 @@ Legend:
 | Function call `f(...)` | Y | Y | Y | Y | Y | includes builtin and user fn |
 | List literal `[ ... ]` | Y | Y | Y | Y | Y | multiple scalar families + struct list |
 | Struct literal `{field = ...}` | Y | Y | Y | P | P | stable subset covered |
-| `i++` / `i--` statement-only | P (lex as operators) | P | P | P | N | syntax policy exists; full path not yet frozen |
-| `break` / `continue` / `pass` | P (lex as identifiers today) | P | P | P | N | target behavior documented, coverage to finalize |
+| `i++` / `i--` statement-only | P (lex as operators) | Y | Y | Y | Y | statement-only behavior enforced and covered end-to-end |
+| `break` / `continue` / `pass` | P (lex as identifiers today) | Y | Y | Y | Y | loop-scope semantics and lowering covered end-to-end |
 
 ## 3. Coverage Sources
 
@@ -65,7 +65,5 @@ Legend:
 
 ## 4. Pre-freeze TODO (explicit)
 
-1. Freeze and close `i++/i--` full pipeline status (parser + semantic + codegen + e2e).
-2. Freeze and close `break/continue/pass` full pipeline status.
-3. Decide if `fixed/const/hide/local/direct/allow drop` remain in v1 surface or move to deferred list in syntax status.
-4. Keep this matrix synced with `docs/TEST_COVERAGE_MATRIX.md` after each feature merge.
+1. Decide if `fixed/const/hide/local/direct/allow drop` remain in v1 surface or move to deferred list in syntax status.
+2. Keep this matrix synced with `docs/TEST_COVERAGE_MATRIX.md` after each feature merge.

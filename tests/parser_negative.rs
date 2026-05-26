@@ -70,3 +70,13 @@ xs = fs.list(".") on error {
     let err = parse_err(src);
     assert!(err.contains("SC-PARSE-134"));
 }
+
+#[test]
+fn parser_rejects_increment_not_standalone() {
+    let src = r#"
+new Int i = 0
+i++ + 1
+"#;
+    let err = parse_err(src);
+    assert!(err.contains("SC-PARSE-159"));
+}

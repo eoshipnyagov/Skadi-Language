@@ -681,6 +681,63 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
         line_end += 1;
     }
 
+    if start_index < line_end
+        && tokens[start_index].kind() == TokenKind::Identifier
+        && (tokens[start_index].lexeme == "break"
+            || tokens[start_index].lexeme == "continue"
+            || tokens[start_index].lexeme == "pass")
+    {
+        if line_end - start_index != 1 {
+            return Err(parse_err("SC-PARSE-158", "control statement must be a standalone instruction."));
+        }
+        return Ok((
+            match tokens[start_index].lexeme.as_str() {
+                "break" => Statement::BreakStatement { loc },
+                "continue" => Statement::ContinueStatement { loc },
+                _ => Statement::PassStatement { loc },
+            },
+            line_end - start_index,
+        ));
+    }
+
+    if start_index + 2 < line_end
+        && tokens[start_index].kind() == TokenKind::Identifier
+        && tokens[start_index + 1].kind() == TokenKind::OpArithmetic
+        && tokens[start_index + 2].kind() == TokenKind::OpArithmetic
+        && tokens[start_index + 1].lexeme == "+"
+        && tokens[start_index + 2].lexeme == "+"
+    {
+        if line_end - start_index != 3 {
+            return Err(parse_err("SC-PARSE-159", "increment must be a standalone statement: x++"));
+        }
+        return Ok((
+            Statement::IncrementStatement {
+                target: tokens[start_index].lexeme.clone(),
+                loc,
+            },
+            line_end - start_index,
+        ));
+    }
+
+    if start_index + 2 < line_end
+        && tokens[start_index].kind() == TokenKind::Identifier
+        && tokens[start_index + 1].kind() == TokenKind::OpArithmetic
+        && tokens[start_index + 2].kind() == TokenKind::OpArithmetic
+        && tokens[start_index + 1].lexeme == "-"
+        && tokens[start_index + 2].lexeme == "-"
+    {
+        if line_end - start_index != 3 {
+            return Err(parse_err("SC-PARSE-160", "decrement must be a standalone statement: x--"));
+        }
+        return Ok((
+            Statement::DecrementStatement {
+                target: tokens[start_index].lexeme.clone(),
+                loc,
+            },
+            line_end - start_index,
+        ));
+    }
+
     let on_idx = (start_index..line_end).find(|&i| {
         tokens[i].kind() == TokenKind::KeywordOnError
             && i + 1 < line_end

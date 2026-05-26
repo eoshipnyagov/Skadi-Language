@@ -529,3 +529,27 @@ new Text x = tail("abc")
     assert!(c.contains("static char* sk_text_slice(const char *s, int64_t start, int64_t end) {"));
     assert!(c.contains("return sk_text_slice(t, 1, ((int64_t)strlen(t)));"));
 }
+
+#[test]
+fn codegen_emits_break_continue_pass_and_inc_dec_shape() {
+    let src = r#"
+new Int i = 0
+loop {
+    i++
+    pass
+    if i > 2 {
+        break
+    } else {
+        continue
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("i += 1;"));
+    assert!(c.contains("/* pass */"));
+    assert!(c.contains("break;"));
+    assert!(c.contains("continue;"));
+}

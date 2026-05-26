@@ -761,3 +761,55 @@ output("hello") on error {
     assert!(err.contains("on error requires danger fn call"));
     assert!(err.contains("output"));
 }
+
+#[test]
+fn semantic_allows_break_continue_inside_loop_and_pass() {
+    let src = r#"
+new Int i = 0
+loop {
+    i++
+    pass
+    if i > 2 {
+        break
+    } else {
+        continue
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_break_outside_loop() {
+    let src = "break\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-040"));
+    assert!(err.contains("break is allowed only inside loops"));
+}
+
+#[test]
+fn semantic_rejects_continue_outside_loop() {
+    let src = "continue\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-040"));
+    assert!(err.contains("continue is allowed only inside loops"));
+}
+
+#[test]
+fn semantic_rejects_inc_dec_for_non_numeric_type() {
+    let src = r#"
+new Text t = "x"
+t++
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("inc/dec requires numeric variable"));
+}

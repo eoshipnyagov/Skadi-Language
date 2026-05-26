@@ -452,3 +452,35 @@ output("hello")
     assert_eq!(program.statements.len(), 1);
     assert!(matches!(program.statements[0], Statement::ExpressionStatement { .. }));
 }
+
+#[test]
+fn parses_break_continue_pass_statements() {
+    let src = r#"
+loop {
+    pass
+    continue
+    break
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::LoopStatement { body, .. } = &program.statements[0] else {
+        panic!("expected LoopStatement");
+    };
+    assert!(matches!(body.statements[0], Statement::PassStatement { .. }));
+    assert!(matches!(body.statements[1], Statement::ContinueStatement { .. }));
+    assert!(matches!(body.statements[2], Statement::BreakStatement { .. }));
+}
+
+#[test]
+fn parses_increment_and_decrement_statements() {
+    let src = r#"
+new Int i = 0
+i++
+i--
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert!(matches!(program.statements[1], Statement::IncrementStatement { .. }));
+    assert!(matches!(program.statements[2], Statement::DecrementStatement { .. }));
+}

@@ -1088,6 +1088,28 @@ fn emit_statement(
             out.push_str(trigger);
             out.push_str(" TODO(v1): runtime binding */\n");
         }
+        Statement::BreakStatement { .. } => {
+            out.push_str(&pad);
+            out.push_str("break;\n");
+        }
+        Statement::ContinueStatement { .. } => {
+            out.push_str(&pad);
+            out.push_str("continue;\n");
+        }
+        Statement::PassStatement { .. } => {
+            out.push_str(&pad);
+            out.push_str("/* pass */\n");
+        }
+        Statement::IncrementStatement { target, .. } => {
+            out.push_str(&pad);
+            out.push_str(target);
+            out.push_str(" += 1;\n");
+        }
+        Statement::DecrementStatement { target, .. } => {
+            out.push_str(&pad);
+            out.push_str(target);
+            out.push_str(" -= 1;\n");
+        }
         Statement::DangerAssignOnError {
             target,
             call_name,

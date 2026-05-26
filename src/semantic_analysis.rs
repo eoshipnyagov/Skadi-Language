@@ -68,6 +68,11 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
         | Statement::ListPush { loc, .. }
         | Statement::ListPopOnError { loc, .. }
         | Statement::ReturnError { loc, .. }
+        | Statement::BreakStatement { loc, .. }
+        | Statement::ContinueStatement { loc, .. }
+        | Statement::PassStatement { loc, .. }
+        | Statement::IncrementStatement { loc, .. }
+        | Statement::DecrementStatement { loc, .. }
         | Statement::ReturnStatement { loc, .. }
         | Statement::ExpressionStatement { loc, .. }
         | Statement::BlockStatement { loc, .. }
@@ -162,6 +167,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         &labels,
         &structs,
         None,
+        0,
     )
 }
 
@@ -431,9 +437,10 @@ fn analyze_statements(
     labels: &HashMap<String, Vec<String>>,
     structs: &HashMap<String, StructInfo>,
     fn_ctx: Option<FnContext>,
+    loop_depth: usize,
 ) -> Result<(), String> {
     for stmt in statements {
-        analyze_statement(stmt, scope, functions, labels, structs, fn_ctx.clone())?;
+        analyze_statement(stmt, scope, functions, labels, structs, fn_ctx.clone(), loop_depth)?;
     }
     Ok(())
 }
@@ -445,6 +452,7 @@ fn analyze_statement(
     labels: &HashMap<String, Vec<String>>,
     structs: &HashMap<String, StructInfo>,
     fn_ctx: Option<FnContext>,
+    loop_depth: usize,
 ) -> Result<(), String> {
     match stmt {
         Statement::VarDecl {
@@ -560,7 +568,7 @@ fn analyze_statement(
                 return_type: sig.return_type.clone(),
                 self_struct: None,
             };
-            analyze_block(body, &mut fn_scope, functions, labels, structs, Some(local_ctx))?;
+            analyze_block(body, &mut fn_scope, functions, labels, structs, Some(local_ctx), 0)?;
             if sig.is_danger && !block_guarantees_termination(body) {
                 return Err(err_at_code(
                     stmt,
@@ -581,10 +589,10 @@ fn analyze_statement(
                 return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, "if condition must be bool.".to_string()));
             }
             let mut then_scope = scope.clone();
-            analyze_block(then_block, &mut then_scope, functions, labels, structs, fn_ctx.clone())?;
+            analyze_block(then_block, &mut then_scope, functions, labels, structs, fn_ctx.clone(), loop_depth)?;
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, structs, fn_ctx.clone())?;
+                analyze_block(else_block, &mut else_scope, functions, labels, structs, fn_ctx.clone(), loop_depth)?;
             }
             Ok(())
         }
@@ -627,7 +635,7 @@ fn analyze_statement(
             if let Some(upd) = update {
                 let _ = infer_expression_type(upd, &loop_scope, functions, structs, fn_ctx.as_ref())?;
             }
-            analyze_block(body, &mut loop_scope, functions, labels, structs, fn_ctx)
+            analyze_block(body, &mut loop_scope, functions, labels, structs, fn_ctx, loop_depth + 1)
         }
         Statement::WhenBlock {
             when_expression,
@@ -651,11 +659,11 @@ fn analyze_statement(
                     }
                 }
                 let mut case_scope = scope.clone();
-                analyze_block(block, &mut case_scope, functions, labels, structs, fn_ctx.clone())?;
+                analyze_block(block, &mut case_scope, functions, labels, structs, fn_ctx.clone(), loop_depth)?;
             }
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, structs, fn_ctx.clone())?;
+                analyze_block(else_block, &mut else_scope, functions, labels, structs, fn_ctx.clone(), loop_depth)?;
             }
             Ok(())
         }
@@ -669,15 +677,53 @@ fn analyze_statement(
                 ));
             }
             let mut while_scope = scope.clone();
-            analyze_block(body, &mut while_scope, functions, labels, structs, fn_ctx)
+            analyze_block(body, &mut while_scope, functions, labels, structs, fn_ctx, loop_depth + 1)
         }
         Statement::LoopStatement { body, .. } => {
             let mut local_scope = scope.clone();
-            analyze_block(body, &mut local_scope, functions, labels, structs, fn_ctx)
+            analyze_block(body, &mut local_scope, functions, labels, structs, fn_ctx, loop_depth + 1)
+        }
+        Statement::BreakStatement { .. } => {
+            if loop_depth == 0 {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    "break is allowed only inside loops.".to_string(),
+                ));
+            }
+            Ok(())
+        }
+        Statement::ContinueStatement { .. } => {
+            if loop_depth == 0 {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    "continue is allowed only inside loops.".to_string(),
+                ));
+            }
+            Ok(())
+        }
+        Statement::PassStatement { .. } => Ok(()),
+        Statement::IncrementStatement { target, .. } | Statement::DecrementStatement { target, .. } => {
+            let Some(target_ty) = scope.get(target).cloned() else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined in current scope.", target),
+                ));
+            };
+            if target_ty != ValueType::Int && target_ty != ValueType::Float {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!("inc/dec requires numeric variable, got {:?}.", target_ty),
+                ));
+            }
+            Ok(())
         }
         Statement::OnErrorBlock { statements, .. } | Statement::BlockStatement { statements, .. } => {
             let mut local_scope = scope.clone();
-            analyze_statements(statements, &mut local_scope, functions, labels, structs, fn_ctx)
+            analyze_statements(statements, &mut local_scope, functions, labels, structs, fn_ctx, loop_depth)
         }
         Statement::OnBlock { trigger, .. } => {
             if trigger == "error" {
@@ -729,7 +775,7 @@ fn analyze_statement(
             }
             validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx, loop_depth)
         }
         Statement::DangerCallOnError {
             call_name,
@@ -760,7 +806,7 @@ fn analyze_statement(
             }
             validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx, loop_depth)
         }
         Statement::ListPush { list_name, value, .. } => {
             let Some(list_ty) = scope.get(list_name).cloned() else {
@@ -833,7 +879,7 @@ fn analyze_statement(
                 ));
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx)
+            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx, loop_depth)
         }
         Statement::ReturnError { code, .. } => {
             if fn_ctx.map(|c| c.is_danger) != Some(true) {
@@ -903,7 +949,7 @@ fn analyze_statement(
                     return_type: m.returns.as_deref().map(parse_type_name).or(Some(ValueType::Int)),
                     self_struct: Some(name.clone()),
                 };
-                analyze_block(&m.body, &mut method_scope, functions, labels, structs, Some(method_ctx))?;
+                analyze_block(&m.body, &mut method_scope, functions, labels, structs, Some(method_ctx), 0)?;
             }
             Ok(())
         }
@@ -918,8 +964,9 @@ fn analyze_block(
     labels: &HashMap<String, Vec<String>>,
     structs: &HashMap<String, StructInfo>,
     fn_ctx: Option<FnContext>,
+    loop_depth: usize,
 ) -> Result<(), String> {
-    analyze_statements(&block.statements, scope, functions, labels, structs, fn_ctx)
+    analyze_statements(&block.statements, scope, functions, labels, structs, fn_ctx, loop_depth)
 }
 
 fn param_type_or_default(param: &FunctionParam) -> ValueType {

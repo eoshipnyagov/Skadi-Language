@@ -717,3 +717,30 @@ output(total)
     compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_danger_when_pop", &[]);
 }
 
+#[test]
+fn e2e_loop_control_and_inc_dec_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Int i = 0
+new Int acc = 0
+loop {
+    i++
+    if i mod 2 == 0 {
+        pass
+        continue
+    }
+    acc = acc + i
+    if i >= 7 {
+        break
+    }
+}
+output(acc)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_loop_control_incdec", &[]);
+}
+
