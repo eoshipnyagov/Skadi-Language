@@ -1,16 +1,16 @@
 ﻿# Skadi v1 Blockers Matrix
 
-Дата: 2026-05-26
+Дата: 2026-05-27
 Назначение: фиксировать обязательные решения перед стабильным `v1` релизом транспилятора `Skadi -> C`.
 
 ## P0 (блокирует v1)
 
-1. Стабильность codegen e2e (feature-mix программы) — В РАБОТЕ (существенно усилено)
+1. Стабильность codegen e2e (feature-mix программы) — ЗАКРЫТО
 - Что уже закрыто:
-  - расширенная матрица `tests/codegen_e2e.rs` (14 сценариев),
+  - расширенная матрица `tests/codegen_e2e.rs` (26 сценариев),
   - добавлены mutation-like негативные e2e в `tools/skadi-cli/src/pipeline.rs`.
 - Что осталось:
-  - добить целевую матрицу 12+ сценариев с формальным чек-листом по фичам в доке.
+  - поддерживать матрицу синхронно с новыми фичами (без снижения покрытия).
 
 2. Единообразие диагностик parser/semantic/codegen — В РАБОТЕ
 - Что уже закрыто:
@@ -24,7 +24,9 @@
 4. Кроссплатформенный CLI pipeline (Win/Linux/macOS) + doctor — В РАБОТЕ
 - Что уже закрыто:
   - добавлен GitHub Actions workflow с матрицей `ubuntu/windows/macos`,
-  - прогоняются root tests + `tools/skadi-cli` tests + smoke compile + `doctor`.
+  - выделен отдельный required job `codegen-e2e` для compile/run защиты,
+  - `test-matrix` оставлен для non-e2e + `tools/skadi-cli` tests + smoke compile + `doctor`,
+  - добавлен `sanitizer-optional` (ASan/UBSan) с явным логированием.
 - Что осталось:
   - пройти реальный CI green-run на GitHub и зафиксировать baseline.
 

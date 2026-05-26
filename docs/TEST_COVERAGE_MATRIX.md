@@ -1,6 +1,6 @@
 # Test Coverage Matrix (Skadi v1 Prototype)
 
-Date: 2026-05-26
+Date: 2026-05-27
 Owner: Skadi core
 
 This file tracks test coverage for language elements in the current Rust prototype.
@@ -31,14 +31,23 @@ This file tracks test coverage for language elements in the current Rust prototy
 - C compiler e2e tests
   - `tests/codegen_e2e.rs`
   - C output compiles and produced binaries run for representative programs
+  - total: `26` e2e scenarios (including feature-mix, negative pipeline checks, and stress cases)
   - includes feature-mix scenarios for:
     - `when + find/len + Text`
     - `danger/on error` in loops
     - `List + while + indexing`
     - `fs.list + fs.is_dir + when`
+    - `break/continue/pass` + `i++/i--` loop-control path
   - includes UTF-8 text byte-semantics smoke scenario
+  - includes large-shape stress scenarios:
+    - big `when` chain
+    - deep/wide import-graph e2e in CLI pipeline tests
+    - large allocation loops for `List`/`Struct List` and intensive `Text` ops
   - includes sanitizer-backed stress scenario (`ASan/UBSan`) when compiler supports flags
   - memory contract tie-in: validates no sanitizer-detected crashes/UB for current runtime allocation model
+- CI gate structure (GitHub Actions):
+  - required: `test-matrix` (non-e2e + CLI), `codegen-e2e` (full `codegen_e2e` suite)
+  - optional: `sanitizer-optional` (ASan/UBSan scenario; explicit log via `--nocapture`)
 - CLI pipeline mutation-like negative e2e tests
   - `tools/skadi-cli/src/pipeline.rs` test module
   - verifies deterministic failure stage + diagnostic code for:

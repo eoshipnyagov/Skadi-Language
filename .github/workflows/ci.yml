@@ -1,4 +1,4 @@
-﻿name: skadi-ci
+name: skadi-ci
 
 on:
   push:
@@ -23,8 +23,8 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Root tests
-        run: cargo test -q
+      - name: Root tests (non-e2e)
+        run: cargo test -q -- --skip e2e_
 
       - name: CLI tests
         working-directory: tools/skadi-cli
@@ -36,3 +36,39 @@ jobs:
       - name: CLI doctor smoke
         working-directory: tools/skadi-cli
         run: cargo run -- doctor
+
+  codegen-e2e:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run codegen e2e suite
+        run: cargo test -q --test codegen_e2e
+
+  sanitizer-optional:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: ASan/UBSan e2e (optional gate)
+        run: cargo test -q e2e_sanitized_runtime_stress_list_text_path --test codegen_e2e -- --nocapture
