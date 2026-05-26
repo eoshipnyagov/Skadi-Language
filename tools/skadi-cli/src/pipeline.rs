@@ -191,6 +191,12 @@ mod tests {
     }
 
     #[test]
+    fn parse_import_line_rejects_unterminated_quote() {
+        let err = parse_import_line("import \"./lib.skd").expect_err("must reject");
+        assert!(err.contains("unsupported import syntax"));
+    }
+
+    #[test]
     fn load_source_with_imports_merges_files() {
         let root = temp_case_dir("imports_ok");
         let entry = root.join("main.skd");
@@ -260,6 +266,24 @@ mod tests {
         fs::write(
             &main,
             "import \"./left.skd\"\nimport \"./right.skd\"\nnew Int x = l + r\n",
+        )
+        .expect("write main");
+
+        let merged = load_source_with_imports(&main).expect("merge");
+        assert_eq!(merged.matches("fn shared() Int").count(), 1);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_source_with_imports_deduplicates_repeated_direct_imports() {
+        let root = temp_case_dir("imports_repeat_direct");
+        let main = root.join("main.skd");
+        let common = root.join("common.skd");
+        fs::write(&common, "fn shared() Int {\n    return 42\n}\n").expect("write common");
+        fs::write(
+            &main,
+            "import \"./common.skd\"\nimport \"./common.skd\"\nnew Int x = shared()\n",
         )
         .expect("write main");
 
@@ -354,6 +378,45 @@ mod tests {
     }
 
     #[test]
+    fn e2e_multifile_feature_mix_compile_and_run() {
+        if !has_host_compiler() {
+            eprintln!("Skipping e2e_multifile_feature_mix_compile_and_run: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("imports_e2e_feature_mix");
+        let entry = root.join("main.skd");
+        let ops = root.join("ops.skd");
+        let util = root.join("util.skd");
+
+        fs::write(
+            &util,
+            "fn next(Int x) Int {\n    return x + 1\n}\n",
+        )
+        .expect("write util");
+        fs::write(
+            &ops,
+            "import \"./util.skd\"\nfn score3(Int a, Int b, Int c) Int {\n    return next(a) + next(b) + next(c)\n}\n",
+        )
+        .expect("write ops");
+        fs::write(
+            &entry,
+            "import \"./ops.skd\"\nnew i32 List xs = [1, 2, 3]\nnew Int s = score3(xs[0], xs[1], xs[2])\nwhen s {\n    is 9 {\n        output(s)\n    }\n    else {\n        output(0)\n    }\n}\n",
+        )
+        .expect("write entry");
+
+        let c = compile_to_c(&entry).expect("compile to C");
+        let c_path = root.join("out.c");
+        let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
+        fs::write(&c_path, c).expect("write C file");
+        compile_c_to_exe(&c_path, &exe_path, "host").expect("compile C to exe");
+        let run = Command::new(&exe_path).output().expect("run exe");
+        assert!(run.status.success(), "binary run failed");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn negative_module_name_import_fails_with_contract_diagnostic() {
         let root = temp_case_dir("imports_neg_module_name");
         let entry = root.join("main.skd");
@@ -403,6 +466,32 @@ mod tests {
         let err = compile_to_c(&a).expect_err("compile must fail");
         assert!(err.contains("[SC-MOD-001]"));
         assert!(err.contains("cyclic import detected"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_self_cycle_import_fails_with_contract_diagnostic() {
+        let root = temp_case_dir("imports_neg_self_cycle");
+        let a = root.join("a.skd");
+        fs::write(&a, "import \"./a.skd\"\nnew Int x = 1\n").expect("write a");
+
+        let err = compile_to_c(&a).expect_err("compile must fail");
+        assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("cyclic import detected"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_invalid_import_syntax_fails_with_contract_diagnostic() {
+        let root = temp_case_dir("imports_neg_invalid_syntax");
+        let entry = root.join("main.skd");
+        fs::write(&entry, "import \"./lib.skd\nnew Int x = 1\n").expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("unsupported import syntax"));
 
         let _ = fs::remove_dir_all(root);
     }
