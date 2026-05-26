@@ -2,12 +2,13 @@ use std::io::{self, Write};
 
 pub fn run(_args: &[String]) -> Result<(), String> {
     println!("Skadi TUI (minimal)\n");
+    println!("0) Exit");
     println!("1) New project");
     println!("2) Init current directory");
     println!("3) Check project");
     println!("4) Build project");
     println!("5) Run project");
-    print!("Select [1-5]: ");
+    print!("Select [0-5]: ");
     io::stdout().flush().map_err(|e| format!("flush failed: {e}"))?;
 
     let mut input = String::new();
@@ -16,6 +17,7 @@ pub fn run(_args: &[String]) -> Result<(), String> {
         .map_err(|e| format!("read failed: {e}"))?;
 
     let result = match input.trim() {
+        "0" => return Ok(()),
         "1" => {
             print!("Project name: ");
             io::stdout().flush().map_err(|e| format!("flush failed: {e}"))?;

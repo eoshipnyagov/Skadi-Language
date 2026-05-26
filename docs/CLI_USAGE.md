@@ -1,5 +1,7 @@
 # Skadi CLI Usage
 
+Quick start (RU): `docs/SKADI_CLI_QUICK_START_RU.md`
+
 Current CLI entrypoint: `src/main.rs`
 
 ## Supported commands

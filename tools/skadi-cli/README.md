@@ -2,6 +2,8 @@
 
 Cargo-like CLI for Skadi (early stage).
 
+Quick start (RU): `docs/SKADI_CLI_QUICK_START_RU.md`
+
 ## Current status
 
 - Implemented:
