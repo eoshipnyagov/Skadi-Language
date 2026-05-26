@@ -1,32 +1,59 @@
-# Skadi CLI Usage
+﻿# Skadi CLI Usage
 
-Current CLI entrypoint: `src/main.rs`
+Date: 2026-05-26
 
-## Supported commands
+This document describes practical usage of the current CLI manager in `tools/skadi-cli`.
 
-- Emit C file:
-  - `cargo run -- --input program.skd --emit-c out.c`
+## Commands
 
-- Build executable in one command (requires `gcc` or `clang` in PATH):
-  - `cargo run -- --input program.skd --emit-exe out.exe`
+- `doctor` — detect host toolchain and show setup hints.
+- `new <name> [--template <console|gui|embedded|game>]` — create a new project.
+- `init` — initialize `skadi.toml` in current directory.
+- `examples [--template <...>]` — add example programs.
+- `check [--project <dir>]` — parse/semantic/codegen check without final native run.
+- `build [--project <dir>] [--cc <compiler>] [--target <triple>]` — build project.
+- `run [--project <dir>] [--cc <compiler>] [--target <triple>]` — build and run.
+- `clean [--project <dir>]` — remove generated artifacts.
 
-- Print generated C to stdout:
-  - `cargo run -- --input program.skd --print-c`
+## Quick flow
 
-- Show help:
-  - `cargo run -- --help`
+```bash
+cargo run -p skadi-cli -- doctor
+cargo run -p skadi-cli -- new demo
+cargo run -p skadi-cli -- check --project demo
+cargo run -p skadi-cli -- build --project demo
+cargo run -p skadi-cli -- run --project demo
+```
 
-## Notes
+## Notes on `cargo run -- ...`
 
-- `--emit-exe` uses a temporary `.c` file near output exe and removes it after compilation.
-- If both `--emit-c` and `--emit-exe` are provided, compiler writes C output and also builds executable.
-- You can pass source file directly without `--input`:
-  - `cargo run -- program.skd --emit-exe out.exe`
+When launching a binary via Cargo and passing flags to that binary, use:
 
-## Planned next improvements
+```bash
+cargo run -p skadi-cli -- <cli args>
+```
 
-- Add explicit `--cc <compiler>` option (`gcc`, `clang`, `cl`).
-- Add `--target <triple>` workflow for cross-compilation.
-- Add stable `Skadi` wrapper binary command format.
+The `--` separator tells Cargo that following arguments belong to `skadi-cli`, not Cargo itself.
 
+## Compiler selection
 
+`build` and `run` support explicit compiler pinning:
+
+```bash
+cargo run -p skadi-cli -- build --project demo --cc gcc
+cargo run -p skadi-cli -- run --project demo --cc clang
+```
+
+Auto-detect order by host:
+- Windows: `gcc -> clang -> cl`
+- Linux/WSL/macOS: `gcc -> clang -> cc`
+
+## Multi-file modules (v1 contract)
+
+Supported canonical import form:
+
+```skadi
+import "./relative_path.skd"
+```
+
+Current v1 scope does not include alias/module-name import forms.
