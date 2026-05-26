@@ -89,6 +89,18 @@ fn compile_skadi_and_run(compiler: &str, src: &str, stem: &str, extra_flags: &[&
     compile_c_and_run(compiler, &c, stem, extra_flags);
 }
 
+fn compile_skadi_expect_semantic_error(src: &str, code: &str) {
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic should fail");
+    assert!(
+        err.contains(code),
+        "expected semantic error code {}, got: {}",
+        code,
+        err
+    );
+}
+
 #[test]
 fn e2e_skadi_to_c_binary_builds() {
     let Some(compiler) = find_c_compiler() else {
@@ -903,5 +915,46 @@ output(hits)
 "#;
 
     compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_iterate_text_find", &[]);
+}
+
+#[test]
+fn e2e_negative_pipeline_rejects_break_outside_loop() {
+    let src = r#"
+new Int x = 0
+if x == 0 {
+    break
+}
+"#;
+    compile_skadi_expect_semantic_error(src, "SC-SEM-040");
+}
+
+#[test]
+fn e2e_negative_pipeline_rejects_on_error_for_non_danger_builtin() {
+    let src = r#"
+output("hello") on error {
+    output("fallback")
+}
+"#;
+    compile_skadi_expect_semantic_error(src, "SC-SEM-040");
+}
+
+#[test]
+fn e2e_stress_text_concat_growth_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Text acc = ""
+new Int i = 0
+while i < 2000 {
+    acc = concat(acc, "x")
+    i++
+}
+output(len(acc))
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_text_concat_growth", &[]);
 }
 

@@ -553,3 +553,58 @@ loop {
     assert!(c.contains("break;"));
     assert!(c.contains("continue;"));
 }
+
+#[test]
+fn codegen_invariant_when_lowering_uses_single_temp() {
+    let src = r#"
+new Int x = 3
+when x {
+    is 1 {
+        output(1)
+    }
+    is 2, 3 {
+        output(2)
+    }
+    else {
+        output(0)
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.matches("__when_tmp_1").count() >= 4);
+    assert!(c.contains("if ((__when_tmp_1 == 1)) {"));
+    assert!(c.contains("else if ((__when_tmp_1 == 2) || (__when_tmp_1 == 3)) {"));
+}
+
+#[test]
+fn codegen_invariant_danger_on_error_emits_status_check_branch() {
+    let src = r#"
+label ErrorCode {
+    Ok
+    BadInput
+}
+
+danger fn parse_nonzero(Int x) Int {
+    if x == 0 {
+        return error BadInput
+    } else {
+        return x
+    }
+}
+
+new Int value = 0
+new Int parsed = 0
+parsed = parse_nonzero(value) on error {
+    parsed = -1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("if (parse_nonzero(value, &parsed) != 0) {"));
+    assert!(c.contains("parsed = (-1);") || c.contains("parsed = -1;"));
+}
