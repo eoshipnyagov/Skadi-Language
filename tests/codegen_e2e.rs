@@ -1017,3 +1017,85 @@ output(out)
     compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_large_when_chain", &[]);
 }
 
+#[test]
+fn e2e_stress_text_ops_in_long_loop_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Text seed = "abcdefghij"
+new Text acc = ""
+new Int i = 0
+new Int sum = 0
+while i < 1500 {
+    new Text part = slice(seed, 2, 7)
+    new Int pos = find(part, "de")
+    if pos >= 0 {
+        acc = concat(acc, "x")
+        sum = sum + len(acc)
+    } else {
+        acc = concat(acc, "y")
+    }
+    i++
+}
+output(sum)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_text_ops_loop", &[]);
+}
+
+#[test]
+fn e2e_stress_nested_danger_recovery_paths_build_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+label ErrorCode {
+    Ok
+    BadDenominator
+    TooLarge
+}
+
+danger fn safe_div(Int a, Int b) Int {
+    if b == 0 {
+        return error BadDenominator
+    } else {
+        return a div b
+    }
+}
+
+danger fn clamp_small(Int x) Int {
+    if x > 20 {
+        return error TooLarge
+    } else {
+        return x
+    }
+}
+
+new Int List ds = [5, 4, 0, 2, 1, 0, 8, 3]
+new Int i = 0
+new Int total = 0
+new Int d = 0
+new Int v = 0
+new Int c = 0
+while i < len(ds) {
+    d = ds[i]
+    v = safe_div(100, d) on error {
+        v = 0
+    }
+    c = clamp_small(v) on error {
+        c = 20
+    }
+    total = total + c
+    i++
+}
+output(total)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_nested_danger_recovery", &[]);
+}
+
