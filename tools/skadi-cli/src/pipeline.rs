@@ -426,6 +426,92 @@ mod tests {
     }
 
     #[test]
+    fn e2e_deep_chain_imports_compile_and_run() {
+        if !has_host_compiler() {
+            eprintln!("Skipping e2e_deep_chain_imports_compile_and_run: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("imports_e2e_deep_chain");
+        let entry = root.join("main.skd");
+
+        fs::write(
+            root.join("m11.skd"),
+            "fn step11(Int x) Int {\n    return x + 11\n}\n",
+        )
+        .expect("write m11");
+        for i in (0..=10).rev() {
+            let next = i + 1;
+            let content = format!(
+                "import \"./m{next}.skd\"\nfn step{i}(Int x) Int {{\n    return step{next}(x + {i})\n}}\n"
+            );
+            fs::write(root.join(format!("m{i}.skd")), content).expect("write chain module");
+        }
+        fs::write(
+            &entry,
+            "import \"./m0.skd\"\nnew Int out = step0(1)\noutput(out)\n",
+        )
+        .expect("write entry");
+
+        let c = compile_to_c(&entry).expect("compile to C");
+        let c_path = root.join("out.c");
+        let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
+        fs::write(&c_path, c).expect("write C file");
+        compile_c_to_exe(&c_path, &exe_path, "host").expect("compile C to exe");
+        let run = Command::new(&exe_path).output().expect("run exe");
+        assert!(run.status.success(), "binary run failed");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn e2e_wide_diamond_imports_compile_and_run() {
+        if !has_host_compiler() {
+            eprintln!("Skipping e2e_wide_diamond_imports_compile_and_run: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("imports_e2e_wide_diamond");
+        let entry = root.join("main.skd");
+        fs::write(
+            root.join("shared.skd"),
+            "fn base(Int x) Int {\n    return x + 1\n}\n",
+        )
+        .expect("write shared");
+
+        let mut imports = String::new();
+        let mut sum_expr = String::new();
+        for i in 0..8 {
+            let name = format!("leaf{i}");
+            fs::write(
+                root.join(format!("{name}.skd")),
+                format!("import \"./shared.skd\"\nfn {name}() Int {{\n    return base({i})\n}}\n"),
+            )
+            .expect("write leaf");
+            imports.push_str(&format!("import \"./{name}.skd\"\n"));
+            if i > 0 {
+                sum_expr.push_str(" + ");
+            }
+            sum_expr.push_str(&format!("{name}()"));
+        }
+        fs::write(
+            &entry,
+            format!("{imports}new Int total = {sum_expr}\noutput(total)\n"),
+        )
+        .expect("write entry");
+
+        let c = compile_to_c(&entry).expect("compile to C");
+        let c_path = root.join("out.c");
+        let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
+        fs::write(&c_path, c).expect("write C file");
+        compile_c_to_exe(&c_path, &exe_path, "host").expect("compile C to exe");
+        let run = Command::new(&exe_path).output().expect("run exe");
+        assert!(run.status.success(), "binary run failed");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn negative_module_name_import_fails_with_contract_diagnostic() {
         let root = temp_case_dir("imports_neg_module_name");
         let entry = root.join("main.skd");

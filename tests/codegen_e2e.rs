@@ -958,3 +958,62 @@ output(len(acc))
     compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_text_concat_growth", &[]);
 }
 
+#[test]
+fn e2e_stress_large_when_chain_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Int x = 37
+new Int out = 0
+when x {
+    is 0 { out = 0 }
+    is 1 { out = 1 }
+    is 2 { out = 2 }
+    is 3 { out = 3 }
+    is 4 { out = 4 }
+    is 5 { out = 5 }
+    is 6 { out = 6 }
+    is 7 { out = 7 }
+    is 8 { out = 8 }
+    is 9 { out = 9 }
+    is 10 { out = 10 }
+    is 11 { out = 11 }
+    is 12 { out = 12 }
+    is 13 { out = 13 }
+    is 14 { out = 14 }
+    is 15 { out = 15 }
+    is 16 { out = 16 }
+    is 17 { out = 17 }
+    is 18 { out = 18 }
+    is 19 { out = 19 }
+    is 20 { out = 20 }
+    is 21 { out = 21 }
+    is 22 { out = 22 }
+    is 23 { out = 23 }
+    is 24 { out = 24 }
+    is 25 { out = 25 }
+    is 26 { out = 26 }
+    is 27 { out = 27 }
+    is 28 { out = 28 }
+    is 29 { out = 29 }
+    is 30 { out = 30 }
+    is 31 { out = 31 }
+    is 32 { out = 32 }
+    is 33 { out = 33 }
+    is 34 { out = 34 }
+    is 35 { out = 35 }
+    is 36 { out = 36 }
+    is 37 { out = 37 }
+    is 38 { out = 38 }
+    is 39 { out = 39 }
+    else { out = -1 }
+}
+output(out)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_large_when_chain", &[]);
+}
+
