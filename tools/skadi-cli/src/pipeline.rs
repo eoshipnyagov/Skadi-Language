@@ -151,9 +151,11 @@ pub fn compile_c_to_exe(c_path: &Path, exe_path: &Path, target: &str) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{load_source_with_imports, parse_import_line};
+    use super::{compile_c_to_exe, compile_to_c, load_source_with_imports, parse_import_line};
+    use crate::targets::detect_compiler;
     use std::fs;
     use std::path::PathBuf;
+    use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_case_dir(stem: &str) -> PathBuf {
@@ -164,6 +166,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("skadi_cli_{stem}_{stamp}"));
         fs::create_dir_all(&dir).expect("mkdir");
         dir
+    }
+
+    fn has_host_compiler() -> bool {
+        ["gcc", "clang", "cc", "cl"].iter().any(|c| detect_compiler(c))
     }
 
     #[test]
@@ -281,6 +287,122 @@ mod tests {
         let p1 = merged.find("marker_one").expect("marker one present");
         let p2 = merged.find("marker_two").expect("marker two present");
         assert!(p1 < p2, "import order must be stable and line-ordered");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn e2e_chain_imports_compile_and_run() {
+        if !has_host_compiler() {
+            eprintln!("Skipping e2e_chain_imports_compile_and_run: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("imports_e2e_chain");
+        let entry = root.join("main.skd");
+        let math = root.join("math.skd");
+        let util = root.join("util.skd");
+        fs::write(&util, "fn twice(Int x) Int {\n    return x + x\n}\n").expect("write util");
+        fs::write(&math, "import \"./util.skd\"\nfn plus_two(Int x) Int {\n    return x + 2\n}\n").expect("write math");
+        fs::write(
+            &entry,
+            "import \"./math.skd\"\nnew Int a = twice(2)\nnew Int b = plus_two(a)\noutput(b)\n",
+        )
+        .expect("write entry");
+
+        let c = compile_to_c(&entry).expect("compile to C");
+        let c_path = root.join("out.c");
+        let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
+        fs::write(&c_path, c).expect("write C file");
+        compile_c_to_exe(&c_path, &exe_path, "host").expect("compile C to exe");
+        let run = Command::new(&exe_path).output().expect("run exe");
+        assert!(run.status.success(), "binary run failed");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn e2e_diamond_imports_structs_compile_and_run() {
+        if !has_host_compiler() {
+            eprintln!("Skipping e2e_diamond_imports_structs_compile_and_run: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("imports_e2e_diamond");
+        let entry = root.join("main.skd");
+        let left = root.join("left.skd");
+        let right = root.join("right.skd");
+        let shared = root.join("shared.skd");
+        fs::write(&shared, "struct Acc {\n    Int value\n}\n\nfn base() Int {\n    return 3\n}\n").expect("write shared");
+        fs::write(&left, "import \"./shared.skd\"\nfn l() Int {\n    return base() + 1\n}\n").expect("write left");
+        fs::write(&right, "import \"./shared.skd\"\nfn r() Int {\n    return base() + 2\n}\n").expect("write right");
+        fs::write(
+            &entry,
+            "import \"./left.skd\"\nimport \"./right.skd\"\nnew Acc a = {value = l() + r()}\noutput(a.value)\n",
+        )
+        .expect("write entry");
+
+        let c = compile_to_c(&entry).expect("compile to C");
+        let c_path = root.join("out.c");
+        let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
+        fs::write(&c_path, c).expect("write C file");
+        compile_c_to_exe(&c_path, &exe_path, "host").expect("compile C to exe");
+        let run = Command::new(&exe_path).output().expect("run exe");
+        assert!(run.status.success(), "binary run failed");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_module_name_import_fails_with_contract_diagnostic() {
+        let root = temp_case_dir("imports_neg_module_name");
+        let entry = root.join("main.skd");
+        fs::write(&entry, "import lib\nnew Int x = 1\n").expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("module-name import is not supported"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_alias_import_fails_with_contract_diagnostic() {
+        let root = temp_case_dir("imports_neg_alias");
+        let entry = root.join("main.skd");
+        fs::write(&entry, "import \"./lib.skd\" as lib\nnew Int x = 1\n").expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("import alias is not supported"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_missing_import_fails_with_contract_diagnostic() {
+        let root = temp_case_dir("imports_neg_missing");
+        let entry = root.join("main.skd");
+        fs::write(&entry, "import \"./missing.skd\"\nnew Int x = 1\n").expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("import path resolution failed"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_cycle_import_fails_with_contract_diagnostic() {
+        let root = temp_case_dir("imports_neg_cycle");
+        let a = root.join("a.skd");
+        let b = root.join("b.skd");
+        fs::write(&a, "import \"./b.skd\"\nnew Int x = 1\n").expect("write a");
+        fs::write(&b, "import \"./a.skd\"\nnew Int y = 2\n").expect("write b");
+
+        let err = compile_to_c(&a).expect_err("compile must fail");
+        assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("cyclic import detected"));
 
         let _ = fs::remove_dir_all(root);
     }
