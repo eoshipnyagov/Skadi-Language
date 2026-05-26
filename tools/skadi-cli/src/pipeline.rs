@@ -128,25 +128,34 @@ fn parse_import_line(line: &str) -> Result<Option<String>, String> {
 pub fn compile_c_to_exe(c_path: &Path, exe_path: &Path, target: &str) -> Result<(), String> {
     let _profile = resolve_profile(target)?;
 
-    let mut last_err = String::new();
     let candidates = candidate_invocations(target, c_path, exe_path)?;
+    let mut attempts: Vec<String> = Vec::new();
     for inv in candidates {
         let out = Command::new(&inv.program).args(&inv.args).output();
         match out {
             Ok(r) if r.status.success() => return Ok(()),
             Ok(r) => {
-                last_err = format!(
-                    "{} failed: {}",
-                    inv.program,
-                    String::from_utf8_lossy(&r.stderr).trim()
-                );
+                let stderr = String::from_utf8_lossy(&r.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&r.stdout).trim().to_string();
+                let detail = if !stderr.is_empty() {
+                    stderr
+                } else if !stdout.is_empty() {
+                    stdout
+                } else {
+                    "no compiler output".to_string()
+                };
+                attempts.push(format!("- {}: {}", inv.program, detail));
             }
             Err(e) => {
-                last_err = format!("failed to run {}: {}", inv.program, e);
+                attempts.push(format!("- {}: failed to run: {}", inv.program, e));
             }
         }
     }
-    Err(last_err)
+    Err(format!(
+        "[SC-CGEN-001] native C compilation failed for target '{}'. attempts:\n{}",
+        target,
+        attempts.join("\n")
+    ))
 }
 
 #[cfg(test)]
@@ -492,6 +501,30 @@ mod tests {
         let err = compile_to_c(&entry).expect_err("compile must fail");
         assert!(err.contains("[SC-MOD-001]"));
         assert!(err.contains("unsupported import syntax"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn compile_c_to_exe_reports_attempt_matrix_on_failure() {
+        if !has_host_compiler() {
+            eprintln!("Skipping compile_c_to_exe_reports_attempt_matrix_on_failure: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("cgen_attempt_matrix");
+        let c_path = root.join("broken.c");
+        let exe_path = if cfg!(windows) { root.join("broken.exe") } else { root.join("broken") };
+        fs::write(&c_path, "int main(void) { BROKEN_TOKEN return 0; }\n").expect("write c");
+
+        let err = compile_c_to_exe(&c_path, &exe_path, "host").expect_err("compile must fail");
+        assert!(err.contains("[SC-CGEN-001]"));
+        assert!(err.contains("attempts:"));
+        assert!(
+            err.contains("- gcc:") || err.contains("- clang:") || err.contains("- cc:"),
+            "must include compiler attempt lines, got: {}",
+            err
+        );
 
         let _ = fs::remove_dir_all(root);
     }
