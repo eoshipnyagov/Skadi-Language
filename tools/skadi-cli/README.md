@@ -2,6 +2,8 @@
 
 Cargo-like CLI for Skadi (early stage).
 
+Quick start (cross-platform): `docs/QUICK_START.md`
+
 ## Current status
 
 - Implemented:
@@ -33,6 +35,20 @@ cargo run --manifest-path tools/skadi-cli/Cargo.toml -- examples --type gui
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- build
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- run
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
+```
+
+## Install as global `skadi` command
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_skadi.ps1
+```
+
+Linux / macOS / WSL:
+
+```bash
+bash ./scripts/install_skadi.sh
 ```
 
 ## From-zero smoke flow (Windows PowerShell)
