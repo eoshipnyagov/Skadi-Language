@@ -392,38 +392,115 @@ fn emit_struct_methods(program: &Program, out: &mut String) {
 }
 
 fn program_uses_text_runtime(program: &Program) -> bool {
+    fn expression_needs_text_runtime(expr: &Expression) -> bool {
+        match expr {
+            Expression::LiteralString(_) => true,
+            Expression::ListLiteral(items) => items.iter().any(expression_needs_text_runtime),
+            Expression::Index { base, index } => {
+                expression_needs_text_runtime(base) || expression_needs_text_runtime(index)
+            }
+            Expression::Call { name, args } => {
+                matches!(
+                    name.as_str(),
+                    "len" | "contains" | "find" | "slice" | "concat" | "input" | "read" | "fs.join"
+                ) || args.iter().any(expression_needs_text_runtime)
+            }
+            Expression::BinaryOp { left, right, .. } => {
+                expression_needs_text_runtime(left)
+                    || right
+                        .as_ref()
+                        .map(|r| expression_needs_text_runtime(r))
+                        .unwrap_or(false)
+            }
+            Expression::StructConstruction { fields } => {
+                fields.values().any(|v| expression_needs_text_runtime(v))
+            }
+            _ => false,
+        }
+    }
+
     fn block_has_text(block: &BlockStatement) -> bool {
         block.statements.iter().any(statement_has_text)
     }
+
     fn statement_has_text(stmt: &Statement) -> bool {
         match stmt {
-            Statement::VarDecl { declared_type, .. } => declared_type
-                .as_deref()
-                .map(|t| t == "Text")
-                .unwrap_or(false),
+            Statement::VarDecl {
+                declared_type, value, ..
+            } => {
+                declared_type
+                    .as_deref()
+                    .map(|t| t == "Text")
+                    .unwrap_or(false)
+                    || expression_needs_text_runtime(value)
+            }
+            Statement::Assignment { value, .. }
+            | Statement::FieldAssignment { value, .. }
+            | Statement::ExpressionStatement { expr: value, .. } => expression_needs_text_runtime(value),
             Statement::FunctionDef { body, .. } => block_has_text(body),
             Statement::IfStatement {
+                condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                block_has_text(then_block)
+                expression_needs_text_runtime(condition)
+                    || block_has_text(then_block)
                     || else_block
                         .as_ref()
                         .map(|b| block_has_text(b))
                         .unwrap_or(false)
             }
-            Statement::WhenBlock { cases, else_block, .. } => {
-                cases.iter().any(|(_, b)| block_has_text(b))
+            Statement::ForLoop {
+                initialization,
+                condition,
+                update,
+                body,
+                ..
+            } => {
+                initialization
+                    .as_ref()
+                    .map(|e| expression_needs_text_runtime(e))
+                    .unwrap_or(false)
+                    || condition
+                        .as_ref()
+                        .map(|e| expression_needs_text_runtime(e))
+                        .unwrap_or(false)
+                    || update
+                        .as_ref()
+                        .map(|e| expression_needs_text_runtime(e))
+                        .unwrap_or(false)
+                    || block_has_text(body)
+            }
+            Statement::WhenBlock {
+                when_expression,
+                cases,
+                else_block,
+                ..
+            } => {
+                expression_needs_text_runtime(when_expression)
+                    || cases.iter().any(|(case_exprs, b)| {
+                        case_exprs.iter().any(expression_needs_text_runtime) || block_has_text(b)
+                    })
                     || else_block
                         .as_ref()
                         .map(|b| block_has_text(b))
                         .unwrap_or(false)
             }
-            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => block_has_text(body),
-            Statement::DangerAssignOnError { on_error, .. }
-            | Statement::DangerCallOnError { on_error, .. }
-            | Statement::ListPopOnError { on_error, .. } => block_has_text(on_error),
+            Statement::WhileLoop {
+                condition, body, ..
+            } => expression_needs_text_runtime(condition) || block_has_text(body),
+            Statement::LoopStatement { body, .. } => block_has_text(body),
+            Statement::DangerAssignOnError { args, on_error, .. }
+            | Statement::DangerCallOnError { args, on_error, .. } => {
+                args.iter().any(expression_needs_text_runtime) || block_has_text(on_error)
+            }
+            Statement::ListPush { value, .. } => expression_needs_text_runtime(value),
+            Statement::ListPopOnError { on_error, .. } => block_has_text(on_error),
+            Statement::ReturnStatement { value, .. } => value
+                .as_ref()
+                .map(|v| expression_needs_text_runtime(v))
+                .unwrap_or(false),
             Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
                 statements.iter().any(statement_has_text)
             }

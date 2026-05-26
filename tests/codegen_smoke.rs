@@ -168,6 +168,29 @@ when x {
 }
 
 #[test]
+fn codegen_emits_text_runtime_for_when_find_expression() {
+    let src = r#"
+new Text t = "alpha"
+when find(t, "a") {
+    is -1 {
+        new Int x = 0
+    }
+    else {
+        new Int x = 1
+    }
+}
+"#;
+
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+
+    assert!(c.contains("static int64_t sk_text_find(const char *s, const char *needle) {"));
+    assert!(c.contains("int64_t __when_tmp_1 = sk_text_find(t, \"a\");"));
+}
+
+#[test]
 fn codegen_lowers_for_in_to_list_iteration_shape() {
     let src = r#"
 new Int sum = 0
