@@ -12,6 +12,7 @@ Cargo-like CLI for Skadi (early stage).
   - `run` (build + execute)
   - `target list`, `tui` (minimal)
   - `doctor` (target compiler availability report)
+  - multi-file project load via `import "./relative_file.skd"` (recursive, cycle-safe, deduplicated)
 - Planned:
   - full target toolchain support
   - `format`

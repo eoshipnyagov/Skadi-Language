@@ -242,18 +242,17 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         for stmt in stmts {
             match stmt {
                 Statement::VarDecl {
-                    declared_type,
+                    declared_type: Some(dt),
                     loc,
                     ..
                 } => {
-                    if let Some(dt) = declared_type {
-                        if let Some(elem) = dt.strip_suffix(" List") {
-                            warn_type_style(elem.trim(), loc.line, loc.column, user_types, out);
-                        } else {
-                            warn_type_style(dt, loc.line, loc.column, user_types, out);
-                        }
+                    if let Some(elem) = dt.strip_suffix(" List") {
+                        warn_type_style(elem.trim(), loc.line, loc.column, user_types, out);
+                    } else {
+                        warn_type_style(dt, loc.line, loc.column, user_types, out);
                     }
                 }
+                Statement::VarDecl { declared_type: None, .. } => {}
                 Statement::FunctionDef {
                     params,
                     returns,
@@ -864,17 +863,17 @@ fn analyze_statement(
             if let Some(ref ctx) = fn_ctx {
                 if let Some(expr) = value {
                     let actual = infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
-                    if let Some(expected) = ctx.return_type.as_ref() {
-                        if !can_assign(expected, &actual) {
-                            return Err(err_at_code(
-                                stmt,
-                                SEM_TYPE_MISMATCH,
-                                format!(
-                                    "type mismatch in return: cannot return {:?} where {:?} expected.",
-                                    actual, expected
-                                ),
-                            ));
-                        }
+                    if let Some(expected) = ctx.return_type.as_ref()
+                        && !can_assign(expected, &actual)
+                    {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TYPE_MISMATCH,
+                            format!(
+                                "type mismatch in return: cannot return {:?} where {:?} expected.",
+                                actual, expected
+                            ),
+                        ));
                     }
                 } else if !ctx.is_danger && ctx.return_type.is_some() {
                     return Err(err_at_code(

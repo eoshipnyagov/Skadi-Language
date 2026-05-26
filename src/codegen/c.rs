@@ -780,19 +780,20 @@ fn program_uses_args_runtime(program: &Program) -> bool {
 
 fn emit_error_code_enum(program: &Program, out: &mut String) {
     for stmt in &program.statements {
-        if let Statement::LabelDecl { name, variants, .. } = stmt {
-            if name == "ErrorCode" && !variants.is_empty() {
-                out.push_str("typedef enum ErrorCode {\n");
-                for (i, v) in variants.iter().enumerate() {
-                    if i == 0 {
-                        out.push_str(&format!("    ErrorCode_{} = 0,\n", v));
-                    } else {
-                        out.push_str(&format!("    ErrorCode_{} = {},\n", v, i));
-                    }
+        if let Statement::LabelDecl { name, variants, .. } = stmt
+            && name == "ErrorCode"
+            && !variants.is_empty()
+        {
+            out.push_str("typedef enum ErrorCode {\n");
+            for (i, v) in variants.iter().enumerate() {
+                if i == 0 {
+                    out.push_str(&format!("    ErrorCode_{} = 0,\n", v));
+                } else {
+                    out.push_str(&format!("    ErrorCode_{} = {},\n", v, i));
                 }
-                out.push_str("} ErrorCode;\n\n");
-                break;
             }
+            out.push_str("} ErrorCode;\n\n");
+            break;
         }
     }
 }
@@ -902,13 +903,13 @@ fn emit_statement(
             let mut then_decl = declared.clone();
             emit_block(then_block, out, indent + 1, &mut then_decl, fn_ctx);
             out.push_str(&pad);
-            out.push_str("}");
+            out.push('}');
             if let Some(else_block) = else_block {
                 out.push_str(" else {\n");
                 let mut else_decl = declared.clone();
                 emit_block(else_block, out, indent + 1, &mut else_decl, fn_ctx);
                 out.push_str(&pad);
-                out.push_str("}");
+                out.push('}');
             }
             out.push('\n');
         }
@@ -1100,35 +1101,35 @@ fn emit_statement(
             out.push_str("}\n");
         }
         Statement::ReturnStatement { value, .. } => {
-            if let Some(ctx) = fn_ctx {
-                if ctx.is_danger {
-                    match (ctx.return_type.is_some(), value) {
-                        (true, Some(expr)) => {
-                            out.push_str(&pad);
-                            out.push_str("*out = ");
-                            out.push_str(&emit_expr(expr, declared));
-                            out.push_str(";\n");
-                            out.push_str(&pad);
-                            out.push_str("return 0;\n");
-                            return;
-                        }
-                        (true, None) => {
-                            out.push_str(&pad);
-                            out.push_str("return 1;\n");
-                            return;
-                        }
-                        (false, Some(expr)) => {
-                            out.push_str(&pad);
-                            out.push_str("return ");
-                            out.push_str(&emit_expr(expr, declared));
-                            out.push_str(";\n");
-                            return;
-                        }
-                        (false, None) => {
-                            out.push_str(&pad);
-                            out.push_str("return 1;\n");
-                            return;
-                        }
+            if let Some(ctx) = fn_ctx
+                && ctx.is_danger
+            {
+                match (ctx.return_type.is_some(), value) {
+                    (true, Some(expr)) => {
+                        out.push_str(&pad);
+                        out.push_str("*out = ");
+                        out.push_str(&emit_expr(expr, declared));
+                        out.push_str(";\n");
+                        out.push_str(&pad);
+                        out.push_str("return 0;\n");
+                        return;
+                    }
+                    (true, None) => {
+                        out.push_str(&pad);
+                        out.push_str("return 1;\n");
+                        return;
+                    }
+                    (false, Some(expr)) => {
+                        out.push_str(&pad);
+                        out.push_str("return ");
+                        out.push_str(&emit_expr(expr, declared));
+                        out.push_str(";\n");
+                        return;
+                    }
+                    (false, None) => {
+                        out.push_str(&pad);
+                        out.push_str("return 1;\n");
+                        return;
                     }
                 }
             }
@@ -1185,7 +1186,7 @@ fn emit_statement(
                     out.push_str("else if (");
                 }
                 if case_exprs.is_empty() {
-                    out.push_str("0");
+                    out.push('0');
                 } else {
                     for (j, expr) in case_exprs.iter().enumerate() {
                         if j > 0 {
@@ -1222,43 +1223,38 @@ fn emit_statement(
             }
         }
         Statement::VarDecl { name, value, declared_type, .. } => {
-            if let Some(dt) = declared_type.as_deref() {
-                if let Some(elem) = list_elem_from_decl(dt)
-                    && {
-                        let _ = elem;
-                        true
-                    }
-                {
-                    let suffix = list_meta_dynamic(elem).1;
-                    out.push_str(&pad);
-                    out.push_str("SkadiList_");
-                    out.push_str(&suffix);
-                    out.push(' ');
-                    out.push_str(name);
-                    out.push_str(" = sk_list_");
-                    out.push_str(&suffix);
-                    out.push_str("_new();\n");
-                    if let Expression::ListLiteral(items) = value.as_ref() {
-                        for item in items {
-                            out.push_str(&pad);
-                            out.push_str("(void)sk_list_");
-                            out.push_str(&suffix);
-                            out.push_str("_push(&");
-                            out.push_str(name);
-                            out.push_str(", ");
-                            out.push_str(&emit_expr(item, declared));
-                            out.push_str(");\n");
-                        }
-                    } else {
+            if let Some(dt) = declared_type.as_deref()
+                && let Some(elem) = list_elem_from_decl(dt)
+            {
+                let suffix = list_meta_dynamic(elem).1;
+                out.push_str(&pad);
+                out.push_str("SkadiList_");
+                out.push_str(&suffix);
+                out.push(' ');
+                out.push_str(name);
+                out.push_str(" = sk_list_");
+                out.push_str(&suffix);
+                out.push_str("_new();\n");
+                if let Expression::ListLiteral(items) = value.as_ref() {
+                    for item in items {
                         out.push_str(&pad);
+                        out.push_str("(void)sk_list_");
+                        out.push_str(&suffix);
+                        out.push_str("_push(&");
                         out.push_str(name);
-                        out.push_str(" = ");
-                        out.push_str(&emit_expr(value, declared));
-                        out.push_str(";\n");
+                        out.push_str(", ");
+                        out.push_str(&emit_expr(item, declared));
+                        out.push_str(");\n");
                     }
-                    declared.insert(name.clone(), dt.to_string());
-                    return;
+                } else {
+                    out.push_str(&pad);
+                    out.push_str(name);
+                    out.push_str(" = ");
+                    out.push_str(&emit_expr(value, declared));
+                    out.push_str(";\n");
                 }
+                declared.insert(name.clone(), dt.to_string());
+                return;
             }
             out.push_str(&pad);
             if let Some(dt) = declared_type.as_deref()
@@ -1478,23 +1474,23 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     _ => {}
                 }
             }
-            if let Some((obj, method)) = name.split_once(".") {
-                if let Some(obj_ty) = declared.get(obj)
-                    && !matches!(
-                        obj_ty.as_str(),
-                        "Int" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "Float"
-                            | "f32" | "f64" | "bool" | "Bool" | "char" | "Char" | "Text" | "Path"
-                    ) && !obj_ty.ends_with(" List")
-                {
-                    let mut rendered: Vec<String> = Vec::new();
-                    if obj == "my" {
-                        rendered.push("my".to_string());
-                    } else {
-                        rendered.push(format!("&{}", obj));
-                    }
-                    rendered.extend(args.iter().map(|a| emit_expr(a, declared)));
-                    return format!("{}_{}({})", obj_ty, method, rendered.join(", "));
+            if let Some((obj, method)) = name.split_once(".")
+                && let Some(obj_ty) = declared.get(obj)
+                && !matches!(
+                    obj_ty.as_str(),
+                    "Int" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "Float"
+                        | "f32" | "f64" | "bool" | "Bool" | "char" | "Char" | "Text" | "Path"
+                )
+                && !obj_ty.ends_with(" List")
+            {
+                let mut rendered: Vec<String> = Vec::new();
+                if obj == "my" {
+                    rendered.push("my".to_string());
+                } else {
+                    rendered.push(format!("&{}", obj));
                 }
+                rendered.extend(args.iter().map(|a| emit_expr(a, declared)));
+                return format!("{}_{}({})", obj_ty, method, rendered.join(", "));
             }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", name, rendered.join(", "))
