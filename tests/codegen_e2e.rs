@@ -81,6 +81,14 @@ fn compile_c_and_run(compiler: &str, c_src: &str, stem: &str, extra_flags: &[&st
     let _ = fs::remove_file(exe_path);
 }
 
+fn compile_skadi_and_run(compiler: &str, src: &str, stem: &str, extra_flags: &[&str]) {
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    compile_c_and_run(compiler, &c, stem, extra_flags);
+}
+
 #[test]
 fn e2e_skadi_to_c_binary_builds() {
     let Some(compiler) = find_c_compiler() else {
@@ -519,5 +527,92 @@ output(msg)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     compile_c_and_run(compiler, &c, "Skadi_e2e_sanitized", &sanitizer_flags);
+}
+
+#[test]
+fn e2e_feature_mix_inc_dec_with_loop_flow() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Int i = 0
+new Int acc = 0
+while i < 10 {
+    i = i + 1
+    if i mod 2 != 0 {
+        if i < 8 {
+            acc = acc + i
+        }
+    }
+}
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_inc_dec", &[]);
+}
+
+#[test]
+fn e2e_feature_mix_iterate_when_pass_and_text() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Text List items = ["alpha", "beta", "gamma"]
+new Int score = 0
+iterate items as item {
+    when len(item) {
+        is 0 {
+            score = score + 0
+        }
+        else {
+            score = score + len(item)
+        }
+    }
+}
+output(score)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_iterate_when", &[]);
+}
+
+#[test]
+fn e2e_feature_mix_danger_on_error_inside_loop() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+label ErrorCode {
+    Ok
+    ZeroDivision
+}
+
+danger fn div_safe(Int a, Int b) Int {
+    if b == 0 {
+        return error ZeroDivision
+    } else {
+        return a div b
+    }
+}
+
+new i32 List divisors = [2, 1, 0, 4]
+new Int i = 0
+new Int total = 0
+new Int part = 0
+while i < len(divisors) {
+    part = div_safe(20, divisors[i]) on error {
+        part = 0
+    }
+    total = total + part
+    i = i + 1
+}
+output(total)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_danger_loop", &[]);
 }
 
