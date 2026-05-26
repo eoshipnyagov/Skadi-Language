@@ -19,7 +19,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     if deep {
         remove_dir_if_exists(root.join("target"), &mut removed)?;
-        remove_dir_if_exists(root.join("tools").join("skadi-cli").join("target"), &mut removed)?;
     }
 
     if removed.is_empty() {
