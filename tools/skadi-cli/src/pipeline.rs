@@ -506,6 +506,59 @@ mod tests {
     }
 
     #[test]
+    fn mutation_negative_parser_error_surfaces_with_parse_code() {
+        let root = temp_case_dir("mut_parse_code");
+        let entry = root.join("main.skd");
+        fs::write(
+            &entry,
+            "new Int x = 1\nx = 1 +\n",
+        )
+        .expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("parse failed"));
+        assert!(err.contains("SC-PARSE-"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn mutation_negative_semantic_on_error_non_danger_surfaces_with_sem_code() {
+        let root = temp_case_dir("mut_sem_on_error");
+        let entry = root.join("main.skd");
+        fs::write(
+            &entry,
+            "new Int x = 1\nx = read(\"a.txt\") on error {\n    x = 0\n}\n",
+        )
+        .expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("semantic failed"));
+        assert!(err.contains("SC-SEM-040"));
+        assert!(err.contains("on error requires danger fn call"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn mutation_negative_semantic_index_type_surfaces_with_sem_code() {
+        let root = temp_case_dir("mut_sem_index_type");
+        let entry = root.join("main.skd");
+        fs::write(
+            &entry,
+            "new i32 List xs = [1, 2]\nnew i32 v = xs[\"bad\"]\n",
+        )
+        .expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("semantic failed"));
+        assert!(err.contains("SC-SEM-020"));
+        assert!(err.contains("index access requires Int index"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn compile_c_to_exe_reports_attempt_matrix_on_failure() {
         if !has_host_compiler() {
             eprintln!("Skipping compile_c_to_exe_reports_attempt_matrix_on_failure: no host C compiler in PATH.");
@@ -525,6 +578,33 @@ mod tests {
             "must include compiler attempt lines, got: {}",
             err
         );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn mutation_negative_codegen_gap_surfaces_as_sc_cgen_001() {
+        if !has_host_compiler() {
+            eprintln!("Skipping mutation_negative_codegen_gap_surfaces_as_sc_cgen_001: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("mut_codegen_gap");
+        let entry = root.join("main.skd");
+        fs::write(
+            &entry,
+            "new i32 List xs = [1, 2]\nnew Int v = 0\nv = xs.pop() on error {\n    v = -1\n}\n",
+        )
+        .expect("write entry");
+
+        let c = compile_to_c(&entry).expect("compile_to_c should pass this known gap");
+        let c_path = root.join("out.c");
+        let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
+        fs::write(&c_path, c).expect("write C file");
+
+        let err = compile_c_to_exe(&c_path, &exe_path, "host").expect_err("native compile must fail");
+        assert!(err.contains("[SC-CGEN-001]"));
+        assert!(err.contains("attempts:"));
 
         let _ = fs::remove_dir_all(root);
     }
