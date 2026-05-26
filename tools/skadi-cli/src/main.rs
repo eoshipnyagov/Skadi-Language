@@ -11,8 +11,10 @@ fn print_help() {
     println!("  skadi <command> [args]");
     println!();
     println!("Commands:");
-    println!("  new <name>         Create a new Skadi project");
-    println!("  init               Initialize Skadi project in current directory");
+    println!("  new <name>         Create a new Skadi project (default: console)");
+    println!("  new <type> <name>  Create typed project (game|embedded|console|gui)");
+    println!("  init [type]        Initialize Skadi project in current directory");
+    println!("  examples           Add examples based on project type");
     println!("  check              Run frontend checks");
     println!("  clean [--all]      Remove build artifacts");
     println!("  build [--target]   Build project");
@@ -33,6 +35,7 @@ fn main() {
     let result = match cmd {
         "new" => commands::new_cmd::run(&args[2..]),
         "init" => commands::init_cmd::run(&args[2..]),
+        "examples" => commands::examples_cmd::run(&args[2..]),
         "check" => commands::check_cmd::run(&args[2..]),
         "clean" => commands::clean_cmd::run(&args[2..]),
         "build" => commands::build_cmd::run(&args[2..]),

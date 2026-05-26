@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 pub struct ProjectConfig {
     pub root: PathBuf,
     pub name: String,
+    pub project_type: String,
     pub entry: PathBuf,
 }
 
@@ -19,10 +20,11 @@ pub fn load_project() -> Result<ProjectConfig, String> {
             .unwrap_or("skadi_project")
             .to_string()
     });
+    let project_type = extract_string_value(&content, "type").unwrap_or_else(|| "console".to_string());
     let entry_str = extract_string_value(&content, "entry").unwrap_or_else(|| "src/main.skd".to_string());
     let entry = root.join(entry_str);
 
-    Ok(ProjectConfig { root, name, entry })
+    Ok(ProjectConfig { root, name, project_type, entry })
 }
 
 fn extract_string_value(content: &str, key: &str) -> Option<String> {
