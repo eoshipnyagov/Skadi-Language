@@ -1,6 +1,6 @@
 ﻿# Skadi Docs Index (Source of Truth Map)
 
-Date: 2026-05-26
+Date: 2026-05-27
 Purpose: one-page map of which document answers which question.
 
 ## 1. Start Here
@@ -40,17 +40,23 @@ Purpose: one-page map of which document answers which question.
 - `docs/V1_BLOCKERS_MATRIX_RU.md` — release blockers and status.
 - `docs/DIAGNOSTICS_STYLE.md` — canonical diagnostics format.
 - `docs/DIAGNOSTIC_CODES_REFERENCE.md` — canonical ownership map for diagnostic code families.
+- `docs/V1_RELEASE_CONTRACT_RU.md` — release freeze contract (draft/approval gate).
 
-## 7. Style
+## 7. Release Notes
+
+- `CHANGELOG.md` — release-level change log.
+- `docs/RELEASE_NOTES_V1_RC1_RU.md` — candidate release notes for `v1.0.0-rc1`.
+
+## 8. Style
 
 - `docs/SKADI_STYLE_PRINCIPLES.md` — design principles.
 - `docs/SKADI_STYLE_GUIDE_V1.md` — coding style for examples/showcase.
 
-## 8. Showcase
+## 9. Showcase
 
 - `docs/SHOWCASE_PROGRAMS.md` — small programs used as confidence suite.
 
-## 9. Conflict Resolution Rule
+## 10. Conflict Resolution Rule
 
 If two docs conflict:
 1. `SKADI_SYNTAX_STATUS.md` wins for implemented behavior.

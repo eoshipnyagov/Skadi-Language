@@ -1,6 +1,6 @@
 # Skadi Quick Start (Win + macOS + Linux)
 
-Date: 2026-05-26
+Date: 2026-05-27
 
 ## 1. Prerequisites
 
@@ -43,8 +43,7 @@ cd demo
 skadi check
 skadi build
 skadi run
-skadi examples
-skadi clean
+skadi clean --all
 ```
 
 Typed templates:
@@ -62,3 +61,5 @@ skadi new gui app_demo
   - not supported yet: `import module_name`, alias (`as`), visibility rules
 - If you run commands through `cargo run`, keep `--` before CLI args:
   - `cargo run --manifest-path tools/skadi-cli/Cargo.toml -- help`
+  - inside a generated project directory, use absolute/relative manifest path:
+    - `cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- check`

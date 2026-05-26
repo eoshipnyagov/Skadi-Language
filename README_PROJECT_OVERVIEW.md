@@ -1,6 +1,6 @@
 ﻿# Skadi Compiler: Project Overview
 
-Дата обновления: 2026-05-26
+Дата обновления: 2026-05-27
 
 ## 1. Что это за репозиторий
 
@@ -32,6 +32,9 @@
 - Матрица покрытия и блокеры:
   - `docs/TEST_COVERAGE_MATRIX.md`
   - `docs/V1_BLOCKERS_MATRIX_RU.md`
+- Релизный freeze-контракт и release notes:
+  - `docs/V1_RELEASE_CONTRACT_RU.md`
+  - `docs/RELEASE_NOTES_V1_RC1_RU.md`
 - План разработки:
   - `SKADI_IMPLEMENTATION_PLAN.md`
 
@@ -55,10 +58,11 @@ cargo test -q
 Проверка CLI:
 ```bash
 cargo run -p skadi-cli -- doctor
-cargo run -p skadi-cli -- new demo
-cargo run -p skadi-cli -- check --project demo
-cargo run -p skadi-cli -- build --project demo
-cargo run -p skadi-cli -- run --project demo
+cargo run -p skadi-cli -- new console demo
+cd demo
+cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- check
+cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- build
+cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- run
 ```
 
 Транспиляция одного файла:

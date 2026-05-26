@@ -1,28 +1,29 @@
 ﻿# Skadi CLI Usage
 
-Date: 2026-05-26
+Date: 2026-05-27
 
 This document describes practical usage of the current CLI manager in `tools/skadi-cli`.
 
 ## Commands
 
 - `doctor` — detect host toolchain and show setup hints.
-- `new <name> [--template <console|gui|embedded|game>]` — create a new project.
-- `init` — initialize `skadi.toml` in current directory.
-- `examples [--template <...>]` — add example programs.
-- `check [--project <dir>]` — parse/semantic/codegen check without final native run.
-- `build [--project <dir>] [--cc <compiler>] [--target <triple>]` — build project.
-- `run [--project <dir>] [--cc <compiler>] [--target <triple>]` — build and run.
-- `clean [--project <dir>]` — remove generated artifacts.
+- `new <name>` or `new <type> <name>` — create a new project.
+- `init [type]` — initialize `Skadi.toml` in current directory.
+- `examples` — add example programs.
+- `check` — parse/semantic/codegen check without final native run.
+- `build [--target <triple>]` — build project.
+- `run` — build and run.
+- `clean [--all]` — remove generated artifacts.
 
 ## Quick flow
 
 ```bash
 cargo run -p skadi-cli -- doctor
-cargo run -p skadi-cli -- new demo
-cargo run -p skadi-cli -- check --project demo
-cargo run -p skadi-cli -- build --project demo
-cargo run -p skadi-cli -- run --project demo
+cargo run -p skadi-cli -- new console demo
+cd demo
+cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- check
+cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- build
+cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- run
 ```
 
 ## Notes on `cargo run -- ...`
@@ -37,14 +38,10 @@ The `--` separator tells Cargo that following arguments belong to `skadi-cli`, n
 
 ## Compiler selection
 
-`build` and `run` support explicit compiler pinning:
+Current stable command surface does not expose `--cc` yet.
+Compiler auto-detect order is:
 
 ```bash
-cargo run -p skadi-cli -- build --project demo --cc gcc
-cargo run -p skadi-cli -- run --project demo --cc clang
-```
-
-Auto-detect order by host:
 - Windows: `gcc -> clang -> cl`
 - Linux/WSL/macOS: `gcc -> clang -> cc`
 
