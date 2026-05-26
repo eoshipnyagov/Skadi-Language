@@ -69,3 +69,14 @@
 2. Добавить секцию ownership memory contract для C runtime helper-ов.
 3. Дополнить edge/conformance тесты по утвержденным контрактам.
 
+
+## V1 Reliability Addendum (2026-05-26)
+
+- Added feature-mix codegen e2e scenarios that combine multiple v1 constructs in one program.
+- Added golden-lite codegen invariants for critical lowering patterns:
+  - `when -> if/else-if`,
+  - `danger fn` and `on error` call shape,
+  - runtime hooks for `List/Text/fs/io`,
+  - statement-only `i++/i--` lowering.
+- Added negative compile e2e guard for known semantic/codegen mismatch shape (`output(concat(...))`).
+- CI gate split includes dedicated `codegen-e2e` stage; sanitizer run remains optional with explicit skip logs.

@@ -84,6 +84,35 @@ fn compile_c_and_run(compiler: &str, c_src: &str, stem: &str, extra_flags: &[&st
     let _ = fs::remove_file(exe_path);
 }
 
+fn compile_c_expect_fail(compiler: &str, c_src: &str, stem: &str) {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time")
+        .as_millis();
+    let mut c_path: PathBuf = std::env::temp_dir();
+    c_path.push(format!("{stem}_{stamp}.c"));
+    let mut exe_path: PathBuf = std::env::temp_dir();
+    exe_path.push(format!("{stem}_{stamp}"));
+    if cfg!(windows) {
+        exe_path.set_extension("exe");
+    }
+
+    fs::write(&c_path, c_src).expect("write C source");
+    let compile = Command::new(compiler)
+        .arg(&c_path)
+        .arg("-o")
+        .arg(&exe_path)
+        .output()
+        .expect("run C compiler");
+    assert!(
+        !compile.status.success(),
+        "expected compile to fail, but it succeeded for {}",
+        c_path.display()
+    );
+    let _ = fs::remove_file(c_path);
+    let _ = fs::remove_file(exe_path);
+}
+
 #[test]
 fn e2e_skadi_to_c_binary_builds() {
     let Some(compiler) = find_c_compiler() else {
@@ -522,5 +551,125 @@ output(msg)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     compile_c_and_run(compiler, &c, "Skadi_e2e_sanitized", &sanitizer_flags);
+}
+
+#[test]
+fn e2e_feature_mix_struct_when_iterate_incdec_build_and_run() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+struct Meter {
+    Int value
+    fn add(Int d) Int {
+        my.value = my.value + d
+        return my.value
+    }
+}
+new Meter m = {value = 0}
+new Int total = 0
+new Int i = 0
+while i < 3 {
+    total = total + i
+    i++
+}
+new Int mode = 2
+when mode {
+    is 1 {
+        total = m.add(1)
+    }
+    is 2, 3 {
+        total = m.add(total)
+    }
+    else {
+        total = 0
+    }
+}
+output(total)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("if ((__when_tmp_"));
+    assert!(c.contains("i += 1;"));
+    assert!(c.contains("Meter_add(&m, total)"));
+    compile_c_and_run(compiler, &c, "Skadi_e2e_mix_struct_when_iterate", &[]);
+}
+
+#[test]
+fn e2e_feature_mix_io_fs_branching_build_and_run() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Text root = "."
+new Text List entries = fs.list(root)
+new Int count = len(entries)
+new Int idx = 0
+while idx < count {
+    new Text path = fs.join(root, entries[idx])
+    if fs.is_dir(path) {
+        output(path)
+    } else {
+        new Text content = read(path)
+        output(content)
+    }
+    idx++
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_fs_list("));
+    assert!(c.contains("sk_fs_join("));
+    assert!(c.contains("sk_fs_is_dir("));
+    assert!(c.contains("sk_read_file("));
+    assert!(c.contains("sk_output_text("));
+    compile_c_and_run(compiler, &c, "Skadi_e2e_mix_io_fs_branching", &[]);
+}
+
+#[test]
+fn e2e_codegen_negative_output_read_inline_currently_compile_fails() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping negative e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Text root = "."
+new Text List entries = fs.list(root)
+new Int idx = 0
+if idx < len(entries) {
+    new Text p = fs.join(root, entries[idx])
+    output(read(p))
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic currently passes");
+    let c = transpile_program_to_c(&program);
+    compile_c_expect_fail(compiler, &c, "Skadi_e2e_negative_output_read_inline");
+}
+
+#[test]
+fn e2e_codegen_negative_concat_output_currently_compile_fails() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping negative e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Text a = "x"
+new Text b = "y"
+output(concat(a, b))
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic currently passes");
+    let c = transpile_program_to_c(&program);
+    // Known regression guard: semantic accepts this shape, but codegen currently lowers output(...) as int-only here.
+    compile_c_expect_fail(compiler, &c, "Skadi_e2e_negative_concat_output");
 }
 

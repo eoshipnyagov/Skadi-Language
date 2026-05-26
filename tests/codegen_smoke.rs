@@ -452,3 +452,57 @@ new char c = t[999]
     assert!(c.contains("if (!s || idx < 0) return '\\0';"));
     assert!(c.contains("if ((size_t)idx >= n) return '\\0';"));
 }
+
+#[test]
+fn codegen_emits_when_and_danger_invariants() {
+    let src = r#"
+label ErrorCode {
+    Ok
+    Bad
+}
+
+danger fn parse(Int x) Int {
+    if x > 0 {
+        return x
+    }
+    return error Bad
+}
+
+new Int x = 1
+new Int y = 0
+y = parse(x) on error {
+    y = -1
+}
+when y {
+    is 0, 1 {
+        y = y + 1
+    }
+    else {
+        y = 0
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int parse(int64_t x, int64_t *out)"));
+    assert!(c.contains("if (parse(x, &y) != 0) {"));
+    assert!(c.contains("if ((__when_tmp_"));
+    assert!(c.contains("||"));
+}
+
+#[test]
+fn codegen_emits_increment_decrement_lowering() {
+    let src = r#"
+new Int i = 0
+i++
+i--
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("i += 1;"));
+    assert!(c.contains("i -= 1;"));
+}

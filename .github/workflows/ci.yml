@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  test-and-smoke:
+  core-tests:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -25,8 +25,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Run tests
-        run: cargo test -q
+      - name: Run tests except codegen_e2e
+        run: cargo test -q -- --skip codegen_e2e
 
       - name: Smoke transpile sample programs to C
         run: |
@@ -50,3 +50,20 @@ jobs:
           cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- init
           cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- check
           cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- build --target host --cc ${{ matrix.cc }}
+
+  codegen-e2e:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run dedicated codegen e2e suite
+        run: cargo test -q --test codegen_e2e

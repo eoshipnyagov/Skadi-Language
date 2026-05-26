@@ -35,6 +35,8 @@ This file tracks test coverage for language elements in the current Rust prototy
   - includes UTF-8 text byte-semantics smoke scenario
   - includes sanitizer-backed stress scenario (`ASan/UBSan`) when compiler supports flags
   - memory contract tie-in: validates no sanitizer-detected crashes/UB for current runtime allocation model
+  - includes feature-mix scenarios (struct+method + iterate/when + i++/i--, and io/fs branching mixes)
+  - includes negative compile e2e guard for known semantic/codegen mismatch shape
 - Edge matrix conformance set
   - `tests/edge_matrix.rs`
   - includes:
@@ -64,4 +66,12 @@ For each newly implemented feature, add:
 2. semantic positive + negative tests (`semantic_smoke`)
 3. codegen shape check (`codegen_smoke`)
 4. at least one integration scenario (`language_programs` or `codegen_e2e`)
+
+## 4. Codegen Invariants (golden-lite)
+
+Critical lowering markers are asserted directly in tests (stable fragments, not full-file snapshots):
+- `when -> if / else if` chain markers (`__when_tmp_*`).
+- `danger fn` + `on error` lowering markers (`fn(..., *out)` + `if (call(...) != 0)`).
+- runtime hooks for `List/Text/fs/io`.
+- statement-only inc/dec lowering (`i += 1;` / `i -= 1;`).
 
