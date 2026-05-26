@@ -1,5 +1,6 @@
 pub mod build_cmd;
 pub mod check_cmd;
+pub mod clean_cmd;
 pub mod doctor_cmd;
 pub mod format_cmd;
 pub mod init_cmd;

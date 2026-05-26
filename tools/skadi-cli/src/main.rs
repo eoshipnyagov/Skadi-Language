@@ -14,12 +14,13 @@ fn print_help() {
     println!("  new <name>         Create a new Skadi project");
     println!("  init               Initialize Skadi project in current directory");
     println!("  check              Run frontend checks");
+    println!("  clean [--all]      Remove build artifacts");
     println!("  build [--target]   Build project");
     println!("  run                Build and run project");
     println!("  target list        List supported targets");
     println!("  tui                Interactive mode");
     println!("  format             Format source files (planned)");
-    println!("  doctor             Verify toolchain environment (planned)");
+    println!("  doctor             Verify toolchain environment");
 }
 
 fn main() {
@@ -33,6 +34,7 @@ fn main() {
         "new" => commands::new_cmd::run(&args[2..]),
         "init" => commands::init_cmd::run(&args[2..]),
         "check" => commands::check_cmd::run(&args[2..]),
+        "clean" => commands::clean_cmd::run(&args[2..]),
         "build" => commands::build_cmd::run(&args[2..]),
         "run" => commands::run_cmd::run(&args[2..]),
         "target" => commands::target_cmd::run(&args[2..]),

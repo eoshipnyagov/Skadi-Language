@@ -7,7 +7,9 @@ pub fn run(_args: &[String]) -> Result<(), String> {
     println!("3) Check project");
     println!("4) Build project");
     println!("5) Run project");
-    print!("Select [1-5]: ");
+    println!("6) Clean artifacts");
+    println!("0) Exit");
+    print!("Select [0-6]: ");
     io::stdout().flush().map_err(|e| format!("flush failed: {e}"))?;
 
     let mut input = String::new();
@@ -33,6 +35,8 @@ pub fn run(_args: &[String]) -> Result<(), String> {
         "3" => super::check_cmd::run(&[]),
         "4" => super::build_cmd::run(&[]),
         "5" => super::run_cmd::run(&[]),
+        "6" => super::clean_cmd::run(&[]),
+        "0" => Ok(()),
         _ => Err("unknown selection".to_string()),
     };
 

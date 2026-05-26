@@ -1,4 +1,4 @@
-# Skadi Showcase Programs (Draft v0.1)
+# Skadi Showcase Programs (Current v1 Prototype)
 
 This folder contains 8 small showcase utilities.
 Goal: verify that different real-world program shapes compile and run through the current Skadi -> C -> EXE pipeline.
@@ -52,6 +52,12 @@ cargo run -- --input benchmarks/bench_07_struct_list.skd --emit-exe bench_07_str
 cargo run -- --input benchmarks/bench_08_path_list_helpers.skd --emit-exe bench_08_path_list_helpers.exe
 ```
 
+Or one-command helper:
+
+```powershell
+.\scripts\run_showcase.ps1 -Mode build
+```
+
 ## Smoke runs
 
 ```powershell
@@ -64,6 +70,22 @@ cargo run -- --input benchmarks/bench_08_path_list_helpers.skd --emit-exe bench_
 .\bench_07_struct_list.exe
 .\bench_08_path_list_helpers.exe
 ```
+
+Or one-command helper:
+
+```powershell
+.\scripts\run_showcase.ps1 -Mode smoke
+```
+
+Build and smoke in one pass:
+
+```powershell
+.\scripts\run_showcase.ps1 -Mode all
+```
+
+Notes:
+- `run_showcase.ps1` validates that each expected `.exe` is produced.
+- If compiler invocation fails, the script exits non-zero and reports failed benches.
 
 ## Why this set
 
