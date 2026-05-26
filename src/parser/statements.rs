@@ -66,6 +66,22 @@ fn find_block_end(tokens: &[Token], open_brace_index: usize) -> Result<usize, St
     Ok(current - 1)
 }
 
+pub fn parse_control_keyword_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let stmt = match tokens[start_index].kind() {
+        TokenKind::KeywordBreak => Statement::BreakStatement { loc },
+        TokenKind::KeywordContinue => Statement::ContinueStatement { loc },
+        TokenKind::KeywordPass => Statement::PassStatement { loc },
+        _ => return Err(parse_err("SC-PARSE-158", "expected break/continue/pass keyword.")),
+    };
+
+    let mut cursor = start_index + 1;
+    while cursor < tokens.len() && tokens[cursor].kind() != TokenKind::NewLine && tokens[cursor].lexeme != "}" {
+        cursor += 1;
+    }
+    Ok((stmt, (cursor - start_index).max(1)))
+}
+
 pub fn parse_function_declaration(
     tokens: &[Token],
     start_index: usize,

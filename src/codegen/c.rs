@@ -939,6 +939,18 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str("}\n");
         }
+        Statement::BreakStatement { .. } => {
+            out.push_str(&pad);
+            out.push_str("break;\n");
+        }
+        Statement::ContinueStatement { .. } => {
+            out.push_str(&pad);
+            out.push_str("continue;\n");
+        }
+        Statement::PassStatement { .. } => {
+            out.push_str(&pad);
+            out.push_str(";\n");
+        }
         Statement::ForLoop { initialization, condition, body, .. } => {
             if let (Some(init), Some(coll)) = (initialization, condition) {
                 let var_name = match init.as_ref() {

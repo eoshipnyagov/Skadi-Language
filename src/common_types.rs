@@ -18,6 +18,9 @@ pub enum TokenKind {
     KeywordIn,          // in
     KeywordWhile,       // while
     KeywordLoop,        // loop
+    KeywordBreak,       // break
+    KeywordContinue,    // continue
+    KeywordPass,        // pass
     KeywordReturn,      // return
     KeywordNew,         // new
     KeywordFixed,       // fixed (or const)

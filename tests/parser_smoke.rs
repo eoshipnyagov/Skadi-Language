@@ -476,3 +476,22 @@ new Int x = i++
     let err = parse_program(&tokens).expect_err("parse should fail");
     assert!(err.contains("SC-PARSE-213"));
 }
+
+#[test]
+fn parses_break_continue_pass_statements() {
+    let src = r#"
+loop {
+    pass
+    continue
+    break
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::LoopStatement { body, .. } = &program.statements[0] else {
+        panic!("expected LoopStatement");
+    };
+    assert!(matches!(body.statements[0], Statement::PassStatement { .. }));
+    assert!(matches!(body.statements[1], Statement::ContinueStatement { .. }));
+    assert!(matches!(body.statements[2], Statement::BreakStatement { .. }));
+}

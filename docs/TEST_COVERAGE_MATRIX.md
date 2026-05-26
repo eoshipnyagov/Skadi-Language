@@ -13,7 +13,8 @@ This file tracks test coverage for language elements in the current Rust prototy
   - `tests/parser_smoke.rs`
   - includes: `new`, typed `new`, `if/else`, `while`, `for in`, `iterate ... as ...`,
     function defs, `danger fn`, `return`, `return error`, `when/is/else`, `label`,
-    `struct` shape, `on interrupt`, list literals, list push/pop-on-error, indexing, calls
+    `struct` shape, `on interrupt`, list literals, list push/pop-on-error, indexing, calls,
+    `break/continue/pass`
 - Semantic validation
   - `tests/semantic_smoke.rs`
   - includes: type mismatch, scope/redeclaration, use-before-def, call arity/types,
@@ -21,6 +22,7 @@ This file tracks test coverage for language elements in the current Rust prototy
     `for/iterate` item inference, text builtin checks (`len/contains/find/slice`),
     negative checks for `on error` on non-danger builtins (`read/write/fs.list`),
     style-canonical warnings (`iterate` preference, `Bool/Char` preference)
+  - includes loop-context rules for `break/continue` (inside loops allowed, outside rejected)
 - Code generation shape checks
   - `tests/codegen_smoke.rs`
   - includes C lowering of control flow, `when`, list runtime calls, text runtime calls,

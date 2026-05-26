@@ -23,6 +23,9 @@ fn parse_statement_at(
         TokenKind::KeywordIf => statements::parse_if_statement(tokens, current_token_index),
         TokenKind::KeywordWhile => statements::parse_while_statement(tokens, current_token_index),
         TokenKind::KeywordLoop => statements::parse_loop_statement(tokens, current_token_index),
+        TokenKind::KeywordBreak | TokenKind::KeywordContinue | TokenKind::KeywordPass => {
+            statements::parse_control_keyword_statement(tokens, current_token_index)
+        }
         TokenKind::KeywordReturn => statements::parse_return_statement(tokens, current_token_index),
         TokenKind::KeywordNew => statements::parse_new_declaration(tokens, current_token_index),
         TokenKind::Identifier if start_token.lexeme == "iterate" => {

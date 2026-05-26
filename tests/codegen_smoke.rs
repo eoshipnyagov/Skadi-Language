@@ -506,3 +506,24 @@ i--
     assert!(c.contains("i += 1;"));
     assert!(c.contains("i -= 1;"));
 }
+
+#[test]
+fn codegen_emits_break_continue_pass_lowering() {
+    let src = r#"
+new Int i = 0
+while i < 5 {
+    i++
+    pass
+    if i == 2 {
+        continue
+    }
+    break
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("continue;"));
+    assert!(c.contains("break;"));
+}
