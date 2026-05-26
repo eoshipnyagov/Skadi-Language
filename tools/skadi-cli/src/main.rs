@@ -1,6 +1,7 @@
 mod commands;
 mod pipeline;
 mod project;
+mod templates;
 mod targets;
 
 use std::env;
