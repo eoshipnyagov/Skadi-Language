@@ -16,16 +16,19 @@ Produce readable, deterministic C output for `Skadi Core v1` to avoid implementi
 - arithmetic/comparison/logical expressions currently supported by parser
 - `if / else`, `while`, `loop`
 - `return`
-- `for item in collection` (transitional lowering)
+- `for item in collection` and `iterate collection as item`
 - baseline Skadi->C type mapping for declarations:
   - `Int`/`i64` -> `int64_t`
   - `Float`/`f64` -> `double`
-  - `bool` -> `bool`
+- `Bool`/`bool` -> `bool`
+- `Char`/`char` -> `char`
+- `Text`/`Path` -> `const char*`
+- `... List` -> typed runtime list structs/helpers
 
 ## Transitional Mappings
 - `loop { ... }` -> `while (1) { ... }`
-- `for item in collection { ... }` -> temporary C-style loop placeholder until list runtime model is defined
-- unsupported constructs are emitted as explicit `TODO(v1)` comments in C
+- `for item in collection { ... }` -> indexed loop over runtime list (`.len`/`.data`)
+- legacy for-shape (when present in AST) lowers to `for (init; cond; update)` form
 
 ## Priority Roadmap
 1. Function signatures and typing
@@ -38,14 +41,13 @@ Produce readable, deterministic C output for `Skadi Core v1` to avoid implementi
 - define explicit behavior for mixed arithmetic (`Int + Float`)
 - add explicit cast strategy in AST/codegen where needed
 
-3. Danger/on-error lowering
-- represent danger call result in C as status/value pair
-- lower `x = danger_call(...) on error { ... }`
-- lower bare `danger_call(...) on error { ... }`
+3. Danger/on-error stabilization
+- keep status/value lowering contract stable (`int` status + optional `out` value)
+- preserve explicit `if (danger_call(...) != 0) { ... }` emission shape
 
 4. Control-flow completeness
-- real `when/is/else` lowering (if-chain or switch where applicable)
-- canonical else-if lowering in AST/codegen path
+- continue hardening `when/is/else` lowering invariants and edge tests
+- extend mixed-scenario e2e coverage (`when` + `danger` + collections)
 
 5. Runtime-oriented syntax (post-MVP)
 - `run/wait/delay`
@@ -56,7 +58,6 @@ Produce readable, deterministic C output for `Skadi Core v1` to avoid implementi
 - full `returns struct { ... }` lowering
 - `direct` params semantics
 - `local fn` module visibility enforcement
-- struct field access (`my.field`) and method lowering
 - imports and module path resolution
 - memory model features (`allow drop`, chunk budgeting)
 - test DSL (`test`, `check`)
@@ -64,7 +65,7 @@ Produce readable, deterministic C output for `Skadi Core v1` to avoid implementi
 ## Output Principles
 - generated C should be stable (same input -> same output)
 - generated C should be readable for debugging
-- unsupported constructs should be represented with explicit TODO comments in C output
+- unsupported constructs should fail semantically or lower deterministically (without silent behavior changes)
 
 ## Validation
 - smoke tests assert generation of major structures

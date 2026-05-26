@@ -73,6 +73,7 @@ x = parse_value(x) on error {
     let program = parse_program(&tokens).expect("parse should succeed");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("if (parse_value(x, &x) != 0) {"));
+    assert!(!c.contains("TODO(v1): danger call lowering"));
 }
 
 #[test]

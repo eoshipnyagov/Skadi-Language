@@ -930,7 +930,7 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str("}\n");
         }
-        Statement::ForLoop { initialization, condition, body, .. } => {
+        Statement::ForLoop { initialization, condition, update, body, .. } => {
             if let (Some(init), Some(coll)) = (initialization, condition) {
                 let var_name = match init.as_ref() {
                     Expression::VariableReference(v) => v.clone(),
@@ -972,7 +972,23 @@ fn emit_statement(
                 out.push_str("}\n");
             } else {
                 out.push_str(&pad);
-                out.push_str("/* TODO(v1): unsupported for-loop form; expected 'for item in collection' */\n");
+                out.push_str("for (");
+                if let Some(init) = initialization {
+                    out.push_str(&emit_expr(init, declared));
+                }
+                out.push_str("; ");
+                if let Some(cond) = condition {
+                    out.push_str(&emit_expr(cond, declared));
+                }
+                out.push_str("; ");
+                if let Some(step) = update {
+                    out.push_str(&emit_expr(step, declared));
+                }
+                out.push_str(") {\n");
+                let mut inner = declared.clone();
+                emit_block(body, out, indent + 1, &mut inner, fn_ctx);
+                out.push_str(&pad);
+                out.push_str("}\n");
             }
         }
         Statement::FunctionDef { .. } => {}
@@ -1002,8 +1018,6 @@ fn emit_statement(
             ..
         } => {
             out.push_str(&pad);
-            out.push_str("/* TODO(v1): danger call lowering */\n");
-            out.push_str(&pad);
             out.push_str("if (");
             out.push_str(call_name);
             out.push('(');
@@ -1030,8 +1044,6 @@ fn emit_statement(
             on_error,
             ..
         } => {
-            out.push_str(&pad);
-            out.push_str("/* TODO(v1): danger call lowering */\n");
             out.push_str(&pad);
             out.push_str("if (");
             out.push_str(call_name);
