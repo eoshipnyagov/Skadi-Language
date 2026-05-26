@@ -640,3 +640,80 @@ output(out)
     compile_skadi_and_run(compiler, src, "Skadi_e2e_when_find", &[]);
 }
 
+#[test]
+fn e2e_feature_mix_fs_text_when_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Text root = "."
+new Text List entries = fs.list(root)
+new Int i = 0
+new Int files = 0
+while i < len(entries) {
+    new Text p = entries[i]
+    when fs.is_dir(p) {
+        is true {
+            files = files + 0
+        }
+        else {
+            files = files + 1
+        }
+    }
+    i = i + 1
+}
+output(files)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_fs_text_when", &[]);
+}
+
+#[test]
+fn e2e_feature_mix_danger_when_list_pop_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+label ErrorCode {
+    Ok
+    BadInput
+}
+
+danger fn parse_nonzero(Int x) Int {
+    if x == 0 {
+        return error BadInput
+    } else {
+        return x
+    }
+}
+
+new Int List q = [3, 2, 0, 1]
+new Int total = 0
+new Int v = 0
+new Int parsed = 0
+while len(q) > 0 {
+    v = q.pop() on error {
+        v = 0
+    }
+    parsed = parse_nonzero(v) on error {
+        parsed = 0
+    }
+    when parsed {
+        is 0 {
+            total = total + 0
+        }
+        else {
+            total = total + parsed
+        }
+    }
+}
+output(total)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_danger_when_pop", &[]);
+}
+
