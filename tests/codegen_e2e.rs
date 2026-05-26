@@ -9,12 +9,9 @@ use v01::parser::parse_program;
 use v01::semantic_analysis::semantic_analyze;
 
 fn find_c_compiler() -> Option<&'static str> {
-    for c in ["clang", "gcc", "cc"] {
-        if Command::new(c).arg("--version").output().is_ok() {
-            return Some(c);
-        }
-    }
-    None
+    ["clang", "gcc", "cc"]
+        .into_iter()
+        .find(|c| Command::new(c).arg("--version").output().is_ok())
 }
 
 fn compiler_supports_flags(compiler: &str, flags: &[&str]) -> bool {

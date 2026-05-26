@@ -472,16 +472,13 @@ fn analyze_statement(
             let final_ty = if let Some(tn) = declared_type {
                 let declared = parse_declared_type_name(tn, structs);
                 if !can_assign(&declared, &value_ty) {
-                    return Err(format!(
-                        "{}",
-                        err_at_code(
-                            stmt,
-                            SEM_TYPE_MISMATCH,
-                            format!(
-                                "type mismatch in declaration '{}': cannot assign {:?} to {:?}.",
-                                name, value_ty, declared
-                            ),
-                        )
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "type mismatch in declaration '{}': cannot assign {:?} to {:?}.",
+                            name, value_ty, declared
+                        ),
                     ));
                 }
                 declared
@@ -493,27 +490,21 @@ fn analyze_statement(
         }
         Statement::Assignment { target, value, .. } => {
             let Some(target_ty) = scope.get(target).cloned() else {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_USE_BEFORE_DEF,
-                        format!("use-before-definition: '{}' is not defined in current scope.", target),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined in current scope.", target),
                 ));
             };
             let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             if !can_assign(&target_ty, &value_ty) {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_TYPE_MISMATCH,
-                        format!(
-                            "type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
-                            target, value_ty, target_ty
-                        ),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
+                        target, value_ty, target_ty
+                    ),
                 ));
             }
             Ok(())
@@ -572,13 +563,10 @@ fn analyze_statement(
             };
             analyze_block(body, &mut fn_scope, functions, labels, structs, Some(local_ctx))?;
             if sig.is_danger && !block_guarantees_termination(body) {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_RETURN_RULE,
-                        format!("danger fn '{}' must end with explicit return/return error on all paths.", name),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_RETURN_RULE,
+                    format!("danger fn '{}' must end with explicit return/return error on all paths.", name),
                 ));
             }
             Ok(())
@@ -727,23 +715,17 @@ fn analyze_statement(
                 ));
             };
             if !sig.is_danger {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_INVALID_CONTEXT,
-                        format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
                 ));
             }
             if !scope.contains_key(target) {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_USE_BEFORE_DEF,
-                        format!("use-before-definition: '{}' is not defined in current scope.", target),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined in current scope.", target),
                 ));
             }
             validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
@@ -771,13 +753,10 @@ fn analyze_statement(
                 ));
             };
             if !sig.is_danger {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_INVALID_CONTEXT,
-                        format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
                 ));
             }
             validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;

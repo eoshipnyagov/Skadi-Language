@@ -29,6 +29,12 @@ impl Program {
     }
 }
 
+impl Default for Program {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 
 /// A general container for all top-level executable structures (Function definitions, etc.)
 #[derive(Debug)]
