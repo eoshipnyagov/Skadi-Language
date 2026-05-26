@@ -745,6 +745,69 @@ output(acc)
 }
 
 #[test]
+fn e2e_stress_list_large_push_pop_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Int List xs = []
+new Int i = 0
+while i < 10000 {
+    xs.push(i)
+    i++
+}
+
+new Int sum = 0
+while len(xs) > 0 {
+    new Int v = 0
+    v = xs.pop() on error {
+        v = 0
+    }
+    sum = sum + v
+}
+output(sum)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_large_push_pop", &[]);
+}
+
+#[test]
+fn e2e_stress_struct_list_large_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+struct Point {
+    Int x
+    Int y
+}
+
+new Point List pts = []
+new Int i = 0
+while i < 5000 {
+    new Point p = {x = i, y = i + 1}
+    pts.push(p)
+    i++
+}
+
+new Int acc = 0
+new Int j = 0
+while j < len(pts) {
+    new Point p = pts[j]
+    acc = acc + p.x + p.y
+    j++
+}
+output(acc)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_struct_list", &[]);
+}
+
+#[test]
 fn e2e_feature_mix_for_when_text_and_inc_dec() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");

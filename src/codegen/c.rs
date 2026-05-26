@@ -61,6 +61,27 @@ fn collect_struct_names(program: &Program) -> Vec<String> {
 }
 
 fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
+    let default_value = if c_ty.ends_with('*') {
+        "NULL".to_string()
+    } else if matches!(
+        c_ty,
+        "int8_t"
+            | "int16_t"
+            | "int32_t"
+            | "int64_t"
+            | "uint8_t"
+            | "uint16_t"
+            | "uint32_t"
+            | "uint64_t"
+            | "float"
+            | "double"
+            | "bool"
+            | "char"
+    ) {
+        "0".to_string()
+    } else {
+        format!("({}){{0}}", c_ty)
+    };
     out.push_str(&format!(
         "typedef struct {{\n    {} *data;\n    size_t len;\n    size_t cap;\n}} SkadiList_{};\n\n",
         c_ty, suffix
@@ -102,7 +123,9 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
         "static {} sk_list_{}_get(const SkadiList_{} *xs, int64_t idx) {{\n",
         c_ty, suffix, suffix
     ));
-    out.push_str("    if (!xs || idx < 0 || (size_t)idx >= xs->len) return 0;\n");
+    out.push_str("    if (!xs || idx < 0 || (size_t)idx >= xs->len) return ");
+    out.push_str(&default_value);
+    out.push_str(";\n");
     out.push_str("    return xs->data[(size_t)idx];\n");
     out.push_str("}\n\n");
 }
@@ -281,6 +304,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         out.push_str("#include <dirent.h>\n");
         out.push_str("#include <sys/stat.h>\n\n");
     }
+    emit_struct_declarations(program, &mut out);
     if needs_list_runtime {
         emit_list_runtime(&mut out, &struct_names);
     }
@@ -293,7 +317,6 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     if needs_io_runtime {
         emit_io_runtime(&mut out, needs_args_runtime);
     }
-    emit_struct_declarations(program, &mut out);
     emit_error_code_enum(program, &mut out);
 
     for stmt in &program.statements {
