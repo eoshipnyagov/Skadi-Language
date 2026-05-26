@@ -1,79 +1,71 @@
-# Skadi Compiler: Project Overview
+﻿# Skadi Compiler: Project Overview
 
-Дата обновления: 2026-05-22
+Дата обновления: 2026-05-26
 
 ## 1. Что это за репозиторий
 
-Это рабочий прототип компилятора языка Skadi на Rust.  
-Текущая цель этапа: стабильный и тестируемый пайплайн
-`lexer -> parser -> semantic -> C transpiler`.
+Это рабочий прототип компилятора языка **Skadi** на Rust.
+Текущая практическая цель: стабильный и тестируемый pipeline
+`lexer -> parser -> semantic -> C transpiler`, плюс удобный CLI-менеджер `skadi-cli`.
 
 ## 2. Текущее состояние
 
 Сейчас реализовано:
-- лексический анализ (токенизация, диагностика),
-- синтаксический анализ (AST для core-конструкций),
-- семантические проверки типов и контекстов,
-- генерация C-кода для поддерживаемого подмножества языка,
-- развитый набор тестов (smoke, negative, conformance, e2e).
+- лексер (токенизация + диагностика),
+- парсер (AST для поддерживаемого подмножества Skadi v1),
+- семантический анализ (типы, контексты, ошибки),
+- транспиляция в C,
+- запуск внешнего C-компилятора через `skadi-cli` (auto-detect/`--cc`),
+- мультифайловая сборка через path-import,
+- широкий набор unit/integration/e2e тестов.
 
 ## 3. Куда смотреть в первую очередь
 
-Документация языка (RU):
-- `docs/SKADI_LANGUAGE_REFERENCE_RU.md`
+- Язык (текущее реализованное поведение):
+  - `docs/SKADI_LANGUAGE_REFERENCE_RU.md`
+- Техническая документация по проекту:
+  - `docs/SKADI_PROJECT_TECH_REFERENCE_RU.md`
+- Статус синтаксиса и v1-ограничения:
+  - `docs/SKADI_SYNTAX_STATUS.md`
+- Матрица покрытия и блокеры:
+  - `docs/TEST_COVERAGE_MATRIX.md`
+  - `docs/V1_BLOCKERS_MATRIX_RU.md`
+- План разработки:
+  - `SKADI_IMPLEMENTATION_PLAN.md`
 
-Техническая документация проекта (RU):
-- `docs/SKADI_PROJECT_TECH_REFERENCE_RU.md`
+## 4. Ключевая структура репозитория
 
-Дополнительно:
-- `docs/TEST_COVERAGE_MATRIX.md` — покрытие тестами,
-- `docs/RFC_LIST.md` — контракт `List`,
-- `docs/RFC_TEXT.md` — контракт `Text`,
-- `docs/RFC_MATH_VECTOR_CORE.md` — математика/векторы/матрицы (целевой v1 трек),
-- `docs/SKADI_TO_C_SCOPE.md` — scope transpile в C,
-- `SKADI_IMPLEMENTATION_PLAN.md` — roadmap.
+- `src/` — библиотека/ядро компилятора (`lexer`, `parser`, `semantic_analysis`, `codegen`).
+- `tests/` — unit/integration/e2e тесты, включая codegen-проверки.
+- `tools/skadi-cli/` — менеджер проектов и build/check/run/doctor.
+- `docs/` — актуальные спецификации, RFC и матрицы статуса.
+- `benchmarks/` — короткие showcase/benchmark-программы на `.skd`.
+- `example_tree.skd`, `example_meteostation.txt` — примеры входного кода.
 
-## 4. Структура кода
+## 5. Быстрый старт для разработчика
 
-- `src/main.rs` — CLI-вход, запуск пайплайна.
-- `src/lib.rs` — wiring модулей.
-- `src/lexer/*` — лексер.
-- `src/parser/*` — парсер.
-- `src/semantic_analysis.rs` — семантическая валидация.
-- `src/codegen/c.rs` — транспиляция в C.
-- `tests/*` — полный контур тестов.
-
-## 5. Как запустить
-
-Проверка сборки:
+Проверка компилятора:
 ```bash
 cargo check
+cargo test -q
 ```
 
-Все тесты:
+Проверка CLI:
 ```bash
-cargo test
+cargo run -p skadi-cli -- doctor
+cargo run -p skadi-cli -- new demo
+cargo run -p skadi-cli -- check --project demo
+cargo run -p skadi-cli -- build --project demo
+cargo run -p skadi-cli -- run --project demo
 ```
 
-Запуск пайплайна:
+Транспиляция одного файла:
 ```bash
-cargo run -- --input example_meteostation.txt --print-c
+cargo run -- --input example_tree.skd --print-c
 ```
 
-Запись сгенерированного C в файл:
-```bash
-cargo run -- --input example_meteostation.txt --emit-c out.c
-```
+## 6. Что важно помнить
 
-## 6. Ключевые ограничения текущей версии
-
-- Это прототип и транспилятор в C, а не финальный native backend.
-- Часть языкового дизайна (из `Skadi_design.txt`) пока не реализована полностью.
-- Runtime-поведение ряда операций пока временное (fail-soft для некоторых out-of-range индексаций).
-
-## 7. Ближайший приоритет развития
-
-- завершить и зафиксировать контракт ошибок runtime,
-- дорасширить синтаксис/семантику до согласованного v1-подмножества,
-- держать “один feature = parser + semantic + codegen + tests + docs”.
-
+- Это **Skadi -> C** транспилятор (не native backend).
+- Часть исходного дизайна языка осознанно отложена на `v1.x/v2`.
+- Приоритет перед релизом v1: предсказуемость codegen, диагностики и кроссплатформенная стабильность CLI.
