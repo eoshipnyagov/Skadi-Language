@@ -1,75 +1,85 @@
-# Skadi CLI Quick Start (RU)
+# Skadi CLI Quick Start (RU, Cross-Platform)
 
-Короткий старт для Windows/PowerShell из текущего репозитория.
+Быстрый старт для Windows, WSL, Linux и macOS.
 
-## 1. Проверка окружения
+## 1. Prerequisites
+
+- Rust toolchain (`cargo`)
+- C-компилятор в `PATH`:
+  - Windows: `gcc` (MinGW-w64) или `cl` (Visual Studio Build Tools)
+  - WSL/Linux: `gcc` или `clang`
+  - macOS: Xcode Command Line Tools (`clang`)
+
+## 2. Проверка toolchain
+
+### Windows (PowerShell)
 
 ```powershell
 cd D:\YandexDisk\Skadi\v01\tools\skadi-cli
 cargo run -- doctor
 ```
 
-Что важно:
-- установлен Rust (`cargo`);
-- в `PATH` есть C-компилятор (`gcc` из MinGW или `clang`).
+### WSL/Linux/macOS (bash)
 
-## 2. Справка по командам
-
-```powershell
-cargo run -- --help
+```bash
+cd /path/to/Skadi/v01/tools/skadi-cli
+cargo run -- doctor
 ```
 
-Почему `--`:
-- всё, что до `--`, обрабатывает `cargo`;
-- всё, что после `--`, передается в `skadi-cli`.
+## 3. Почему в `cargo run` нужен `--`
 
-Для TUI-режима:
+- До `--` аргументы обрабатывает `cargo`.
+- После `--` аргументы передаются в программу (`skadi-cli`).
+
+Пример:
 
 ```powershell
-cargo run -- tui
+cargo run -- build --target host --cc gcc
 ```
 
-Выход из TUI:
-- в меню нажать `0` (успешный выход, код `0`).
+Здесь `build --target host --cc gcc` получает именно `skadi-cli`.
 
-## 3. Создать новый проект
+## 4. Основной цикл (new/check/build/run)
+
+### Windows (PowerShell)
 
 ```powershell
+cd D:\YandexDisk\Skadi\v01\tools\skadi-cli
 cargo run -- new hello_skadi
 cd hello_skadi
-```
-
-## 4. Проверить, собрать и запустить
-
-```powershell
 cargo run -- check
 cargo run -- build
 cargo run -- run
 ```
 
-## 5. Быстрый запуск без `skadi-cli` (через корневой компилятор)
+### WSL/Linux/macOS (bash)
 
-Из корня репозитория:
-
-```powershell
-cd D:\YandexDisk\Skadi\v01
-cargo run -- --input example_tree.skd --emit-c out.c
-cargo run -- --input example_tree.skd --emit-exe tree.exe
+```bash
+cd /path/to/Skadi/v01/tools/skadi-cli
+cargo run -- new hello_skadi
+cd hello_skadi
+cargo run -- check
+cargo run -- build
+cargo run -- run
 ```
 
-## 6. Частые проблемы
+## 5. Явный выбор компилятора
 
-- `failed to run clang: program not found`:
-  установите `clang` или используйте MinGW `gcc` в `PATH`.
-- `no working C compiler found`:
-  проверьте `gcc --version` и `where gcc`.
-- `Unknown option ...`:
-  проверьте синтаксис команды через `cargo run -- --help`.
+- `--cc <compiler>` принудительно задает C-компилятор:
+  - `cargo run -- build --cc gcc`
+  - `cargo run -- build --cc clang`
+  - `cargo run -- build --cc cl` (Windows host)
 
-## 7. Минимальный рабочий цикл
+Если `--cc` не задан:
+- Windows host: `gcc -> clang -> cl`
+- Linux/WSL/macOS host: `gcc -> clang -> cc`
 
-1. `doctor`
-2. `new <name>` или `init`
-3. `check`
-4. `build`
-5. `run`
+## 6. Troubleshooting
+
+- Ошибка: `failed to run <compiler>: ...`
+  - Проверьте наличие компилятора: `gcc --version`, `clang --version`, `cl`.
+- Ошибка: `no working C compiler for target ...`
+  - Запустите `cargo run -- doctor`.
+  - Проверьте PATH:
+    - Windows: `where gcc`, `where clang`, `where cl`
+    - Linux/macOS/WSL: `which gcc`, `which clang`, `which cc`

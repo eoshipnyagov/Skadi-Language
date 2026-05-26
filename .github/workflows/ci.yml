@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            cc: cl
+          - os: ubuntu-latest
+            cc: gcc
+          - os: macos-latest
+            cc: clang
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test -q
+
+      - name: Smoke transpile sample programs to C
+        run: |
+          cargo run -- --input example_tree.skd --emit-c target/ci_example_tree.c
+          cargo run -- --input benchmarks/bench_04_sum_ints.skd --emit-c target/ci_bench_04.c
+          cargo run -- --input benchmarks/bench_08_path_list_helpers.skd --emit-c target/ci_bench_08.c
+
+      - name: skadi-cli doctor
+        run: cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
+
+      - name: skadi-cli init/check/build on temp project
+        shell: pwsh
+        run: |
+          $demoDir = Join-Path $env:RUNNER_TEMP "skadi_ci_demo"
+          if (Test-Path $demoDir) {
+            Remove-Item -Recurse -Force $demoDir
+          }
+          New-Item -ItemType Directory -Path $demoDir | Out-Null
+          Set-Location $demoDir
+
+          cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- init
+          cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- check
+          cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- build --target host --cc ${{ matrix.cc }}

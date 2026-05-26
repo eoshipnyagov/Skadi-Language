@@ -113,8 +113,60 @@ pub fn candidate_invocations(target: &str, c_path: &Path, exe_path: &Path) -> Re
     Ok(inv)
 }
 
+pub fn single_compiler_invocation(
+    target: &str,
+    compiler: &str,
+    c_path: &Path,
+    exe_path: &Path,
+) -> Result<CompilerInvocation, String> {
+    let c = c_path.display().to_string();
+    let out = exe_path.display().to_string();
+    let inv = match compiler {
+        "cl" => {
+            if target != "host" {
+                return Err(format!("compiler 'cl' is only supported for host target, got '{target}'"));
+            }
+            CompilerInvocation {
+                program: "cl".to_string(),
+                args: vec!["/nologo".to_string(), c, format!("/Fe:{out}")],
+            }
+        }
+        other => CompilerInvocation {
+            program: other.to_string(),
+            args: match target {
+                "x86_64-unknown-linux-gnu" if other == "clang" => vec![
+                    "--target=x86_64-unknown-linux-gnu".to_string(),
+                    c,
+                    "-o".to_string(),
+                    out,
+                ],
+                _ => vec![c, "-o".to_string(), out],
+            },
+        },
+    };
+    Ok(inv)
+}
+
 pub fn detect_compiler(program: &str) -> bool {
     Command::new(program).arg("--version").output().is_ok()
+}
+
+pub fn shell_probe_hint() -> &'static str {
+    if cfg!(windows) {
+        "where <compiler>"
+    } else {
+        "which <compiler>"
+    }
+}
+
+pub fn os_install_hint() -> &'static str {
+    if cfg!(windows) {
+        "Windows: install MinGW-w64 (gcc) or Visual Studio Build Tools (cl)."
+    } else if cfg!(target_os = "macos") {
+        "macOS: install Xcode Command Line Tools: xcode-select --install"
+    } else {
+        "Linux/WSL: install build-essential (gcc) or clang (for example: sudo apt install build-essential clang)."
+    }
 }
 
 pub fn target_hint(triple: &str) -> &'static str {
@@ -127,5 +179,45 @@ pub fn target_hint(triple: &str) -> &'static str {
             "Install x86_64-linux-gnu-gcc cross toolchain or clang with Linux target support."
         }
         _ => "Install matching target toolchain and ensure compiler is available in PATH.",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{candidate_invocations, single_compiler_invocation};
+
+    #[test]
+    fn host_order_starts_with_gcc_clang() {
+        let xs = candidate_invocations("host", Path::new("a.c"), Path::new("a.out"))
+            .expect("host invocations should be available");
+        assert!(xs.len() >= 2);
+        assert_eq!(xs[0].program, "gcc");
+        assert_eq!(xs[1].program, "clang");
+    }
+
+    #[test]
+    fn explicit_clang_linux_cross_adds_target_flag() {
+        let inv = single_compiler_invocation(
+            "x86_64-unknown-linux-gnu",
+            "clang",
+            Path::new("a.c"),
+            Path::new("a.out"),
+        )
+        .expect("explicit invocation should be created");
+        assert!(inv.args.iter().any(|a| a == "--target=x86_64-unknown-linux-gnu"));
+    }
+
+    #[test]
+    fn explicit_cl_rejected_for_non_host() {
+        let err = single_compiler_invocation(
+            "x86_64-unknown-linux-gnu",
+            "cl",
+            Path::new("a.c"),
+            Path::new("a.out"),
+        )
+        .expect_err("cl should be host-only");
+        assert!(err.contains("only supported for host"));
     }
 }

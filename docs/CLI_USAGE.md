@@ -27,8 +27,6 @@ Current CLI entrypoint: `src/main.rs`
 
 ## Planned next improvements
 
-- Add explicit `--cc <compiler>` option (`gcc`, `clang`, `cl`).
-- Add `--target <triple>` workflow for cross-compilation.
 - Add stable `Skadi` wrapper binary command format.
 
 
