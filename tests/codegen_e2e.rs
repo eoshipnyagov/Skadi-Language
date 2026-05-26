@@ -744,3 +744,101 @@ output(acc)
     compile_skadi_and_run(compiler, src, "Skadi_e2e_loop_control_incdec", &[]);
 }
 
+#[test]
+fn e2e_feature_mix_for_when_text_and_inc_dec() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Text List words = ["sun", "rain", "wind", "fog"]
+new Int i = 0
+new Int score = 0
+for w in words {
+    i++
+    when len(w) {
+        is 3 {
+            score = score + i
+        }
+        else {
+            score = score + 0
+        }
+    }
+}
+output(score)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_for_when_text", &[]);
+}
+
+#[test]
+fn e2e_feature_mix_danger_list_loop_control() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+label ErrorCode {
+    Ok
+    NegativeValue
+}
+
+danger fn ensure_positive(Int x) Int {
+    if x < 0 {
+        return error NegativeValue
+    } else {
+        return x
+    }
+}
+
+new Int List values = [3, -1, 4, -2, 5]
+new Int i = 0
+new Int sum = 0
+new Int checked = 0
+while i < len(values) {
+    checked = ensure_positive(values[i]) on error {
+        checked = 0
+    }
+    if checked == 0 {
+        i++
+        continue
+    }
+    sum = sum + checked
+    if sum > 10 {
+        break
+    }
+    i++
+}
+output(sum)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_danger_list_loop_control", &[]);
+}
+
+#[test]
+fn e2e_feature_mix_iterate_text_find_and_pass() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Text List words = ["alpha", "beta", "gamma", "delta"]
+new Int hits = 0
+iterate words as w {
+    if find(w, "a") >= 0 {
+        hits++
+    } else {
+        pass
+    }
+}
+new Text msg = concat("hits=", "ok")
+output(msg)
+output(hits)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_iterate_text_find", &[]);
+}
+
