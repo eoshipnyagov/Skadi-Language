@@ -14,10 +14,22 @@ const IMPORT_CONTRACT_HINT: &str =
 
 pub fn compile_to_c(entry_path: &Path) -> Result<String, String> {
     let source = load_source_with_imports(entry_path)
-        .map_err(|e| format!("[SC-MOD-001] {e}"))?;
-    let tokens = lex(&source).map_err(|e| format!("lex failed: {e}"))?;
-    let program = parse_program(&tokens).map_err(|e| format!("parse failed: {e}"))?;
-    semantic_analyze(&program).map_err(|e| format!("semantic failed: {e}"))?;
+        .map_err(|e| format!("[SC-MOD-001] stage=module-import: {e}\nhint: use only path imports like import \"./file.skd\" and verify import graph paths/cycles."))?;
+    let tokens = lex(&source).map_err(|e| {
+        format!(
+            "[SC-LEX-000] stage=lex: {e}\nhint: inspect the reported source position and remove unsupported characters/tokens."
+        )
+    })?;
+    let program = parse_program(&tokens).map_err(|e| {
+        format!(
+            "[SC-PARSE-000] stage=parse: {e}\nhint: check statement/block structure near the reported token."
+        )
+    })?;
+    semantic_analyze(&program).map_err(|e| {
+        format!(
+            "[SC-SEM-000] stage=semantic: {e}\nhint: align types/signatures and ensure on error is used only in allowed contexts."
+        )
+    })?;
     for warning in semantic_style_warnings(&program) {
         eprintln!("{warning}");
     }
@@ -152,7 +164,7 @@ pub fn compile_c_to_exe(c_path: &Path, exe_path: &Path, target: &str) -> Result<
         }
     }
     Err(format!(
-        "[SC-CGEN-001] native C compilation failed for target '{}'. attempts:\n{}",
+        "[SC-CGEN-001] stage=codegen-native-compile: native C compilation failed for target '{}'. attempts:\n{}\nhint: install a supported C compiler or pass --cc <compiler>; run `skadi doctor` for toolchain diagnostics.",
         target,
         attempts.join("\n")
     ))
@@ -519,6 +531,8 @@ mod tests {
 
         let err = compile_to_c(&entry).expect_err("compile must fail");
         assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("stage=module-import"));
+        assert!(err.contains("hint:"));
         assert!(err.contains("module-name import is not supported"));
 
         let _ = fs::remove_dir_all(root);
@@ -602,7 +616,9 @@ mod tests {
         .expect("write entry");
 
         let err = compile_to_c(&entry).expect_err("compile must fail");
-        assert!(err.contains("parse failed"));
+        assert!(err.contains("[SC-PARSE-000]"));
+        assert!(err.contains("stage=parse"));
+        assert!(err.contains("hint:"));
         assert!(err.contains("SC-PARSE-"));
 
         let _ = fs::remove_dir_all(root);
@@ -619,7 +635,9 @@ mod tests {
         .expect("write entry");
 
         let err = compile_to_c(&entry).expect_err("compile must fail");
-        assert!(err.contains("semantic failed"));
+        assert!(err.contains("[SC-SEM-000]"));
+        assert!(err.contains("stage=semantic"));
+        assert!(err.contains("hint:"));
         assert!(err.contains("SC-SEM-040"));
         assert!(err.contains("on error requires danger fn call"));
 
@@ -637,7 +655,9 @@ mod tests {
         .expect("write entry");
 
         let err = compile_to_c(&entry).expect_err("compile must fail");
-        assert!(err.contains("semantic failed"));
+        assert!(err.contains("[SC-SEM-000]"));
+        assert!(err.contains("stage=semantic"));
+        assert!(err.contains("hint:"));
         assert!(err.contains("SC-SEM-020"));
         assert!(err.contains("index access requires Int index"));
 
@@ -658,6 +678,8 @@ mod tests {
 
         let err = compile_c_to_exe(&c_path, &exe_path, "host").expect_err("compile must fail");
         assert!(err.contains("[SC-CGEN-001]"));
+        assert!(err.contains("stage=codegen-native-compile"));
+        assert!(err.contains("hint:"));
         assert!(err.contains("attempts:"));
         assert!(
             err.contains("- gcc:") || err.contains("- clang:") || err.contains("- cc:"),
@@ -690,7 +712,23 @@ mod tests {
 
         let err = compile_c_to_exe(&c_path, &exe_path, "host").expect_err("native compile must fail");
         assert!(err.contains("[SC-CGEN-001]"));
+        assert!(err.contains("stage=codegen-native-compile"));
+        assert!(err.contains("hint:"));
         assert!(err.contains("attempts:"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn mutation_negative_lex_error_surfaces_with_lex_code() {
+        let root = temp_case_dir("mut_lex_code");
+        let entry = root.join("main.skd");
+        fs::write(&entry, "new Int x = 1\n@\n").expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("[SC-LEX-000]"));
+        assert!(err.contains("stage=lex"));
+        assert!(err.contains("hint:"));
 
         let _ = fs::remove_dir_all(root);
     }

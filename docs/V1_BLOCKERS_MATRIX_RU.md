@@ -12,12 +12,14 @@
 - Что осталось:
   - поддерживать матрицу синхронно с новыми фичами (без снижения покрытия).
 
-2. Единообразие диагностик parser/semantic/codegen — В РАБОТЕ
+2. Единообразие диагностик parser/semantic/codegen — ЗАКРЫТО
 - Что уже закрыто:
   - унифицирована ошибка native C compile с кодом `[SC-CGEN-001]` и матрицей попыток компиляторов,
   - импортный контракт стабильно маркируется как `[SC-MOD-001]`.
-- Что осталось:
-  - свести в один reference-файл все диагностические коды и stage ownership.
+  - в `compile_to_c` добавлены stage-wrapper коды (`SC-LEX-000`, `SC-PARSE-000`, `SC-SEM-000`),
+  - формализован единый префикс `code + stage + hint`,
+  - reference-файл с ownership и кодами: `docs/DIAGNOSTIC_CODES_REFERENCE.md`,
+  - добавлены контрактные mutation-тесты на стабильный формат диагностик по стадиям.
 
 3. Multi-file import contract (`import "./... .skd"`) + edge-cases — ЗАКРЫТО
 

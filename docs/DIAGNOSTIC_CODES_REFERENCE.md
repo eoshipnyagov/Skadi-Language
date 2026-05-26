@@ -11,6 +11,11 @@ Purpose: canonical map of diagnostic codes by pipeline stage and ownership.
 - `SC-MOD-*` — module/import pipeline diagnostics (`tools/skadi-cli/src/pipeline.rs`)
 - `SC-CGEN-*` — native C compile/link diagnostics (`tools/skadi-cli/src/pipeline.rs`)
 
+Wrapper/stage codes used by CLI pipeline:
+- `SC-LEX-000` — lex stage wrapper in `compile_to_c`
+- `SC-PARSE-000` — parse stage wrapper in `compile_to_c`
+- `SC-SEM-000` — semantic stage wrapper in `compile_to_c`
+
 ## 2. Parser Codes (`SC-PARSE-*`)
 
 ### Entry / wrapper
@@ -64,6 +69,10 @@ Canonical formatting is defined in `docs/DIAGNOSTICS_STYLE.md`:
 `<Kind> error at line <L>, col <C>[, index <I>]: [<CODE>] <message>`
 
 For module/codegen pipeline codes, location may be absent and message is still required to include code and actionable hint.
+
+For CLI pipeline wrappers, normalized prefix is:
+- `[<CODE>] stage=<stage-name>: <details>`
+- followed by `hint: <actionable next step>`
 
 ## 6. Ownership and Change Policy
 
