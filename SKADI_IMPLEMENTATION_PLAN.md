@@ -1,4 +1,4 @@
-# Skadi Implementation Plan
+﻿# Skadi Implementation Plan
 
 ## Plan Date
 2026-05-20
@@ -204,12 +204,16 @@ Tech debt priorities:
 - Centralize project-template logic used by `new` / `init` / `examples` commands.
 - Add stronger CLI tests for error paths and UX contracts.
 - Reduce documentation drift (`implemented` vs `planned`) across docs set.
-- Add repeatable “from-zero” smoke flow scripts/checks for end users.
+- Add repeatable вЂњfrom-zeroвЂќ smoke flow scripts/checks for end users.
 - Keep repository hygiene policy for `old/` and stale artifacts.
+- Add explicit token/construct coverage matrix:
+  - map every keyword/lexeme and parser construct to tests (lexer/parser/semantic/codegen/e2e),
+  - mark uncovered items as blocking TODO before v1 freeze.
 
 ## Working Rules
 - Every new grammar feature must include at least one positive and one negative test.
 - Prefer small commits per phase task.
 - Keep `Skadi_design.txt` as the normative grammar reference.
 - Keep syntax choices aligned with `docs/SKADI_STYLE_PRINCIPLES.md`.
+
 

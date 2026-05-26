@@ -1,0 +1,38 @@
+﻿name: skadi-ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test-matrix:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Root tests
+        run: cargo test -q
+
+      - name: CLI tests
+        working-directory: tools/skadi-cli
+        run: cargo test -q
+
+      - name: Compiler smoke (emit C)
+        run: cargo run -- --input example_tree.skd --emit-c target/ci_tree.c
+
+      - name: CLI doctor smoke
+        working-directory: tools/skadi-cli
+        run: cargo run -- doctor
