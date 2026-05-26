@@ -39,6 +39,7 @@ Purpose: one-page map of which document answers which question.
 - `docs/TOKEN_CONSTRUCT_COVERAGE_MATRIX.md` — explicit token/construct-to-tests traceability matrix.
 - `docs/V1_BLOCKERS_MATRIX_RU.md` — release blockers and status.
 - `docs/DIAGNOSTICS_STYLE.md` — canonical diagnostics format.
+- `docs/DIAGNOSTIC_CODES_REFERENCE.md` — canonical ownership map for diagnostic code families.
 
 ## 7. Style
 
