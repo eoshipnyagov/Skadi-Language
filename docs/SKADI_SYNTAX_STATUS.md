@@ -88,11 +88,19 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - `direct` params
 - `returns struct { ... }`
 - `local fn`
-- imports/modules
 - struct fields/methods (`my.field`)
 - events/interrupt runtime semantics
 - chunk memory features (`allow drop`, budgets)
 - test DSL keywords
+
+## Imports / Modules (Current v1 wave)
+- `import "./relative_path.skd"` - `Partial`
+  - supported by `skadi-cli` multi-file pipeline (source merge before lex/parse)
+  - recursive, cycle-safe, deduplicated, deterministic by source import order
+- Not supported in current wave:
+  - `import module_name`
+  - alias form (`import "./x.skd" as x`)
+  - module visibility rules
 
 ## Design Note
 Keyword naming may change later. This file tracks the implemented parser contract now, not a final language freeze.

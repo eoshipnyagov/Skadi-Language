@@ -58,7 +58,7 @@ Produce readable, deterministic C output for `Skadi Core v1` to avoid implementi
 - full `returns struct { ... }` lowering
 - `direct` params semantics
 - `local fn` module visibility enforcement
-- imports and module path resolution
+- language-level module imports beyond current CLI path-import pre-merge contract
 - memory model features (`allow drop`, chunk budgeting)
 - test DSL (`test`, `check`)
 

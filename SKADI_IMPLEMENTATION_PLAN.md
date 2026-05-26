@@ -154,6 +154,26 @@ Exit criteria:
 - Semantic pass validates all agreed v1 rules.
 - C backend can build and run at least one e2e list/text fixture.
 
+## Phase 8 - Documentation UX and Single-Source Publishing
+Status: planned
+
+Tasks:
+- Add optional offline HTML documentation generation from current Markdown docs
+  (begin with language reference + quick start + syntax status pages).
+- Add CLI entrypoint for docs convenience (for example: `skadi docs` / `skadi docs --build` / `skadi docs --open`).
+- Keep Markdown as single source of truth; HTML must be generated, not hand-edited.
+- Define stable docs bundle structure for newcomers (landing page + navigation + search-ready headings).
+- Add short LLM-oriented language guide generated from same source docs:
+  - concise syntax/semantics summary,
+  - canonical naming/style decisions,
+  - known limitations and current v1 contracts.
+- Ensure update flow avoids duplicated manual edits across multiple files/formats.
+
+Exit criteria:
+- One-command local generation of offline HTML docs works.
+- Generated docs open in browser without external dependencies.
+- LLM short guide is generated from docs source and version-aligned with current syntax status.
+
 ## Risk Register
 1. Contract drift between lexer token kinds and parser expectations.
 Mitigation: freeze shared enums in `common_types.rs`, change only with tests.
@@ -166,6 +186,26 @@ Mitigation: convert placeholders to explicit errors where behavior is not implem
 
 4. Syntax drift away from readability goals.
 Mitigation: enforce `docs/SKADI_STYLE_PRINCIPLES.md` as review baseline.
+
+## Active TODO (V1 + Tech Debt)
+Status: active
+
+V1 priorities:
+- Finalize language-level module system (`import module_name`, aliasing, visibility).
+- Stabilize multi-file compile model at language/pipeline level (not only CLI source merge).
+- Fix remaining RU docs encoding issues and sync references with actual implementation status.
+- Complete install/`PATH` user flow for `skadi` across Windows/macOS/Linux.
+- Implement `skadi docs` offline HTML workflow (`build/open`) from Markdown sources.
+- Implement generated short LLM guide from same docs sources (single-source publishing).
+- Close remaining transitional `TODO(v1)` behavior in codegen/semantic.
+- Expand negative e2e/import edge-case coverage.
+
+Tech debt priorities:
+- Centralize project-template logic used by `new` / `init` / `examples` commands.
+- Add stronger CLI tests for error paths and UX contracts.
+- Reduce documentation drift (`implemented` vs `planned`) across docs set.
+- Add repeatable “from-zero” smoke flow scripts/checks for end users.
+- Keep repository hygiene policy for `old/` and stale artifacts.
 
 ## Working Rules
 - Every new grammar feature must include at least one positive and one negative test.

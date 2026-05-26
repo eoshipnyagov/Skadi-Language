@@ -15,7 +15,7 @@ Cargo-like CLI for Skadi (early stage).
   - `examples` (inject typed example set into `examples/`)
   - `target list`, `tui` (minimal)
   - `doctor` (target compiler availability report)
-  - multi-file project load via `import "./relative_file.skd"` (recursive, cycle-safe, deduplicated)
+  - multi-file project load via `import "./relative_file.skd"` (recursive, cycle-safe, deduplicated, deterministic)
 - Planned:
   - full target toolchain support
   - `format`
@@ -34,4 +34,18 @@ cargo run --manifest-path tools/skadi-cli/Cargo.toml -- build
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- run
 cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
 ```
+
+## V1 module contract (current wave)
+
+- Supported:
+  - `import "./relative_path.skd"`
+- Not supported in this wave:
+  - `import module_name`
+  - alias form (`import "./x.skd" as x`)
+  - visibility rules (`local fn`/module privacy semantics)
+- Import pipeline behavior:
+  - recursive loading
+  - cycle detection (fails fast)
+  - deduplication of already imported files
+  - deterministic merge order by import order in source
 
