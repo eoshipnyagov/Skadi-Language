@@ -616,3 +616,27 @@ output(total)
     compile_skadi_and_run(compiler, src, "Skadi_e2e_feature_mix_danger_loop", &[]);
 }
 
+#[test]
+fn e2e_when_find_expression_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+new Text t = "alpha"
+new Int out = 0
+when find(t, "ph") {
+    is -1 {
+        out = 0
+    }
+    else {
+        out = 1
+    }
+}
+output(out)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_when_find", &[]);
+}
+

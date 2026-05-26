@@ -476,3 +476,56 @@ new char c = t[999]
     assert!(c.contains("if (!s || idx < 0) return '\\0';"));
     assert!(c.contains("if ((size_t)idx >= n) return '\\0';"));
 }
+
+#[test]
+fn codegen_emits_text_runtime_for_find_in_if_condition() {
+    let src = r#"
+new Text t = "alpha"
+if find(t, "ph") >= 0 {
+    output("ok")
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("static int64_t sk_text_find(const char *s, const char *needle) {"));
+    assert!(c.contains("if ((sk_text_find(t, \"ph\") >= 0)) {"));
+}
+
+#[test]
+fn codegen_emits_fs_runtime_for_fs_calls_inside_when() {
+    let src = r#"
+new Text p = "."
+when fs.is_dir(p) {
+    is true {
+        output(1)
+    }
+    else {
+        output(0)
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("static bool sk_fs_is_dir(const char *path) {"));
+    assert!(c.contains("int64_t __when_tmp_1 = sk_fs_is_dir(p);"));
+}
+
+#[test]
+fn codegen_emits_text_runtime_for_text_return_expression() {
+    let src = r#"
+fn tail(Text t) Text {
+    return slice(t, 1, len(t))
+}
+new Text x = tail("abc")
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("static char* sk_text_slice(const char *s, int64_t start, int64_t end) {"));
+    assert!(c.contains("return sk_text_slice(t, 1, ((int64_t)strlen(t)));"));
+}
