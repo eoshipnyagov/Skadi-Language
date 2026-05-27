@@ -2,7 +2,7 @@
 
 Cargo-like CLI for Skadi (early stage).
 
-Quick start (cross-platform): `docs/QUICK_START.md`
+Quick start (cross-platform): `docs/manual/QUICK_START.md`
 
 ## Current status
 
@@ -80,4 +80,5 @@ Other project types:
   - cycle detection (fails fast)
   - deduplication of already imported files
   - deterministic merge order by import order in source
+
 

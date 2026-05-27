@@ -1,20 +1,20 @@
-ï»¿# Skadi Diagnostic Codes Reference (v1 Snapshot)
+# Skadi Diagnostic Codes Reference (v1 Snapshot)
 
 Date: 2026-05-27
 Purpose: canonical map of diagnostic codes by pipeline stage and ownership.
 
 ## 1. Code Families
 
-- `SC-LEX-*` â€” lexer diagnostics (`src/lexer/*`)
-- `SC-PARSE-*` â€” parser diagnostics (`src/parser/*`)
-- `SC-SEM-*` â€” semantic diagnostics (`src/semantic_analysis.rs`)
-- `SC-MOD-*` â€” module/import pipeline diagnostics (`tools/skadi-cli/src/pipeline.rs`)
-- `SC-CGEN-*` â€” native C compile/link diagnostics (`tools/skadi-cli/src/pipeline.rs`)
+- `SC-LEX-*` — lexer diagnostics (`src/lexer/*`)
+- `SC-PARSE-*` — parser diagnostics (`src/parser/*`)
+- `SC-SEM-*` — semantic diagnostics (`src/semantic_analysis.rs`)
+- `SC-MOD-*` — module/import pipeline diagnostics (`tools/skadi-cli/src/pipeline.rs`)
+- `SC-CGEN-*` — native C compile/link diagnostics (`tools/skadi-cli/src/pipeline.rs`)
 
 Wrapper/stage codes used by CLI pipeline:
-- `SC-LEX-000` â€” lex stage wrapper in `compile_to_c`
-- `SC-PARSE-000` â€” parse stage wrapper in `compile_to_c`
-- `SC-SEM-000` â€” semantic stage wrapper in `compile_to_c`
+- `SC-LEX-000` — lex stage wrapper in `compile_to_c`
+- `SC-PARSE-000` — parse stage wrapper in `compile_to_c`
+- `SC-SEM-000` — semantic stage wrapper in `compile_to_c`
 
 ## 2. Parser Codes (`SC-PARSE-*`)
 
@@ -64,7 +64,7 @@ Wrapper/stage codes used by CLI pipeline:
 
 ## 5. Output Format Contract
 
-Canonical formatting is defined in `docs/DIAGNOSTICS_STYLE.md`:
+Canonical formatting is defined in `docs/internal/DIAGNOSTICS_STYLE.md`:
 
 `<Kind> error at line <L>, col <C>[, index <I>]: [<CODE>] <message>`
 
@@ -79,3 +79,4 @@ For CLI pipeline wrappers, normalized prefix is:
 1. New diagnostic code must be added here and in stage-local tests.
 2. Reusing an existing code for a different semantic meaning is not allowed.
 3. Parser/semantic/module/codegen tests must assert code presence for stable failure contracts.
+

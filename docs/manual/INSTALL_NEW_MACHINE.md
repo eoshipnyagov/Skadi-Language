@@ -79,6 +79,7 @@ cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
 
 ## 7. Related docs
 
-- `docs/QUICK_START.md`
-- `docs/CLI_USAGE.md`
+- `docs/manual/QUICK_START.md`
+- `docs/manual/CLI_USAGE.md`
 - `docs/DOCS_INDEX.md`
+

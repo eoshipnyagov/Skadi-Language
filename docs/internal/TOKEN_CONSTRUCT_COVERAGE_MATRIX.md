@@ -1,4 +1,4 @@
-﻿# Token/Construct Coverage Matrix (v1 Tracking)
+# Token/Construct Coverage Matrix (v1 Tracking)
 
 Date: 2026-05-27
 Purpose: explicit traceability for confidence before v1 freeze.
@@ -66,4 +66,5 @@ Legend:
 ## 4. Pre-freeze TODO (explicit)
 
 1. Decide if `fixed/const/hide/local/direct/allow drop` remain in v1 surface or move to deferred list in syntax status.
-2. Keep this matrix synced with `docs/TEST_COVERAGE_MATRIX.md` after each feature merge.
+2. Keep this matrix synced with `docs/internal/TEST_COVERAGE_MATRIX.md` after each feature merge.
+

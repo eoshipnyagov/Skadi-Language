@@ -65,7 +65,7 @@ Available `type` values for `skadi new <type> <name>`:
 - `embedded`
 - `gui`
 
-More details: [docs/CLI_USAGE.md](docs/CLI_USAGE.md)
+More details: [docs/manual/CLI_USAGE.md](docs/manual/CLI_USAGE.md)
 
 ## Syntax Contrast (Tiny Example)
 
@@ -162,14 +162,16 @@ int sum_positive(const std::vector<int>& xs) {
 
 ## Key Docs
 
-- [docs/QUICK_START.md](docs/QUICK_START.md)
-- [docs/INSTALL_NEW_MACHINE.md](docs/INSTALL_NEW_MACHINE.md)
-- [docs/SKADI_LANGUAGE_REFERENCE_RU.md](docs/SKADI_LANGUAGE_REFERENCE_RU.md)
-- [docs/SKADI_SYNTAX_STATUS.md](docs/SKADI_SYNTAX_STATUS.md)
-- [docs/SKADI_PROJECT_TECH_REFERENCE_RU.md](docs/SKADI_PROJECT_TECH_REFERENCE_RU.md)
-- [docs/TEST_COVERAGE_MATRIX.md](docs/TEST_COVERAGE_MATRIX.md)
+- [docs/manual/QUICK_START.md](docs/manual/QUICK_START.md)
+- [docs/manual/INSTALL_NEW_MACHINE.md](docs/manual/INSTALL_NEW_MACHINE.md)
+- [docs/manual/SKADI_LANGUAGE_REFERENCE_RU.md](docs/manual/SKADI_LANGUAGE_REFERENCE_RU.md)
+- [docs/manual/SKADI_SYNTAX_STATUS.md](docs/manual/SKADI_SYNTAX_STATUS.md)
+- [docs/internal/SKADI_PROJECT_TECH_REFERENCE_RU.md](docs/internal/SKADI_PROJECT_TECH_REFERENCE_RU.md)
+- [docs/internal/TEST_COVERAGE_MATRIX.md](docs/internal/TEST_COVERAGE_MATRIX.md)
+- [docs/DOCS_POLICY.md](docs/DOCS_POLICY.md)
 - [docs/DOCS_INDEX.md](docs/DOCS_INDEX.md)
 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
