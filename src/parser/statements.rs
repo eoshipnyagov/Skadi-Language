@@ -568,6 +568,21 @@ pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResu
         && tokens[expr_start].lexeme == "error"
         && tokens[expr_start + 1].kind() == TokenKind::Identifier
     {
+        if expr_start + 3 < tokens.len()
+            && tokens[expr_start + 2].lexeme == "."
+            && tokens[expr_start + 3].kind() == TokenKind::Identifier
+        {
+            return Ok((
+                Statement::ReturnError {
+                    code: format!(
+                        "{}.{}",
+                        tokens[expr_start + 1].lexeme, tokens[expr_start + 3].lexeme
+                    ),
+                    loc,
+                },
+                5,
+            ));
+        }
         return Ok((
             Statement::ReturnError {
                 code: tokens[expr_start + 1].lexeme.clone(),

@@ -971,7 +971,8 @@ fn analyze_statement(
                     "return error requires label ErrorCode declaration.".to_string(),
                 ));
             };
-            if !error_codes.iter().any(|v| v == code) {
+            let variant = code.split('.').next_back().unwrap_or(code.as_str());
+            if !error_codes.iter().any(|v| v == variant) {
                 return Err(err_at_code(
                     stmt,
                     SEM_ERRORCODE_RULE,

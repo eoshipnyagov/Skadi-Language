@@ -126,6 +126,25 @@ danger fn parse_value(Int x) Int {
 }
 
 #[test]
+fn codegen_emits_return_error_for_qualified_variant() {
+    let src = r#"
+label ErrorCode {
+    Ok
+    ZeroDivision
+}
+
+danger fn parse_value(Int x) Int {
+    return error core.ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("return ErrorCode_ZeroDivision;"));
+}
+
+#[test]
 fn codegen_emits_regular_call_expression() {
     let src = r#"
 fn add(Int a, Int b) Int {

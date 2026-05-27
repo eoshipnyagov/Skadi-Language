@@ -162,6 +162,23 @@ danger fn parse_value(bool x) Int {
 }
 
 #[test]
+fn semantic_allows_qualified_return_error_variant() {
+    let src = r#"
+label ErrorCode {
+    Ok
+    ZeroDivision
+}
+
+danger fn parse_value(bool x) Int {
+    return error core.ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
 fn semantic_rejects_unknown_return_error_code() {
     let src = r#"
 label ErrorCode {

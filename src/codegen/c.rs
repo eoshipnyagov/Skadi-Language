@@ -1323,9 +1323,10 @@ fn emit_statement(
             out.push_str(";\n");
         }
         Statement::ReturnError { code, .. } => {
+            let variant = code.rsplit('.').next().unwrap_or(code.as_str());
             out.push_str(&pad);
             out.push_str("return ErrorCode_");
-            out.push_str(code);
+            out.push_str(variant);
             out.push_str(";\n");
         }
         Statement::WhenBlock {

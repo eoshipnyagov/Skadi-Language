@@ -349,6 +349,24 @@ danger fn parse_value(Int x) Int {
 }
 
 #[test]
+fn parses_return_error_with_qualified_variant() {
+    let src = r#"
+danger fn parse_value(Int x) Int {
+    return error core.ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::FunctionDef { body, .. } = &program.statements[0] else {
+        panic!("expected FunctionDef");
+    };
+    let Statement::ReturnError { code, .. } = &body.statements[0] else {
+        panic!("expected ReturnError");
+    };
+    assert_eq!(code, "core.ZeroDivision");
+}
+
+#[test]
 fn parses_call_expression_in_declaration() {
     let src = r#"
 fn add(Int a, Int b) Int {
