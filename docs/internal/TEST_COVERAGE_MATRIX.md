@@ -88,3 +88,16 @@ For each newly implemented feature, add:
 3. codegen shape check (`codegen_smoke`)
 4. at least one integration scenario (`language_programs` or `codegen_e2e`)
 
+## 4. Scope/Visibility v1.1 checklist
+
+Source contract: `docs/internal/SCOPE_VISIBILITY_V1_1.md`
+
+Must-cover cases:
+1. Negative: shadowing in nested block fails.
+2. Positive: `my.field` vs local name resolution.
+3. Hidden fields: direct access fails, own-method access succeeds.
+4. `local fn/struct/label` visibility from importer.
+5. Import name collision deterministic failure.
+6. Qualified `module.symbol` for `fn`/`struct`/`label`.
+7. Negative: no transitive import visibility.
+

@@ -191,7 +191,14 @@ Mitigation: enforce `docs/manual/SKADI_STYLE_PRINCIPLES.md` as review baseline.
 Status: active
 
 V1 priorities:
-- Finalize language-level module system (`import module_name`, aliasing, visibility).
+- Implement accepted scope/visibility contract v1.1 (`docs/internal/SCOPE_VISIBILITY_V1_1.md`):
+  - shadowing forbidden,
+  - `local fn/struct/label`,
+  - hidden field access only via own struct methods,
+  - direct-import-only visibility,
+  - deterministic import conflict diagnostics,
+  - `module.symbol` qualification (`module = filename without .skd`).
+- Finalize language-level module system (`import module_name`, aliasing, visibility) on top of the accepted contract.
 - Stabilize multi-file compile model at language/pipeline level (not only CLI source merge).
 - Fix remaining RU docs encoding issues and sync references with actual implementation status.
 - Complete install/`PATH` user flow for `skadi` across Windows/macOS/Linux.

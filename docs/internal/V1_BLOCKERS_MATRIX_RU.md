@@ -55,3 +55,16 @@
 - тесты,
 - синхронное обновление документации.
 
+
+## Scope/Visibility v1.1 (tracking)
+
+Status: in progress
+Source of truth: `docs/internal/SCOPE_VISIBILITY_V1_1.md`
+
+Required closure:
+- forbid shadowing with deterministic diagnostics,
+- support `local` for `fn/struct/label`,
+- enforce hidden-field access only via methods of the same struct,
+- keep direct-import-only visibility,
+- treat import name collisions as compile error and support `module.symbol`,
+- cover the contract checklist with parser/semantic/codegen/e2e tests.
