@@ -1,0 +1,3 @@
+fn write_report(Text out_path, Text data) {
+    write(out_path, data)
+}

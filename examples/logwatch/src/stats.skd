@@ -1,0 +1,17 @@
+import "./text_utils.skd"
+
+fn print_scan_summary(Text data) {
+    new Int lines = line_count(data)
+    new Int errors = count_occurs(data, "ERROR")
+    new Int warns = count_occurs(data, "WARN")
+    new Int infos = count_occurs(data, "INFO")
+
+    output("lines:")
+    output(lines)
+    output("errors:")
+    output(errors)
+    output("warns:")
+    output(warns)
+    output("infos:")
+    output(infos)
+}

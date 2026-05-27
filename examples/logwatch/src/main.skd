@@ -1,0 +1,42 @@
+import "./stats.skd"
+import "./report.skd"
+
+fn print_help() {
+    output("logwatch commands:")
+    output("  scan <file>")
+    output("  report <file> <out>")
+}
+
+new Text List cli_args = args()
+if len(cli_args) == 0 {
+    print_help()
+} else {
+    new Text cmd = cli_args[0]
+
+    when cmd {
+        is "scan" {
+            if len(cli_args) < 2 {
+                output("usage: scan <file>")
+            } else {
+                new Text path = cli_args[1]
+                new Text data = read(path)
+                print_scan_summary(data)
+            }
+        }
+        is "report" {
+            if len(cli_args) < 3 {
+                output("usage: report <file> <out>")
+            } else {
+                new Text path = cli_args[1]
+                new Text out_path = cli_args[2]
+                new Text data = read(path)
+                print_scan_summary(data)
+                write_report(out_path, data)
+                output("report saved")
+            }
+        }
+        else {
+            print_help()
+        }
+    }
+}

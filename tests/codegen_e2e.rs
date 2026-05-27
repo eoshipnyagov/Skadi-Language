@@ -1255,3 +1255,78 @@ new Node List List graph = []
     compile_skadi_expect_parse_error(src, "SC-PARSE-140");
 }
 
+#[test]
+fn e2e_example_logwatch_core_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+fn count_occurs(Text data, Text needle) Int {
+    if len(data) == 0 or len(needle) == 0 {
+        return 0
+    }
+
+    new Int count = 0
+    new Int start = 0
+    new Int n = len(data)
+    new Int step = len(needle)
+
+    while start < n {
+        new Int pos = find(slice(data, start, n), needle)
+        if pos < 0 {
+            start = n
+        } else {
+            count = count + 1
+            start = start + pos + step
+        }
+    }
+
+    return count
+}
+
+fn line_count(Text data) Int {
+    if len(data) == 0 {
+        return 0
+    }
+    return count_occurs(data, "\n") + 1
+}
+
+fn print_scan_summary(Text data) {
+    new Int lines = line_count(data)
+    new Int errors = count_occurs(data, "ERROR")
+    new Int warns = count_occurs(data, "WARN")
+    new Int infos = count_occurs(data, "INFO")
+    output(lines)
+    output(errors)
+    output(warns)
+    output(infos)
+}
+
+new Text List cli_args = args()
+if len(cli_args) == 0 {
+    output("logwatch commands:")
+    output("  scan <file>")
+} else {
+    new Text cmd = cli_args[0]
+    when cmd {
+        is "scan" {
+            if len(cli_args) < 2 {
+                output("usage: scan <file>")
+            } else {
+                new Text path = cli_args[1]
+                new Text data = read(path)
+                print_scan_summary(data)
+            }
+        }
+        else {
+            output("unknown command")
+        }
+    }
+}
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_example_logwatch_core", &[]);
+}
+

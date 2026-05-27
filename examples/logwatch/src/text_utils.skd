@@ -1,0 +1,29 @@
+fn count_occurs(Text data, Text needle) Int {
+    if len(data) == 0 or len(needle) == 0 {
+        return 0
+    }
+
+    new Int count = 0
+    new Int start = 0
+    new Int n = len(data)
+    new Int step = len(needle)
+
+    while start < n {
+        new Int pos = find(slice(data, start, n), needle)
+        if pos < 0 {
+            start = n
+        } else {
+            count = count + 1
+            start = start + pos + step
+        }
+    }
+
+    return count
+}
+
+fn line_count(Text data) Int {
+    if len(data) == 0 {
+        return 0
+    }
+    return count_occurs(data, "\n") + 1
+}

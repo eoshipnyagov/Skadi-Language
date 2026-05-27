@@ -1,0 +1,8 @@
+[package]
+name = "logwatch"
+version = "0.1.0"
+edition = "v1"
+type = "console"
+
+[build]
+entry = "src/main.skd"

@@ -5,4 +5,11 @@
 *.scadi.c
 bench_*.exe
 old/
-examples/
+examples/*
+!examples/logwatch/
+!examples/logwatch/Skadi.toml
+!examples/logwatch/src/
+!examples/logwatch/src/*.skd
+examples/logwatch/build/
+examples/logwatch/*.exe
+examples/logwatch/*.log
