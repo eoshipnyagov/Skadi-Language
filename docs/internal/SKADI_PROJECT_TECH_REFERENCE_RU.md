@@ -111,3 +111,4 @@ cargo clippy --all-targets --all-features -- -D warnings
 - План: `SKADI_IMPLEMENTATION_PLAN.md`
 
 
+

@@ -1,4 +1,4 @@
-ï»¿# Skadi CLI Usage
+# Skadi CLI Usage
 
 Date: 2026-05-27
 
@@ -6,14 +6,14 @@ This document describes practical usage of the current CLI manager in `tools/ska
 
 ## Commands
 
-- `doctor` â€” detect host toolchain and show setup hints.
-- `new <name>` or `new <type> <name>` â€” create a new project.
-- `init [type]` â€” initialize `Skadi.toml` in current directory.
-- `examples` â€” add example programs.
-- `check` â€” parse/semantic/codegen check without final native run.
-- `build [--target <triple>]` â€” build project.
-- `run` â€” build and run.
-- `clean [--all]` â€” remove generated artifacts.
+- `doctor` — detect host toolchain and show setup hints.
+- `new <name>` or `new <type> <name>` — create a new project.
+- `init [type]` — initialize `Skadi.toml` in current directory.
+- `examples` — add example programs.
+- `check` — parse/semantic/codegen check without final native run.
+- `build [--target <triple>]` — build project.
+- `run` — build and run.
+- `clean [--all]` — remove generated artifacts.
 
 Supported project types:
 
@@ -68,3 +68,4 @@ import "./relative_path.skd"
 ```
 
 Current v1 scope does not include alias/module-name import forms.
+

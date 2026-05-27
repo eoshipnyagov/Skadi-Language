@@ -9,11 +9,10 @@ Date: 2026-05-27
 ## User Manual (`docs/manual/`)
 
 - `docs/manual/QUICK_START.md`
-- `docs/manual/INSTALL_NEW_MACHINE.md`
+- `docs/manual/SKADI_INSTALL.md`
 - `docs/manual/CLI_USAGE.md`
 - `docs/manual/SKADI_LANGUAGE_REFERENCE_RU.md`
 - `docs/manual/SKADI_SYNTAX_STATUS.md`
-- `docs/manual/SHOWCASE_PROGRAMS.md`
 - `docs/manual/SKADI_STYLE_GUIDE_V1.md`
 - `docs/manual/SKADI_STYLE_PRINCIPLES.md`
 
@@ -31,17 +30,15 @@ Date: 2026-05-27
 - `docs/internal/KNOWN_ISSUES.md`
 - `docs/internal/DIAGNOSTICS_STYLE.md`
 - `docs/internal/DIAGNOSTIC_CODES_REFERENCE.md`
+- `docs/internal/SHOWCASE_PROGRAMS.md`
 - `docs/internal/RFC_LIST.md`
 - `docs/internal/RFC_TEXT.md`
 - `docs/internal/RFC_MATH_VECTOR_CORE.md`
 - `docs/internal/MATH_VECTOR_CORE_BACKLOG_1X_RU.md`
 - `docs/internal/SYNTAX_CANONICAL_MATRIX_V1_RU.md`
 
-## Design Baseline
-
-- `docs/design/Skadi_design_v1_1.txt`
-
 ## Archive
 
 - `docs/old/SKADI_CLI_RFC.md`
 - `docs/old/RELEASE_NOTES_V1_RC1_RU.md`
+

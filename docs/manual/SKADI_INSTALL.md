@@ -1,4 +1,4 @@
-# Skadi: Setup on a New Machine
+# Skadi Install
 
 Date: 2026-05-27
 
@@ -82,4 +82,5 @@ cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
 - `docs/manual/QUICK_START.md`
 - `docs/manual/CLI_USAGE.md`
 - `docs/DOCS_INDEX.md`
+
 

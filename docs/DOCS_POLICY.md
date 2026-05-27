@@ -52,3 +52,4 @@ Examples:
   - relevant file in `docs/`,
   - `docs/DOCS_INDEX.md` when navigation changes,
   - RU release snapshot only during release preparation.
+
