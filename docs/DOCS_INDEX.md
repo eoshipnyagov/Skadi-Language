@@ -19,6 +19,7 @@ Date: 2026-05-27
 
 - `docs/internal/PROJECT_OVERVIEW.md`
 - `docs/internal/SKADI_IMPLEMENTATION_PLAN.md`
+- `docs/internal/V1_1_ROADMAP.md`
 - `docs/internal/SKADI_PROJECT_TECH_REFERENCE_RU.md`
 - `docs/internal/SCOPE_VISIBILITY_V1_1.md`
 - `docs/internal/SKADI_SYNTAX_STATUS.md`

@@ -9,6 +9,9 @@ Reach a working MVP compiler pipeline for a stable subset of Skadi:
 - deterministic diagnostics with source locations,
 - regression tests for implemented grammar.
 
+Execution note:
+- Current release execution baseline is tracked in `docs/internal/V1_1_ROADMAP.md`.
+
 ## Phase 0 - Baseline Lock (Completed)
 Status: completed
 
