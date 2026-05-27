@@ -43,11 +43,8 @@ skadi build
 skadi run
 ```
 
-Why `cargo run -- ...` sometimes appears in docs:
-
-- `cargo run` itself consumes flags.
-- `--` separates Cargo flags from CLI flags of `skadi-cli`.
-- Example: `cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor`.
+If you run CLI through Cargo, `--` separates Cargo args from `skadi-cli` args.
+Example: `cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor`.
 
 ## CLI Commands (Short)
 
@@ -78,7 +75,7 @@ Task: sum positive values.
 <summary>Skadi</summary>
 
 ```skadi
-fn sum_positive(List(i32) xs) i32 {
+fn sum_positive(i32 List xs) i32 {
     new i32 total = 0
     iterate xs as x {
         if x > 0 {

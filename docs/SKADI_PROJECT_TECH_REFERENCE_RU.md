@@ -80,7 +80,8 @@
 - Расширение языка: `.skd`.
 - Multi-file импорт: только `import "./relative_path.skd"`.
 - Стабильные CLI-команды: `doctor/new/init/check/build/run/clean/examples`.
-- Для `build/run`: поддержка `--cc <compiler>` + host auto-detect.
+- Для `build/run`: поддержка `--target <triple>` + host auto-detect компилятора.
+- Флаг `--cc <compiler>` пока не входит в стабильный CLI-контракт (отложен).
 
 ## 6. Тестовая система
 

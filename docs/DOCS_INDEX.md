@@ -1,70 +1,66 @@
-# Skadi Docs Index (Source of Truth Map)
+# Skadi Docs Index
 
 Date: 2026-05-27
-Purpose: one-page map of which document answers which question.
+Goal: single map of active docs with minimal overlap.
 
-## 1. Start Here
+## Start Here
 
-- `docs/QUICK_START.md` — cross-platform bootstrap and first commands.
-- `docs/INSTALL_NEW_MACHINE.md` — full setup and troubleshooting on a fresh machine.
-- `README_PROJECT_OVERVIEW.md` — short project overview and current status.
+- `docs/QUICK_START.md` - 5-minute bootstrap.
+- `docs/INSTALL_NEW_MACHINE.md` - full setup and troubleshooting on a fresh machine.
+- `docs/CLI_USAGE.md` - command reference for `skadi`.
+- `README_PROJECT_OVERVIEW.md` - project snapshot.
 
-## 2. Language Behavior (Current Snapshot)
+## Language (Current Behavior)
 
-- `docs/SKADI_SYNTAX_STATUS.md` — what syntax works right now.
-- `docs/SKADI_LANGUAGE_REFERENCE_RU.md` — practical RU language reference.
-- `docs/SYNTAX_CANONICAL_MATRIX_V1_RU.md` — canonical style for v1 writing.
+- `docs/SKADI_SYNTAX_STATUS.md` - implemented syntax status.
+- `docs/SKADI_LANGUAGE_REFERENCE_RU.md` - practical language reference (RU).
+- `docs/SYNTAX_CANONICAL_MATRIX_V1_RU.md` - canonical style matrix.
 
-## 3. Contracts (Frozen/Normative for v1)
+## Runtime and Error Contracts (v1)
 
-- `docs/ON_ERROR_V1_MATRIX_RU.md` — `on error` allow/deny matrix.
-- `docs/TEXT_V1_CONTRACT_RU.md` — `Text` contract.
-- `docs/C_RUNTIME_MEMORY_CONTRACT_V1_RU.md` — C runtime memory rules.
+- `docs/ON_ERROR_V1_MATRIX_RU.md`
+- `docs/TEXT_V1_CONTRACT_RU.md`
+- `docs/C_RUNTIME_MEMORY_CONTRACT_V1_RU.md`
 
-## 4. Architecture and Scope
+## Architecture and Scope
 
-- `docs/SKADI_PROJECT_TECH_REFERENCE_RU.md` — project architecture map.
-- `docs/SKADI_TO_C_SCOPE.md` — explicit Skadi->C scope.
-- `docs/SKADI_CLI_RFC.md` — CLI scope/status and command model.
+- `docs/SKADI_PROJECT_TECH_REFERENCE_RU.md`
+- `docs/SKADI_TO_C_SCOPE.md`
 
-## 5. RFC / Backlog
+## Quality and Release Gates
 
-- `docs/RFC_LIST.md` — `List` baseline.
-- `docs/RFC_TEXT.md` — `Text` baseline.
-- `docs/RFC_MATH_VECTOR_CORE.md` — draft for math/vector expansion.
-- `docs/MATH_VECTOR_CORE_BACKLOG_1X_RU.md` — deferred math/vector items.
+- `docs/TEST_COVERAGE_MATRIX.md`
+- `docs/TOKEN_CONSTRUCT_COVERAGE_MATRIX.md`
+- `docs/V1_BLOCKERS_MATRIX_RU.md`
+- `docs/V1_RELEASE_CONTRACT_RU.md`
+- `docs/KNOWN_ISSUES.md`
+- `docs/DIAGNOSTICS_STYLE.md`
+- `docs/DIAGNOSTIC_CODES_REFERENCE.md`
 
-## 6. Quality Gates
+## RFC and Backlog
 
-- `docs/TEST_COVERAGE_MATRIX.md` — test coverage and codegen regression guardrails.
-- `docs/TOKEN_CONSTRUCT_COVERAGE_MATRIX.md` — explicit token/construct-to-tests traceability matrix.
-- `docs/V1_BLOCKERS_MATRIX_RU.md` — release blockers and status.
-- `docs/KNOWN_ISSUES.md` — current known bugs/limitations (fixed/open snapshot).
-- `docs/DIAGNOSTICS_STYLE.md` — canonical diagnostics format.
-- `docs/DIAGNOSTIC_CODES_REFERENCE.md` — canonical ownership map for diagnostic code families.
-- `docs/V1_RELEASE_CONTRACT_RU.md` — release freeze contract (draft/approval gate).
+- `docs/RFC_LIST.md`
+- `docs/RFC_TEXT.md`
+- `docs/RFC_MATH_VECTOR_CORE.md`
+- `docs/MATH_VECTOR_CORE_BACKLOG_1X_RU.md`
 
-## 7. Release Notes
+## Showcase and Style
 
-- `CHANGELOG.md` — release-level change log.
-- `docs/RELEASE_NOTES_V1_RC1_RU.md` — candidate release notes for `v1.0.0-rc1`.
+- `docs/SHOWCASE_PROGRAMS.md`
+- `docs/SKADI_STYLE_PRINCIPLES.md`
+- `docs/SKADI_STYLE_GUIDE_V1.md`
 
-## 8. Style
+## Design Baseline
 
-- `docs/SKADI_STYLE_PRINCIPLES.md` — design principles.
-- `docs/SKADI_STYLE_GUIDE_V1.md` — coding style for examples/showcase.
+- `docs/design/Skadi_design_v1_1.txt`
 
-## 9. Design Baseline
+## Archived Docs
 
-- `docs/design/Skadi_design_v1_1.txt` — historical language design baseline (input for future revisions).
+- `docs/old/SKADI_CLI_RFC.md`
+- `docs/old/RELEASE_NOTES_V1_RC1_RU.md`
 
-## 10. Showcase
+## Conflict Rule
 
-- `docs/SHOWCASE_PROGRAMS.md` — small programs used as confidence suite.
-
-## 11. Conflict Resolution Rule
-
-If two docs conflict:
 1. `SKADI_SYNTAX_STATUS.md` wins for implemented behavior.
 2. `*_CONTRACT_*` docs win for frozen v1 runtime/error rules.
-3. RFC docs are intent/proposals and do not override implemented behavior.
+3. RFC docs are intent only and do not override implementation.

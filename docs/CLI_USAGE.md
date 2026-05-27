@@ -32,17 +32,17 @@ Examples:
 ## Quick flow
 
 ```bash
-cargo run -p skadi-cli -- doctor
-cargo run -p skadi-cli -- new console demo
+skadi doctor
+skadi new console demo
 cd demo
-cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- check
-cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- build
-cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- run
+skadi check
+skadi build
+skadi run
 ```
 
 ## Notes on `cargo run -- ...`
 
-When launching a binary via Cargo and passing flags to that binary, use:
+If `skadi` is not installed in PATH yet and you run via Cargo:
 
 ```bash
 cargo run -p skadi-cli -- <cli args>

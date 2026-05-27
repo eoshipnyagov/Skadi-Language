@@ -5,6 +5,8 @@
 *.scadi.c
 bench_*.exe
 old/
+!docs/old/
+!docs/old/*.md
 examples/*
 !examples/logwatch/
 !examples/logwatch/Skadi.toml

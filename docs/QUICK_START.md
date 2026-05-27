@@ -47,7 +47,7 @@ skadi clean --all
 ## 5. Main manager commands
 
 - `skadi doctor` - environment diagnostics
-- `skadi new <type> <name>` - create project (`console|game|embedded|gui|basic`)
+- `skadi new <type> <name>` - create project (`console|game|embedded|gui`)
 - `skadi init [type]` - initialize in current dir
 - `skadi examples` - add showcase examples
 - `skadi check` - parse/semantic/codegen validation
@@ -55,6 +55,8 @@ skadi clean --all
 - `skadi run` - build and run
 - `skadi clean --all` - remove generated artifacts
 - `skadi tui` - interactive mode
+
+Detailed command reference: `docs/CLI_USAGE.md`.
 
 ## 6. Notes
 
