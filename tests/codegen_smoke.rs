@@ -142,6 +142,21 @@ new Int y = add(x, 2)
 }
 
 #[test]
+fn codegen_lowers_qualified_module_style_call_to_function_call() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+new Int y = util.add(1, 2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int64_t y = add(1, 2);"));
+}
+
+#[test]
 fn codegen_lowers_when_to_if_chain() {
     let src = r#"
 new Int x = 2

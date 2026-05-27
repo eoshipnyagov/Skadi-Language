@@ -813,3 +813,54 @@ t++
     assert!(err.contains("SC-SEM-020"));
     assert!(err.contains("inc/dec requires numeric variable"));
 }
+
+#[test]
+fn semantic_rejects_direct_access_to_hidden_field() {
+    let src = r#"
+struct Secret {
+    hide Int token
+    fn set(Int x) Int {
+        my.token = x
+        return my.token
+    }
+}
+new Secret s = {token = 1}
+new Int x = s.token
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-040"));
+    assert!(err.contains("is hidden"));
+}
+
+#[test]
+fn semantic_allows_hidden_field_access_via_own_method() {
+    let src = r#"
+struct Secret {
+    hide Int token
+    fn set(Int x) Int {
+        my.token = x
+        return my.token
+    }
+}
+new Secret s = {token = 1}
+new Int y = s.set(2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_allows_qualified_module_style_function_call() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+new Int x = util.add(1, 2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}

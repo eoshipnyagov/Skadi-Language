@@ -1681,6 +1681,12 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 rendered.extend(args.iter().map(|a| emit_expr(a, declared)));
                 return format!("{}_{}({})", obj_ty, method, rendered.join(", "));
             }
+            if let Some((base, method)) = name.split_once(".")
+                && !declared.contains_key(base)
+            {
+                let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
+                return format!("{}({})", method, rendered.join(", "));
+            }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", name, rendered.join(", "))
         }

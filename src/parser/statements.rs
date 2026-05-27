@@ -71,6 +71,14 @@ pub fn parse_function_declaration(
     start_index: usize,
     _scope: &ScopeManager,
 ) -> ParseResult<Statement> {
+    parse_function_declaration_inner(tokens, start_index, false)
+}
+
+fn parse_function_declaration_inner(
+    tokens: &[Token],
+    start_index: usize,
+    is_local: bool,
+) -> ParseResult<Statement> {
     let mut current_index = start_index;
     let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     let mut is_danger = false;
@@ -177,10 +185,33 @@ pub fn parse_function_declaration(
         .into(),
         returns,
         is_danger,
+        is_local,
         loc,
     };
 
     Ok((stmt, current_index - start_index))
+}
+
+pub fn parse_local_prefixed_declaration(
+    tokens: &[Token],
+    start_index: usize,
+    _scope: &ScopeManager,
+) -> ParseResult<Statement> {
+    if start_index + 1 >= tokens.len() {
+        return Err(parse_err("SC-PARSE-161", "local must prefix fn/struct/label."));
+    }
+    match tokens[start_index + 1].kind() {
+        TokenKind::KeywordFn => parse_function_declaration_inner(tokens, start_index + 1, true)
+            .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        TokenKind::KeywordStruct => parse_struct_declaration_inner(tokens, start_index + 1, true)
+            .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        TokenKind::KeywordLabel => parse_label_declaration_inner(tokens, start_index + 1, true)
+            .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        _ => Err(parse_err(
+            "SC-PARSE-162",
+            "local may prefix only fn/struct/label declarations.",
+        )),
+    }
 }
 
 pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
@@ -961,6 +992,14 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
 }
 
 pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    parse_label_declaration_inner(tokens, start_index, false)
+}
+
+fn parse_label_declaration_inner(
+    tokens: &[Token],
+    start_index: usize,
+    is_local: bool,
+) -> ParseResult<Statement> {
     let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordLabel {
         return Err(parse_err("SC-PARSE-141", "expected 'label' keyword."));
@@ -985,6 +1024,7 @@ pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseRes
         Statement::LabelDecl {
             name: tokens[start_index + 1].lexeme.clone(),
             variants,
+            is_local,
             loc,
         },
         close + 1 - start_index,
@@ -992,6 +1032,14 @@ pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseRes
 }
 
 pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    parse_struct_declaration_inner(tokens, start_index, false)
+}
+
+fn parse_struct_declaration_inner(
+    tokens: &[Token],
+    start_index: usize,
+    is_local: bool,
+) -> ParseResult<Statement> {
     let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordStruct {
         return Err(parse_err("SC-PARSE-144", "expected 'struct' keyword."));
@@ -1012,9 +1060,12 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             cursor += 1;
             continue;
         }
-        if tokens[cursor].kind() == TokenKind::Identifier && tokens[cursor].lexeme == "hide" {
+        let mut field_hidden = false;
+        if tokens[cursor].kind() == TokenKind::KeywordHide
+            || (tokens[cursor].kind() == TokenKind::Identifier && tokens[cursor].lexeme == "hide")
+        {
+            field_hidden = true;
             cursor += 1;
-            continue;
         }
         let method_start = if tokens[cursor].kind() == TokenKind::Identifier && tokens[cursor].lexeme == "danger" {
             if cursor + 1 < close && tokens[cursor + 1].kind() == TokenKind::KeywordFn {
@@ -1042,6 +1093,7 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             fields.push(StructField {
                 field_type: field_type.clone(),
                 name: first_name,
+                is_hidden: field_hidden,
             });
             cursor += 2;
             while cursor + 1 < close
@@ -1051,6 +1103,7 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
                 fields.push(StructField {
                     field_type: field_type.clone(),
                     name: tokens[cursor + 1].lexeme.clone(),
+                    is_hidden: field_hidden,
                 });
                 cursor += 2;
             }
@@ -1063,6 +1116,7 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             name: tokens[start_index + 1].lexeme.clone(),
             fields,
             methods,
+            is_local,
             loc,
         },
         close + 1 - start_index,

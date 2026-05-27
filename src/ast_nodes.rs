@@ -47,6 +47,7 @@ pub struct FunctionParam {
 pub struct StructField {
     pub field_type: String,
     pub name: String,
+    pub is_hidden: bool,
 }
 
 #[derive(Debug)]
@@ -70,12 +71,13 @@ pub enum Statement {
     VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String>, loc: Location },
     Assignment { target: String, value: Box<Expression>, loc: Location },
     FieldAssignment { object: String, field: String, value: Box<Expression>, loc: Location },
-    FunctionDef { 
+    FunctionDef {
         name: String, 
         params: Vec<FunctionParam>, 
         body: Box<BlockStatement>, 
         returns: Option<String>, // Type of return
         is_danger: bool,
+        is_local: bool,
         loc: Location
     },
     IfStatement { condition: Box<Expression>, then_block: Box<BlockStatement>, else_block: Option<Box<BlockStatement>>, loc: Location },
@@ -95,8 +97,8 @@ pub enum Statement {
     },
     WhileLoop { condition: Box<Expression>, body: Box<BlockStatement>, loc: Location },
     LoopStatement { body: Box<BlockStatement>, loc: Location },
-    LabelDecl { name: String, variants: Vec<String>, loc: Location },
-    StructDecl { name: String, fields: Vec<StructField>, methods: Vec<StructMethod>, loc: Location },
+    LabelDecl { name: String, variants: Vec<String>, is_local: bool, loc: Location },
+    StructDecl { name: String, fields: Vec<StructField>, methods: Vec<StructMethod>, is_local: bool, loc: Location },
     OnBlock { trigger: String, loc: Location },
     DangerAssignOnError {
         target: String,

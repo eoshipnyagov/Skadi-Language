@@ -33,6 +33,7 @@ struct FnContext {
 #[derive(Clone, Debug)]
 struct StructInfo {
     fields: HashMap<String, ValueType>,
+    hidden_fields: std::collections::HashSet<String>,
     methods: HashMap<String, FunctionSig>,
 }
 
@@ -110,9 +111,17 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             is_danger,
             returns,
             params,
+            is_local,
             ..
         } = stmt
         {
+            if !*is_local && (functions.contains_key(name) || labels.contains_key(name) || structs.contains_key(name)) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_REDECLARATION,
+                    format!("top-level symbol collision for '{}'. use distinct names or qualification.", name),
+                ));
+            }
             functions.insert(
                 name.clone(),
                 FunctionSig {
@@ -122,19 +131,38 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 },
             );
         }
-        if let Statement::LabelDecl { name, variants, .. } = stmt {
+        if let Statement::LabelDecl { name, variants, is_local, .. } = stmt {
+            if !*is_local && (functions.contains_key(name) || labels.contains_key(name) || structs.contains_key(name)) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_REDECLARATION,
+                    format!("top-level symbol collision for '{}'. use distinct names or qualification.", name),
+                ));
+            }
             labels.insert(name.clone(), variants.clone());
         }
         if let Statement::StructDecl {
             name,
             fields,
             methods,
+            is_local,
             ..
         } = stmt
         {
+            if !*is_local && (functions.contains_key(name) || labels.contains_key(name) || structs.contains_key(name)) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_REDECLARATION,
+                    format!("top-level symbol collision for '{}'. use distinct names or qualification.", name),
+                ));
+            }
             let mut fmap = HashMap::new();
+            let mut hidden = std::collections::HashSet::new();
             for f in fields {
                 fmap.insert(f.name.clone(), parse_type_name(&f.field_type));
+                if f.is_hidden {
+                    hidden.insert(f.name.clone());
+                }
             }
             let mut mmap = HashMap::new();
             for m in methods {
@@ -151,6 +179,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 name.clone(),
                 StructInfo {
                     fields: fmap,
+                    hidden_fields: hidden,
                     methods: mmap,
                 },
             );
@@ -413,6 +442,25 @@ fn validate_call_args(
     Ok(())
 }
 
+fn resolve_function_name<'a>(
+    raw_name: &'a str,
+    scope: &HashMap<String, ValueType>,
+    functions: &HashMap<String, FunctionSig>,
+) -> Option<&'a str> {
+    if functions.contains_key(raw_name) {
+        return Some(raw_name);
+    }
+    if let Some((base, short)) = raw_name.split_once('.') {
+        if base == "my" || scope.contains_key(base) {
+            return None;
+        }
+        if functions.contains_key(short) {
+            return Some(short);
+        }
+    }
+    None
+}
+
 fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -> ValueType {
     if let Some(elem) = name.strip_suffix(" List") {
         let elem = elem.trim();
@@ -543,6 +591,15 @@ fn analyze_statement(
             let Some(field_ty) = info.fields.get(field).cloned() else {
                 return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("unknown field '{}.{}'.", owner, field)));
             };
+            if info.hidden_fields.contains(field)
+                && object != "my"
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!("field '{}.{}' is hidden; access it via methods of '{}'.", owner, field, owner),
+                ));
+            }
             let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             if !can_assign(&field_ty, &value_ty) {
                 return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("type mismatch in field assignment '{}.{}': cannot assign {:?} to {:?}.", owner, field, value_ty, field_ty)));
@@ -752,13 +809,14 @@ fn analyze_statement(
                     format!("on error requires danger fn call: builtin '{}' is not danger in v1.", call_name),
                 ));
             }
-            let Some(sig) = functions.get(call_name) else {
+            let Some(resolved_name) = resolve_function_name(call_name, scope, functions) else {
                 return Err(err_at_code(
                     stmt,
                     SEM_UNKNOWN_FUNCTION,
                     format!("unknown function '{}' in on error call.", call_name),
                 ));
             };
+            let sig = functions.get(resolved_name).expect("resolved function must exist");
             if !sig.is_danger {
                 return Err(err_at_code(
                     stmt,
@@ -773,7 +831,7 @@ fn analyze_statement(
                     format!("use-before-definition: '{}' is not defined in current scope.", target),
                 ));
             }
-            validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
+            validate_call_args(resolved_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
             let mut on_error_scope = scope.clone();
             analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx, loop_depth)
         }
@@ -790,13 +848,14 @@ fn analyze_statement(
                     format!("on error requires danger fn call: builtin '{}' is not danger in v1.", call_name),
                 ));
             }
-            let Some(sig) = functions.get(call_name) else {
+            let Some(resolved_name) = resolve_function_name(call_name, scope, functions) else {
                 return Err(err_at_code(
                     stmt,
                     SEM_UNKNOWN_FUNCTION,
                     format!("unknown function '{}' in on error call.", call_name),
                 ));
             };
+            let sig = functions.get(resolved_name).expect("resolved function must exist");
             if !sig.is_danger {
                 return Err(err_at_code(
                     stmt,
@@ -804,7 +863,7 @@ fn analyze_statement(
                     format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
                 ));
             }
-            validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
+            validate_call_args(resolved_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
             let mut on_error_scope = scope.clone();
             analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx, loop_depth)
         }
@@ -1044,6 +1103,12 @@ fn infer_expression_type(
                 let Some(ft) = info.fields.get(field) else {
                     return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown field '{}.{}'.", owner, field)));
                 };
+                if info.hidden_fields.contains(field) && base != "my" {
+                    return Err(sem_err(
+                        SEM_INVALID_CONTEXT,
+                        format!("field '{}.{}' is hidden; access it via methods of '{}'.", owner, field, owner),
+                    ));
+                }
                 Ok(ft.clone())
             } else {
                 Ok(ValueType::Unknown)
@@ -1222,49 +1287,68 @@ fn infer_expression_type(
                 };
             }
             if let Some((base, method)) = name.split_once('.') {
-                let owner_ty = if base == "my" {
-                    if let Some(ctx) = fn_ctx {
-                        if let Some(self_name) = ctx.self_struct.as_ref() {
-                            ValueType::Struct(self_name.clone())
+                // Distinguish struct method calls (`obj.method`) from qualified function
+                // calls (`module.symbol`). For now module-qualified calls resolve to
+                // plain function names during semantic/codegen fallback.
+                let base_is_receiver = base == "my" || scope.contains_key(base);
+                if base_is_receiver {
+                    let owner_ty = if base == "my" {
+                        if let Some(ctx) = fn_ctx {
+                            if let Some(self_name) = ctx.self_struct.as_ref() {
+                                ValueType::Struct(self_name.clone())
+                            } else {
+                                return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                            }
                         } else {
                             return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
                         }
                     } else {
-                        return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                        scope
+                            .get(base)
+                            .cloned()
+                            .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", base)))?
+                    };
+                    let ValueType::Struct(owner) = owner_ty else {
+                        return Err(sem_err(SEM_TYPE_MISMATCH, format!("method call requires struct receiver, got {:?}.", owner_ty)));
+                    };
+                    let Some(info) = structs.get(&owner) else {
+                        return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown struct type '{}'.", owner)));
+                    };
+                    let Some(sig) = info.methods.get(method) else {
+                        return Err(sem_err(SEM_UNKNOWN_FUNCTION, format!("unknown method '{}.{}'.", owner, method)));
+                    };
+                    if args.len() != sig.param_types.len() {
+                        return Err(sem_err(SEM_ARG_COUNT, format!("argument count mismatch for '{}.{}': expected {}, got {}.", owner, method, sig.param_types.len(), args.len())));
                     }
-                } else {
-                    scope
-                        .get(base)
-                        .cloned()
-                        .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", base)))?
-                };
-                let ValueType::Struct(owner) = owner_ty else {
-                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("method call requires struct receiver, got {:?}.", owner_ty)));
-                };
-                let Some(info) = structs.get(&owner) else {
-                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown struct type '{}'.", owner)));
-                };
-                let Some(sig) = info.methods.get(method) else {
-                    return Err(sem_err(SEM_UNKNOWN_FUNCTION, format!("unknown method '{}.{}'.", owner, method)));
-                };
-                if args.len() != sig.param_types.len() {
-                    return Err(sem_err(SEM_ARG_COUNT, format!("argument count mismatch for '{}.{}': expected {}, got {}.", owner, method, sig.param_types.len(), args.len())));
-                }
-                for (arg, expected_ty) in args.iter().zip(sig.param_types.iter()) {
-                    let actual_ty = infer_expression_type(arg, scope, functions, structs, fn_ctx)?;
-                    if !can_assign(expected_ty, &actual_ty) {
-                        return Err(sem_err(SEM_ARG_TYPE, format!("argument type mismatch for '{}.{}': expected {:?}, got {:?}.", owner, method, expected_ty, actual_ty)));
+                    for (arg, expected_ty) in args.iter().zip(sig.param_types.iter()) {
+                        let actual_ty = infer_expression_type(arg, scope, functions, structs, fn_ctx)?;
+                        if !can_assign(expected_ty, &actual_ty) {
+                            return Err(sem_err(SEM_ARG_TYPE, format!("argument type mismatch for '{}.{}': expected {:?}, got {:?}.", owner, method, expected_ty, actual_ty)));
+                        }
                     }
+                    return Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown));
                 }
-                return Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown));
+
+                // `base` isn't a local receiver: treat dotted name as module qualification.
+                let qualified = format!("{}.{}", base, method);
+                if let Some(resolved_name) = resolve_function_name(&qualified, scope, functions) {
+                    let sig = functions.get(resolved_name).expect("resolved function must exist");
+                    validate_call_args(resolved_name, args, sig, scope, functions, structs, fn_ctx)?;
+                    return Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown));
+                }
+                return Err(sem_err(
+                    SEM_UNKNOWN_FUNCTION,
+                    format!("unknown function '{}' in expression call.", name),
+                ));
             }
-            let Some(sig) = functions.get(name) else {
+            let Some(resolved_name) = resolve_function_name(name, scope, functions) else {
                 return Err(sem_err(
                     SEM_UNKNOWN_FUNCTION,
                     format!("unknown function '{}' in expression call.", name),
                 ));
             };
-            validate_call_args(name, args, sig, scope, functions, structs, fn_ctx)?;
+            let sig = functions.get(resolved_name).expect("resolved function must exist");
+            validate_call_args(resolved_name, args, sig, scope, functions, structs, fn_ctx)?;
             Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown))
         }
         Expression::BinaryOp { op, left, right } => {

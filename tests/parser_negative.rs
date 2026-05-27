@@ -80,3 +80,10 @@ i++ + 1
     let err = parse_err(src);
     assert!(err.contains("SC-PARSE-159"));
 }
+
+#[test]
+fn parser_rejects_local_for_non_declaration_statement() {
+    let src = "local new Int x = 1\n";
+    let err = parse_err(src);
+    assert!(err.contains("SC-PARSE-162"));
+}

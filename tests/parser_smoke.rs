@@ -484,3 +484,46 @@ i--
     assert!(matches!(program.statements[1], Statement::IncrementStatement { .. }));
     assert!(matches!(program.statements[2], Statement::DecrementStatement { .. }));
 }
+
+#[test]
+fn parses_local_prefixed_declarations() {
+    let src = r#"
+local fn helper(Int x) Int {
+    return x
+}
+
+local label Status {
+    Ok
+    Error
+}
+
+local struct S {
+    Int value
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 3);
+    assert!(matches!(program.statements[0], Statement::FunctionDef { is_local: true, .. }));
+    assert!(matches!(program.statements[1], Statement::LabelDecl { is_local: true, .. }));
+    assert!(matches!(program.statements[2], Statement::StructDecl { is_local: true, .. }));
+}
+
+#[test]
+fn parses_hidden_struct_fields() {
+    let src = r#"
+struct Secret {
+    hide Int token, level
+    Int open
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::StructDecl { fields, .. } = &program.statements[0] else {
+        panic!("expected StructDecl");
+    };
+    assert_eq!(fields.len(), 3);
+    assert!(fields[0].is_hidden);
+    assert!(fields[1].is_hidden);
+    assert!(!fields[2].is_hidden);
+}
