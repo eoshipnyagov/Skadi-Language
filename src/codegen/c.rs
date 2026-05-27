@@ -1228,18 +1228,28 @@ fn emit_statement(
             out.push_str("}\n");
         }
         Statement::ListPush { list_name, value, .. } => {
+            let elem_type = declared
+                .get(list_name)
+                .and_then(|t| list_elem_from_decl(t))
+                .map(str::to_string);
             let suffix = declared
                 .get(list_name)
                 .and_then(|t| list_elem_from_decl(t))
                 .map(|elem| list_meta_dynamic(elem).1)
                 .unwrap_or_else(|| "i64".to_string());
+            let rendered_value = match (&elem_type, value.as_ref()) {
+                (Some(elem), Expression::StructConstruction { fields }) => {
+                    emit_struct_literal(fields, Some(elem.as_str()), declared)
+                }
+                _ => emit_expr(value, declared),
+            };
             out.push_str(&pad);
             out.push_str("(void)sk_list_");
             out.push_str(&suffix);
             out.push_str("_push(&");
             out.push_str(list_name);
             out.push_str(", ");
-            out.push_str(&emit_expr(value, declared));
+            out.push_str(&rendered_value);
             out.push_str(");\n");
         }
         Statement::ListPopOnError {

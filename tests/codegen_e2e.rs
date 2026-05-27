@@ -135,6 +135,17 @@ fn compile_skadi_expect_semantic_error(src: &str, code: &str) {
     );
 }
 
+fn compile_skadi_expect_parse_error(src: &str, code: &str) {
+    let tokens = lex(src).expect("lex should succeed");
+    let err = parse_program(&tokens).expect_err("parse should fail");
+    assert!(
+        err.contains(code),
+        "expected parse error code {}, got: {}",
+        code,
+        err
+    );
+}
+
 #[test]
 fn e2e_skadi_to_c_binary_builds() {
     let Some(compiler) = find_c_compiler() else {
@@ -1148,5 +1159,99 @@ output(total)
 "#;
 
     compile_skadi_and_run(compiler, src, "Skadi_e2e_stress_nested_danger_recovery", &[]);
+}
+
+#[test]
+fn e2e_synthetic_branchy_callgraph_struct_list_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let src = r#"
+struct Packet {
+    Int id
+    Int kind
+    Int score
+}
+
+fn base_score(Int kind, Int id) Int {
+    if kind == 0 {
+        return id + 1
+    } else if kind == 1 {
+        return id * 2
+    } else {
+        return id + kind
+    }
+}
+
+fn tweak_a(Int x) Int {
+    if x mod 2 == 0 {
+        return x div 2
+    } else {
+        return x + 3
+    }
+}
+
+fn tweak_b(Int x) Int {
+    when x mod 3 {
+        is 0 { return x + 10 }
+        is 1 { return x + 20 }
+        else { return x + 30 }
+    }
+}
+
+fn score_pipeline(Int kind, Int id) Int {
+    new Int s0 = base_score(kind, id)
+    new Int s1 = tweak_a(s0)
+    new Int s2 = tweak_b(s1)
+    if s2 > 50 {
+        return s2 - 7
+    } else {
+        return s2 + 7
+    }
+}
+
+new Packet List packets = []
+new Int i = 0
+while i < 1500 {
+    new Int kind = i mod 3
+    new Int s = score_pipeline(kind, i)
+    new Packet pkt = {id = i, kind = kind, score = s}
+    packets.push(pkt)
+    i++
+}
+
+new Int acc = 0
+new Int j = 0
+while j < len(packets) {
+    new Packet p = packets[j]
+    if p.kind == 2 and p.score > 0 {
+        acc = acc + p.score
+    } else if p.kind == 1 {
+        acc = acc + (p.score div 2)
+    } else {
+        acc = acc + 1
+    }
+    j++
+}
+
+output(acc)
+"#;
+
+    compile_skadi_and_run(compiler, src, "Skadi_e2e_synthetic_branchy_callgraph_struct_list", &[]);
+}
+
+#[test]
+fn e2e_negative_nested_list_of_struct_decl_rejected_by_parser() {
+    let src = r#"
+struct Node {
+    Int value
+}
+
+new Node List List graph = []
+"#;
+
+    compile_skadi_expect_parse_error(src, "SC-PARSE-140");
 }
 

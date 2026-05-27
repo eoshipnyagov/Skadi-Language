@@ -449,6 +449,24 @@ new Account first = accounts[0]
 }
 
 #[test]
+fn codegen_struct_list_push_inline_literal_is_typed() {
+    let src = r#"
+struct Sensor {
+    Int id
+    Int value
+}
+
+new Sensor List sensors = []
+sensors.push({id = 1, value = 17})
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("(void)sk_list_Sensor_push(&sensors, (Sensor){.id = 1, .value = 17});"));
+}
+
+#[test]
 fn codegen_list_index_runtime_contract_is_fail_soft_zero() {
     let src = r#"
 new i32 List xs = [1]
