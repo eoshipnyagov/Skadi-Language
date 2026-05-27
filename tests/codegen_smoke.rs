@@ -157,6 +157,22 @@ new Int y = util.add(1, 2)
 }
 
 #[test]
+fn codegen_normalizes_qualified_struct_type_references() {
+    let src = r#"
+struct Point {
+    Int x
+}
+new util.Point p = {x = 1}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("Point p = (Point){.x = 1};"), "generated C:\n{}", c);
+    assert!(!c.contains("util.Point"), "generated C:\n{}", c);
+}
+
+#[test]
 fn codegen_lowers_when_to_if_chain() {
     let src = r#"
 new Int x = 2

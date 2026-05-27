@@ -462,17 +462,33 @@ fn resolve_function_name<'a>(
 }
 
 fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -> ValueType {
+    let resolve_struct_name = |raw: &str| -> Option<String> {
+        if structs.contains_key(raw) {
+            return Some(raw.to_string());
+        }
+        if let Some((_, short)) = raw.split_once('.')
+            && structs.contains_key(short)
+        {
+            return Some(short.to_string());
+        }
+        None
+    };
+
     if let Some(elem) = name.strip_suffix(" List") {
         let elem = elem.trim();
         let parsed_elem = parse_type_name(elem);
-        if parsed_elem == ValueType::Unknown && structs.contains_key(elem) {
-            return ValueType::List(Box::new(ValueType::Struct(elem.to_string())));
+        if parsed_elem == ValueType::Unknown
+            && let Some(resolved_struct) = resolve_struct_name(elem)
+        {
+            return ValueType::List(Box::new(ValueType::Struct(resolved_struct)));
         }
         return ValueType::List(Box::new(parsed_elem));
     }
     let parsed = parse_type_name(name);
-    if parsed == ValueType::Unknown && structs.contains_key(name) {
-        ValueType::Struct(name.to_string())
+    if parsed == ValueType::Unknown
+        && let Some(resolved_struct) = resolve_struct_name(name)
+    {
+        ValueType::Struct(resolved_struct)
     } else {
         parsed
     }

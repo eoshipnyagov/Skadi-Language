@@ -880,3 +880,18 @@ new Int x = util.add(1, 2)
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
 }
+
+#[test]
+fn semantic_allows_qualified_struct_type_reference() {
+    let src = r#"
+struct Point {
+    Int x
+}
+
+new util.Point p = {x = 1}
+new Int y = p.x
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}

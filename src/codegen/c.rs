@@ -1464,7 +1464,9 @@ fn emit_statement(
 }
 
 fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
-    match skadi_type.unwrap_or("Int") {
+    let normalized_owned = normalize_type_token(skadi_type.unwrap_or("Int"));
+    let normalized = normalized_owned.as_str();
+    match normalized {
         "i8" => "int8_t".to_string(),
         "i16" => "int16_t".to_string(),
         "i32" => "int32_t".to_string(),
@@ -1482,6 +1484,15 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
     }
 }
 
+fn normalize_type_token(raw: &str) -> String {
+    if let Some(elem) = raw.strip_suffix(" List") {
+        let elem = elem.trim();
+        let short = elem.rsplit('.').next().unwrap_or(elem);
+        return format!("{} List", short);
+    }
+    raw.rsplit('.').next().unwrap_or(raw).to_string()
+}
+
 fn emit_struct_literal(
     fields: &std::collections::HashMap<String, Box<Expression>>,
     type_name: Option<&str>,
@@ -1490,7 +1501,9 @@ fn emit_struct_literal(
     let mut keys: Vec<&String> = fields.keys().collect();
     keys.sort();
     let mut body = String::new();
-    let prefix = type_name.map(|t| format!("({})", t)).unwrap_or_default();
+    let prefix = type_name
+        .map(|t| format!("({})", normalize_type_token(t)))
+        .unwrap_or_default();
     body.push_str(&prefix);
     body.push('{');
     for (i, k) in keys.iter().enumerate() {
@@ -1665,12 +1678,13 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             }
             if let Some((obj, method)) = name.split_once(".")
                 && let Some(obj_ty) = declared.get(obj)
+                && let obj_ty_norm = normalize_type_token(obj_ty)
                 && !matches!(
-                    obj_ty.as_str(),
+                    obj_ty_norm.as_str(),
                     "Int" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "Float"
                         | "f32" | "f64" | "bool" | "Bool" | "char" | "Char" | "Text" | "Path"
                 )
-                && !obj_ty.ends_with(" List")
+                && !obj_ty_norm.ends_with(" List")
             {
                 let mut rendered: Vec<String> = Vec::new();
                 if obj == "my" {
@@ -1679,7 +1693,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     rendered.push(format!("&{}", obj));
                 }
                 rendered.extend(args.iter().map(|a| emit_expr(a, declared)));
-                return format!("{}_{}({})", obj_ty, method, rendered.join(", "));
+                return format!("{}_{}({})", obj_ty_norm, method, rendered.join(", "));
             }
             if let Some((base, method)) = name.split_once(".")
                 && !declared.contains_key(base)

@@ -15,6 +15,22 @@ fn parse_err(code: &str, message: impl AsRef<str>) -> String {
     format!("[{}] {}", code, message.as_ref())
 }
 
+fn parse_qualified_identifier(tokens: &[Token], start: usize) -> Option<(String, usize)> {
+    if start >= tokens.len() || tokens[start].kind() != TokenKind::Identifier {
+        return None;
+    }
+    if start + 2 < tokens.len()
+        && tokens[start + 1].lexeme == "."
+        && tokens[start + 2].kind() == TokenKind::Identifier
+    {
+        return Some((
+            format!("{}.{}", tokens[start].lexeme, tokens[start + 2].lexeme),
+            3,
+        ));
+    }
+    Some((tokens[start].lexeme.clone(), 1))
+}
+
 fn parse_expression_list(
     tokens: &[Token],
     start: usize,
@@ -127,15 +143,15 @@ fn parse_function_declaration_inner(
                 continue;
             }
 
-            if current_index + 1 < tokens.len()
-                && tokens[current_index].kind() == TokenKind::Identifier
-                && tokens[current_index + 1].kind() == TokenKind::Identifier
+            if let Some((param_type, type_consumed)) = parse_qualified_identifier(tokens, current_index)
+                && current_index + type_consumed < tokens.len()
+                && tokens[current_index + type_consumed].kind() == TokenKind::Identifier
             {
                 params.push(FunctionParam {
-                    param_type: Some(tokens[current_index].lexeme.clone()),
-                    name: tokens[current_index + 1].lexeme.clone(),
+                    param_type: Some(param_type),
+                    name: tokens[current_index + type_consumed].lexeme.clone(),
                 });
-                current_index += 2;
+                current_index += type_consumed + 1;
                 continue;
             }
 
@@ -155,13 +171,12 @@ fn parse_function_declaration_inner(
     }
 
     let mut returns = None;
-    if current_index < tokens.len()
-        && tokens[current_index].kind() == TokenKind::Identifier
+    if let Some((return_type, consumed)) = parse_qualified_identifier(tokens, current_index)
         && current_index + 1 < tokens.len()
-        && tokens[current_index + 1].lexeme == "{"
+        && tokens[current_index + consumed].lexeme == "{"
     {
-        returns = Some(tokens[current_index].lexeme.clone());
-        current_index += 1;
+        returns = Some(return_type);
+        current_index += consumed;
     }
 
     if current_index >= tokens.len()
@@ -918,23 +933,23 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
     // new x = 1
     // new Int x = 1
     // new i32 List xs = [1, 2, 3]
-    if idx + 2 < tokens.len()
-        && tokens[idx].kind() == TokenKind::Identifier
-        && tokens[idx + 1].kind() == TokenKind::Identifier
-        && tokens[idx + 2].kind() == TokenKind::OpAssignment
+    if let Some((type_name, type_consumed)) = parse_qualified_identifier(tokens, idx)
+        && idx + type_consumed + 1 < tokens.len()
+        && tokens[idx + type_consumed].kind() == TokenKind::Identifier
+        && tokens[idx + type_consumed + 1].kind() == TokenKind::OpAssignment
     {
-        declared_type = Some(tokens[idx].lexeme.clone());
-        idx += 1;
+        declared_type = Some(type_name);
+        idx += type_consumed;
     }
-    if idx + 3 < tokens.len()
-        && tokens[idx].kind() == TokenKind::Identifier
-        && tokens[idx + 1].kind() == TokenKind::Identifier
-        && tokens[idx + 1].lexeme == "List"
-        && tokens[idx + 2].kind() == TokenKind::Identifier
-        && tokens[idx + 3].kind() == TokenKind::OpAssignment
+    if let Some((elem_type, type_consumed)) = parse_qualified_identifier(tokens, idx)
+        && idx + type_consumed + 2 < tokens.len()
+        && tokens[idx + type_consumed].kind() == TokenKind::Identifier
+        && tokens[idx + type_consumed].lexeme == "List"
+        && tokens[idx + type_consumed + 1].kind() == TokenKind::Identifier
+        && tokens[idx + type_consumed + 2].kind() == TokenKind::OpAssignment
     {
-        declared_type = Some(format!("{} List", tokens[idx].lexeme));
-        idx += 2;
+        declared_type = Some(format!("{} List", elem_type));
+        idx += type_consumed + 1;
     }
 
     if idx >= tokens.len() || tokens[idx].kind() != TokenKind::Identifier {
@@ -1084,18 +1099,17 @@ fn parse_struct_declaration_inner(
             cursor = ms + consumed;
             continue;
         }
-        if cursor + 1 < close
-            && tokens[cursor].kind() == TokenKind::Identifier
-            && tokens[cursor + 1].kind() == TokenKind::Identifier
+        if let Some((field_type, type_consumed)) = parse_qualified_identifier(tokens, cursor)
+            && cursor + type_consumed < close
+            && tokens[cursor + type_consumed].kind() == TokenKind::Identifier
         {
-            let field_type = tokens[cursor].lexeme.clone();
-            let first_name = tokens[cursor + 1].lexeme.clone();
+            let first_name = tokens[cursor + type_consumed].lexeme.clone();
             fields.push(StructField {
                 field_type: field_type.clone(),
                 name: first_name,
                 is_hidden: field_hidden,
             });
-            cursor += 2;
+            cursor += type_consumed + 1;
             while cursor + 1 < close
                 && tokens[cursor].lexeme == ","
                 && tokens[cursor + 1].kind() == TokenKind::Identifier
@@ -1150,15 +1164,15 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
             current_index += 1;
             continue;
         }
-        if current_index + 1 < end
-            && tokens[current_index].kind() == TokenKind::Identifier
-            && tokens[current_index + 1].kind() == TokenKind::Identifier
+        if let Some((param_type, type_consumed)) = parse_qualified_identifier(tokens, current_index)
+            && current_index + type_consumed < end
+            && tokens[current_index + type_consumed].kind() == TokenKind::Identifier
         {
             params.push(FunctionParam {
-                param_type: Some(tokens[current_index].lexeme.clone()),
-                name: tokens[current_index + 1].lexeme.clone(),
+                param_type: Some(param_type),
+                name: tokens[current_index + type_consumed].lexeme.clone(),
             });
-            current_index += 2;
+            current_index += type_consumed + 1;
             continue;
         }
         if tokens[current_index].kind() == TokenKind::Identifier {
@@ -1174,13 +1188,12 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
     }
     current_index += 1;
     let mut returns = None;
-    if current_index < end
-        && tokens[current_index].kind() == TokenKind::Identifier
+    if let Some((return_type, consumed)) = parse_qualified_identifier(tokens, current_index)
         && current_index + 1 < end
-        && tokens[current_index + 1].lexeme == "{"
+        && tokens[current_index + consumed].lexeme == "{"
     {
-        returns = Some(tokens[current_index].lexeme.clone());
-        current_index += 1;
+        returns = Some(return_type);
+        current_index += consumed;
     }
     if current_index >= end || tokens[current_index].lexeme != "{" {
         return Err(parse_err("SC-PARSE-157", "struct method expected '{' body."));

@@ -527,3 +527,25 @@ struct Secret {
     assert!(fields[1].is_hidden);
     assert!(!fields[2].is_hidden);
 }
+
+#[test]
+fn parses_qualified_type_references_in_declarations_and_signatures() {
+    let src = r#"
+fn make(util.Point p) util.Point {
+    return p
+}
+
+new util.Point v = make({x = 1})
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::FunctionDef { params, returns, .. } = &program.statements[0] else {
+        panic!("expected FunctionDef");
+    };
+    assert_eq!(params[0].param_type.as_deref(), Some("util.Point"));
+    assert_eq!(returns.as_deref(), Some("util.Point"));
+    let Statement::VarDecl { declared_type, .. } = &program.statements[1] else {
+        panic!("expected VarDecl");
+    };
+    assert_eq!(declared_type.as_deref(), Some("util.Point"));
+}
