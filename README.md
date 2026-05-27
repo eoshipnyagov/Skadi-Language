@@ -61,6 +61,13 @@ Why `cargo run -- ...` sometimes appears in docs:
 - `skadi clean --all`
 - `skadi tui`
 
+Available `type` values for `skadi new <type> <name>`:
+
+- `console`
+- `game`
+- `embedded`
+- `gui`
+
 More details: [docs/CLI_USAGE.md](docs/CLI_USAGE.md)
 
 ## Syntax Contrast (Tiny Example)

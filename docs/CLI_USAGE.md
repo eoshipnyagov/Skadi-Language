@@ -15,6 +15,20 @@ This document describes practical usage of the current CLI manager in `tools/ska
 - `run` — build and run.
 - `clean [--all]` — remove generated artifacts.
 
+Supported project types:
+
+- `console`
+- `game`
+- `embedded`
+- `gui`
+
+Examples:
+
+- `skadi new demo` (same as `skadi new console demo`)
+- `skadi new game my_game`
+- `skadi new embedded sensor_fw`
+- `skadi new gui app`
+
 ## Quick flow
 
 ```bash
