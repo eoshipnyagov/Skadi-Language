@@ -11,7 +11,7 @@
 // If no depth flag is provided, depth is unlimited.
 //
 // Build/run examples (from project root):
-//   cargo run -- --input example_tree.skd --emit-c example_tree.c
+//   cargo run -- --input examples/example_tree.skd --emit-c example_tree.c
 //   gcc example_tree.c -o example_tree.exe
 //   .\example_tree.exe
 //   .\example_tree.exe --dirs-only

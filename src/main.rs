@@ -1,4 +1,4 @@
-use std::fs;
+﻿use std::fs;
 use std::process::Command;
 use v01::codegen::transpile_program_to_c;
 use v01::lexer::lex;
@@ -48,7 +48,7 @@ fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
 }
 
 fn main() {
-    let mut input_file = "example_meteostation.txt".to_string();
+    let mut input_file = "examples/example_meteostation.txt".to_string();
     let mut emit_c_path: Option<String> = None;
     let mut emit_exe_path: Option<String> = None;
     let mut print_c = false;
@@ -169,5 +169,6 @@ fn main() {
         }
     }
 }
+
 
 

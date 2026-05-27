@@ -5,7 +5,7 @@
 //   bench_02_read_stats.skd [--input <file>]
 
 new Text List cli_args = args()
-new Text path = "example_meteostation.txt"
+new Text path = "examples/example_meteostation.txt"
 new Int i = 0
 while i < len(cli_args) {
     new Text arg = cli_args[i]
@@ -44,5 +44,6 @@ output("chars:")
 output(n)
 output("lines:")
 output(lines)
+
 
 

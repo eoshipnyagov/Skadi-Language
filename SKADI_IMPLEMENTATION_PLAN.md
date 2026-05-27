@@ -42,7 +42,7 @@ Exit criteria:
 Status: in progress
 
 Tasks:
-- Implement precedence table from `Skadi_design.txt`.
+- Implement precedence table from `docs/design/Skadi_design_v1_1.txt`.
 - Add prefix/infix parsing for arithmetic/comparison/logical operators.
 - Support grouped expressions and variable references.
 
@@ -72,7 +72,7 @@ Status: planned
 Tasks:
 - Add fixture-based tests for:
   - small unit snippets,
-  - `example_meteostation.txt` (integration sample).
+  - `examples/example_meteostation.txt` (integration sample).
 - Add pass/fail expectation files.
 - Add CI-friendly test command.
 
@@ -213,7 +213,8 @@ Tech debt priorities:
 ## Working Rules
 - Every new grammar feature must include at least one positive and one negative test.
 - Prefer small commits per phase task.
-- Keep `Skadi_design.txt` as the normative grammar reference.
+- Keep `docs/design/Skadi_design_v1_1.txt` as the normative grammar reference.
 - Keep syntax choices aligned with `docs/SKADI_STYLE_PRINCIPLES.md`.
+
 
 

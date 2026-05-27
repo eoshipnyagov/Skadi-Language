@@ -4,3 +4,4 @@
 *.vsix
 *.scadi.c
 bench_*.exe
+old/

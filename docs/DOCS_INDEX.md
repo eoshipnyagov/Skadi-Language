@@ -1,4 +1,4 @@
-﻿# Skadi Docs Index (Source of Truth Map)
+# Skadi Docs Index (Source of Truth Map)
 
 Date: 2026-05-27
 Purpose: one-page map of which document answers which question.
@@ -53,11 +53,15 @@ Purpose: one-page map of which document answers which question.
 - `docs/SKADI_STYLE_PRINCIPLES.md` — design principles.
 - `docs/SKADI_STYLE_GUIDE_V1.md` — coding style for examples/showcase.
 
-## 9. Showcase
+## 9. Design Baseline
+
+- `docs/design/Skadi_design_v1_1.txt` — historical language design baseline (input for future revisions).
+
+## 10. Showcase
 
 - `docs/SHOWCASE_PROGRAMS.md` — small programs used as confidence suite.
 
-## 10. Conflict Resolution Rule
+## 11. Conflict Resolution Rule
 
 If two docs conflict:
 1. `SKADI_SYNTAX_STATUS.md` wins for implemented behavior.

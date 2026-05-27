@@ -25,7 +25,7 @@
 - `docs/` — спецификации, RFC, матрицы покрытия и блокеров.
 - `scripts/` — вспомогательные smoke/automation скрипты.
 - `benchmarks/` — короткие программы для showcase/regression.
-- `old/` — архив устаревших материалов.
+- `old/` не хранится в репозитории; локальные архивы игнорируются через `.gitignore`.
 
 ## 3. Модули компиляторного ядра (`src/`)
 
@@ -108,3 +108,4 @@ cargo clippy --all-targets --all-features -- -D warnings
 - Матрица покрытия: `docs/TEST_COVERAGE_MATRIX.md`
 - Блокеры v1: `docs/V1_BLOCKERS_MATRIX_RU.md`
 - План: `SKADI_IMPLEMENTATION_PLAN.md`
+

@@ -1,4 +1,4 @@
-# Skadi Style Principles
+﻿# Skadi Style Principles
 
 ## Status
 Accepted baseline for near-term language design decisions.
@@ -18,7 +18,7 @@ Example:
 
 ## Reference Writing Style
 The canonical style reference is:
-- `example_meteostation.txt`
+- `examples/example_meteostation.txt`
 
 Any new syntax proposal should be checked against this writing style before adoption.
 
@@ -54,5 +54,6 @@ Core user flow for v1:
 A proposal should be accepted only if it passes all checks:
 1. It is easier to read without strain.
 2. It does not introduce ambiguity in parsing.
-3. It fits the style baseline from `example_meteostation.txt`.
+3. It fits the style baseline from `examples/example_meteostation.txt`.
 4. It does not create a second competing form for the same feature in v1.
+

@@ -5,7 +5,7 @@
 //   bench_03_find_count.skd [--input <file>] [--needle <text>]
 
 new Text List cli_args = args()
-new Text path = "example_meteostation.txt"
+new Text path = "examples/example_meteostation.txt"
 new Text needle = "temperature"
 
 new Int i = 0
@@ -49,5 +49,6 @@ output(concat("file: ", path))
 output(concat("needle: ", needle))
 output("count:")
 output(count)
+
 
 

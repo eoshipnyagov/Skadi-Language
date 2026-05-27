@@ -1,4 +1,4 @@
-# Skadi Showcase Programs (Current v1 Prototype)
+﻿# Skadi Showcase Programs (Current v1 Prototype)
 
 This folder contains 8 small showcase utilities.
 Goal: verify that different real-world program shapes compile and run through the current Skadi -> C -> EXE pipeline.
@@ -62,8 +62,8 @@ Or one-command helper:
 
 ```powershell
 .\bench_01_tree.exe --dirs-only --depth-3
-.\bench_02_read_stats.exe --input example_meteostation.txt
-.\bench_03_find_count.exe --input example_meteostation.txt --needle temperature
+.\bench_02_read_stats.exe --input examples/example_meteostation.txt
+.\bench_03_find_count.exe --input examples/example_meteostation.txt --needle temperature
 .\bench_04_sum_ints.exe --medium
 .\bench_05_push_pop.exe --medium
 .\bench_06_struct_account.exe
@@ -92,5 +92,6 @@ Notes:
 - It covers different syntax and runtime paths, not just one demo.
 - It is small enough to run frequently after compiler changes.
 - It can serve as a style showcase for Skadi code.
+
 
 

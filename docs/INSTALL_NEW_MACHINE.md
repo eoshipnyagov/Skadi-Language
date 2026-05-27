@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 
-## 1. Что нужно заранее
+## 1. Требования
 
 - Git
 - Rust toolchain (`cargo`, `rustc`)
@@ -11,42 +11,16 @@ Date: 2026-05-27
   - Linux/WSL: `gcc` или `clang`
   - macOS: `clang` (Xcode Command Line Tools)
 
-## 2. Клонирование проекта
+## 2. Клонирование
 
 ```bash
 git clone git@github.com:eoshipnyagov/Skadi-Language.git
 cd Skadi-Language
 ```
 
-## 3. Проверка ядра компилятора
+## 3. Установка команды `skadi`
 
-```bash
-cargo test -q
-cargo clippy --all-targets --all-features
-```
-
-## 4. Проверка CLI
-
-```bash
-cargo clippy --manifest-path tools/skadi-cli/Cargo.toml --all-targets --all-features
-cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
-```
-
-## 5. Smoke-проверка end-to-end
-
-```bash
-cargo run --manifest-path tools/skadi-cli/Cargo.toml -- new console demo
-cd demo
-cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- check
-cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- build
-cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- run
-```
-
-Ожидаемый результат: успешные `check/build/run` и вывод `Hello from Skadi!`.
-
-## 6. Опционально: команда `skadi` в PATH
-
-Windows (PowerShell):
+Windows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install_skadi.ps1
@@ -58,23 +32,44 @@ Linux/macOS/WSL:
 bash ./scripts/install_skadi.sh
 ```
 
-## 7. Troubleshooting
+## 4. Быстрая проверка
 
-1. Ошибка `gcc/clang not found`
-- Установить C-компилятор и проверить `gcc --version` или `clang --version`.
-- Выполнить `doctor`:
-  - `cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor`
+```bash
+skadi doctor
+skadi new console demo
+cd demo
+skadi check
+skadi build
+skadi run
+```
 
-2. Ошибка `failed to read Skadi.toml`
-- `check/build/run` выполняются из директории проекта.
-- Перейти в папку проекта (`cd demo`) и повторить команду.
+Ожидаемый результат: успешные `check/build/run` и вывод `Hello from Skadi!`.
 
-3. Ошибка `cargo not found`
+## 5. Если нужно работать через Cargo
+
+```bash
+cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
+```
+
+`--` обязателен: он отделяет аргументы Cargo от аргументов `skadi-cli`.
+
+## 6. Troubleshooting
+
+1. `gcc/clang not found`
+- Установить C-компилятор.
+- Проверить: `gcc --version` или `clang --version`.
+- Выполнить `skadi doctor`.
+
+2. `failed to read Skadi.toml`
+- `check/build/run` запускаются из директории проекта.
+- Перейти в папку проекта (`cd demo`) и повторить.
+
+3. `cargo not found`
 - Установить Rust через rustup и перезапустить терминал.
 
-4. Ошибка сборки на новой ОС
+4. Сбой сборки на новой ОС
 - Запустить:
   - `cargo test -q`
   - `cargo clippy --all-targets --all-features`
-  - `cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor`
-- Сверить результаты с CI в GitHub Actions.
+  - `cargo clippy --manifest-path tools/skadi-cli/Cargo.toml --all-targets --all-features`
+- Сверить с последним успешным CI в GitHub Actions.

@@ -45,7 +45,7 @@
 - `tools/skadi-cli/` — менеджер проектов и build/check/run/doctor.
 - `docs/` — актуальные спецификации, RFC и матрицы статуса.
 - `benchmarks/` — короткие showcase/benchmark-программы на `.skd`.
-- `example_tree.skd`, `example_meteostation.txt` — примеры входного кода.
+- `examples/example_tree.skd`, `examples/example_meteostation.txt` — примеры входного кода.
 
 ## 5. Быстрый старт для разработчика
 
@@ -67,7 +67,7 @@ cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- run
 
 Транспиляция одного файла:
 ```bash
-cargo run -- --input example_tree.skd --print-c
+cargo run -- --input examples/example_tree.skd --print-c
 ```
 
 ## 6. Что важно помнить
@@ -75,3 +75,4 @@ cargo run -- --input example_tree.skd --print-c
 - Это **Skadi -> C** транспилятор (не native backend).
 - Часть исходного дизайна языка осознанно отложена на `v1.x/v2`.
 - Приоритет перед релизом v1: предсказуемость codegen, диагностики и кроссплатформенная стабильность CLI.
+
