@@ -39,10 +39,25 @@ pub fn compile_to_c(entry_path: &Path) -> Result<String, String> {
 }
 
 fn load_source_with_imports(entry_path: &Path) -> Result<String, String> {
+    let entry_abs = fs::canonicalize(entry_path).map_err(|e| {
+        format!(
+            "import path resolution failed for '{}': {e}. {}",
+            entry_path.display(),
+            IMPORT_CONTRACT_HINT
+        )
+    })?;
+    let direct_imports = collect_direct_imports(&entry_abs)?;
+
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut stack: Vec<PathBuf> = Vec::new();
     let mut decl_index: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    let merged = load_source_recursive(entry_path, &mut seen, &mut stack, &mut decl_index)?;
+    let merged = load_source_recursive(
+        &entry_abs,
+        &mut seen,
+        &mut stack,
+        &mut decl_index,
+    )?;
+    validate_entry_direct_visibility(&entry_abs, &direct_imports, &decl_index)?;
     ensure_no_public_symbol_collisions(&decl_index)?;
     Ok(merged)
 }
@@ -94,7 +109,12 @@ fn load_source_recursive(
     for line in source.lines() {
         if let Some(import_path) = parse_import_line(line)? {
             let import_abs = base_dir.join(import_path);
-            let imported = load_source_recursive(&import_abs, seen, stack, decl_index)?;
+            let imported = load_source_recursive(
+                &import_abs,
+                seen,
+                stack,
+                decl_index,
+            )?;
             if !imported.is_empty() {
                 merged.push_str(&imported);
                 if !imported.ends_with('\n') {
@@ -110,6 +130,31 @@ fn load_source_recursive(
     stack.pop();
     seen.insert(abs);
     Ok(merged)
+}
+
+fn collect_direct_imports(entry_abs: &Path) -> Result<HashSet<PathBuf>, String> {
+    let source = fs::read_to_string(entry_abs).map_err(|e| {
+        format!(
+            "failed to read import file '{}': {e}. {}",
+            entry_abs.display(),
+            IMPORT_CONTRACT_HINT
+        )
+    })?;
+    let base_dir = entry_abs.parent().unwrap_or(Path::new("."));
+    let mut out: HashSet<PathBuf> = HashSet::new();
+    for line in source.lines() {
+        if let Some(import_path) = parse_import_line(line)? {
+            let import_abs = fs::canonicalize(base_dir.join(import_path)).map_err(|e| {
+                format!(
+                    "import path resolution failed for '{}': {e}. {}",
+                    base_dir.display(),
+                    IMPORT_CONTRACT_HINT
+                )
+            })?;
+            out.insert(import_abs);
+        }
+    }
+    Ok(out)
 }
 
 fn index_public_top_level_declarations(
@@ -137,6 +182,66 @@ fn index_public_top_level_declarations(
             .or_default()
             .insert(module.clone());
     }
+    Ok(())
+}
+
+fn validate_entry_direct_visibility(
+    entry_abs: &Path,
+    direct_imports: &HashSet<PathBuf>,
+    decl_index: &BTreeMap<String, BTreeSet<String>>,
+) -> Result<(), String> {
+    let module_of = |p: &Path| -> Result<String, String> {
+        p.file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| format!("invalid module filename '{}'.", p.display()))
+    };
+
+    let entry_module = module_of(entry_abs)?;
+    let mut allowed_modules: HashSet<String> = HashSet::new();
+    allowed_modules.insert(entry_module);
+    for p in direct_imports {
+        allowed_modules.insert(module_of(p)?);
+    }
+
+    let source = fs::read_to_string(entry_abs).map_err(|e| {
+        format!(
+            "failed to read import file '{}': {e}. {}",
+            entry_abs.display(),
+            IMPORT_CONTRACT_HINT
+        )
+    })?;
+    let call_re = Regex::new(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+        .map_err(|e| format!("internal entry-call regex error: {e}"))?;
+    let skip = [
+        "if", "when", "while", "for", "loop", "return", "on", "run", "wait", "new", "danger", "fn",
+    ];
+
+    for caps in call_re.captures_iter(&source) {
+        let Some(name_m) = caps.get(1) else {
+            continue;
+        };
+        let name = name_m.as_str();
+        if skip.contains(&name) || name.contains('.') {
+            continue;
+        }
+        if name == "output" || name == "input" || name == "read" || name == "write" {
+            continue;
+        }
+        let Some(mods) = decl_index.get(name) else {
+            continue;
+        };
+        if mods.iter().any(|m| allowed_modules.contains(m)) {
+            continue;
+        }
+        return Err(format!(
+            "[SC-MOD-003] transitive visibility violation: '{}' is not directly imported into '{}'. hint: add a direct import for the module that declares '{}' or access it through direct module API.",
+            name,
+            entry_abs.display(),
+            name
+        ));
+    }
+
     Ok(())
 }
 
@@ -465,7 +570,7 @@ local label State {
         fs::write(&math, "import \"./util.skd\"\nfn plus_two(Int x) Int {\n    return x + 2\n}\n").expect("write math");
         fs::write(
             &entry,
-            "import \"./math.skd\"\nnew Int a = twice(2)\nnew Int b = plus_two(a)\noutput(b)\n",
+            "import \"./math.skd\"\nnew Int b = plus_two(2)\noutput(b)\n",
         )
         .expect("write entry");
 
@@ -763,6 +868,47 @@ local label State {
         assert!(err.contains("'shared'"));
         assert!(err.contains("modules [a, b]"));
 
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_transitive_import_visibility_is_rejected() {
+        let root = temp_case_dir("imports_neg_transitive_visibility");
+        let c = root.join("c.skd");
+        let b = root.join("b.skd");
+        let entry = root.join("main.skd");
+        fs::write(&c, "fn deep() Int {\n    return 7\n}\n").expect("write c");
+        fs::write(&b, "import \"./c.skd\"\nfn mid() Int {\n    return deep()\n}\n").expect("write b");
+        fs::write(
+            &entry,
+            "import \"./b.skd\"\nnew Int x = deep()\noutput(x)\n",
+        )
+        .expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("[SC-MOD-003]"));
+        assert!(err.contains("transitive visibility violation"));
+        assert!(err.contains("'deep'"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn positive_direct_import_still_exposes_symbol_when_also_transitively_used() {
+        let root = temp_case_dir("imports_pos_direct_plus_transitive");
+        let c = root.join("c.skd");
+        let b = root.join("b.skd");
+        let entry = root.join("main.skd");
+        fs::write(&c, "fn deep() Int {\n    return 7\n}\n").expect("write c");
+        fs::write(&b, "import \"./c.skd\"\nfn mid() Int {\n    return deep()\n}\n").expect("write b");
+        fs::write(
+            &entry,
+            "import \"./b.skd\"\nimport \"./c.skd\"\nnew Int x = deep() + mid()\noutput(x)\n",
+        )
+        .expect("write entry");
+
+        let _c = compile_to_c(&entry).expect("compile must pass");
         let _ = fs::remove_dir_all(root);
     }
 
