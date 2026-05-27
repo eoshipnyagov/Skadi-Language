@@ -1,6 +1,17 @@
 # Skadi Language (Skadi -> C Compiler Prototype)
 
-Skadi is a human-readable systems language experiment with a practical compiler pipeline:
+![CI](https://github.com/eoshipnyagov/Skadi-Language/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
+
+Skadi is a human-readable systems language for low-level and performance-oriented development.
+Its goal is to keep systems programming powerful, while removing visual noise and keeping syntax easy to read without stress.
+
+Core philosophy:
+- readability first (minimal punctuation clutter),
+- compiler as assistant (clear diagnostics, practical defaults),
+- performance and control (predictable `Skadi -> C -> native` pipeline).
+
+Current implementation in this repository is a production-minded prototype with a practical compiler pipeline:
 
 `Skadi source -> lexer -> parser -> semantic -> C transpiler -> native C compiler`
 
@@ -57,6 +68,15 @@ cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- run
 - Full docs map:
   - [Docs Index](docs/DOCS_INDEX.md)
 
+## Project Snapshot
+
+| Item | Value |
+|---|---|
+| Status | `v1` stabilization (active) |
+| Stable backend path | `Skadi -> C -> native compiler` |
+| Current milestone | `v1.0.0-rc1` readiness |
+| License | MIT |
+
 ## Repository Layout
 
 - `src/` — compiler core (`lexer`, `parser`, `semantic_analysis`, `codegen`)
@@ -78,3 +98,20 @@ cargo run --manifest-path ../tools/skadi-cli/Cargo.toml -- run
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## Contributing
+
+Minimal workflow:
+
+1. Fork the repo and create a feature branch.
+2. Implement change + tests.
+3. Run local quality gates:
+   - `cargo test -q`
+   - `cargo clippy --all-targets --all-features`
+   - `cargo clippy --manifest-path tools/skadi-cli/Cargo.toml --all-targets --all-features`
+4. Open a PR with a short summary and affected docs/tests list.
+
+For language/runtime changes, update docs in the same PR:
+- syntax/status: `docs/SKADI_SYNTAX_STATUS.md`
+- coverage/blockers: `docs/TEST_COVERAGE_MATRIX.md`, `docs/V1_BLOCKERS_MATRIX_RU.md`
+- diagnostics contract (if affected): `docs/DIAGNOSTIC_CODES_REFERENCE.md`
