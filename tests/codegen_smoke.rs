@@ -459,7 +459,9 @@ new i32 v = xs[999]
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("static int32_t sk_list_i32_get(const SkadiList_i32 *xs, int64_t idx) {"));
-    assert!(c.contains("if (!xs || idx < 0 || (size_t)idx >= xs->len) return 0;"));
+    assert!(c.contains("if (!xs || idx < 0 || (size_t)idx >= xs->len) {"));
+    assert!(c.contains("memset(&z, 0, sizeof(z));"));
+    assert!(c.contains("return z;"));
 }
 
 #[test]
