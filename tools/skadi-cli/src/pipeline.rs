@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -40,13 +41,17 @@ pub fn compile_to_c(entry_path: &Path) -> Result<String, String> {
 fn load_source_with_imports(entry_path: &Path) -> Result<String, String> {
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut stack: Vec<PathBuf> = Vec::new();
-    load_source_recursive(entry_path, &mut seen, &mut stack)
+    let mut decl_index: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let merged = load_source_recursive(entry_path, &mut seen, &mut stack, &mut decl_index)?;
+    ensure_no_public_symbol_collisions(&decl_index)?;
+    Ok(merged)
 }
 
 fn load_source_recursive(
     path: &Path,
     seen: &mut HashSet<PathBuf>,
     stack: &mut Vec<PathBuf>,
+    decl_index: &mut BTreeMap<String, BTreeSet<String>>,
 ) -> Result<String, String> {
     let abs = fs::canonicalize(path).map_err(|e| {
         format!(
@@ -82,13 +87,14 @@ fn load_source_recursive(
         )
     })?;
     let source = rewrite_local_symbols(&raw_source, &abs)?;
+    index_public_top_level_declarations(&source, &abs, decl_index)?;
     let base_dir = abs.parent().unwrap_or(Path::new("."));
     let mut merged = String::new();
 
     for line in source.lines() {
         if let Some(import_path) = parse_import_line(line)? {
             let import_abs = base_dir.join(import_path);
-            let imported = load_source_recursive(&import_abs, seen, stack)?;
+            let imported = load_source_recursive(&import_abs, seen, stack, decl_index)?;
             if !imported.is_empty() {
                 merged.push_str(&imported);
                 if !imported.ends_with('\n') {
@@ -104,6 +110,54 @@ fn load_source_recursive(
     stack.pop();
     seen.insert(abs);
     Ok(merged)
+}
+
+fn index_public_top_level_declarations(
+    source: &str,
+    path: &Path,
+    decl_index: &mut BTreeMap<String, BTreeSet<String>>,
+) -> Result<(), String> {
+    let module = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("invalid module filename '{}'.", path.display()))?
+        .to_string();
+    let decl_re = Regex::new(r"(?m)^\s*(fn|struct|label)\s+([A-Za-z_][A-Za-z0-9_]*)")
+        .map_err(|e| format!("internal declaration index regex error: {e}"))?;
+    for caps in decl_re.captures_iter(source) {
+        let Some(name_m) = caps.get(2) else {
+            continue;
+        };
+        let name = name_m.as_str();
+        if name.starts_with("__sklocal_") {
+            continue;
+        }
+        decl_index
+            .entry(name.to_string())
+            .or_default()
+            .insert(module.clone());
+    }
+    Ok(())
+}
+
+fn ensure_no_public_symbol_collisions(
+    decl_index: &BTreeMap<String, BTreeSet<String>>,
+) -> Result<(), String> {
+    let mut collisions: Vec<String> = Vec::new();
+    for (name, modules) in decl_index {
+        if modules.len() <= 1 {
+            continue;
+        }
+        let modules_joined = modules.iter().cloned().collect::<Vec<_>>().join(", ");
+        collisions.push(format!("'{}' in modules [{}]", name, modules_joined));
+    }
+    if collisions.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "[SC-MOD-002] import symbol collision detected: {}. hint: rename symbols or prefer qualified usage with module.symbol where applicable.",
+        collisions.join("; ")
+    ))
 }
 
 fn rewrite_local_symbols(source: &str, path: &Path) -> Result<String, String> {
@@ -684,6 +738,30 @@ local label State {
         let err = compile_to_c(&entry).expect_err("compile must fail");
         assert!(err.contains("[SC-SEM-000]"));
         assert!(err.contains("unknown function 'helper'"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_import_symbol_collision_is_deterministic() {
+        let root = temp_case_dir("imports_neg_collision");
+        let a = root.join("a.skd");
+        let b = root.join("b.skd");
+        let entry = root.join("main.skd");
+        fs::write(&a, "fn shared() Int {\n    return 1\n}\n").expect("write a");
+        fs::write(&b, "fn shared() Int {\n    return 2\n}\n").expect("write b");
+        fs::write(
+            &entry,
+            "import \"./a.skd\"\nimport \"./b.skd\"\nnew Int x = 0\n",
+        )
+        .expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("[SC-MOD-001]"));
+        assert!(err.contains("[SC-MOD-002]"));
+        assert!(err.contains("import symbol collision detected"));
+        assert!(err.contains("'shared'"));
+        assert!(err.contains("modules [a, b]"));
 
         let _ = fs::remove_dir_all(root);
     }
