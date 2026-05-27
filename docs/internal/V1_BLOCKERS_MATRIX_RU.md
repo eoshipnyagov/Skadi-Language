@@ -74,4 +74,4 @@ Required closure:
 Progress note:
 - shadowing/local/hide checks implemented and covered;
 - direct-import-only and import-collision behavior enforced in `skadi-cli` pipeline;
-- remaining work is full `module.symbol` closure for `struct/label` references beyond current function-call coverage.
+- `module.symbol` closure covered for function calls, qualified struct type references, and qualified `return error module.Variant`.

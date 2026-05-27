@@ -162,15 +162,7 @@ int sum_positive(const std::vector<int>& xs) {
 
 ## Key Docs
 
-- [docs/manual/QUICK_START.md](docs/manual/QUICK_START.md)
-- [docs/manual/SKADI_INSTALL.md](docs/manual/SKADI_INSTALL.md)
-- [docs/manual/SKADI_SYNTAX_CHEATSHEET.md](docs/manual/SKADI_SYNTAX_CHEATSHEET.md)
-- [docs/manual/SKADI_LANGUAGE_REFERENCE.md](docs/manual/SKADI_LANGUAGE_REFERENCE.md)
-- [docs/internal/SKADI_SYNTAX_STATUS.md](docs/internal/SKADI_SYNTAX_STATUS.md)
-- [docs/internal/SKADI_PROJECT_TECH_REFERENCE_RU.md](docs/internal/SKADI_PROJECT_TECH_REFERENCE_RU.md)
-- [docs/internal/TEST_COVERAGE_MATRIX.md](docs/internal/TEST_COVERAGE_MATRIX.md)
-- [docs/DOCS_POLICY.md](docs/DOCS_POLICY.md)
-- [docs/DOCS_INDEX.md](docs/DOCS_INDEX.md)
+User docs: [docs/manual](docs/manual)
 
 ## License
 
