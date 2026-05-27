@@ -10,15 +10,16 @@ Date: 2026-05-27
 
 - `docs/manual/QUICK_START.md`
 - `docs/manual/SKADI_INSTALL.md`
-- `docs/manual/CLI_USAGE.md`
+- `docs/manual/SKADI_CLI_USAGE.md`
+- `docs/manual/SKADI_SYNTAX_CHEATSHEET.md`
 - `docs/manual/SKADI_LANGUAGE_REFERENCE_RU.md`
-- `docs/manual/SKADI_SYNTAX_STATUS.md`
-- `docs/manual/SKADI_STYLE_GUIDE_V1.md`
 - `docs/manual/SKADI_STYLE_PRINCIPLES.md`
 
 ## Internal Docs (`docs/internal/`)
 
 - `docs/internal/SKADI_PROJECT_TECH_REFERENCE_RU.md`
+- `docs/internal/SKADI_SYNTAX_STATUS.md`
+- `docs/internal/SKADI_STYLE_GUIDE_V1.md`
 - `docs/internal/SKADI_TO_C_SCOPE.md`
 - `docs/internal/ON_ERROR_V1_MATRIX_RU.md`
 - `docs/internal/TEXT_V1_CONTRACT_RU.md`
@@ -41,4 +42,5 @@ Date: 2026-05-27
 
 - `docs/old/SKADI_CLI_RFC.md`
 - `docs/old/RELEASE_NOTES_V1_RC1_RU.md`
+
 

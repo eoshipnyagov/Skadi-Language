@@ -56,7 +56,7 @@ skadi clean --all
 - `skadi clean --all` - remove generated artifacts
 - `skadi tui` - interactive mode
 
-Detailed command reference: `docs/manual/CLI_USAGE.md`.
+Detailed command reference: `docs/manual/SKADI_CLI_USAGE.md`.
 
 ## 6. Notes
 
@@ -66,5 +66,6 @@ Detailed command reference: `docs/manual/CLI_USAGE.md`.
 - If you run via Cargo, `--` is required:
   - `cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor`
   - after `--`, args are passed to `skadi-cli`.
+
 
 
