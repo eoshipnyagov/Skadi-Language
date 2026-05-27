@@ -1,7 +1,7 @@
-# Skadi Syntax Status (Current Snapshot)
+﻿# Skadi Syntax Status (Current Snapshot)
 
-Date: 2026-05-25
-Purpose: single source of truth for "what syntax actually works right now" in this repository.
+Date: 2026-05-27
+Purpose: single source of truth for what syntax works in this repository.
 
 ## Stability Levels
 - `Stable`: implemented, tested, expected to work.
@@ -18,6 +18,7 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 
 ## Functions
 - `fn name(...) { ... }` - `Stable`
+- `local fn name(...) { ... }` - `Stable`
 - `danger fn name(...) ... { ... }` - `Stable`
 - typed params: `fn add(Int a, Float b)` - `Stable`
 - typed return: `fn add(...) Int` - `Stable`
@@ -34,78 +35,43 @@ Purpose: single source of truth for "what syntax actually works right now" in th
 - `i++` / `i--` - `Stable` (statement-only, not allowed inside expressions)
 - `for item in collection` - `Partial`
   - lowering assumes list runtime shape: `collection.len` + `collection.data[i]`
-  - element type is lowered from declared list element type in codegen
-  - style note: supported for familiarity/compatibility; `iterate ... as ...` is preferred for showcase style.
-- `iterate collection as item` - `Partial` (alias)
-  - parsed as an alias of `for item in collection`
-  - currently lowers through the same `ForLoop` path
-- `when / is / else` - `Stable` (MVP)
+- `iterate collection as item` - `Partial` (alias of `for`)
+- `when / is / else` - `Stable`
   - lowers to `if / else if / else`
   - `is a, b` supported
-  - type compatibility between `when` expression and `is` cases is validated
 
 ## Error Flow
-- `danger` call with handler:
-  - `x = danger_call(...) on error { ... }` - `Stable`
-  - `danger_call(...) on error { ... }` - `Stable`
+- `x = danger_call(...) on error { ... }` - `Stable`
+- `danger_call(...) on error { ... }` - `Stable`
 - `on error` allowed only for calls to `danger fn` - `Stable`
-- `danger fn` C ABI:
-  - returns status `int`
-  - optional out-param for value
-  - success path: `return 0`
-  - explicit error path: `return error X` -> `return ErrorCode_X`
 
-## Labels
-- `label Name { A B C }` parsing - `Stable`
-- `label ErrorCode` semantic contract - `Stable`
-  - first variant must be `Ok`
-  - `return error X` requires `X` in `ErrorCode`
+## Structs and Visibility
+- `struct Name { ... }` - `Stable`
+- `local struct Name { ... }` - `Stable`
+- `label Name { ... }` - `Stable`
+- `local label Name { ... }` - `Stable`
+- `my.field` in methods - `Stable`
+- `hide` fields and restricted external access - `Stable`
+- shadowing forbidden - `Stable`
 
-## Types (Current)
-- Checked scalars: `Int`, `Float`, `bool`
-- implicit widening: `Int -> Float` allowed
-- bool conditions in `if/while` are required
-- `List` and `Text` behavior is frozen for v1 in dedicated contracts:
-  - `TEXT_V1_CONTRACT_RU.md`
-  - `ON_ERROR_V1_MATRIX_RU.md`
-
-## Indexing Contract (Frozen for v1)
-- `xs[i]` for `List` is `fail-soft` in runtime:
-  - out-of-range returns default zero value (`0`) for the element C type.
-- `t[i]` for `Text` is `fail-soft` in runtime:
-  - out-of-range returns `'\0'`.
-- `on error` is **not** attached to index access in `v1`.
-- Possible stricter `danger`-style indexing is deferred to `v2+` discussion.
-
-## Type Naming Canonical Style (v1)
-- Low-level fixed-width numeric types stay lowercase:
-  - `i8`, `i16`, `i32`, `i64`
-  - `u8`, `u16`, `u32`, `u64`
-  - `f32`, `f64`
-- Readability-oriented/common user-facing types stay capitalized:
-  - `Int`, `Float`, `Bool`, `Char`, `Text`, `Path`, `List`, `Vec2`, `Vec3`, `Vec4`
-- Transitional note:
-  - `bool` and `char` remain accepted as compatibility aliases.
-  - For style docs/examples, prefer readability-first naming (`Bool`, `Char`) and keep fixed-width primitives lowercase.
+## Imports / Modules (V1.1)
+- `import "./relative_path.skd"` - `Stable`
+  - recursive, cycle-safe, deduplicated, deterministic merge order
+- `local fn/struct/label` are hidden across imports - `Stable`
+- direct-import-only visibility enforced for entry file - `Stable`
+  - transitive symbol access from entry fails with `SC-MOD-003`
+- deterministic import public-symbol collision error - `Stable`
+  - collisions fail with `SC-MOD-002`
+- Not supported in current wave:
+  - `import module_name`
+  - alias form (`import "./x.skd" as x`)
 
 ## Intentionally Deferred
 - `direct` params
 - `returns struct { ... }`
-- `local fn`
-- struct fields/methods (`my.field`)
 - events/interrupt runtime semantics
 - chunk memory features (`allow drop`, budgets)
 - test DSL keywords
 
-## Imports / Modules (Current v1 wave)
-- `import "./relative_path.skd"` - `Partial`
-  - supported by `skadi-cli` multi-file pipeline (source merge before lex/parse)
-  - recursive, cycle-safe, deduplicated, deterministic by source import order
-- Not supported in current wave:
-  - `import module_name`
-  - alias form (`import "./x.skd" as x`)
-  - module visibility rules
-
 ## Design Note
 Keyword naming may change later. This file tracks the implemented parser contract now, not a final language freeze.
-Canonical writing style for v1 is frozen in `SYNTAX_CANONICAL_MATRIX_V1_RU.md`.

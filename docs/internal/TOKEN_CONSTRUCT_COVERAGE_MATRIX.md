@@ -29,12 +29,14 @@ Legend:
 | `on error` | P (`on` token + parse pattern) | Y | Y | Y | Y | danger/list-pop contracts covered |
 | `on interrupt` | P (`on` + `interrupt`) | Y | P | N | N | parse/semantic placeholder only |
 | `fixed` / `const` | Y | P | P | N | N | tokenized; non-core execution path |
-| `hide` | Y | P | N | N | N | parse-level only (struct visibility roadmap) |
-| `local` | Y | P | N | N | N | parse-level only (local fn roadmap) |
+| `hide` | Y | Y | Y | P | P | hidden-field access checks implemented; broader struct-lowering depth is ongoing |
+| `local` | Y | Y | Y | P | P | local visibility enforced in import pipeline via symbol isolation |
 | `direct` | Y | P | N | N | N | deferred semantics |
 | `allow drop` | P (`allow` tokenized) | P | N | N | N | chunk-memory design deferred |
 | `import "./... .skd"` | N (resolved in CLI pipeline pre-lex) | N (pre-merged) | N (pre-merged) | N (pre-merged) | Y | covered in `tools/skadi-cli` tests |
 | `import module_name` / alias | N | N | N | N | Y (negative) | deterministic diagnostic `[SC-MOD-001]` |
+| import public symbol collision | N | N | N | N | Y (negative) | deterministic diagnostics `[SC-MOD-002]` |
+| direct-import-only visibility | N | N | N | N | Y (negative) | deterministic diagnostics `[SC-MOD-003]` |
 | `and` / `or` / `xor` / `not` | Y | Y | Y | Y | P | operator paths covered; dense combo e2e can grow |
 | `div` / `mod` | Y | Y | Y | Y | P | covered in parser/semantic/smoke, moderate e2e density |
 | `true` / `false` | Y | Y | Y | Y | Y | bool pipelines covered |

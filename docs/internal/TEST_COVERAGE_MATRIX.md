@@ -55,6 +55,8 @@ This file tracks test coverage for language elements in the current Rust prototy
     - semantic contract errors (`SC-SEM-*`)
     - native compile failures (`SC-CGEN-001`)
   - verifies import graph contract diagnostics (`SC-MOD-001`)
+  - verifies deterministic import symbol collision diagnostics (`SC-MOD-002`)
+  - verifies direct-import-only visibility diagnostics (`SC-MOD-003`)
 - Edge matrix conformance set
   - `tests/edge_matrix.rs`
   - includes:

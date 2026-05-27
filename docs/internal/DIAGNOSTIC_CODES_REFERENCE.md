@@ -1,20 +1,20 @@
-# Skadi Diagnostic Codes Reference (v1 Snapshot)
+ï»¿# Skadi Diagnostic Codes Reference (v1 Snapshot)
 
 Date: 2026-05-27
 Purpose: canonical map of diagnostic codes by pipeline stage and ownership.
 
 ## 1. Code Families
 
-- `SC-LEX-*` — lexer diagnostics (`src/lexer/*`)
-- `SC-PARSE-*` — parser diagnostics (`src/parser/*`)
-- `SC-SEM-*` — semantic diagnostics (`src/semantic_analysis.rs`)
-- `SC-MOD-*` — module/import pipeline diagnostics (`tools/skadi-cli/src/pipeline.rs`)
-- `SC-CGEN-*` — native C compile/link diagnostics (`tools/skadi-cli/src/pipeline.rs`)
+- `SC-LEX-*` â€” lexer diagnostics (`src/lexer/*`)
+- `SC-PARSE-*` â€” parser diagnostics (`src/parser/*`)
+- `SC-SEM-*` â€” semantic diagnostics (`src/semantic_analysis.rs`)
+- `SC-MOD-*` â€” module/import pipeline diagnostics (`tools/skadi-cli/src/pipeline.rs`)
+- `SC-CGEN-*` â€” native C compile/link diagnostics (`tools/skadi-cli/src/pipeline.rs`)
 
 Wrapper/stage codes used by CLI pipeline:
-- `SC-LEX-000` — lex stage wrapper in `compile_to_c`
-- `SC-PARSE-000` — parse stage wrapper in `compile_to_c`
-- `SC-SEM-000` — semantic stage wrapper in `compile_to_c`
+- `SC-LEX-000` â€” lex stage wrapper in `compile_to_c`
+- `SC-PARSE-000` â€” parse stage wrapper in `compile_to_c`
+- `SC-SEM-000` â€” semantic stage wrapper in `compile_to_c`
 
 ## 2. Parser Codes (`SC-PARSE-*`)
 
@@ -30,6 +30,7 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-PARSE-137..148` declarations (`new/label/struct/on`) shape errors
 - `SC-PARSE-149..152` `iterate ... as ...` alias syntax errors
 - `SC-PARSE-153..157` struct-method signature/body shape errors
+- `SC-PARSE-161..162` `local` prefix declaration contract errors
 
 ### Expression parser ranges
 - `SC-PARSE-201..212` expression grammar errors
@@ -56,6 +57,14 @@ Wrapper/stage codes used by CLI pipeline:
   - stage: `skadi-cli` import/merge pipeline
   - meaning: path-import contract violation or import graph failure
   - includes: unsupported module-name import, alias import, missing import file, cyclic import
+- `SC-MOD-002`
+  - stage: `skadi-cli` import/merge pipeline
+  - meaning: deterministic public symbol collision across imported modules
+  - includes: same public `fn/struct/label` name declared in multiple imported modules
+- `SC-MOD-003`
+  - stage: `skadi-cli` import/merge pipeline
+  - meaning: direct-import-only visibility violation at entry file
+  - includes: entry file calling symbol available only through transitive import chain
 
 - `SC-CGEN-001`
   - stage: native C compiler invocation after transpilation
@@ -79,4 +88,3 @@ For CLI pipeline wrappers, normalized prefix is:
 1. New diagnostic code must be added here and in stage-local tests.
 2. Reusing an existing code for a different semantic meaning is not allowed.
 3. Parser/semantic/module/codegen tests must assert code presence for stable failure contracts.
-
