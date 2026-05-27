@@ -6,6 +6,7 @@ Purpose: one-page map of which document answers which question.
 ## 1. Start Here
 
 - `docs/QUICK_START.md` — cross-platform bootstrap and first commands.
+- `docs/INSTALL_NEW_MACHINE.md` — full setup and troubleshooting on a fresh machine.
 - `README_PROJECT_OVERVIEW.md` — short project overview and current status.
 
 ## 2. Language Behavior (Current Snapshot)
