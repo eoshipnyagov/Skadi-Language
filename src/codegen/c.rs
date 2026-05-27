@@ -20,7 +20,7 @@ const LIST_TYPE_MAP: [(&str, &str, &str); 12] = [
     ("f32", "float", "f32"),
     ("f64", "double", "f64"),
     ("bool", "bool", "bool"),
-    ("Text", "char*", "text"),
+    ("Text", "const char*", "text"),
 ];
 
 fn list_elem_from_decl(t: &str) -> Option<&str> {

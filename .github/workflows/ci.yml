@@ -31,7 +31,7 @@ jobs:
         run: cargo test -q
 
       - name: Compiler smoke (emit C)
-        run: cargo run -- --input example_tree.skd --emit-c target/ci_tree.c
+        run: cargo run -- --input examples/example_tree.skd --emit-c target/ci_tree.c
 
       - name: CLI doctor smoke
         working-directory: tools/skadi-cli
@@ -72,3 +72,27 @@ jobs:
 
       - name: ASan/UBSan e2e (optional gate)
         run: SKADI_ENABLE_SANITIZER_E2E=1 cargo test -q e2e_sanitized_runtime_stress_list_text_path --test codegen_e2e -- --nocapture
+
+  valgrind-optional:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+
+      - name: Build C from Skadi
+        run: cargo run -- --input benchmarks/bench_04_sum_ints.skd --emit-c target/valgrind_smoke.c
+
+      - name: Valgrind smoke (optional gate)
+        run: |
+          gcc -g -O0 target/valgrind_smoke.c -o target/valgrind_smoke
+          valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=101 ./target/valgrind_smoke
