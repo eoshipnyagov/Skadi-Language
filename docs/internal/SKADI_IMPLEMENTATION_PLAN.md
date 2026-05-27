@@ -1,4 +1,4 @@
-﻿# Skadi Implementation Plan
+# Skadi Implementation Plan
 
 ## Plan Date
 2026-05-20
@@ -42,7 +42,7 @@ Exit criteria:
 Status: in progress
 
 Tasks:
-- Implement precedence table from `docs/design/Skadi_design_v1_1.txt`.
+- Implement precedence table from `docs/internal/SKADI_TO_C_SCOPE.md`.
 - Add prefix/infix parsing for arithmetic/comparison/logical operators.
 - Support grouped expressions and variable references.
 
@@ -101,7 +101,7 @@ Tasks:
 - Resolve syntax/model overlap (one canonical style per feature in v1).
 - Reconfirm semantics for memory model (`allow drop`, chunk budgeting) before deeper implementation.
 - Freeze a reduced "Skadi Core v1" subset and map compiler milestones strictly to that subset.
-- Align all syntax decisions with `docs/SKADI_STYLE_PRINCIPLES.md`.
+- Align all syntax decisions with `docs/manual/SKADI_STYLE_PRINCIPLES.md`.
 - Add TODO track for human-readable output formatting API (avoid low-level `%...` formatting noise in everyday code).
   - candidate direction: readable formatter helper for mixed numeric/text output in v1.x.
 
@@ -132,7 +132,7 @@ Exit criteria:
 Status: in progress
 
 Tasks:
-- Freeze accepted syntax/typing in RFCs (`docs/RFC_LIST.md`, `docs/RFC_TEXT.md`).
+- Freeze accepted syntax/typing in RFCs (`docs/internal/RFC_LIST.md`, `docs/internal/RFC_TEXT.md`).
 - Parser + AST:
   - support `new <Type> List <name> = ...`
   - support list literals `[a, b, c]`
@@ -185,7 +185,7 @@ Mitigation: prioritize Pratt parser before expanding statement grammar.
 Mitigation: convert placeholders to explicit errors where behavior is not implemented.
 
 4. Syntax drift away from readability goals.
-Mitigation: enforce `docs/SKADI_STYLE_PRINCIPLES.md` as review baseline.
+Mitigation: enforce `docs/manual/SKADI_STYLE_PRINCIPLES.md` as review baseline.
 
 ## Active TODO (V1 + Tech Debt)
 Status: active
@@ -204,7 +204,7 @@ Tech debt priorities:
 - Centralize project-template logic used by `new` / `init` / `examples` commands.
 - Add stronger CLI tests for error paths and UX contracts.
 - Reduce documentation drift (`implemented` vs `planned`) across docs set.
-- Add repeatable вЂњfrom-zeroвЂќ smoke flow scripts/checks for end users.
+- Add repeatable “from-zero” smoke flow scripts/checks for end users.
 - Keep repository hygiene policy for `old/` and stale artifacts.
 - Add explicit token/construct coverage matrix:
   - map every keyword/lexeme and parser construct to tests (lexer/parser/semantic/codegen/e2e),
@@ -213,8 +213,9 @@ Tech debt priorities:
 ## Working Rules
 - Every new grammar feature must include at least one positive and one negative test.
 - Prefer small commits per phase task.
-- Keep `docs/design/Skadi_design_v1_1.txt` as the normative grammar reference.
-- Keep syntax choices aligned with `docs/SKADI_STYLE_PRINCIPLES.md`.
+- Keep `docs/internal/SKADI_TO_C_SCOPE.md` as the normative grammar reference.
+- Keep syntax choices aligned with `docs/manual/SKADI_STYLE_PRINCIPLES.md`.
+
 
 
 

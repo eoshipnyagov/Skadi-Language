@@ -105,10 +105,12 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 ## 8. √де смотреть актуальный статус
 
-- язык: `docs/manual/SKADI_LANGUAGE_REFERENCE_RU.md`
+- язык: `docs/manual/SKADI_LANGUAGE_REFERENCE.md`
 - ћатрица покрыти€: `docs/internal/TEST_COVERAGE_MATRIX.md`
 - Ѕлокеры v1: `docs/internal/V1_BLOCKERS_MATRIX_RU.md`
-- ѕлан: `SKADI_IMPLEMENTATION_PLAN.md`
+- ѕлан: `docs/internal/SKADI_IMPLEMENTATION_PLAN.md`
+
+
 
 
 
