@@ -71,4 +71,4 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: ASan/UBSan e2e (optional gate)
-        run: cargo test -q e2e_sanitized_runtime_stress_list_text_path --test codegen_e2e -- --nocapture
+        run: SKADI_ENABLE_SANITIZER_E2E=1 cargo test -q e2e_sanitized_runtime_stress_list_text_path --test codegen_e2e -- --nocapture

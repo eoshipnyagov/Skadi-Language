@@ -533,6 +533,11 @@ for e in entries {
 
 #[test]
 fn e2e_sanitized_runtime_stress_list_text_path() {
+    if std::env::var("SKADI_ENABLE_SANITIZER_E2E").ok().as_deref() != Some("1") {
+        eprintln!("Skipping sanitizer e2e test: enable with SKADI_ENABLE_SANITIZER_E2E=1.");
+        return;
+    }
+
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping sanitizer e2e test: no clang/gcc/cc in PATH.");
         return;
