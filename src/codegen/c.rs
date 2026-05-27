@@ -1444,6 +1444,16 @@ fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
             .get(name)
             .map(|t| t.as_str() == "Text" || t.as_str() == "Path")
             .unwrap_or(false),
+        Expression::Index { base, .. } => {
+            if let Expression::VariableReference(name) = base.as_ref() {
+                return declared
+                    .get(name)
+                    .and_then(|t| list_elem_from_decl(t))
+                    .map(|elem| matches!(elem, "Text" | "Path"))
+                    .unwrap_or(false);
+            }
+            false
+        }
         Expression::MemberAccess { .. } => false,
         Expression::Call { name, .. } => matches!(
             name.as_str(),
@@ -1544,6 +1554,9 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     }
                     Builtin::Output if args.len() == 1 => {
                         let rendered = emit_expr(&args[0], declared);
+                        if is_text_expr(&args[0], declared) {
+                            return format!("sk_output_text({})", rendered);
+                        }
                         return match args[0] {
                             Expression::LiteralFloat(_) => format!("sk_output_float({})", rendered),
                             Expression::LiteralBool(_) => format!("sk_output_bool({})", rendered),

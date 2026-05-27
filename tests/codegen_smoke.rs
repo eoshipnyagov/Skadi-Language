@@ -496,6 +496,35 @@ if find(t, "ph") >= 0 {
 }
 
 #[test]
+fn codegen_lowers_text_list_index_equality_with_strcmp() {
+    let src = r#"
+new Text List keys = ["a"]
+new Text key = "a"
+if keys[0] == key {
+    output(1)
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("if ((strcmp(sk_list_text_get(&keys, 0), key) == 0)) {"));
+}
+
+#[test]
+fn codegen_routes_output_of_text_list_index_to_text_output() {
+    let src = r#"
+new Text List keys = ["a"]
+output(keys[0])
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_output_text(sk_list_text_get(&keys, 0));"));
+}
+
+#[test]
 fn codegen_emits_fs_runtime_for_fs_calls_inside_when() {
     let src = r#"
 new Text p = "."
