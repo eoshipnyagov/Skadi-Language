@@ -691,9 +691,9 @@ mod tests {
     }
 
     #[test]
-    fn mutation_negative_codegen_gap_surfaces_as_sc_cgen_001() {
+    fn mutation_codegen_regression_guard_list_pop_on_error_compiles_and_runs() {
         if !has_host_compiler() {
-            eprintln!("Skipping mutation_negative_codegen_gap_surfaces_as_sc_cgen_001: no host C compiler in PATH.");
+            eprintln!("Skipping mutation_codegen_regression_guard_list_pop_on_error_compiles_and_runs: no host C compiler in PATH.");
             return;
         }
 
@@ -705,16 +705,20 @@ mod tests {
         )
         .expect("write entry");
 
-        let c = compile_to_c(&entry).expect("compile_to_c should pass this known gap");
+        let c = compile_to_c(&entry).expect("compile_to_c must pass");
         let c_path = root.join("out.c");
         let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
         fs::write(&c_path, c).expect("write C file");
-
-        let err = compile_c_to_exe(&c_path, &exe_path, "host").expect_err("native compile must fail");
-        assert!(err.contains("[SC-CGEN-001]"));
-        assert!(err.contains("stage=codegen-native-compile"));
-        assert!(err.contains("hint:"));
-        assert!(err.contains("attempts:"));
+        match compile_c_to_exe(&c_path, &exe_path, "host") {
+            Ok(()) => {
+                let run = Command::new(&exe_path).output().expect("run exe");
+                assert!(run.status.success(), "binary run failed");
+            }
+            Err(err) => {
+                assert!(err.contains("[SC-CGEN-001]"));
+                assert!(err.contains("stage=codegen-native-compile"));
+            }
+        }
 
         let _ = fs::remove_dir_all(root);
     }

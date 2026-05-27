@@ -9,9 +9,43 @@ use v01::parser::parse_program;
 use v01::semantic_analysis::semantic_analyze;
 
 fn find_c_compiler() -> Option<&'static str> {
-    ["clang", "gcc", "cc"]
-        .into_iter()
+    let candidates: &[&str] = if cfg!(windows) {
+        &["gcc", "clang", "cc"]
+    } else {
+        &["clang", "gcc", "cc"]
+    };
+    candidates
+        .iter()
+        .copied()
         .find(|c| Command::new(c).arg("--version").output().is_ok())
+}
+
+fn compiler_supports_dirent(compiler: &str) -> bool {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time")
+        .as_millis();
+    let mut c_path: PathBuf = std::env::temp_dir();
+    c_path.push(format!("Skadi_dirent_probe_{stamp}.c"));
+    let mut exe_path: PathBuf = std::env::temp_dir();
+    exe_path.push(format!("Skadi_dirent_probe_{stamp}"));
+    if cfg!(windows) {
+        exe_path.set_extension("exe");
+    }
+
+    if fs::write(&c_path, "#include <dirent.h>\nint main(void){return 0;}\n").is_err() {
+        return false;
+    }
+    let ok = Command::new(compiler)
+        .arg(&c_path)
+        .arg("-o")
+        .arg(&exe_path)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let _ = fs::remove_file(c_path);
+    let _ = fs::remove_file(exe_path);
+    ok
 }
 
 fn compiler_supports_flags(compiler: &str, flags: &[&str]) -> bool {
@@ -441,6 +475,10 @@ fn e2e_skadi_fs_list_and_is_dir_build_and_run() {
         eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
         return;
     };
+    if !compiler_supports_dirent(compiler) {
+        eprintln!("Skipping fs e2e test: compiler/runtime does not provide dirent.h.");
+        return;
+    }
 
     let src = r#"
 new Text root = "."
@@ -499,6 +537,10 @@ fn e2e_sanitized_runtime_stress_list_text_path() {
         eprintln!("Skipping sanitizer e2e test: no clang/gcc/cc in PATH.");
         return;
     };
+    if !compiler_supports_dirent(compiler) {
+        eprintln!("Skipping sanitizer e2e test: compiler/runtime does not provide dirent.h.");
+        return;
+    }
 
     let sanitizer_flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-O1"];
     if !compiler_supports_flags(compiler, &sanitizer_flags) {
@@ -658,6 +700,10 @@ fn e2e_feature_mix_fs_text_when_builds_and_runs() {
         eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
         return;
     };
+    if !compiler_supports_dirent(compiler) {
+        eprintln!("Skipping fs e2e test: compiler/runtime does not provide dirent.h.");
+        return;
+    }
 
     let src = r#"
 new Text root = "."

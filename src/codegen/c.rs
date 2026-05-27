@@ -1517,7 +1517,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                         if let Expression::VariableReference(var_name) = &args[0]
                             && declared
                                 .get(var_name)
-                                .map(|t| t.as_str() == "Text")
+                                .map(|t| t.as_str() == "Text" || t.as_str() == "Path")
                                 .unwrap_or(false)
                         {
                             return format!("((int64_t)strlen({}))", arg_rendered);
