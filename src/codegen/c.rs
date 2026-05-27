@@ -109,6 +109,16 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
     out.push_str("    }\n");
     out.push_str("    return xs->data[(size_t)idx];\n");
     out.push_str("}\n\n");
+    out.push_str(&format!(
+        "static void sk_list_{}_free(SkadiList_{} *xs) {{\n",
+        suffix, suffix
+    ));
+    out.push_str("    if (!xs) return;\n");
+    out.push_str("    free(xs->data);\n");
+    out.push_str("    xs->data = NULL;\n");
+    out.push_str("    xs->len = 0;\n");
+    out.push_str("    xs->cap = 0;\n");
+    out.push_str("}\n\n");
 }
 
 fn emit_list_runtime(out: &mut String, struct_names: &[String]) {
@@ -152,7 +162,7 @@ fn emit_text_runtime(out: &mut String) {
     out.push_str("        memcpy(out, s + start, len);\n");
     out.push_str("    }\n");
     out.push_str("    out[len] = '\\0';\n");
-    out.push_str("    return out;\n");
+    out.push_str("    return (char*)sk_track_alloc(out);\n");
     out.push_str("}\n\n");
     out.push_str("static char* sk_text_concat(const char *a, const char *b) {\n");
     out.push_str("    const char *left = a ? a : \"\";\n");
@@ -160,11 +170,46 @@ fn emit_text_runtime(out: &mut String) {
     out.push_str("    size_t alen = strlen(left);\n");
     out.push_str("    size_t blen = strlen(right);\n");
     out.push_str("    char *out = (char*)malloc(alen + blen + 1);\n");
-    out.push_str("    if (!out) return strdup(\"\");\n");
+    out.push_str("    if (!out) return sk_strdup_track(\"\");\n");
     out.push_str("    memcpy(out, left, alen);\n");
     out.push_str("    memcpy(out + alen, right, blen);\n");
     out.push_str("    out[alen + blen] = '\\0';\n");
-    out.push_str("    return out;\n");
+    out.push_str("    return (char*)sk_track_alloc(out);\n");
+    out.push_str("}\n\n");
+}
+
+fn emit_alloc_runtime(out: &mut String) {
+    out.push_str("static void **sk_allocs = NULL;\n");
+    out.push_str("static size_t sk_allocs_len = 0;\n");
+    out.push_str("static size_t sk_allocs_cap = 0;\n\n");
+    out.push_str("static void* sk_track_alloc(void *p) {\n");
+    out.push_str("    if (!p) return NULL;\n");
+    out.push_str("    if (sk_allocs_len == sk_allocs_cap) {\n");
+    out.push_str("        size_t next = sk_allocs_cap == 0 ? 64 : sk_allocs_cap * 2;\n");
+    out.push_str("        void **np = (void**)realloc(sk_allocs, next * sizeof(void*));\n");
+    out.push_str("        if (!np) return p;\n");
+    out.push_str("        sk_allocs = np;\n");
+    out.push_str("        sk_allocs_cap = next;\n");
+    out.push_str("    }\n");
+    out.push_str("    sk_allocs[sk_allocs_len++] = p;\n");
+    out.push_str("    return p;\n");
+    out.push_str("}\n\n");
+    out.push_str("static char* sk_strdup_track(const char *s) {\n");
+    out.push_str("    const char *src = s ? s : \"\";\n");
+    out.push_str("    size_t n = strlen(src);\n");
+    out.push_str("    char *p = (char*)malloc(n + 1);\n");
+    out.push_str("    if (!p) return NULL;\n");
+    out.push_str("    memcpy(p, src, n + 1);\n");
+    out.push_str("    return (char*)sk_track_alloc(p);\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_runtime_cleanup(void) {\n");
+    out.push_str("    for (size_t i = 0; i < sk_allocs_len; ++i) {\n");
+    out.push_str("        free(sk_allocs[i]);\n");
+    out.push_str("    }\n");
+    out.push_str("    free(sk_allocs);\n");
+    out.push_str("    sk_allocs = NULL;\n");
+    out.push_str("    sk_allocs_len = 0;\n");
+    out.push_str("    sk_allocs_cap = 0;\n");
     out.push_str("}\n\n");
 }
 
@@ -186,7 +231,7 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_jo
     out.push_str("    struct dirent *ent;\n");
     out.push_str("    while ((ent = readdir(dir)) != NULL) {\n");
     out.push_str("        if (strcmp(ent->d_name, \".\") == 0 || strcmp(ent->d_name, \"..\") == 0) continue;\n");
-    out.push_str("        char *name = strdup(ent->d_name);\n");
+    out.push_str("        char *name = sk_strdup_track(ent->d_name);\n");
     out.push_str("        if (!name) continue;\n");
     out.push_str("        (void)sk_list_text_push(&out, name);\n");
     out.push_str("    }\n");
@@ -203,13 +248,13 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_jo
         out.push_str("    bool need_sep = alen > 0 && left[alen - 1] != '/' && left[alen - 1] != '\\\\';\n");
         out.push_str("    size_t n = alen + (need_sep ? 1 : 0) + blen;\n");
         out.push_str("    char *outp = (char*)malloc(n + 1);\n");
-        out.push_str("    if (!outp) return strdup(\"\");\n");
+        out.push_str("    if (!outp) return sk_strdup_track(\"\");\n");
         out.push_str("    memcpy(outp, left, alen);\n");
         out.push_str("    size_t p = alen;\n");
         out.push_str("    if (need_sep) outp[p++] = '/';\n");
         out.push_str("    memcpy(outp + p, right, blen);\n");
         out.push_str("    outp[n] = '\\0';\n");
-        out.push_str("    return outp;\n");
+        out.push_str("    return (char*)sk_track_alloc(outp);\n");
         out.push_str("}\n\n");
     }
 }
@@ -223,24 +268,24 @@ fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
     out.push_str("static char* sk_input(const char *prompt) {\n");
     out.push_str("    if (prompt) printf(\"%s\", prompt);\n");
     out.push_str("    char buf[4096];\n");
-    out.push_str("    if (!fgets(buf, sizeof(buf), stdin)) return strdup(\"\");\n");
+    out.push_str("    if (!fgets(buf, sizeof(buf), stdin)) return sk_strdup_track(\"\");\n");
     out.push_str("    size_t n = strlen(buf);\n");
     out.push_str("    if (n > 0 && buf[n - 1] == '\\n') buf[n - 1] = '\\0';\n");
-    out.push_str("    return strdup(buf);\n");
+    out.push_str("    return sk_strdup_track(buf);\n");
     out.push_str("}\n\n");
     out.push_str("static char* sk_read_file(const char *path) {\n");
     out.push_str("    FILE *f = fopen(path, \"rb\");\n");
-    out.push_str("    if (!f) return strdup(\"\");\n");
+    out.push_str("    if (!f) return sk_strdup_track(\"\");\n");
     out.push_str("    fseek(f, 0, SEEK_END);\n");
     out.push_str("    long n = ftell(f);\n");
     out.push_str("    fseek(f, 0, SEEK_SET);\n");
-    out.push_str("    if (n < 0) { fclose(f); return strdup(\"\"); }\n");
+    out.push_str("    if (n < 0) { fclose(f); return sk_strdup_track(\"\"); }\n");
     out.push_str("    char *buf = (char*)malloc((size_t)n + 1);\n");
-    out.push_str("    if (!buf) { fclose(f); return strdup(\"\"); }\n");
+    out.push_str("    if (!buf) { fclose(f); return sk_strdup_track(\"\"); }\n");
     out.push_str("    size_t r = fread(buf, 1, (size_t)n, f);\n");
     out.push_str("    buf[r] = '\\0';\n");
     out.push_str("    fclose(f);\n");
-    out.push_str("    return buf;\n");
+    out.push_str("    return (char*)sk_track_alloc(buf);\n");
     out.push_str("}\n\n");
     out.push_str("static int sk_write_file(const char *path, const char *data) {\n");
     out.push_str("    FILE *f = fopen(path, \"wb\");\n");
@@ -254,7 +299,7 @@ fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
         out.push_str("static SkadiList_text sk_args(int argc, char **argv) {\n");
         out.push_str("    SkadiList_text out = sk_list_text_new();\n");
         out.push_str("    for (int i = 1; i < argc; ++i) {\n");
-        out.push_str("        char *v = strdup(argv[i] ? argv[i] : \"\");\n");
+        out.push_str("        char *v = sk_strdup_track(argv[i] ? argv[i] : \"\");\n");
         out.push_str("        if (!v) continue;\n");
         out.push_str("        (void)sk_list_text_push(&out, v);\n");
         out.push_str("    }\n");
@@ -271,6 +316,8 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let needs_text_runtime = program_uses_text_runtime(program);
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
+    let needs_alloc_runtime =
+        needs_text_runtime || needs_fs_list || needs_fs_join || needs_io_runtime || needs_args_runtime;
     out.push_str("#include <stdio.h>\n\n");
     if needs_list_runtime || needs_text_runtime || needs_io_runtime {
         out.push_str("#include <stddef.h>\n");
@@ -286,6 +333,9 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         out.push_str("#include <sys/stat.h>\n\n");
     }
     emit_struct_declarations(program, &mut out);
+    if needs_alloc_runtime {
+        emit_alloc_runtime(&mut out);
+    }
     if needs_list_runtime {
         emit_list_runtime(&mut out, &struct_names);
     }
@@ -318,6 +368,19 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         if !matches!(stmt, Statement::FunctionDef { .. }) {
             emit_statement(stmt, &mut out, 1, &mut declared, None);
         }
+    }
+    for (name, ty) in &declared {
+        if let Some(elem) = list_elem_from_decl(ty) {
+            let suffix = list_meta_dynamic(elem).1;
+            out.push_str("    sk_list_");
+            out.push_str(&suffix);
+            out.push_str("_free(&");
+            out.push_str(name);
+            out.push_str(");\n");
+        }
+    }
+    if needs_alloc_runtime {
+        out.push_str("    sk_runtime_cleanup();\n");
     }
     out.push_str("    return 0;\n");
     out.push_str("}\n");
