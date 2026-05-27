@@ -913,6 +913,70 @@ local label State {
     }
 
     #[test]
+    fn e2e_qualified_struct_type_across_modules_builds_and_runs() {
+        if !has_host_compiler() {
+            eprintln!("Skipping e2e_qualified_struct_type_across_modules_builds_and_runs: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("imports_e2e_qualified_struct_type");
+        let shared = root.join("shared.skd");
+        let entry = root.join("main.skd");
+        fs::write(
+            &shared,
+            "struct Point {\n    Int x\n}\n",
+        )
+        .expect("write shared");
+        fs::write(
+            &entry,
+            "import \"./shared.skd\"\nnew shared.Point p = {x = 7}\noutput(p.x)\n",
+        )
+        .expect("write entry");
+
+        let c = compile_to_c(&entry).expect("compile to C");
+        let c_path = root.join("out.c");
+        let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
+        fs::write(&c_path, c).expect("write C file");
+        compile_c_to_exe(&c_path, &exe_path, "host").expect("compile C to exe");
+        let run = Command::new(&exe_path).output().expect("run exe");
+        assert!(run.status.success(), "binary run failed");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn e2e_qualified_errorcode_variant_builds_and_runs() {
+        if !has_host_compiler() {
+            eprintln!("Skipping e2e_qualified_errorcode_variant_builds_and_runs: no host C compiler in PATH.");
+            return;
+        }
+
+        let root = temp_case_dir("imports_e2e_qualified_errorcode");
+        let shared = root.join("shared.skd");
+        let entry = root.join("main.skd");
+        fs::write(
+            &shared,
+            "label ErrorCode {\n    Ok\n    ZeroDivision\n}\ndanger fn parse(Int x) Int {\n    return error shared.ZeroDivision\n}\n",
+        )
+        .expect("write shared");
+        fs::write(
+            &entry,
+            "import \"./shared.skd\"\nnew Int x = 0\nx = parse(1) on error {\n    x = -1\n}\noutput(x)\n",
+        )
+        .expect("write entry");
+
+        let c = compile_to_c(&entry).expect("compile to C");
+        let c_path = root.join("out.c");
+        let exe_path = if cfg!(windows) { root.join("out.exe") } else { root.join("out") };
+        fs::write(&c_path, c).expect("write C file");
+        compile_c_to_exe(&c_path, &exe_path, "host").expect("compile C to exe");
+        let run = Command::new(&exe_path).output().expect("run exe");
+        assert!(run.status.success(), "binary run failed");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn mutation_negative_parser_error_surfaces_with_parse_code() {
         let root = temp_case_dir("mut_parse_code");
         let entry = root.join("main.skd");

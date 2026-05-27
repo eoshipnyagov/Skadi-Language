@@ -103,3 +103,8 @@ Must-cover cases:
 6. Qualified `module.symbol` for `fn`/`struct`/`label`.
 7. Negative: no transitive import visibility.
 
+Current closure notes:
+- `module.symbol` call path for functions is covered in semantic/codegen smoke tests.
+- Qualified struct type references (`module.Struct`) are covered in parser/semantic/codegen tests and CLI e2e.
+- Qualified `return error module.Variant` is covered in parser/semantic/codegen tests and CLI e2e.
+
