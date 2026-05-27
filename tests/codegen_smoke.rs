@@ -192,6 +192,23 @@ new util.Point p = {x = 1}
 }
 
 #[test]
+fn codegen_emits_typed_struct_literal_for_return_statement() {
+    let src = r#"
+struct Point {
+    Int x
+}
+fn make(Int x) Point {
+    return {x = x}
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("return (Point){.x = x};"), "generated C:\n{}", c);
+}
+
+#[test]
 fn codegen_lowers_when_to_if_chain() {
     let src = r#"
 new Int x = 2

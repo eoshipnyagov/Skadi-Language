@@ -990,8 +990,48 @@ fn emit_function(stmt: &Statement, out: &mut String) {
             return_type: returns.clone(),
         };
         emit_block(body, out, 1, &mut declared, Some(&fn_ctx));
-        out.push_str("    return 0;\n");
+        emit_fallback_return(out, *is_danger, returns.as_deref());
         out.push_str("}\n");
+    }
+}
+
+fn emit_fallback_return(out: &mut String, is_danger: bool, returns: Option<&str>) {
+    if is_danger {
+        out.push_str("    return 0;\n");
+        return;
+    }
+    match returns {
+        None => out.push_str("    return 0;\n"),
+        Some(rt) => {
+            let norm = normalize_type_token(rt);
+            if matches!(
+                norm.as_str(),
+                "i8"
+                    | "i16"
+                    | "i32"
+                    | "i64"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "Int"
+                    | "f32"
+                    | "f64"
+                    | "Float"
+                    | "bool"
+                    | "Bool"
+                    | "char"
+                    | "Char"
+                    | "Text"
+                    | "Path"
+            ) {
+                out.push_str("    return 0;\n");
+            } else {
+                out.push_str("    return (");
+                out.push_str(&norm);
+                out.push_str("){0};\n");
+            }
+        }
     }
 }
 
@@ -1284,7 +1324,11 @@ fn emit_statement(
                     (true, Some(expr)) => {
                         out.push_str(&pad);
                         out.push_str("*out = ");
-                        out.push_str(&emit_expr(expr, declared));
+                        out.push_str(&emit_expr_with_expected_type(
+                            expr,
+                            ctx.return_type.as_deref(),
+                            declared,
+                        ));
                         out.push_str(";\n");
                         out.push_str(&pad);
                         out.push_str("return 0;\n");
@@ -1313,7 +1357,11 @@ fn emit_statement(
             out.push_str("return");
             if let Some(expr) = value {
                 out.push(' ');
-                out.push_str(&emit_expr(expr, declared));
+                out.push_str(&emit_expr_with_expected_type(
+                    expr,
+                    fn_ctx.and_then(|c| c.return_type.as_deref()),
+                    declared,
+                ));
             }
             out.push_str(";\n");
         }
@@ -1522,6 +1570,19 @@ fn emit_struct_literal(
     }
     body.push('}');
     body
+}
+
+fn emit_expr_with_expected_type(
+    expr: &Expression,
+    expected_type: Option<&str>,
+    declared: &HashMap<String, String>,
+) -> String {
+    if let Expression::StructConstruction { fields } = expr
+        && let Some(t) = expected_type
+    {
+        return emit_struct_literal(fields, Some(t), declared);
+    }
+    emit_expr(expr, declared)
 }
 
 fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {

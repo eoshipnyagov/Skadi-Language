@@ -924,12 +924,12 @@ local label State {
         let entry = root.join("main.skd");
         fs::write(
             &shared,
-            "struct Point {\n    Int x\n}\n",
+            "struct Point {\n    Int x\n}\nfn make(Int x) Point {\n    return {x = x}\n}\n",
         )
         .expect("write shared");
         fs::write(
             &entry,
-            "import \"./shared.skd\"\nnew shared.Point p = {x = 7}\noutput(p.x)\n",
+            "import \"./shared.skd\"\nnew shared.Point p = make(7)\noutput(p.x)\n",
         )
         .expect("write entry");
 
