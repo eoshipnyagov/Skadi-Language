@@ -36,12 +36,14 @@ Design baseline for visibility:
 
 1. Extend `on error` beyond `danger fn` and `List.pop` by explicit matrix.
 2. Finalize `Text`/`List` edge contracts and diagnostics.
-3. Stabilize `skadi build/run --cc <compiler>` as public contract.
-4. Improve `doctor` with OS-specific actionable checks.
+3. Stabilize `struct` lowering in nested/list-heavy scenarios.
+4. Stabilize `skadi build/run --cc <compiler>` as public contract.
+5. Improve `doctor` with OS-specific actionable checks.
+6. Add path-import-compatible module ergonomics: `import module_name` and `as alias` on top of deterministic visibility rules.
 
 ## Could (deferred to 1.2 by default)
 
-1. `import module_name`, alias `as`, and re-export model.
+1. Re-export model.
 2. `skadi docs` offline HTML and generated LLM guide.
 3. Math/runtime expansion beyond current core (`Path/fs` reinforcement, math core, formatted output API).
 

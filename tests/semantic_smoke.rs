@@ -35,6 +35,22 @@ fn semantic_fails_for_redeclaration_in_same_scope() {
 }
 
 #[test]
+fn semantic_fails_for_shadowing_from_outer_scope() {
+    let src = r#"
+new Int a = 1
+if a == 1 {
+    new Int a = 2
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-010"));
+    assert!(err.contains("redeclaration"));
+    assert!(err.contains("a"));
+}
+
+#[test]
 fn semantic_fails_for_self_reference_on_initialization() {
     let src = "new x = x + 1\n";
     let tokens = lex(src).expect("lex should succeed");
