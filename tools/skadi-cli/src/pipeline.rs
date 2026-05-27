@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::collections::HashSet;
+use regex::Regex;
 
 use v01::codegen::transpile_program_to_c;
 use v01::lexer::lex;
@@ -73,13 +74,14 @@ fn load_source_recursive(
     }
 
     stack.push(abs.clone());
-    let source = fs::read_to_string(&abs).map_err(|e| {
+    let raw_source = fs::read_to_string(&abs).map_err(|e| {
         format!(
             "failed to read import file '{}': {e}. {}",
             abs.display(),
             IMPORT_CONTRACT_HINT
         )
     })?;
+    let source = rewrite_local_symbols(&raw_source, &abs)?;
     let base_dir = abs.parent().unwrap_or(Path::new("."));
     let mut merged = String::new();
 
@@ -102,6 +104,38 @@ fn load_source_recursive(
     stack.pop();
     seen.insert(abs);
     Ok(merged)
+}
+
+fn rewrite_local_symbols(source: &str, path: &Path) -> Result<String, String> {
+    let module = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("invalid module filename '{}'.", path.display()))?;
+    let decl_re = Regex::new(r"(?m)^\s*local\s+(fn|struct|label)\s+([A-Za-z_][A-Za-z0-9_]*)")
+        .map_err(|e| format!("internal local-symbol regex error: {e}"))?;
+
+    let mut rewrites: Vec<(String, String)> = Vec::new();
+    for caps in decl_re.captures_iter(source) {
+        let kind = caps.get(1).map(|m| m.as_str()).unwrap_or("fn");
+        let name = caps.get(2).map(|m| m.as_str()).unwrap_or_default();
+        let mangled = format!("__sklocal_{}_{}_{}", module, kind, name);
+        rewrites.push((name.to_string(), mangled));
+    }
+
+    if rewrites.is_empty() {
+        return Ok(source.to_string());
+    }
+
+    let mut out = source.to_string();
+    for (name, mangled) in &rewrites {
+        let word_re = Regex::new(&format!(r"\b{}\b", regex::escape(name)))
+            .map_err(|e| format!("internal local-word regex error for '{}': {e}", name))?;
+        out = word_re.replace_all(&out, mangled.as_str()).to_string();
+    }
+
+    let local_kw_re = Regex::new(r"(?m)^(\s*)local\s+(fn|struct|label)\s+")
+        .map_err(|e| format!("internal local-kw regex error: {e}"))?;
+    Ok(local_kw_re.replace_all(&out, "$1$2 ").to_string())
 }
 
 fn parse_import_line(line: &str) -> Result<Option<String>, String> {
@@ -172,10 +206,10 @@ pub fn compile_c_to_exe(c_path: &Path, exe_path: &Path, target: &str) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{compile_c_to_exe, compile_to_c, load_source_with_imports, parse_import_line};
+    use super::{compile_c_to_exe, compile_to_c, load_source_with_imports, parse_import_line, rewrite_local_symbols};
     use crate::targets::detect_compiler;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -215,6 +249,32 @@ mod tests {
     fn parse_import_line_rejects_unterminated_quote() {
         let err = parse_import_line("import \"./lib.skd").expect_err("must reject");
         assert!(err.contains("unsupported import syntax"));
+    }
+
+    #[test]
+    fn local_symbols_are_mangled_and_local_keyword_removed() {
+        let src = r#"
+local fn helper(Int x) Int {
+    return x + 1
+}
+
+local struct Hidden {
+    Int value
+}
+
+local label State {
+    A
+    B
+}
+"#;
+        let path = Path::new("mod_a.skd");
+        let rewritten = rewrite_local_symbols(src, path).expect("rewrite");
+        assert!(!rewritten.contains("local fn helper"));
+        assert!(!rewritten.contains("local struct Hidden"));
+        assert!(!rewritten.contains("local label State"));
+        assert!(rewritten.contains("fn __sklocal_mod_a_fn_helper"));
+        assert!(rewritten.contains("struct __sklocal_mod_a_struct_Hidden"));
+        assert!(rewritten.contains("label __sklocal_mod_a_label_State"));
     }
 
     #[test]
@@ -601,6 +661,29 @@ mod tests {
         let err = compile_to_c(&entry).expect_err("compile must fail");
         assert!(err.contains("[SC-MOD-001]"));
         assert!(err.contains("unsupported import syntax"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn negative_direct_import_cannot_call_local_function() {
+        let root = temp_case_dir("imports_neg_local_visibility");
+        let lib = root.join("lib.skd");
+        let entry = root.join("main.skd");
+        fs::write(
+            &lib,
+            "local fn helper(Int x) Int {\n    return x + 1\n}\nfn pubf(Int x) Int {\n    return helper(x)\n}\n",
+        )
+        .expect("write lib");
+        fs::write(
+            &entry,
+            "import \"./lib.skd\"\nnew Int a = helper(1)\noutput(a)\n",
+        )
+        .expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("compile must fail");
+        assert!(err.contains("[SC-SEM-000]"));
+        assert!(err.contains("unknown function 'helper'"));
 
         let _ = fs::remove_dir_all(root);
     }
