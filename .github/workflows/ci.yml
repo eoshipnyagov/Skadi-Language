@@ -23,6 +23,19 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      - name: Setup MSYS2 GCC (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-gcc
+
+      - name: Add MSYS2 toolchain to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: echo "C:\msys64\ucrt64\bin" >> $env:GITHUB_PATH
+
       - name: Root tests (non-e2e)
         run: cargo test -q -- --skip e2e_
 
@@ -53,6 +66,19 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+
+      - name: Setup MSYS2 GCC (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-gcc
+
+      - name: Add MSYS2 toolchain to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: echo "C:\msys64\ucrt64\bin" >> $env:GITHUB_PATH
 
       - name: Run codegen e2e suite
         run: cargo test -q --test codegen_e2e
