@@ -752,6 +752,37 @@ new char ch = 'a'
 }
 
 #[test]
+fn style_warning_for_legacy_non_void_return_without_returns_keyword() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+    let warnings = semantic_style_warnings(&program);
+    assert!(warnings.iter().any(|w| w.contains("prefer explicit 'returns <type>'")));
+}
+
+#[test]
+fn semantic_rejects_struct_return_without_returns_keyword() {
+    let src = r#"
+struct Point {
+    Int x
+}
+fn make(Int x) Point {
+    return {x = x}
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-050"));
+    assert!(err.contains("requires explicit 'returns <type>'"));
+}
+
+#[test]
 fn semantic_rejects_on_error_for_read_builtin() {
     let src = r#"
 new Text body = ""

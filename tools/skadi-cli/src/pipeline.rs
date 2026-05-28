@@ -924,7 +924,7 @@ local label State {
         let entry = root.join("main.skd");
         fs::write(
             &shared,
-            "struct Point {\n    Int x\n}\nfn make(Int x) Point {\n    return {x = x}\n}\n",
+            "struct Point {\n    Int x\n}\nfn make(Int x) returns Point {\n    return {x = x}\n}\n",
         )
         .expect("write shared");
         fs::write(

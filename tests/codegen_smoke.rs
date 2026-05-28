@@ -197,7 +197,7 @@ fn codegen_emits_typed_struct_literal_for_return_statement() {
 struct Point {
     Int x
 }
-fn make(Int x) Point {
+fn make(Int x) returns Point {
     return {x = x}
 }
 "#;

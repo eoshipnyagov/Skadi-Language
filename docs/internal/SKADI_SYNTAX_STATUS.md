@@ -21,7 +21,10 @@ Purpose: single source of truth for what syntax works in this repository.
 - `local fn name(...) { ... }` - `Stable`
 - `danger fn name(...) ... { ... }` - `Stable`
 - typed params: `fn add(Int a, Float b)` - `Stable`
-- typed return: `fn add(...) Int` - `Stable`
+- canonical typed return: `fn add(...) returns Int` - `Stable`
+- legacy typed return without `returns`: `fn add(...) Int` - `Partial`
+  - currently allowed for simple scalar types with style warning
+  - struct return without explicit `returns` is semantic error
 - function calls in expressions: `x = add(a, b)` - `Stable`
 - signature checks (arity/types) for calls - `Stable`
 

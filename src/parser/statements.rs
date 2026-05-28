@@ -171,8 +171,18 @@ fn parse_function_declaration_inner(
     }
 
     let mut returns = None;
-    if let Some((return_type, consumed)) = parse_qualified_identifier(tokens, current_index)
-        && current_index + 1 < tokens.len()
+    let mut uses_returns_keyword = false;
+    if current_index < tokens.len() && tokens[current_index].lexeme == "returns" {
+        uses_returns_keyword = true;
+        current_index += 1;
+        if let Some((return_type, consumed)) = parse_qualified_identifier(tokens, current_index) {
+            returns = Some(return_type);
+            current_index += consumed;
+        } else {
+            return Err(parse_err("SC-PARSE-163", "expected return type after 'returns'."));
+        }
+    } else if let Some((return_type, consumed)) = parse_qualified_identifier(tokens, current_index)
+        && current_index + consumed < tokens.len()
         && tokens[current_index + consumed].lexeme == "{"
     {
         returns = Some(return_type);
@@ -199,6 +209,7 @@ fn parse_function_declaration_inner(
         }
         .into(),
         returns,
+        uses_returns_keyword,
         is_danger,
         is_local,
         loc,
@@ -1203,8 +1214,18 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
     }
     current_index += 1;
     let mut returns = None;
-    if let Some((return_type, consumed)) = parse_qualified_identifier(tokens, current_index)
-        && current_index + 1 < end
+    let mut uses_returns_keyword = false;
+    if current_index < end && tokens[current_index].lexeme == "returns" {
+        uses_returns_keyword = true;
+        current_index += 1;
+        if let Some((return_type, consumed)) = parse_qualified_identifier(tokens, current_index) {
+            returns = Some(return_type);
+            current_index += consumed;
+        } else {
+            return Err(parse_err("SC-PARSE-163", "expected return type after 'returns'."));
+        }
+    } else if let Some((return_type, consumed)) = parse_qualified_identifier(tokens, current_index)
+        && current_index + consumed < end
         && tokens[current_index + consumed].lexeme == "{"
     {
         returns = Some(return_type);
@@ -1222,6 +1243,7 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
             params,
             body: Box::new(BlockStatement { statements: body_stmts }),
             returns,
+            uses_returns_keyword,
             is_danger,
         },
         consumed,

@@ -111,6 +111,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             is_danger,
             returns,
             params,
+            uses_returns_keyword: _,
             is_local,
             ..
         } = stmt
@@ -291,6 +292,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 Statement::FunctionDef {
                     params,
                     returns,
+                    uses_returns_keyword,
                     body,
                     loc,
                     ..
@@ -305,6 +307,17 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                             warn_type_style(elem.trim(), loc.line, loc.column, user_types, out);
                         } else {
                             warn_type_style(rt, loc.line, loc.column, user_types, out);
+                        }
+                    }
+                    if let Some(rt) = returns.as_deref()
+                        && !*uses_returns_keyword
+                    {
+                        let parsed = parse_primitive_type_name(rt);
+                        if parsed != ValueType::Unknown {
+                            out.push(format!(
+                                "style warning at line {}, col {}: prefer explicit 'returns <type>' in function declaration.",
+                                loc.line, loc.column
+                            ));
                         }
                     }
                     visit_statements(&body.statements, user_types, out);
@@ -623,8 +636,21 @@ fn analyze_statement(
             Ok(())
         }
         Statement::FunctionDef {
-            name, params, body, ..
+            name, params, body, returns, uses_returns_keyword, ..
         } => {
+            if let Some(rt) = returns.as_deref()
+                && !*uses_returns_keyword
+                && matches!(parse_declared_type_name(rt, structs), ValueType::Struct(_))
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_RETURN_RULE,
+                    format!(
+                        "struct return type '{}' requires explicit 'returns <type>' in function declaration.",
+                        rt
+                    ),
+                ));
+            }
             let mut fn_scope = scope.clone();
             for p in params {
                 let pty = param_type_or_default(p);

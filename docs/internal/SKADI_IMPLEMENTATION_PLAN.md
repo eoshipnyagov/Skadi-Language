@@ -209,6 +209,8 @@ V1 priorities:
 - Implement generated short LLM guide from same docs sources (single-source publishing).
 - Close remaining transitional `TODO(v1)` behavior in codegen/semantic.
 - Expand negative e2e/import edge-case coverage.
+- Add semantic warning: missing explicit return type in function declaration when function returns a non-void value.
+- Add semantic error: returning struct value without explicit function return type declaration.
 
 Tech debt priorities:
 - Centralize project-template logic used by `new` / `init` / `examples` commands.

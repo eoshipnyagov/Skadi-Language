@@ -56,6 +56,7 @@ pub struct StructMethod {
     pub params: Vec<FunctionParam>,
     pub body: Box<BlockStatement>,
     pub returns: Option<String>,
+    pub uses_returns_keyword: bool,
     pub is_danger: bool,
 }
 
@@ -76,6 +77,7 @@ pub enum Statement {
         params: Vec<FunctionParam>, 
         body: Box<BlockStatement>, 
         returns: Option<String>, // Type of return
+        uses_returns_keyword: bool,
         is_danger: bool,
         is_local: bool,
         loc: Location
