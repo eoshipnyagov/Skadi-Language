@@ -1,16 +1,16 @@
-// bench_06_struct_account.skd
+﻿// bench_06_struct_account.skd
 // Showcase: structs + methods + `my` + dot-call syntax.
 
 struct Account {
     Int balance
     Text owner
 
-    fn deposit(Int amount) Int {
+    fn deposit(Int amount) returns Int {
         my.balance = my.balance + amount
         return my.balance
     }
 
-    fn withdraw(Int amount) Int {
+    fn withdraw(Int amount) returns Int {
         if my.balance >= amount {
             my.balance = my.balance - amount
             return my.balance
@@ -19,7 +19,7 @@ struct Account {
         }
     }
 
-    fn snapshot() Text {
+    fn snapshot() returns Text {
         return concat(my.owner, ":")
     }
 }

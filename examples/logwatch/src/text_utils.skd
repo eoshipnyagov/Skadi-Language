@@ -1,4 +1,4 @@
-fn count_occurs(Text data, Text needle) Int {
+﻿fn count_occurs(Text data, Text needle) returns Int {
     if len(data) == 0 or len(needle) == 0 {
         return 0
     }
@@ -21,7 +21,7 @@ fn count_occurs(Text data, Text needle) Int {
     return count
 }
 
-fn line_count(Text data) Int {
+fn line_count(Text data) returns Int {
     if len(data) == 0 {
         return 0
     }

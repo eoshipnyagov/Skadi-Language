@@ -1,11 +1,11 @@
-// bench_07_struct_list.skd
+﻿// bench_07_struct_list.skd
 // Showcase: Struct List + iterate + method calls.
 
 struct Sensor {
     Int id
     Int value
 
-    fn is_hot(Int threshold) Bool {
+    fn is_hot(Int threshold) returns Bool {
         if my.value >= threshold {
             return true
         } else {
