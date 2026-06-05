@@ -66,3 +66,19 @@ fn showcase_math_navigation_compiles() {
     assert!(c.contains("sin("));
     assert!(c.contains("atan2("));
 }
+
+#[test]
+fn showcase_v1_1_toolbox_compiles() {
+    let src = include_str!("../benchmarks/bench_10_v1_1_toolbox.skd");
+    assert!(!src.contains("for "));
+    assert!(src.contains("iterate "));
+    assert!(src.contains("danger fn"));
+    let c = compile_pipeline(src);
+    assert!(c.contains("typedef enum ErrorCode"));
+    assert!(c.contains("int safe_speed(double distance, double seconds, double *out)"));
+    assert!(c.contains("SkadiList_Waypoint"));
+    assert!(c.contains("Waypoint_distance_from_origin(&point)"));
+    assert!(c.contains("if (safe_speed(total, 0, &fallback) != 0) {"));
+    assert!(c.contains("sk_list_Waypoint_free(&route);"));
+    assert!(c.contains("free((void*)summary);"));
+}

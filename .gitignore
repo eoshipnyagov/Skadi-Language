@@ -6,3 +6,5 @@
 .docs-build/
 site/
 .venv-docs/
+__pycache__/
+*.pyc

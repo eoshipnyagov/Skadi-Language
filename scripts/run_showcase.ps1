@@ -18,7 +18,9 @@ $benches = @(
     @{ name = "bench_05_push_pop"; file = "benchmarks/bench_05_push_pop.skd"; args = @("--medium") },
     @{ name = "bench_06_struct_account"; file = "benchmarks/bench_06_struct_account.skd"; args = @() },
     @{ name = "bench_07_struct_list"; file = "benchmarks/bench_07_struct_list.skd"; args = @() },
-    @{ name = "bench_08_path_list_helpers"; file = "benchmarks/bench_08_path_list_helpers.skd"; args = @() }
+    @{ name = "bench_08_path_list_helpers"; file = "benchmarks/bench_08_path_list_helpers.skd"; args = @() },
+    @{ name = "bench_09_math_navigation"; file = "benchmarks/bench_09_math_navigation.skd"; args = @() },
+    @{ name = "bench_10_v1_1_toolbox"; file = "benchmarks/bench_10_v1_1_toolbox.skd"; args = @() }
 )
 
 function Invoke-Step {

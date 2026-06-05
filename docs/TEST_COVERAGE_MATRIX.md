@@ -54,7 +54,7 @@
 - math core coverage
   - semantic positive/negative checks для constants и numeric builtin typing
   - codegen shape checks для `math.h`, constants, trigonometry, `root`, angle conversion
-  - showcase coverage через `bench_09_math_navigation.skd`
+  - showcase coverage через `bench_09_math_navigation.skd` и `bench_10_v1_1_toolbox.skd`
 
 ## 2. Что покрыто частично / что ещё требует углубления
 

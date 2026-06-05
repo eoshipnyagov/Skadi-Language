@@ -132,7 +132,15 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
         "static {} sk_list_{}_get(const SkadiList_{} *xs, int64_t idx) {{\n",
         c_ty, suffix, suffix
     ));
-    out.push_str("    if (!xs || idx < 0 || (size_t)idx >= xs->len) return 0;\n");
+    let fallback = if LIST_TYPE_MAP.iter().any(|(_, mapped_ty, _)| *mapped_ty == c_ty) {
+        "0".to_string()
+    } else {
+        format!("({}){{0}}", c_ty)
+    };
+    out.push_str(&format!(
+        "    if (!xs || idx < 0 || (size_t)idx >= xs->len) return {};\n",
+        fallback
+    ));
     out.push_str("    return xs->data[(size_t)idx];\n");
     out.push_str("}\n\n");
 }
@@ -332,6 +340,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         out.push_str("#include <dirent.h>\n");
         out.push_str("#include <sys/stat.h>\n\n");
     }
+    emit_struct_declarations(program, &mut out);
     if needs_list_runtime {
         emit_list_runtime(&mut out, &struct_names);
     }
@@ -344,7 +353,6 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     if needs_io_runtime {
         emit_io_runtime(&mut out, needs_args_runtime);
     }
-    emit_struct_declarations(program, &mut out);
     emit_error_code_enum(program, &mut out);
 
     for stmt in &program.statements {
@@ -405,7 +413,7 @@ fn emit_top_level_cleanup(program: &Program, out: &mut String) {
         }
 
         if matches!(dt, "Text" | "Path") && expression_returns_owned_text(value) {
-            out.push_str("    free(");
+            out.push_str("    free((void*)");
             out.push_str(name);
             out.push_str(");\n");
         }
@@ -1276,6 +1284,10 @@ fn emit_statement(
         Statement::ListPush {
             list_name, value, ..
         } => {
+            let elem_type = declared
+                .get(list_name)
+                .and_then(|t| list_elem_from_decl(t))
+                .map(str::to_string);
             let suffix = declared
                 .get(list_name)
                 .and_then(|t| list_elem_from_decl(t))
@@ -1287,7 +1299,13 @@ fn emit_statement(
             out.push_str("_push(&");
             out.push_str(list_name);
             out.push_str(", ");
-            out.push_str(&emit_expr(value, declared));
+            if let (Some(elem), Expression::StructConstruction { fields }) =
+                (elem_type.as_deref(), value.as_ref())
+            {
+                out.push_str(&emit_struct_literal(fields, Some(elem), declared));
+            } else {
+                out.push_str(&emit_expr(value, declared));
+            }
             out.push_str(");\n");
         }
         Statement::ListPopOnError {
@@ -1468,7 +1486,11 @@ fn emit_statement(
                             out.push_str("_push(&");
                             out.push_str(name);
                             out.push_str(", ");
-                            out.push_str(&emit_expr(item, declared));
+                            if let Expression::StructConstruction { fields } = item {
+                                out.push_str(&emit_struct_literal(fields, Some(elem), declared));
+                            } else {
+                                out.push_str(&emit_expr(item, declared));
+                            }
                             out.push_str(");\n");
                         }
                     } else {

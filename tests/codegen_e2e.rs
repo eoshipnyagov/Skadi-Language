@@ -691,3 +691,19 @@ output(bounded)
     let c = transpile_program_to_c(&program);
     compile_c_and_run(compiler, &c, "Skadi_e2e_math_core", &["-lm"]);
 }
+
+#[test]
+fn e2e_v1_1_toolbox_showcase_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = include_str!("../benchmarks/bench_10_v1_1_toolbox.skd");
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_list_Waypoint_free(&route);"));
+    assert!(c.contains("free((void*)summary);"));
+    compile_c_and_run(compiler, &c, "Skadi_e2e_v1_1_toolbox", &["-lm"]);
+}

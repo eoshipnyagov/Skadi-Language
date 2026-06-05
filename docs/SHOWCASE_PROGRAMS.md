@@ -1,6 +1,6 @@
 # Showcase-программы Skadi
 
-В этом разделе собраны 9 небольших showcase-программ.
+В этом разделе собраны 10 небольших showcase-программ.
 
 Их цель:
 
@@ -21,6 +21,7 @@
   <li><code>bench_07_struct_list.skd</code><ul><li>Обход списка структур с проверками через методы.</li><li>Покрытие: <code>Struct List</code>, <code>push</code> структурных литералов, <code>iterate ... as ...</code>, вызовы методов на элементе списка.</li></ul></li>
   <li><code>bench_08_path_list_helpers.skd</code><ul><li>Утилита для обхода и фильтрации путей.</li><li>Покрытие: <code>Path List</code>, <code>fs.list</code>, <code>fs.join</code>, <code>fs.is_dir</code>, <code>iterate ... as ...</code>.</li></ul></li>
   <li><code>bench_09_math_navigation.skd</code><ul><li>Небольшой showcase для math и навигации.</li><li>Покрытие: <code>deg_to_rad</code>, <code>sin</code>, <code>cos</code>, <code>atan2</code>, <code>sqrt</code>, <code>round</code>, <code>clamp</code>.</li></ul></li>
+  <li><code>bench_10_v1_1_toolbox.skd</code><ul><li>Сборный showcase для ключевых обновлений <code>v1.1</code>.</li><li>Покрытие: <code>danger fn</code>, <code>on error</code>, <code>label ErrorCode</code>, <code>struct</code>, методы, <code>List</code>, <code>iterate ... as ...</code>, <code>when</code>, math core и cleanup generated C.</li></ul></li>
 </ol>
 
 ## Сборка всех showcase-программ
@@ -37,6 +38,7 @@ cargo run -- --input benchmarks/bench_06_struct_account.skd --emit-exe bench_06_
 cargo run -- --input benchmarks/bench_07_struct_list.skd --emit-exe bench_07_struct_list.exe
 cargo run -- --input benchmarks/bench_08_path_list_helpers.skd --emit-exe bench_08_path_list_helpers.exe
 cargo run -- --input benchmarks/bench_09_math_navigation.skd --emit-exe bench_09_math_navigation.exe
+cargo run -- --input benchmarks/bench_10_v1_1_toolbox.skd --emit-exe bench_10_v1_1_toolbox.exe
 ```
 
 Или через вспомогательный скрипт:
@@ -57,6 +59,7 @@ cargo run -- --input benchmarks/bench_09_math_navigation.skd --emit-exe bench_09
 .\bench_07_struct_list.exe
 .\bench_08_path_list_helpers.exe
 .\bench_09_math_navigation.exe
+.\bench_10_v1_1_toolbox.exe
 ```
 
 Или через вспомогательный скрипт:

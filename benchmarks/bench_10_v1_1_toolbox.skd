@@ -1,0 +1,103 @@
+// bench_10_v1_1_toolbox.skd
+// Showcase: v1.1 math, structs, lists, methods, when, and danger/on error.
+
+label ErrorCode {
+    Ok
+    DivideByZero
+}
+
+danger fn safe_speed(Float distance, Float seconds) Float {
+    if seconds <= 0.0 {
+        return error DivideByZero
+    } else {
+        return distance / seconds
+    }
+}
+
+struct Waypoint {
+    Text name
+    Float x
+    Float y
+
+    fn distance_from_origin() Float {
+        return sqrt(my.x * my.x + my.y * my.y)
+    }
+
+    fn bearing_deg() Float {
+        return rad_to_deg(atan2(my.y, my.x))
+    }
+}
+
+new Waypoint List route = []
+
+route.push({name = "base", x = 0.0, y = 0.0})
+
+route.push({name = "ridge", x = 3.0, y = 4.0})
+
+route.push({name = "tower", x = 6.0, y = 8.0})
+
+new Float total = 0.0
+
+new Float max_leg = 0.0
+
+iterate route as point {
+    new Float distance = point.distance_from_origin()
+    new Float bearing = clamp(point.bearing_deg(), 0.0, 360.0)
+    total = total + distance
+    max_leg = max(max_leg, distance)
+    output(concat(point.name, ":"))
+    output(round(distance))
+    output(round(bearing))
+}
+
+new Float average = 0.0
+
+average = safe_speed(total, 3.0) on error {
+    average = 0.0
+}
+
+new Float fallback = 0.0
+
+fallback = safe_speed(total, 0.0) on error {
+    fallback = -1.0
+}
+
+new Float normalized = clamp(average / (TAU + EPSILON), 0.0, 10.0)
+
+new Float root_score = root(max_leg, 2.0)
+
+new Float low = floor(min(total, max_leg))
+
+new Float high = ceil(abs(fallback))
+
+new Text summary = concat("v1.1 ", "toolbox")
+
+new Int bucket = 0
+
+if average >= 3.0 {
+    bucket = 2
+} else {
+    bucket = 1
+}
+
+when bucket {
+    is 1 {
+        output("slow route")
+    }
+
+    is 2 {
+        output(summary)
+    }
+
+    else {
+        output("unknown route")
+    }
+}
+
+output(round(normalized))
+
+output(round(root_score))
+
+output(low)
+
+output(high)

@@ -560,6 +560,7 @@ Showcase-программы:
 - `benchmarks/bench_07_struct_list.skd`
 - `benchmarks/bench_08_path_list_helpers.skd`
 - `benchmarks/bench_09_math_navigation.skd`
+- `benchmarks/bench_10_v1_1_toolbox.skd`
 
 Описание: [Showcase-программы](showcases.md)
 
