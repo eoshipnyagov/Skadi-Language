@@ -30,7 +30,7 @@ jobs:
 
       - name: Smoke transpile sample programs to C
         run: |
-          cargo run -- --input example_tree.skd --emit-c target/ci_example_tree.c
+          cargo run -- --input examples/example_tree.skd --emit-c target/ci_example_tree.c
           cargo run -- --input benchmarks/bench_04_sum_ints.skd --emit-c target/ci_bench_04.c
           cargo run -- --input benchmarks/bench_08_path_list_helpers.skd --emit-c target/ci_bench_08.c
 
