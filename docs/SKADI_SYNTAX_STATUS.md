@@ -1,102 +1,145 @@
-# Skadi Syntax Status (Current Snapshot)
+# Статус синтаксиса Skadi
 
-Date: 2026-05-25
-Purpose: single source of truth for "what syntax actually works right now" in this repository.
+Дата: 2026-06-05  
+Назначение: единый точный срез того, какой синтаксис действительно работает в этом репозитории сейчас.
 
-## Stability Levels
-- `Stable`: implemented, tested, expected to work.
-- `Partial`: implemented with constraints / transitional behavior.
-- `Planned`: in spec, not implemented here yet.
+## Уровни статуса
 
-## Core Statements
+- `Stable` - реализовано, покрыто тестами, ожидается как рабочая часть языка.
+- `Partial` - реализовано с явными ограничениями или переходным поведением.
+- `Planned` - не входит в рабочую поверхность `v1.1` в этом репозитории.
+
+## Базовые конструкции
+
 - `new x = expr` - `Stable`
-- `new Type x = expr` - `Stable` (scalar types: `Int`, `Float`, `bool`)
-- `x = expr` - `Stable` (requires prior declaration)
-- `i++` / `i--` - `Stable` (statement-only; not allowed inside expressions)
+- `new Type x = expr` - `Stable`
+- `new ElemType List x = [...]` - `Stable`
+- `x = expr` - `Stable`
+- `x.field = expr` - `Stable`
+- `i++` / `i--` - `Stable`
 - `return expr` - `Stable`
-- `return` - `Stable` (special behavior in `danger fn`)
-- `return error Code` - `Stable` (only in `danger fn`, with `label ErrorCode`)
-- `pass` - `Stable` (no-op statement)
+- `return` - `Stable`
+- `return error Code` - `Stable`
+- `pass` - `Stable`
+- выражение как statement, включая builtin-вызовы вроде `output("hello")` - `Stable`
 
-## Functions
+## Функции
+
 - `fn name(...) { ... }` - `Stable`
-- `danger fn name(...) ... { ... }` - `Stable`
-- typed params: `fn add(Int a, Float b)` - `Stable`
-- typed return: `fn add(...) Int` - `Stable`
-- function calls in expressions: `x = add(a, b)` - `Stable`
-- signature checks (arity/types) for calls - `Stable`
+- `danger fn name(...) { ... }` - `Stable`
+- типизированные параметры - `Stable`
+- типизированный возврат - `Stable`
+- вызовы функций внутри выражений - `Stable`
+- проверка количества и типов аргументов - `Stable`
 
-## Control Flow
+## Поток ошибок
+
+- `x = danger_call(...) on error { ... }` - `Stable`
+- `danger_call(...) on error { ... }` - `Stable`
+- `on error` только на danger-вызовах - `Stable`
+- контракт `label ErrorCode` - `Stable`
+  - первый вариант должен быть `Ok`
+  - `return error X` требует существующего варианта `ErrorCode`
+
+## Управляющие конструкции
+
 - `if / else if / else` - `Stable`
 - `while` - `Stable`
 - `loop` - `Stable`
-- `break` / `continue` - `Stable` (allowed only inside loops)
-- `for item in collection` - `Partial`
-  - lowering assumes list runtime shape: `collection.len` + `collection.data[i]`
-  - element type is lowered from declared list element type in codegen
-  - style note: supported for familiarity/compatibility; `iterate ... as ...` is preferred for showcase style.
-- `iterate collection as item` - `Partial` (alias)
-  - parsed as an alias of `for item in collection`
-  - currently lowers through the same `ForLoop` path
-- `when / is / else` - `Stable` (MVP)
-  - lowers to `if / else if / else`
-  - `is a, b` supported
-  - type compatibility between `when` expression and `is` cases is validated
+- `break` / `continue` - `Stable`
+- `for item in collection` - `Stable`
+- `iterate collection as item` - `Stable`
+  - предпочтительная витринная форма записи
+- legacy `for (init; cond; update)` - `Stable`
+  - поддерживается для совместимости, но не считается предпочтительным стилем
+- `when / is / else` - `Stable`
 
-## Error Flow
-- `danger` call with handler:
-  - `x = danger_call(...) on error { ... }` - `Stable`
-  - `danger_call(...) on error { ... }` - `Stable`
-- `on error` allowed only for calls to `danger fn` - `Stable`
-- `danger fn` C ABI:
-  - returns status `int`
-  - optional out-param for value
-  - success path: `return 0`
-  - explicit error path: `return error X` -> `return ErrorCode_X`
+## Структуры и методы
 
-## Labels
-- `label Name { A B C }` parsing - `Stable`
-- `label ErrorCode` semantic contract - `Stable`
-  - first variant must be `Ok`
-  - `return error X` requires `X` in `ErrorCode`
+- `struct Name { ... }` - `Stable`
+- поля структуры - `Stable`
+- методы внутри структуры - `Stable`
+- `my.field` внутри методов - `Stable`
+- доступ `obj.field` - `Stable`
+- вызовы `obj.method(...)` - `Stable`
+- struct literals `{field = value, ...}` - `Stable`
+- field punning `{value, status}` - `Stable`
+- списки структур и вызовы методов на итерируемых элементах - `Stable`
 
-## Types (Current)
-- Checked scalars: `Int`, `Float`, `bool`
-- implicit widening: `Int -> Float` allowed
-- bool conditions in `if/while` are required
-- `List` and `Text` behavior is frozen for v1 in dedicated contracts:
-  - `TEXT_V1_CONTRACT_RU.md`
-  - `ON_ERROR_V1_MATRIX_RU.md`
+## Builtins: Text / List / Filesystem / I/O
 
-## Indexing Contract (Frozen for v1)
-- `xs[i]` for `List` is `fail-soft` in runtime:
-  - out-of-range returns default zero value (`0`) for the element C type.
-- `t[i]` for `Text` is `fail-soft` in runtime:
-  - out-of-range returns `'\0'`.
-- `on error` is **not** attached to index access in `v1`.
-- Possible stricter `danger`-style indexing is deferred to `v2+` discussion.
+- `len` - `Stable`
+- `contains` - `Stable`
+- `find` - `Stable`
+- `slice` - `Stable`
+- `concat` - `Stable`
+- `fs.list` - `Stable`
+- `fs.is_dir` - `Stable`
+- `fs.join` - `Stable`
+- `args` - `Stable`
+- `output` - `Stable`
+- `input` - `Stable`
+- `read` - `Stable`
+- `write` - `Stable`
 
-## Type Naming Canonical Style (v1)
-- Low-level fixed-width numeric types stay lowercase:
+## Math core (`v1.1`)
+
+- константы `PI`, `TAU`, `E`, `EPSILON` - `Stable`
+- `abs`, `min`, `max`, `clamp` - `Stable`
+- `floor`, `ceil`, `round` - `Stable`
+- `sin`, `cos`, `atan2`, `sqrt`, `root` - `Stable`
+- `deg_to_rad`, `rad_to_deg` - `Stable`
+
+## Типы
+
+- `Int` - `Stable`
+- `Float` - `Stable`
+- `Bool` / `bool` - `Stable`
+- `Char` / `char` - `Stable`
+- `Text` - `Stable`
+- `Path` - `Stable`
+- контейнеры `List` - `Stable`
+- fixed-width numeric families:
+
   - `i8`, `i16`, `i32`, `i64`
   - `u8`, `u16`, `u32`, `u64`
   - `f32`, `f64`
-- Readability-oriented/common user-facing types stay capitalized:
-  - `Int`, `Float`, `Bool`, `Char`, `Text`, `Path`, `List`, `Vec2`, `Vec3`, `Vec4`
-- Transitional note:
-  - `bool` and `char` remain accepted as compatibility aliases.
-  - For style docs/examples, prefer readability-first naming (`Bool`, `Char`) and keep fixed-width primitives lowercase.
+  - `Stable`
 
-## Intentionally Deferred
-- `direct` params
-- `returns struct { ... }`
-- `local fn`
-- imports/modules
-- struct fields/methods (`my.field`)
-- events/interrupt runtime semantics
-- chunk memory features (`allow drop`, budgets)
-- test DSL keywords
+## Контракт индексации
 
-## Design Note
-Keyword naming may change later. This file tracks the implemented parser contract now, not a final language freeze.
-Canonical writing style for v1 is frozen in `SYNTAX_CANONICAL_MATRIX_V1_RU.md`.
+- `xs[i]` для `List` - `Stable`
+- `t[i]` для `Text` - `Stable`
+- индекс списка вне диапазона возвращает fail-soft default value - `Stable`
+- индекс текста вне диапазона возвращает `'\0'` - `Stable`
+- `on error` на индексации - `Planned`
+
+## Стиль и канонические формы
+
+- `iterate ... as ...` предпочтительнее `for ... in ...` - `Stable warning policy`
+- `Bool` предпочтительнее `bool` - `Stable warning policy`
+- `Char` предпочтительнее `char` - `Stable warning policy`
+
+## Частично реализованное / переходное
+
+- `on interrupt ... { ... }` - `Partial`
+  - parse-level поддержка уже есть;
+  - семантика выполнения ещё не считается завершённой частью `v1.1`.
+- formatter coverage - `Partial`
+  - ориентирован на текущий рабочий слой `v1.1`;
+  - уже пригоден для повседневной работы, но продолжает развиваться вместе с синтаксисом.
+
+## Сознательно отложенное
+
+- imports / modules
+- task / channel concurrency model
+- memory model features
+- visual core / canvas
+- systems additions track
+- более строгая модель ошибок индексации
+- async/background execution внутри TUI
+
+## Примечание
+
+Этот файл фиксирует текущий реализованный контракт, а не вечную финальную форму языка.
+Для первого знакомства удобнее начинать с [Начало работы](getting-started.md).

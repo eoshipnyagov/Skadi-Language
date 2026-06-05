@@ -73,42 +73,15 @@ fn compile_c_and_run(compiler: &str, c_src: &str, stem: &str, extra_flags: &[&st
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    let run = Command::new(&exe_path)
+        .output()
+        .expect("run compiled binary");
     assert!(
         run.status.success(),
         "Binary execution failed: {}",
         String::from_utf8_lossy(&run.stderr)
     );
 
-    let _ = fs::remove_file(c_path);
-    let _ = fs::remove_file(exe_path);
-}
-
-fn compile_c_expect_fail(compiler: &str, c_src: &str, stem: &str) {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("time")
-        .as_millis();
-    let mut c_path: PathBuf = std::env::temp_dir();
-    c_path.push(format!("{stem}_{stamp}.c"));
-    let mut exe_path: PathBuf = std::env::temp_dir();
-    exe_path.push(format!("{stem}_{stamp}"));
-    if cfg!(windows) {
-        exe_path.set_extension("exe");
-    }
-
-    fs::write(&c_path, c_src).expect("write C source");
-    let compile = Command::new(compiler)
-        .arg(&c_path)
-        .arg("-o")
-        .arg(&exe_path)
-        .output()
-        .expect("run C compiler");
-    assert!(
-        !compile.status.success(),
-        "expected compile to fail, but it succeeded for {}",
-        c_path.display()
-    );
     let _ = fs::remove_file(c_path);
     let _ = fs::remove_file(exe_path);
 }
@@ -156,7 +129,9 @@ new Int y = x + 3
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    let run = Command::new(&exe_path)
+        .output()
+        .expect("run compiled binary");
     assert!(
         run.status.success(),
         "Binary execution failed: {}",
@@ -213,7 +188,9 @@ new Int n = len(part)
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    let run = Command::new(&exe_path)
+        .output()
+        .expect("run compiled binary");
     assert!(
         run.status.success(),
         "Binary execution failed: {}",
@@ -272,7 +249,9 @@ new Int n2 = len(s2)
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    let run = Command::new(&exe_path)
+        .output()
+        .expect("run compiled binary");
     assert!(
         run.status.success(),
         "Binary execution failed: {}",
@@ -372,7 +351,9 @@ when mode {
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    let run = Command::new(&exe_path)
+        .output()
+        .expect("run compiled binary");
     assert!(
         run.status.success(),
         "Binary execution failed: {}",
@@ -436,7 +417,9 @@ if c_ok == c_out {
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    let run = Command::new(&exe_path)
+        .output()
+        .expect("run compiled binary");
     assert!(
         run.status.success(),
         "Binary execution failed: {}",
@@ -494,7 +477,9 @@ for e in entries {
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = Command::new(&exe_path).output().expect("run compiled binary");
+    let run = Command::new(&exe_path)
+        .output()
+        .expect("run compiled binary");
     assert!(
         run.status.success(),
         "Binary execution failed: {}",
@@ -512,7 +497,11 @@ fn e2e_sanitized_runtime_stress_list_text_path() {
         return;
     };
 
-    let sanitizer_flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-O1"];
+    let sanitizer_flags = [
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer",
+        "-O1",
+    ];
     if !compiler_supports_flags(compiler, &sanitizer_flags) {
         eprintln!("Skipping sanitizer e2e test: compiler does not support ASan/UBSan flags.");
         return;
@@ -649,13 +638,13 @@ if idx < len(entries) {
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    semantic_analyze(&program).expect("semantic currently passes");
+    semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    compile_c_expect_fail(compiler, &c, "Skadi_e2e_negative_output_read_inline");
+    compile_c_and_run(compiler, &c, "Skadi_e2e_output_read_inline", &["-lm"]);
 }
 
 #[test]
-fn e2e_codegen_negative_concat_output_currently_compile_fails() {
+fn e2e_concat_output_builds_and_runs() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping negative e2e C build test: no clang/gcc/cc in PATH.");
         return;
@@ -667,9 +656,33 @@ output(concat(a, b))
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    semantic_analyze(&program).expect("semantic currently passes");
+    semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    // Known regression guard: semantic accepts this shape, but codegen currently lowers output(...) as int-only here.
-    compile_c_expect_fail(compiler, &c, "Skadi_e2e_negative_concat_output");
+    compile_c_and_run(compiler, &c, "Skadi_e2e_concat_output", &["-lm"]);
 }
 
+#[test]
+fn e2e_math_core_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Float heading_deg = 45.0
+new Float heading_rad = deg_to_rad(heading_deg)
+new Float dx = cos(heading_rad)
+new Float dy = sin(heading_rad)
+new Float distance = sqrt((dx * dx) + (dy * dy))
+new Float snapped = round(distance)
+new Float restored_deg = rad_to_deg(atan2(dy, dx))
+new Float bounded = clamp(restored_deg, 0.0, 90.0)
+output(heading_rad)
+output(snapped)
+output(bounded)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    compile_c_and_run(compiler, &c, "Skadi_e2e_math_core", &["-lm"]);
+}

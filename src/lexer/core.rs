@@ -1,7 +1,7 @@
 // File: src/lexer/core.rs
 
-use crate::common_types::{TokenKind, Token};
 use super::structures::LexError;
+use crate::common_types::{Token, TokenKind};
 
 /// A Lexer tokenizes the source code string into a sequence of Tokens.
 pub struct Lexer<'a> {
@@ -212,12 +212,14 @@ impl<'a> Lexer<'a> {
 
         // 2. Comments: skip them entirely (they produce no tokens)
         if self.starts_with("//") {
-            self.advance(); self.advance(); // consume "//"
+            self.advance();
+            self.advance(); // consume "//"
             self.skip_line_comment();
             return Some(Ok((TokenKind::Whitespace, String::new())));
         }
         if self.starts_with("/*") {
-            self.advance(); self.advance(); // consume "/*"
+            self.advance();
+            self.advance(); // consume "/*"
             self.skip_block_comment();
             return Some(Ok((TokenKind::Whitespace, String::new())));
         }
@@ -238,10 +240,16 @@ impl<'a> Lexer<'a> {
 
         // 5. Numbers
         if let Some(c) = self.peek() {
-            if c.is_ascii_digit() || (c == '.' && self.peek_next().map_or(false, |nc| nc.is_ascii_digit())) {
+            if c.is_ascii_digit()
+                || (c == '.' && self.peek_next().map_or(false, |nc| nc.is_ascii_digit()))
+            {
                 let lexeme = self.scan_number();
                 return Some(Ok((
-                    if lexeme.contains('.') { TokenKind::TypeFloat } else { TokenKind::TypeInt },
+                    if lexeme.contains('.') {
+                        TokenKind::TypeFloat
+                    } else {
+                        TokenKind::TypeInt
+                    },
                     lexeme,
                 )));
             }
@@ -266,34 +274,116 @@ impl<'a> Lexer<'a> {
         });
 
         match two_char_op.as_deref() {
-            Some("==") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpComparison, "==".into()))); }
-            Some("!=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpComparison, "!=".into()))); }
-            Some(">=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpComparison, ">=".into()))); }
-            Some("<=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpComparison, "<=".into()))); }
-            Some("&&") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpLogical, "and".into()))); }
-            Some("||") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpLogical, "or".into()))); }
-            Some("+=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpAssignment, "+=".into()))); }
-            Some("-=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpAssignment, "-=".into()))); }
-            Some("*=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpAssignment, "*=".into()))); }
-            Some("/=") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpAssignment, "/=".into()))); }
-            Some("++") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpIncDec, "++".into()))); }
-            Some("--") => { self.advance(); self.advance(); return Some(Ok((TokenKind::OpIncDec, "--".into()))); }
+            Some("==") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpComparison, "==".into())));
+            }
+            Some("!=") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpComparison, "!=".into())));
+            }
+            Some(">=") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpComparison, ">=".into())));
+            }
+            Some("<=") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpComparison, "<=".into())));
+            }
+            Some("&&") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpLogical, "and".into())));
+            }
+            Some("||") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpLogical, "or".into())));
+            }
+            Some("+=") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpAssignment, "+=".into())));
+            }
+            Some("-=") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpAssignment, "-=".into())));
+            }
+            Some("*=") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpAssignment, "*=".into())));
+            }
+            Some("/=") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpAssignment, "/=".into())));
+            }
+            Some("++") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpIncDec, "++".into())));
+            }
+            Some("--") => {
+                self.advance();
+                self.advance();
+                return Some(Ok((TokenKind::OpIncDec, "--".into())));
+            }
             _ => {}
         }
 
         // 8. Single character operators and punctuation
         let c = self.peek().unwrap();
         match c {
-            '(' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, "(".into()))) }
-            ')' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, ")".into()))) }
-            '{' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, "{".into()))) }
-            '}' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, "}".into()))) }
-            '[' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, "[".into()))) }
-            ']' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, "]".into()))) }
-            '.' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, ".".into()))) }
-            ',' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, ",".into()))) }
-            ':' => { self.advance(); Some(Ok((TokenKind::OpPunctuation, ":".into()))) }
-            '+' => { self.advance(); Some(Ok((TokenKind::OpArithmetic, "+".into()))) }
+            '(' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, "(".into())))
+            }
+            ')' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, ")".into())))
+            }
+            '{' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, "{".into())))
+            }
+            '}' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, "}".into())))
+            }
+            '[' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, "[".into())))
+            }
+            ']' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, "]".into())))
+            }
+            '.' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, ".".into())))
+            }
+            ',' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, ",".into())))
+            }
+            ';' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, ";".into())))
+            }
+            ':' => {
+                self.advance();
+                Some(Ok((TokenKind::OpPunctuation, ":".into())))
+            }
+            '+' => {
+                self.advance();
+                Some(Ok((TokenKind::OpArithmetic, "+".into())))
+            }
             '-' => {
                 // Could be unary minus or subtraction
                 self.advance();
@@ -301,10 +391,22 @@ impl<'a> Lexer<'a> {
                 // For now just return as arithmetic; Pratt parser handles context.
                 Some(Ok((TokenKind::OpArithmetic, "-".into())))
             }
-            '*' => { self.advance(); Some(Ok((TokenKind::OpArithmetic, "*".into()))) }
-            '/' => { self.advance(); Some(Ok((TokenKind::OpArithmetic, "/".into()))) }
-            '%' => { self.advance(); Some(Ok((TokenKind::OpArithmetic, "%".into()))) }
-            '^' => { self.advance(); Some(Ok((TokenKind::OpArithmetic, "^".into()))) }
+            '*' => {
+                self.advance();
+                Some(Ok((TokenKind::OpArithmetic, "*".into())))
+            }
+            '/' => {
+                self.advance();
+                Some(Ok((TokenKind::OpArithmetic, "/".into())))
+            }
+            '%' => {
+                self.advance();
+                Some(Ok((TokenKind::OpArithmetic, "%".into())))
+            }
+            '^' => {
+                self.advance();
+                Some(Ok((TokenKind::OpArithmetic, "^".into())))
+            }
             '!' => {
                 self.advance();
                 // Could be != already handled above; or just ! (not unary)
@@ -315,8 +417,14 @@ impl<'a> Lexer<'a> {
                 }
                 Some(Ok((TokenKind::OpLogical, "!".into())))
             }
-            '&' => { self.advance(); Some(Ok((TokenKind::OpLogical, "&".into()))) }
-            '|' => { self.advance(); Some(Ok((TokenKind::OpLogical, "|".into()))) }
+            '&' => {
+                self.advance();
+                Some(Ok((TokenKind::OpLogical, "&".into())))
+            }
+            '|' => {
+                self.advance();
+                Some(Ok((TokenKind::OpLogical, "|".into())))
+            }
             '=' => {
                 // Check for == handled above. Plain = is assignment.
                 if let Some('=') = self.peek_next() {
@@ -325,8 +433,14 @@ impl<'a> Lexer<'a> {
                 self.advance();
                 Some(Ok((TokenKind::OpAssignment, "=".into())))
             }
-            '<' => { self.advance(); Some(Ok((TokenKind::OpComparison, "<".into()))) }
-            '>' => { self.advance(); Some(Ok((TokenKind::OpComparison, ">".into()))) }
+            '<' => {
+                self.advance();
+                Some(Ok((TokenKind::OpComparison, "<".into())))
+            }
+            '>' => {
+                self.advance();
+                Some(Ok((TokenKind::OpComparison, ">".into())))
+            }
             _ => {
                 // Unknown character
                 self.advance();

@@ -1,199 +1,505 @@
-# Skadi: Документация Языка (Текущее Состояние v0.1)
+# Skadi: Справочник языка (RU)
 
-Дата актуальности: 2026-05-22  
-Статус: практическая документация по **реально реализованному** в текущем прототипе.
+Актуальный справочник по реализованному подмножеству Skadi в этом репозитории.
 
-## 1. Что такое Skadi сейчас
+Роль этого документа: быть справочником по синтаксису, типам, builtins и
+контрактам языка. Для первого знакомства и пошагового старта лучше начинать с
+[Начало работы](getting-started.md).
 
-Skadi в этом репозитории сейчас реализован как:
-1. лексер,
-2. парсер,
-3. семантический анализатор,
-4. транспилятор в C.
+[Начало работы](getting-started.md)  
+[Статус синтаксиса](syntax-status.md)
 
-Поддерживается рабочий end-to-end пайплайн:
-`Skadi source -> tokens -> AST -> semantic checks -> C code`.
+## 1. Общая модель
 
-## 2. Базовый синтаксис
+Текущий практический контур проекта:
 
-- Разделение инструкций: в текущем состоянии ориентир на “одна инструкция на строку”.
-- Блоки: `{ ... }`.
-- Комментарии: `// ...`, `/* ... */`.
-- Объявление переменной:
-  - `new x = 1`
-  - `new Int x = 1`
-  - `new i32 List xs = [1, 2, 3]`
-- Присваивание:
-  - `x = 2`
-- Вызов функции:
-  - `y = add(x, 2)`
-- Опасный вызов с обработкой:
-  - `x = parse(x) on error { x = 0 }`
+```text
+Skadi source -> lexer -> parser -> semantic -> C codegen -> C compiler
+```
 
-## 3. Поддерживаемые конструкции языка
+Для `v1.1` основная цель - стабильный и тестируемый `Skadi -> C` pipeline,
+а не финальный native backend.
 
-### 3.1 Декларации и типы
+## 2. Топ-уровневые конструкции
 
 Поддерживаются:
-- `new` с выводом типа,
-- `new` с явным типом (`Int`, `Float`, `i32`, `u8`, `bool`, `char`, `Text`, `Path`, `... List`),
-- литералы:
-  - целые,
-  - float,
-  - bool,
-  - строковые.
-- struct-like literal форма выражения:
-  - полная запись: `{value = value, status = status}`
-  - сокращённая field-punning запись: `{value, status}` (эквивалент полной формы)
 
-Правило стиля именования типов (canonical v1):
-- фиксированной разрядности: `i8/i16/i32/i64`, `u8/u16/u32/u64`, `f32/f64` (lowercase),
-- человекочитаемые/пользовательские: `Int`, `Float`, `Bool`, `Char`, `Text`, `Path`, `List`, `Vec2`, `Vec3`, `Vec4` (capitalized),
-- `bool` и `char` остаются совместимыми алиасами (рекомендуется `Bool`/`Char` в витринном стиле).
+- `fn`
+- `danger fn`
+- `label`
+- `struct`
+- обычные executable statements на top level
+- `on interrupt ... { ... }` как parse-level конструкция
 
-### 3.2 Функции
+## 3. Объявления
 
-Поддерживаются:
-- обычные `fn`,
-- `danger fn`,
-- typed-сигнатуры параметров и возвращаемого значения,
-- `return`,
-- `return error <Variant>` внутри `danger fn`.
+### Без явного типа
 
-### 3.3 Управление потоком
+```skadi
+new x = 10
+new title = "Skadi"
+```
 
-Поддерживаются:
-- `if / else`,
-- `while`,
-- `loop`,
-- `when / is / else`,
-- `for item in collection`,
-- алиас цикла: `iterate collection as item`.
+### С явным типом
 
-### 3.4 Коллекции List
+```skadi
+new Int count = 10
+new Float ratio = 1.5
+new Text name = "Alice"
+new Path root = "."
+new i32 List xs = [1, 2, 3]
+```
 
-Поддерживаются:
-- типизированные литералы списков: `new i32 List xs = [1, 2, 3]`,
-- `xs.push(v)`,
-- `x = xs.pop() on error { ... }`,
-- `len(xs)`,
-- `xs[i]`.
+### Присваивание
 
-Текущая runtime-семантика индексации:
-- out-of-range для `List` в C-lowering даёт безопасное значение по умолчанию `0`
-  (fail-soft поведение прототипа).
+```skadi
+count = count + 1
+```
 
-### 3.5 Текст Text
+### Инкремент / декремент
 
-Поддерживаются:
-- `new Text t = "hello"`,
-- `len(t)`,
-- `t[i]`,
-- `contains(t, "sub") -> bool`,
-- `find(t, "sub") -> Int` (индекс или `-1`),
-- `slice(t, start, end) -> Text`.
+```skadi
+count++
+count--
+```
 
-Текущая runtime-семантика:
-- `slice` нормализует границы (`start/end clamp`),
-- `Text` операции byte-oriented (UTF-8 байты, не графемы),
-- `t[i]` при выходе за границы в C-lowering возвращает `'\0'` (fail-soft).
+Они разрешены как statements, а не как expressions.
 
-### 3.6 Ошибки и `on error`
+## 4. Типы
 
-Поддерживается:
-- `on error` для:
-  - вызовов `danger fn`,
-  - `List.pop()`.
+### Чаще всего используемые
 
-Ограничение:
-- `on error` для произвольных выражений/операций пока не реализован как универсальный механизм.
+- `Int`
+- `Float`
+- `Bool`
+- `Char`
+- `Text`
+- `Path`
 
-### 3.7 Label / Struct / On-block
+### Fixed-width типы
+
+- `i8`, `i16`, `i32`, `i64`
+- `u8`, `u16`, `u32`, `u64`
+- `f32`, `f64`
+
+### Совместимость имен
+
+- `bool` и `char` принимаются как совместимые алиасы;
+- в каноническом стиле предпочтительны `Bool` и `Char`.
+
+### Приведение
+
+Текущий зафиксированный случай неявного widening:
+
+- `Int -> Float`
+
+## 5. Литералы
 
 Поддерживаются:
-- `label` (включая `label ErrorCode`),
-- `struct` (parse-level/placeholder в backend),
-- `on interrupt ... { ... }` (parse/semantic-level).
 
-### 3.8 Ввод-вывод (ядро)
+- integer literals
+- float literals
+- `true` / `false`
+- string literals
+- list literals
+- struct literals
 
-Поддерживаются builtin-ы:
-- `output(x)` — печать значения (`Text/Int/Float/bool/char`),
-- `input(prompt)` — чтение строки из stdin,
-- `read(path)` — чтение файла в `Text`,
-- `write(path, data)` — запись `Text` в файл.
+Примеры:
 
-Также поддерживаются:
-- `args()` -> `Text List` — аргументы запуска программы (без имени исполняемого файла).
+```skadi
+new Int a = 10
+new Float b = 2.5
+new Bool ok = true
+new Text t = "hello"
+new i32 List xs = [1, 2, 3]
+new Point p = {x = 10, y = 20}
+```
 
-Заметка по roadmap:
-- Текущий контракт `read(path)` / `write(path, data)` и `args()` является практичным v1-срезом.
-- Целевое направление для 1.x: унификация к stream-модели `read(stream)` / `write(stream, data)`,
-  где файловые/консольные/CLI-источники задаются как потоки.
+Field punning:
 
-### 3.9 Файловая система (ядро)
+```skadi
+new Int value = 7
+new Text status = "ok"
+new Result r = {value, status}
+```
+
+## 6. Выражения
 
 Поддерживаются:
-- `fs.list(path)` -> `Text List`,
-- `fs.is_dir(path)` -> `bool`,
-- `fs.join(a, b)` -> `Text` (соединение сегментов пути через `/`).
 
-## 4. Семантические правила (реализованные)
+- бинарные арифметические операции;
+- сравнение;
+- логические `and` / `or`;
+- группировка через `(...)`;
+- function calls;
+- method calls;
+- field access;
+- indexing.
 
-- проверка `use-before-definition`,
-- запрет повторного объявления в одной области,
-- запрет самоссылки в инициализации,
-- проверка совместимости типов в присваиваниях/инициализации,
-- проверка сигнатур и аргументов функций,
-- проверка контекста `on error` (только `danger fn`),
-- правила для `ErrorCode`:
-  - если label присутствует, первый вариант должен быть `Ok`,
-  - `return error X` проверяет существование `X`,
-- проверка типов `List`/`Text` builtins (`len/contains/find/slice`),
-- вывод типа переменной цикла `for/iterate` из коллекции.
+Примеры:
 
-## 5. Транспиляция в C (текущее поведение)
+```skadi
+new Int total = (a + b) * 2
+new Bool ok = (total > 0) and ready
+new Int second = xs[1]
+new Char first = t[0]
+new Int next = counter.bump(2)
+```
 
-Генерируется:
-- C-файл с `main`,
-- runtime helper-ы для `List`,
-- runtime helper-ы для `Text`,
-- lowering control flow (`if`, `while`, `when`, `for`),
-- lowering `danger fn` в сигнатуру с `out`-параметром.
+## 7. Функции
 
-Примеры lowering:
-- `len(t)` -> `strlen(t)`,
-- `find(t, s)` -> `sk_text_find(t, s)`,
-- `slice(t, a, b)` -> `sk_text_slice(t, a, b)`,
-- `t[i]` -> `sk_text_char_at(t, i)`,
-- `xs[i]` -> `sk_list_<type>_get(&xs, i)`.
+### Обычная функция
 
-## 6. Что ещё не финализировано
+```skadi
+fn add(Int a, Int b) Int {
+    return a + b
+}
+```
 
-- Полная модель памяти “чанков” из языкового дизайна пока не реализована.
-- `on event`, `Link`, `run/wait` runtime-семантика ещё не реализованы.
-- `struct` lowering в C пока TODO.
-- Индексация сейчас fail-soft; переход к строгому danger/on-error контракту — отдельное design-решение.
+### `danger fn`
 
-## 7. Минимальный пример
+```skadi
+danger fn safe_div(Int a, Int b) Int {
+    if b == 0 {
+        return error ZeroDivision
+    }
+
+    return a / b
+}
+```
+
+### Параметры и возврат
+
+Поддерживаются:
+
+- typed params;
+- typed return;
+- вызов функции внутри выражения;
+- проверка количества и типов аргументов.
+
+## 8. Возврат и error flow
+
+### `return`
+
+```skadi
+return value
+return
+```
+
+### `return error`
+
+```skadi
+return error ZeroDivision
+```
+
+Работает только внутри `danger fn` и только при корректном `label ErrorCode`.
+
+## 9. `label ErrorCode`
+
+Пример:
 
 ```skadi
 label ErrorCode {
     Ok
     ZeroDivision
+    FileError
 }
+```
 
-danger fn safe_div(Int a, Int b) Int {
-    if b == 0 {
-        return error ZeroDivision
-    } else {
-        return a div b
+Текущий semantic contract:
+
+- первый вариант должен быть `Ok`
+- `return error X` требует, чтобы `X` существовал в `ErrorCode`
+
+## 10. Управляющие конструкции
+
+### `if / else`
+
+```skadi
+if total > 0 {
+    output("positive")
+} else {
+    output("other")
+}
+```
+
+### `while`
+
+```skadi
+while i < 10 {
+    i++
+}
+```
+
+### `loop`
+
+```skadi
+loop {
+    break
+}
+```
+
+### `for item in collection`
+
+```skadi
+for item in xs {
+    output(item)
+}
+```
+
+### `iterate collection as item`
+
+```skadi
+iterate xs as item {
+    output(item)
+}
+```
+
+`iterate ... as ...` - рекомендуемая витринная форма.  
+`for ... in ...` поддерживается как совместимая и привычная форма.
+
+### Legacy C-style `for`
+
+```skadi
+for (i = 0; i < 10; i++) {
+    output(i)
+}
+```
+
+Поддерживается, но не является каноническим стилем.
+
+### `when / is / else`
+
+```skadi
+when mode {
+    is 1 {
+        output("one")
+    }
+    is 2, 3 {
+        output("two or three")
+    }
+    else {
+        output("other")
+    }
+}
+```
+
+### `break`, `continue`, `pass`
+
+```skadi
+break
+continue
+pass
+```
+
+`break` и `continue` разрешены только внутри циклов.
+
+## 11. `on error`
+
+### С присваиванием
+
+```skadi
+new Int value = safe_div(10, 2) on error {
+    output("failed")
+    return
+}
+```
+
+### Без присваивания
+
+```skadi
+safe_div(10, 0) on error {
+    output("failed")
+}
+```
+
+Правило:
+
+- `on error` можно использовать только на вызовах, которые semantic layer считает `danger`.
+
+## 12. Struct и методы
+
+```skadi
+struct Counter {
+    Int value
+
+    fn inc(Int delta) Int {
+        my.value = my.value + delta
+        return my.value
     }
 }
 
-new Text t = "weather station"
-new bool has = contains(t, "station")
-new Int idx = find(t, "ther")
-new Text part = slice(t, 3, 7)
+new Counter c = {value = 1}
+new Int next = c.inc(2)
+output(c.value)
 ```
 
+Поддерживаются:
+
+- поля структуры;
+- методы;
+- `my.field` внутри метода;
+- `obj.field`;
+- `obj.method(...)`;
+- list of structs;
+- методы на элементах списка после извлечения/итерации.
+
+## 13. `Text`, `Path`, `List`
+
+### `Text`
+
+```skadi
+new Text t = "weather"
+new Int n = len(t)
+new Char c = t[0]
+```
+
+### `Path`
+
+```skadi
+new Path root = "."
+new Path full = fs.join(root, "src")
+```
+
+### `List`
+
+```skadi
+new i32 List xs = [1, 2, 3]
+xs.push(4)
+new i32 first = xs[0]
+new Int size = len(xs)
+```
+
+### Индексация
+
+```skadi
+new i32 value = xs[1]
+new Char c = t[0]
+```
+
+Текущий runtime-контракт `v1`:
+
+- `List` index вне диапазона -> fail-soft default value;
+- `Text` index вне диапазона -> `'\0'`;
+- `on error` на индексации нет.
+
+## 14. Builtins
+
+### Core collection / text
+
+- `len(x)`
+- `contains(text, needle)`
+- `find(text, needle)`
+- `slice(text, start, end)`
+- `concat(a, b)`
+
+### Filesystem
+
+- `fs.list(path)`
+- `fs.is_dir(path)`
+- `fs.join(a, b)`
+
+### I/O
+
+- `args()`
+- `output(value)`
+- `input(prompt)`
+- `read(path)`
+- `write(path, text)`
+
+### Math
+
+- `abs(x)`
+- `min(a, b)`
+- `max(a, b)`
+- `clamp(x, lo, hi)`
+- `floor(x)`
+- `ceil(x)`
+- `round(x)`
+- `sin(x)`
+- `cos(x)`
+- `atan2(y, x)`
+- `sqrt(x)`
+- `root(x, n)`
+- `deg_to_rad(x)`
+- `rad_to_deg(x)`
+
+### Math constants
+
+- `PI`
+- `TAU`
+- `E`
+- `EPSILON`
+
+## 15. I/O examples
+
+```skadi
+new Text List cli_args = args()
+new Text answer = input("name: ")
+new Text body = read("input.txt")
+new Int ok = write("output.txt", body)
+output(answer)
+```
+
+## 16. Filesystem examples
+
+```skadi
+new Path root = "."
+new Path List entries = fs.list(root)
+
+iterate entries as entry {
+    new Path full = fs.join(root, entry)
+    if fs.is_dir(full) {
+        output(full)
+    }
+}
+```
+
+## 17. Math examples
+
+```skadi
+new Float heading_deg = 45.0
+new Float heading_rad = deg_to_rad(heading_deg)
+new Float dx = cos(heading_rad)
+new Float dy = sin(heading_rad)
+new Float distance = sqrt((dx * dx) + (dy * dy))
+new Float restored_deg = rad_to_deg(atan2(dy, dx))
+new Float bounded = clamp(restored_deg, 0.0, 90.0)
+output(bounded)
+```
+
+## 18. `on interrupt`
+
+Синтаксис уже принимается:
+
+```skadi
+on interrupt shutdown {
+    output("cleanup")
+}
+```
+
+Но полноценная семантика выполнения этого трека пока не считается завершённой в `v1.1`.
+
+## 19. Диагностика
+
+Пользовательские ошибки стараются быть нормализованными:
+
+- `Lex error ...`
+- `Parse error ... [SC-PARSE-*] ...`
+- `Semantic error ... [SC-SEM-*] ...`
+
+Это важная часть текущего контракта проекта.
+
+## 20. Что пока не считать завершённой стабильной частью `v1.1`
+
+Не стоит пока закладываться на это как на законченный слой `v1.1`:
+
+- модульную систему / imports;
+- concurrency primitives;
+- memory-model features из future docs;
+- visual core;
+- systems additions tracks;
+- завершённую семантику выполнения для `on interrupt` и родственных будущих hooks.
+
+Если нужен явный список того, что мы сознательно не поддерживаем в `v1`,
+смотри [v1 non-goals](../internal/v1-non-goals.md).

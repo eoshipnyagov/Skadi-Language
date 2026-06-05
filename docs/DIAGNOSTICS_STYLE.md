@@ -1,64 +1,65 @@
-# Diagnostics Style Guide
+# Руководство по стилю диагностических сообщений
 
-This document defines the canonical user-facing diagnostic format for Skadi compiler stages.
+Этот документ определяет канонический user-facing формат diagnostics для стадий компилятора Skadi.
 
-## Canonical format
+## Канонический формат
 
 `<Kind> error at line <L>, col <C>[, index <I>]: [<CODE>] <message>`
 
-Where:
-- `<Kind>` is one of: `Lex`, `Parse`, `Semantic`.
-- `<CODE>` is optional but recommended (`SC-LEX-001`, `SC-PARSE-003`, `SC-SEM-020`).
-- `line`/`col` are 1-based source coordinates when available.
-- `index` is optional token index (currently used by parser entry diagnostics).
-- `<message>` must be concise, actionable, and describe the exact failure.
+Где:
 
-When location data is not available:
+- `<Kind>` — один из: `Lex`, `Parse`, `Semantic`
+- `<CODE>` — опционален, но желателен (`SC-LEX-001`, `SC-PARSE-003`, `SC-SEM-020`)
+- `line`/`col` — 1-based source coordinates, когда они доступны
+- `index` — опциональный token index (сейчас используется в parser entry diagnostics)
+- `<message>` — короткое, прикладное и точное описание ошибки
+
+Если location data недоступны:
 
 `<Kind> error: [<CODE>] <message>`
 
-## Message conventions
+## Соглашения по сообщениям
 
-- Start with lowercase unless using a language symbol/name (`ErrorCode`, `Int`, etc.).
-- Prefer domain-specific phrasing:
+- Начинать с lowercase, если только не используется имя языкового символа (`ErrorCode`, `Int` и т.д.).
+- Предпочитать domain-specific phrasing:
+
   - `use-before-definition`
   - `type mismatch in assignment`
   - `unknown function 'foo'`
-- Include related symbol names in single quotes.
-- Avoid stack-trace style or internal debug noise in user messages.
+- Связанные имена символов брать в одинарные кавычки.
+- Не допускать stack-trace style или внутренний debug noise в user-facing сообщениях.
 
-## Examples
+## Примеры
 
 - `Lex error at line 3, col 12: [SC-LEX-001] unexpected character '@'`
 - `Parse error at line 5, col 1, index 14: [SC-PARSE-003] expected '{' after 'if' condition.`
 - `Semantic error at line 9, col 7: [SC-SEM-020] type mismatch in assignment to 'x': cannot assign Bool to Int.`
 
-## Semantic code map (current)
+## Карта semantic codes (текущее состояние)
 
-- `SC-SEM-010` redeclaration in scope
-- `SC-SEM-011` invalid self-referential initialization
-- `SC-SEM-012` use-before-definition
-- `SC-SEM-020` type mismatch
-- `SC-SEM-030` unknown function
-- `SC-SEM-031` argument count mismatch
-- `SC-SEM-032` argument type mismatch
-- `SC-SEM-040` invalid semantic context
-- `SC-SEM-050` return-path/return-form rule
-- `SC-SEM-051` `ErrorCode` label/variant rule
-- `SC-SEM-900` internal semantic consistency error
+- `SC-SEM-010` — redeclaration in scope
+- `SC-SEM-011` — invalid self-referential initialization
+- `SC-SEM-012` — use-before-definition
+- `SC-SEM-020` — type mismatch
+- `SC-SEM-030` — unknown function
+- `SC-SEM-031` — argument count mismatch
+- `SC-SEM-032` — argument type mismatch
+- `SC-SEM-040` — invalid semantic context
+- `SC-SEM-050` — return-path/return-form rule
+- `SC-SEM-051` — `ErrorCode` label/variant rule
+- `SC-SEM-900` — internal semantic consistency error
 
-## Parse code map (current)
+## Карта parse codes (текущее состояние)
 
-- `SC-PARSE-001..003` parser entry/wrapper diagnostics (`parser/mod.rs`)
-- `SC-PARSE-101..148` statement-level parser diagnostics (`parser/statements.rs`)
-- `SC-PARSE-201..206` expression parser diagnostics (`parser/expressions.rs`)
+- `SC-PARSE-001..003` — parser entry/wrapper diagnostics (`parser/mod.rs`)
+- `SC-PARSE-101..148` — statement-level parser diagnostics (`parser/statements.rs`)
+- `SC-PARSE-201..206` — expression parser diagnostics (`parser/expressions.rs`)
 
-### Parse code ranges
+### Диапазоны parse codes
 
-- `SC-PARSE-10x`: block/function structure and signature expectations
-- `SC-PARSE-11x`: loop/when structural expectations
-- `SC-PARSE-12x`: if/while/loop/return statement expectations
-- `SC-PARSE-13x`: assignment and danger-call shape expectations
-- `SC-PARSE-14x`: declaration/on-block structural expectations
-- `SC-PARSE-20x`: expression parsing expectations and unexpected tokens
-
+- `SC-PARSE-10x` — block/function structure и ожидания сигнатур
+- `SC-PARSE-11x` — structural expectations для loop/when
+- `SC-PARSE-12x` — ожидания для `if/while/loop/return`
+- `SC-PARSE-13x` — shape expectations для assignment и danger-call
+- `SC-PARSE-14x` — structural expectations для declaration/on-block
+- `SC-PARSE-20x` — ожидания expression parser и unexpected tokens

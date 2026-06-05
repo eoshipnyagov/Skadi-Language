@@ -7,16 +7,22 @@ Owner: Skadi core
 ## 1. Final syntax (v1)
 
 - Declaration:
+
   - `new Text t = "hello"`
 - Length:
+
   - `n = len(t)`
 - Indexing:
+
   - `ch = t[i]`
 - Contains:
+
   - `ok = contains(t, "sub")`
 - Find:
+
   - `idx = find(t, "sub")`
 - Slice:
+
   - `part = slice(t, start, end)`
 
 ## 2. Type rules (v1)
@@ -32,6 +38,7 @@ Owner: Skadi core
 ## 3. Error behavior (v1)
 
 - `slice` bounds are normalized:
+
   - `start < 0` -> `0`
   - `end < start` -> `start`
   - `start/end > len(text)` -> `len(text)`

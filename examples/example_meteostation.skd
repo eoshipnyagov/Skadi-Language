@@ -1,0 +1,18 @@
+// Meteostation showcase for the current Skadi v1.1 style.
+
+struct MeteostationReading {
+    Float temperature
+    Float humidity
+    Float pressure
+
+    fn print() {
+        output(my.temperature)
+        output(my.humidity)
+        output(my.pressure)
+    }
+}
+
+fn main() {
+    new MeteostationReading reading = {temperature = 21.5, humidity = 0.48, pressure = 1013.25}
+    reading.print()
+}

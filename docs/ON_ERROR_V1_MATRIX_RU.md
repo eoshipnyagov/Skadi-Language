@@ -6,11 +6,13 @@
 ## Разрешено в v1
 
 1. Вызов `danger fn`:
+
 - `x = danger_call(...) on error { ... }`
 - `danger_call(...) on error { ... }`
 - Семантическое правило: функция должна быть объявлена как `danger`.
 
 2. Операция `List.pop()`:
+
 - `x = xs.pop() on error { ... }`
 - Используется как recoverable-путь для пустого списка.
 
@@ -32,8 +34,10 @@
 ## Поведение диагностики
 
 Для non-danger call с `on error` semantic analyzer возвращает ошибку:
+
 - `on error requires danger fn call: '<name>' is not declared as danger.`
 - Для builtin-ов:
+
   - `on error requires danger fn call: builtin '<name>' is not danger in v1.`
 
 Отдельно: dotted-форма (`fs.list(...) on error`) в текущем `v1` парсере не поддерживается как `danger on error` шаблон и отклоняется на parse-этапе.

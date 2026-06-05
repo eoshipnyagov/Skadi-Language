@@ -70,3 +70,32 @@ xs = fs.list(".") on error {
     let err = parse_err(src);
     assert!(err.contains("SC-PARSE-134"));
 }
+
+#[test]
+fn parser_structural_diagnostic_snapshot() {
+    let src = r#"
+new Int x = 1
+x = parse(x) on error
+"#;
+    let err = parse_err(src);
+    assert!(err.starts_with("Parse error at line"));
+    assert!(err.contains("col"));
+    assert!(err.contains("index"));
+    assert!(err.contains("[SC-PARSE-003]"));
+    assert!(err.contains("[SC-PARSE-136] on error expected '{'."));
+}
+
+#[test]
+fn parser_expression_diagnostic_snapshot() {
+    let src = r#"
+new Int i = 0
+new Int x = i++
+"#;
+    let err = parse_err(src);
+    assert!(err.starts_with("Parse error at line"));
+    assert!(err.contains("col"));
+    assert!(err.contains("index"));
+    assert!(err.contains("[SC-PARSE-003]"));
+    assert!(err.contains("[SC-PARSE-213]"));
+    assert!(err.contains("unexpected trailing token in expression"));
+}

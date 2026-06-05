@@ -1,9 +1,7 @@
-use crate::pipeline::compile_to_c;
-use crate::project::load_project;
+use crate::actions;
 
 pub fn run(_args: &[String]) -> Result<(), String> {
-    let project = load_project()?;
-    let _c = compile_to_c(&project.entry)?;
-    println!("check ok: {}", project.entry.display());
+    let result = actions::run_check().map_err(|e| e.to_string())?;
+    println!("check ok: {}", result.entry.display());
     Ok(())
 }

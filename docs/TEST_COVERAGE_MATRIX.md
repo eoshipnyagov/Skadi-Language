@@ -1,79 +1,85 @@
-# Test Coverage Matrix (Skadi v1 Prototype)
+# Матрица тестового покрытия (`Skadi v1`)
 
-Date: 2026-05-25
-Owner: Skadi core
+Дата: 2026-05-25  
+Ответственный слой: Skadi core
 
-This file tracks test coverage for language elements in the current Rust prototype.
+Этот файл фиксирует покрытие тестами для элементов языка в текущем Rust-прототипе.
 
-## 1. Covered now
+## 1. Что уже покрыто
 
-- Lexing diagnostics and tokenization
+- лексинг, токенизация и diagnostics
   - `tests/lexer_smoke.rs`
-- Parsing core statements/expressions
+- core parser для statements и expressions
   - `tests/parser_smoke.rs`
-  - includes: `new`, typed `new`, `if/else`, `while`, `for in`, `iterate ... as ...`,
-    function defs, `danger fn`, `return`, `return error`, `when/is/else`, `label`,
-    `struct` shape, `on interrupt`, list literals, list push/pop-on-error, indexing, calls,
+  - включает: `new`, typed `new`, `if/else`, `while`, `for in`, `iterate ... as ...`,
+    объявления функций, `danger fn`, `return`, `return error`, `when/is/else`, `label`,
+    форму `struct`, `on interrupt`, list literals, `push/pop-on-error`, indexing, calls,
     `break/continue/pass`
-- Semantic validation
+- semantic validation
   - `tests/semantic_smoke.rs`
-  - includes: type mismatch, scope/redeclaration, use-before-def, call arity/types,
-    `danger` + `on error` binding checks, `ErrorCode` rules, list typing, text typing,
-    `for/iterate` item inference, text builtin checks (`len/contains/find/slice`),
-    negative checks for `on error` on non-danger builtins (`read/write/fs.list`),
-    style-canonical warnings (`iterate` preference, `Bool/Char` preference)
-  - includes loop-context rules for `break/continue` (inside loops allowed, outside rejected)
-- Code generation shape checks
+  - включает: type mismatch, scope/redeclaration, use-before-def, arity/types calls,
+    проверки связки `danger` + `on error`, правила `ErrorCode`, типизацию list/text,
+    вывод типов для `for/iterate`, проверки text builtins (`len/contains/find/slice`),
+    негативные проверки `on error` на не-danger builtins (`read/write/fs.list`),
+    стилевые предупреждения (`iterate`, `Bool/Char`)
+  - включает loop-context rules для `break/continue`
+- shape-проверки codegen
   - `tests/codegen_smoke.rs`
-  - includes C lowering of control flow, `when`, list runtime calls, text runtime calls,
-    danger-call lowering shape, typed declarations
-- Integration pipeline tests
+  - включает понижение control flow, `when`, runtime-вызовы для list/text,
+    shape danger-call lowering, typed declarations
+- интеграционные pipeline-тесты
   - `tests/language_programs.rs`
-  - end-to-end through lex -> parse -> semantic -> C generation for multi-feature programs
-- C compiler e2e tests
+  - end-to-end через `lex -> parse -> semantic -> C generation` для многофичевых программ
+- e2e-тесты с C-компилятором
   - `tests/codegen_e2e.rs`
-  - C output compiles and produced binaries run for representative programs
-  - includes edge scenarios for `Text` bounds/empty-needle and `List` + `when` flow
-  - includes UTF-8 text byte-semantics smoke scenario
-  - includes sanitizer-backed stress scenario (`ASan/UBSan`) when compiler supports flags
-  - memory contract tie-in: validates no sanitizer-detected crashes/UB for current runtime allocation model
-  - includes feature-mix scenarios (struct+method + iterate/when + i++/i--, and io/fs branching mixes)
-  - includes negative compile e2e guard for known semantic/codegen mismatch shape
-- Edge matrix conformance set
+  - C output собирается, а binaries запускаются на representative programs
+  - включает edge-сценарии для `Text`, пустой needle, `List` + `when`
+  - включает UTF-8 smoke-сценарий с byte-semantics
+  - включает compile/run-сценарий для math core
+  - включает sanitizer-backed stress scenario (`ASan/UBSan`), когда toolchain поддерживает флаги
+  - включает memory contract tie-in: отсутствие sanitizer-detected crashes/UB в текущей runtime allocation model
+  - включает feature-mix scenarios (`struct+method`, `iterate/when`, `i++/i--`, `io/fs`)
+  - включает negative compile e2e guard для известной semantic/codegen mismatch shape
+- edge matrix conformance set
   - `tests/edge_matrix.rs`
-  - includes:
-    - numeric List coverage across `i/u/f` families (`8/16/32/64`) and `bool`
-    - `Path List` lowering to text runtime helpers
+  - включает:
+
+    - numeric `List` coverage для семейств `i/u/f` (`8/16/32/64`) и `bool`
+    - понижение `Path List` к text runtime helpers
     - extreme text index/slice shapes
-    - UTF-8 text contract shape (byte-oriented `len/index/slice` lowering)
+    - UTF-8 text contract shape (byte-oriented `len/index/slice`)
     - negative builtin argument/type checks (`fs.join`, `write`, `args`)
-    - struct-list iteration + method calls
-    - `danger` + `on error` + explicit `ErrorCode` flow
+    - обход списка структур и method calls
+    - `danger` + `on error` + explicit `ErrorCode`
+- math core coverage
+  - semantic positive/negative checks для constants и numeric builtin typing
+  - codegen shape checks для `math.h`, constants, trigonometry, `root`, angle conversion
+  - showcase coverage через `bench_09_math_navigation.skd`
 
-## 2. Partially covered / pending deep checks
+## 2. Что покрыто частично / что ещё требует углубления
 
-- Runtime out-of-range policy for indexing
-  - frozen for v1 as fail-soft (`List` index -> `0`, `Text` index -> `'\0'`)
-  - codegen contract tests cover helper behavior shape
-- `on interrupt` / `on event` runtime semantics
-  - parse-level coverage exists, runtime binding remains TODO
-- Concurrency primitives (`run`, `wait`, `Link`) and embedded APIs
-  - not implemented in current transpiler/runtime slice
+- политика runtime для out-of-range indexing
+  - зафиксирована для `v1` как fail-soft (`List` index -> `0`, `Text` index -> `'\0'`)
+  - codegen contract tests проверяют форму вспомогательных runtime helpers
+- runtime semantics для `on interrupt` / `on event`
+  - parse-level coverage уже есть, runtime binding остаётся TODO
+- concurrency primitives (`run`, `wait`, `Link`) и embedded APIs
+  - не реализованы в текущем transpiler/runtime слое
 
-## 3. Policy for new features
+## 3. Политика для новых фич
 
-For each newly implemented feature, add:
+Для каждой новой реализованной фичи нужно добавлять:
 
 1. parser test (`parser_smoke`)
 2. semantic positive + negative tests (`semantic_smoke`)
 3. codegen shape check (`codegen_smoke`)
-4. at least one integration scenario (`language_programs` or `codegen_e2e`)
+4. хотя бы один integration scenario (`language_programs` или `codegen_e2e`)
 
-## 4. Codegen Invariants (golden-lite)
+## 4. Инварианты codegen (golden-lite)
 
-Critical lowering markers are asserted directly in tests (stable fragments, not full-file snapshots):
-- `when -> if / else if` chain markers (`__when_tmp_*`).
-- `danger fn` + `on error` lowering markers (`fn(..., *out)` + `if (call(...) != 0)`).
-- runtime hooks for `List/Text/fs/io`.
-- statement-only inc/dec lowering (`i += 1;` / `i -= 1;`).
+Критические маркеры понижения проверяются напрямую в тестах как устойчивые фрагменты, а не как полные snapshot-файлы:
 
+- маркеры `when -> if / else if` (`__when_tmp_*`)
+- форма понижения `danger fn` + `on error` (`fn(..., *out)` и `if (call(...) != 0)`)
+- runtime hooks для `List/Text/fs/io`
+- понижение только statement-level `i++/i--` (`i += 1;` / `i -= 1;`)

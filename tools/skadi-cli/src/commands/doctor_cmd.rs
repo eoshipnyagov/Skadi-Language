@@ -1,58 +1,43 @@
-use std::collections::BTreeSet;
-
-use crate::targets::{
-    builtin_profiles, candidate_invocations, detect_compiler, os_install_hint, shell_probe_hint,
-    target_hint,
-};
+use crate::actions;
 
 pub fn run(_args: &[String]) -> Result<(), String> {
+    let report = actions::run_doctor().map_err(|e| e.to_string())?;
     println!("skadi doctor");
     println!();
     println!("Host compiler candidates:");
-    let host_dummy_c = std::path::Path::new("dummy.c");
-    let host_dummy_out = std::path::Path::new("dummy.out");
-    let host_candidates = candidate_invocations("host", host_dummy_c, host_dummy_out)?;
-    let mut host_seen: BTreeSet<String> = BTreeSet::new();
-    let mut host_ok = false;
-    for c in host_candidates {
-        if !host_seen.insert(c.program.clone()) {
-            continue;
-        }
-        if detect_compiler(&c.program) {
-            host_ok = true;
+    for c in &report.host_candidates {
+        if c.available {
             println!("  [ok]   {}", c.program);
         } else {
             println!("  [miss] {}", c.program);
         }
     }
-    if !host_ok {
+    if !report.host_ready {
         println!("  no host compiler detected");
-        println!("  install: {}", os_install_hint());
-        println!("  probe: run '<compiler> --version' and '{}'", shell_probe_hint());
+        println!("  install: {}", report.host_install_hint);
+        println!(
+            "  probe: run '<compiler> --version' and '{}'",
+            report.shell_probe_hint
+        );
+    } else {
+        println!("  host toolchain status: ready");
     }
 
     println!();
     println!("Target toolchain availability:");
-    for profile in builtin_profiles() {
-        let dummy_c = std::path::Path::new("dummy.c");
-        let dummy_out = std::path::Path::new("dummy.out");
-        let candidates = candidate_invocations(profile.triple, dummy_c, dummy_out)?;
-        let mut seen: BTreeSet<String> = BTreeSet::new();
-        let mut ok = false;
-        for c in candidates {
-            if !seen.insert(c.program.clone()) {
-                continue;
-            }
-            if detect_compiler(&c.program) {
-                ok = true;
+    for profile in &report.targets {
+        for c in &profile.statuses {
+            if c.available {
                 println!("  [ok]   {} -> {}", profile.triple, c.program);
             } else {
                 println!("  [miss] {} -> {}", profile.triple, c.program);
             }
         }
-        if !ok {
+        if !profile.ready {
             println!("        no available compiler found for {}", profile.triple);
-            println!("        hint: {}", target_hint(profile.triple));
+            println!("        hint: {}", profile.hint);
+        } else {
+            println!("        target status: ready for {}", profile.triple);
         }
     }
     Ok(())

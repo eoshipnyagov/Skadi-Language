@@ -1,0 +1,2 @@
+[pygments.lexers]
+skadi = skadi_docs_lexer.lexer:SkadiLexer

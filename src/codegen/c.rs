@@ -1,11 +1,21 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
-use crate::builtins::{builtin_from_name, Builtin};
+use crate::builtins::{Builtin, builtin_from_name};
 
 struct FunctionContext {
     is_danger: bool,
     return_type: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ExprKind {
+    Int,
+    Float,
+    Bool,
+    Char,
+    Text,
+    Unknown,
 }
 
 const LIST_TYPE_MAP: [(&str, &str, &str); 12] = [
@@ -65,7 +75,10 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
         "typedef struct {{\n    {} *data;\n    size_t len;\n    size_t cap;\n}} SkadiList_{};\n\n",
         c_ty, suffix
     ));
-    out.push_str(&format!("static SkadiList_{} sk_list_{}_new(void) {{\n", suffix, suffix));
+    out.push_str(&format!(
+        "static SkadiList_{} sk_list_{}_new(void) {{\n",
+        suffix, suffix
+    ));
     out.push_str(&format!("    SkadiList_{} xs;\n", suffix));
     out.push_str("    xs.data = NULL;\n");
     out.push_str("    xs.len = 0;\n");
@@ -166,29 +179,29 @@ fn emit_text_runtime(out: &mut String) {
 
 fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_join: bool) {
     if need_is_dir {
-    out.push_str("static bool sk_fs_is_dir(const char *path) {\n");
-    out.push_str("    if (!path) return false;\n");
-    out.push_str("    struct stat st;\n");
-    out.push_str("    if (stat(path, &st) != 0) return false;\n");
-    out.push_str("    return S_ISDIR(st.st_mode) != 0;\n");
-    out.push_str("}\n\n");
+        out.push_str("static bool sk_fs_is_dir(const char *path) {\n");
+        out.push_str("    if (!path) return false;\n");
+        out.push_str("    struct stat st;\n");
+        out.push_str("    if (stat(path, &st) != 0) return false;\n");
+        out.push_str("    return S_ISDIR(st.st_mode) != 0;\n");
+        out.push_str("}\n\n");
     }
     if need_list {
-    out.push_str("static SkadiList_text sk_fs_list(const char *path) {\n");
-    out.push_str("    SkadiList_text out = sk_list_text_new();\n");
-    out.push_str("    if (!path) return out;\n");
-    out.push_str("    DIR *dir = opendir(path);\n");
-    out.push_str("    if (!dir) return out;\n");
-    out.push_str("    struct dirent *ent;\n");
-    out.push_str("    while ((ent = readdir(dir)) != NULL) {\n");
-    out.push_str("        if (strcmp(ent->d_name, \".\") == 0 || strcmp(ent->d_name, \"..\") == 0) continue;\n");
-    out.push_str("        char *name = strdup(ent->d_name);\n");
-    out.push_str("        if (!name) continue;\n");
-    out.push_str("        (void)sk_list_text_push(&out, name);\n");
-    out.push_str("    }\n");
-    out.push_str("    closedir(dir);\n");
-    out.push_str("    return out;\n");
-    out.push_str("}\n\n");
+        out.push_str("static SkadiList_text sk_fs_list(const char *path) {\n");
+        out.push_str("    SkadiList_text out = sk_list_text_new();\n");
+        out.push_str("    if (!path) return out;\n");
+        out.push_str("    DIR *dir = opendir(path);\n");
+        out.push_str("    if (!dir) return out;\n");
+        out.push_str("    struct dirent *ent;\n");
+        out.push_str("    while ((ent = readdir(dir)) != NULL) {\n");
+        out.push_str("        if (strcmp(ent->d_name, \".\") == 0 || strcmp(ent->d_name, \"..\") == 0) continue;\n");
+        out.push_str("        char *name = strdup(ent->d_name);\n");
+        out.push_str("        if (!name) continue;\n");
+        out.push_str("        (void)sk_list_text_push(&out, name);\n");
+        out.push_str("    }\n");
+        out.push_str("    closedir(dir);\n");
+        out.push_str("    return out;\n");
+        out.push_str("}\n\n");
     }
     if need_join {
         out.push_str("static char* sk_fs_join(const char *a, const char *b) {\n");
@@ -196,7 +209,9 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_jo
         out.push_str("    const char *right = b ? b : \"\";\n");
         out.push_str("    size_t alen = strlen(left);\n");
         out.push_str("    size_t blen = strlen(right);\n");
-        out.push_str("    bool need_sep = alen > 0 && left[alen - 1] != '/' && left[alen - 1] != '\\\\';\n");
+        out.push_str(
+            "    bool need_sep = alen > 0 && left[alen - 1] != '/' && left[alen - 1] != '\\\\';\n",
+        );
         out.push_str("    size_t n = alen + (need_sep ? 1 : 0) + blen;\n");
         out.push_str("    char *outp = (char*)malloc(n + 1);\n");
         out.push_str("    if (!outp) return strdup(\"\");\n");
@@ -211,8 +226,12 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_jo
 }
 
 fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
-    out.push_str("static int sk_output_text(const char *s) { printf(\"%s\\n\", s ? s : \"\"); return 0; }\n");
-    out.push_str("static int sk_output_int(int64_t v) { printf(\"%lld\\n\", (long long)v); return 0; }\n");
+    out.push_str(
+        "static int sk_output_text(const char *s) { printf(\"%s\\n\", s ? s : \"\"); return 0; }\n",
+    );
+    out.push_str(
+        "static int sk_output_int(int64_t v) { printf(\"%lld\\n\", (long long)v); return 0; }\n",
+    );
     out.push_str("static int sk_output_float(double v) { printf(\"%f\\n\", v); return 0; }\n");
     out.push_str("static int sk_output_bool(bool v) { printf(\"%s\\n\", v ? \"true\" : \"false\"); return 0; }\n");
     out.push_str("static int sk_output_char(char v) { printf(\"%c\\n\", v); return 0; }\n\n");
@@ -259,6 +278,11 @@ fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
     }
 }
 
+fn emit_math_runtime(out: &mut String) {
+    out.push_str("#ifndef M_PI\n#define M_PI 3.14159265358979323846\n#endif\n");
+    out.push_str("#ifndef M_E\n#define M_E 2.71828182845904523536\n#endif\n\n");
+}
+
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
     let struct_names = collect_struct_names(program);
@@ -267,6 +291,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let needs_text_runtime = program_uses_text_runtime(program);
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
+    let needs_math_runtime = program_uses_math_runtime(program);
     out.push_str("#include <stdio.h>\n\n");
     if needs_list_runtime || needs_text_runtime || needs_io_runtime {
         out.push_str("#include <stddef.h>\n");
@@ -274,8 +299,17 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
     out.push_str("#include <stdint.h>\n");
     out.push_str("#include <stdbool.h>\n\n");
-    if needs_text_runtime || needs_fs_list || needs_fs_join || needs_io_runtime || needs_args_runtime {
+    if needs_text_runtime
+        || needs_fs_list
+        || needs_fs_join
+        || needs_io_runtime
+        || needs_args_runtime
+    {
         out.push_str("#include <string.h>\n\n");
+    }
+    if needs_math_runtime {
+        out.push_str("#include <math.h>\n\n");
+        emit_math_runtime(&mut out);
     }
     if needs_fs_list || needs_fs_is_dir || needs_fs_join {
         out.push_str("#include <dirent.h>\n");
@@ -342,7 +376,9 @@ fn emit_struct_declarations(program: &Program, out: &mut String) {
 
 fn emit_struct_methods(program: &Program, out: &mut String) {
     for stmt in &program.statements {
-        let Statement::StructDecl { name, methods, .. } = stmt else { continue };
+        let Statement::StructDecl { name, methods, .. } = stmt else {
+            continue;
+        };
         for method in methods {
             if method.is_danger {
                 out.push_str("int ");
@@ -362,7 +398,9 @@ fn emit_struct_methods(program: &Program, out: &mut String) {
                 out.push(' ');
                 out.push_str(&p.name);
             }
-            if method.is_danger && let Some(ret_ty) = method.returns.as_deref() {
+            if method.is_danger
+                && let Some(ret_ty) = method.returns.as_deref()
+            {
                 out.push_str(", ");
                 out.push_str(&map_skadi_type_to_c(Some(ret_ty)));
                 out.push_str(" *out");
@@ -413,18 +451,23 @@ fn program_uses_text_runtime(program: &Program) -> bool {
                         .map(|b| block_has_text(b))
                         .unwrap_or(false)
             }
-            Statement::WhenBlock { cases, else_block, .. } => {
+            Statement::WhenBlock {
+                cases, else_block, ..
+            } => {
                 cases.iter().any(|(_, b)| block_has_text(b))
                     || else_block
                         .as_ref()
                         .map(|b| block_has_text(b))
                         .unwrap_or(false)
             }
-            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => block_has_text(body),
+            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => {
+                block_has_text(body)
+            }
             Statement::DangerAssignOnError { on_error, .. }
             | Statement::DangerCallOnError { on_error, .. }
             | Statement::ListPopOnError { on_error, .. } => block_has_text(on_error),
-            Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
+            Statement::BlockStatement { statements, .. }
+            | Statement::OnErrorBlock { statements, .. } => {
                 statements.iter().any(statement_has_text)
             }
             _ => false,
@@ -457,17 +500,22 @@ fn program_uses_list_runtime(program: &Program) -> bool {
                         .map(|b| block_has_for(b))
                         .unwrap_or(false)
             }
-            Statement::WhenBlock { cases, else_block, .. } => {
+            Statement::WhenBlock {
+                cases, else_block, ..
+            } => {
                 cases.iter().any(|(_, b)| block_has_for(b))
                     || else_block
                         .as_ref()
                         .map(|b| block_has_for(b))
                         .unwrap_or(false)
             }
-            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => block_has_for(body),
+            Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => {
+                block_has_for(body)
+            }
             Statement::DangerAssignOnError { on_error, .. }
             | Statement::DangerCallOnError { on_error, .. } => block_has_for(on_error),
-            Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
+            Statement::BlockStatement { statements, .. }
+            | Statement::OnErrorBlock { statements, .. } => {
                 statements.iter().any(statement_needs_list)
             }
             _ => false,
@@ -554,7 +602,12 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
             Statement::VarDecl { value, .. } => expression_uses_fs_call(value),
             Statement::Assignment { value, .. } => expression_uses_fs_call(value),
             Statement::FunctionDef { body, .. } => block_uses_fs(body),
-            Statement::IfStatement { condition, then_block, else_block, .. } => {
+            Statement::IfStatement {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 let (mut nl, mut nd, mut nj) = expression_uses_fs_call(condition);
                 let (l2, d2, j2) = block_uses_fs(then_block);
                 nl |= l2;
@@ -568,7 +621,9 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
                 }
                 (nl, nd, nj)
             }
-            Statement::ForLoop { condition, body, .. } => {
+            Statement::ForLoop {
+                condition, body, ..
+            } => {
                 let (mut nl, mut nd, mut nj) = condition
                     .as_ref()
                     .map(|e| expression_uses_fs_call(e))
@@ -579,7 +634,12 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
                 nj |= j2;
                 (nl, nd, nj)
             }
-            Statement::WhenBlock { when_expression, cases, else_block, .. } => {
+            Statement::WhenBlock {
+                when_expression,
+                cases,
+                else_block,
+                ..
+            } => {
                 let (mut nl, mut nd, mut nj) = expression_uses_fs_call(when_expression);
                 for (_, b) in cases {
                     let (l, d, j) = block_uses_fs(b);
@@ -595,7 +655,9 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
                 }
                 (nl, nd, nj)
             }
-            Statement::WhileLoop { condition, body, .. } => {
+            Statement::WhileLoop {
+                condition, body, ..
+            } => {
                 let (mut nl, mut nd, mut nj) = expression_uses_fs_call(condition);
                 let (l2, d2, j2) = block_uses_fs(body);
                 nl |= l2;
@@ -619,8 +681,7 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
                 (nl || l2, nd || d2, nj || j2)
             }
             Statement::ListPush { value, .. } => expression_uses_fs_call(value),
-            Statement::ListPopOnError { on_error, .. }
-            => block_uses_fs(on_error),
+            Statement::ListPopOnError { on_error, .. } => block_uses_fs(on_error),
             Statement::BlockStatement { statements, .. }
             | Statement::OnErrorBlock { statements, .. } => statements_uses_fs(statements),
             Statement::ReturnStatement { value, .. } => value
@@ -646,18 +707,26 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
 fn expression_uses_io_call(expr: &Expression) -> bool {
     match expr {
         Expression::Call { name, args } => {
-            let is_io = matches!(name.as_str(), "output" | "input" | "read" | "write" | "args");
+            let is_io = matches!(
+                name.as_str(),
+                "output" | "input" | "read" | "write" | "args"
+            );
             is_io || args.iter().any(expression_uses_io_call)
         }
         Expression::BinaryOp { left, right, .. } => {
             expression_uses_io_call(left)
-                || right.as_deref().map(expression_uses_io_call).unwrap_or(false)
+                || right
+                    .as_deref()
+                    .map(expression_uses_io_call)
+                    .unwrap_or(false)
         }
         Expression::Index { base, index } => {
             expression_uses_io_call(base) || expression_uses_io_call(index)
         }
         Expression::ListLiteral(items) => items.iter().any(expression_uses_io_call),
-        Expression::StructConstruction { fields } => fields.values().any(|v| expression_uses_io_call(v)),
+        Expression::StructConstruction { fields } => {
+            fields.values().any(|v| expression_uses_io_call(v))
+        }
         _ => false,
     }
 }
@@ -669,13 +738,18 @@ fn expression_uses_args_call(expr: &Expression) -> bool {
         }
         Expression::BinaryOp { left, right, .. } => {
             expression_uses_args_call(left)
-                || right.as_deref().map(expression_uses_args_call).unwrap_or(false)
+                || right
+                    .as_deref()
+                    .map(expression_uses_args_call)
+                    .unwrap_or(false)
         }
         Expression::Index { base, index } => {
             expression_uses_args_call(base) || expression_uses_args_call(index)
         }
         Expression::ListLiteral(items) => items.iter().any(expression_uses_args_call),
-        Expression::StructConstruction { fields } => fields.values().any(|v| expression_uses_args_call(v)),
+        Expression::StructConstruction { fields } => {
+            fields.values().any(|v| expression_uses_args_call(v))
+        }
         _ => false,
     }
 }
@@ -687,7 +761,12 @@ fn program_uses_io_runtime(program: &Program) -> bool {
             Statement::Assignment { value, .. } => expression_uses_io_call(value),
             Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_io),
             Statement::ExpressionStatement { expr, .. } => expression_uses_io_call(expr),
-            Statement::IfStatement { condition, then_block, else_block, .. } => {
+            Statement::IfStatement {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 expression_uses_io_call(condition)
                     || then_block.statements.iter().any(stmt_uses_io)
                     || else_block
@@ -695,34 +774,49 @@ fn program_uses_io_runtime(program: &Program) -> bool {
                         .map(|b| b.statements.iter().any(stmt_uses_io))
                         .unwrap_or(false)
             }
-            Statement::ForLoop { condition, body, .. } => {
-                condition.as_ref().map(|e| expression_uses_io_call(e)).unwrap_or(false)
+            Statement::ForLoop {
+                condition, body, ..
+            } => {
+                condition
+                    .as_ref()
+                    .map(|e| expression_uses_io_call(e))
+                    .unwrap_or(false)
                     || body.statements.iter().any(stmt_uses_io)
             }
-            Statement::WhenBlock { when_expression, cases, else_block, .. } => {
+            Statement::WhenBlock {
+                when_expression,
+                cases,
+                else_block,
+                ..
+            } => {
                 expression_uses_io_call(when_expression)
-                    || cases.iter().any(|(_, b)| b.statements.iter().any(stmt_uses_io))
+                    || cases
+                        .iter()
+                        .any(|(_, b)| b.statements.iter().any(stmt_uses_io))
                     || else_block
                         .as_ref()
                         .map(|b| b.statements.iter().any(stmt_uses_io))
                         .unwrap_or(false)
             }
-            Statement::WhileLoop { condition, body, .. } => {
-                expression_uses_io_call(condition) || body.statements.iter().any(stmt_uses_io)
-            }
+            Statement::WhileLoop {
+                condition, body, ..
+            } => expression_uses_io_call(condition) || body.statements.iter().any(stmt_uses_io),
             Statement::LoopStatement { body, .. } => body.statements.iter().any(stmt_uses_io),
             Statement::DangerAssignOnError { args, on_error, .. }
             | Statement::DangerCallOnError { args, on_error, .. } => {
-                args.iter().any(expression_uses_io_call) || on_error.statements.iter().any(stmt_uses_io)
+                args.iter().any(expression_uses_io_call)
+                    || on_error.statements.iter().any(stmt_uses_io)
             }
             Statement::ListPush { value, .. } => expression_uses_io_call(value),
-            Statement::ListPopOnError { on_error, .. } => on_error.statements.iter().any(stmt_uses_io),
-            Statement::ReturnStatement { value, .. } => {
-                value.as_ref().map(|v| expression_uses_io_call(v)).unwrap_or(false)
+            Statement::ListPopOnError { on_error, .. } => {
+                on_error.statements.iter().any(stmt_uses_io)
             }
-            Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
-                statements.iter().any(stmt_uses_io)
-            }
+            Statement::ReturnStatement { value, .. } => value
+                .as_ref()
+                .map(|v| expression_uses_io_call(v))
+                .unwrap_or(false),
+            Statement::BlockStatement { statements, .. }
+            | Statement::OnErrorBlock { statements, .. } => statements.iter().any(stmt_uses_io),
             _ => false,
         }
     }
@@ -736,7 +830,12 @@ fn program_uses_args_runtime(program: &Program) -> bool {
             Statement::Assignment { value, .. } => expression_uses_args_call(value),
             Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_args),
             Statement::ExpressionStatement { expr, .. } => expression_uses_args_call(expr),
-            Statement::IfStatement { condition, then_block, else_block, .. } => {
+            Statement::IfStatement {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 expression_uses_args_call(condition)
                     || then_block.statements.iter().any(stmt_uses_args)
                     || else_block
@@ -744,34 +843,49 @@ fn program_uses_args_runtime(program: &Program) -> bool {
                         .map(|b| b.statements.iter().any(stmt_uses_args))
                         .unwrap_or(false)
             }
-            Statement::ForLoop { condition, body, .. } => {
-                condition.as_ref().map(|e| expression_uses_args_call(e)).unwrap_or(false)
+            Statement::ForLoop {
+                condition, body, ..
+            } => {
+                condition
+                    .as_ref()
+                    .map(|e| expression_uses_args_call(e))
+                    .unwrap_or(false)
                     || body.statements.iter().any(stmt_uses_args)
             }
-            Statement::WhenBlock { when_expression, cases, else_block, .. } => {
+            Statement::WhenBlock {
+                when_expression,
+                cases,
+                else_block,
+                ..
+            } => {
                 expression_uses_args_call(when_expression)
-                    || cases.iter().any(|(_, b)| b.statements.iter().any(stmt_uses_args))
+                    || cases
+                        .iter()
+                        .any(|(_, b)| b.statements.iter().any(stmt_uses_args))
                     || else_block
                         .as_ref()
                         .map(|b| b.statements.iter().any(stmt_uses_args))
                         .unwrap_or(false)
             }
-            Statement::WhileLoop { condition, body, .. } => {
-                expression_uses_args_call(condition) || body.statements.iter().any(stmt_uses_args)
-            }
+            Statement::WhileLoop {
+                condition, body, ..
+            } => expression_uses_args_call(condition) || body.statements.iter().any(stmt_uses_args),
             Statement::LoopStatement { body, .. } => body.statements.iter().any(stmt_uses_args),
             Statement::DangerAssignOnError { args, on_error, .. }
             | Statement::DangerCallOnError { args, on_error, .. } => {
-                args.iter().any(expression_uses_args_call) || on_error.statements.iter().any(stmt_uses_args)
+                args.iter().any(expression_uses_args_call)
+                    || on_error.statements.iter().any(stmt_uses_args)
             }
             Statement::ListPush { value, .. } => expression_uses_args_call(value),
-            Statement::ListPopOnError { on_error, .. } => on_error.statements.iter().any(stmt_uses_args),
-            Statement::ReturnStatement { value, .. } => {
-                value.as_ref().map(|v| expression_uses_args_call(v)).unwrap_or(false)
+            Statement::ListPopOnError { on_error, .. } => {
+                on_error.statements.iter().any(stmt_uses_args)
             }
-            Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
-                statements.iter().any(stmt_uses_args)
-            }
+            Statement::ReturnStatement { value, .. } => value
+                .as_ref()
+                .map(|v| expression_uses_args_call(v))
+                .unwrap_or(false),
+            Statement::BlockStatement { statements, .. }
+            | Statement::OnErrorBlock { statements, .. } => statements.iter().any(stmt_uses_args),
             _ => false,
         }
     }
@@ -879,7 +993,11 @@ fn emit_statement(
             out.push_str(&expr);
             out.push_str(";\n");
         }
-        Statement::IncDec { target, is_increment, .. } => {
+        Statement::IncDec {
+            target,
+            is_increment,
+            ..
+        } => {
             out.push_str(&pad);
             out.push_str(target);
             if *is_increment {
@@ -889,7 +1007,10 @@ fn emit_statement(
             }
         }
         Statement::FieldAssignment {
-            object, field, value, ..
+            object,
+            field,
+            value,
+            ..
         } => {
             out.push_str(&pad);
             if object == "my" {
@@ -903,7 +1024,12 @@ fn emit_statement(
             out.push_str(&emit_expr(value, declared));
             out.push_str(";\n");
         }
-        Statement::IfStatement { condition, then_block, else_block, .. } => {
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
             out.push_str(&pad);
             out.push_str("if (");
             out.push_str(&emit_expr(condition, declared));
@@ -921,7 +1047,9 @@ fn emit_statement(
             }
             out.push('\n');
         }
-        Statement::WhileLoop { condition, body, .. } => {
+        Statement::WhileLoop {
+            condition, body, ..
+        } => {
             out.push_str(&pad);
             out.push_str("while (");
             out.push_str(&emit_expr(condition, declared));
@@ -951,7 +1079,12 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str(";\n");
         }
-        Statement::ForLoop { initialization, condition, body, .. } => {
+        Statement::ForLoop {
+            initialization,
+            condition,
+            body,
+            ..
+        } => {
             if let (Some(init), Some(coll)) = (initialization, condition) {
                 let var_name = match init.as_ref() {
                     Expression::VariableReference(v) => v.clone(),
@@ -1069,7 +1202,9 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str("}\n");
         }
-        Statement::ListPush { list_name, value, .. } => {
+        Statement::ListPush {
+            list_name, value, ..
+        } => {
             let suffix = declared
                 .get(list_name)
                 .and_then(|t| list_elem_from_decl(t))
@@ -1175,7 +1310,9 @@ fn emit_statement(
             let when_expr = emit_expr(when_expression, declared);
             let when_tmp = format!("__when_tmp_{}", indent);
             let when_is_text = is_text_expr(when_expression, declared)
-                || cases.iter().any(|(case_exprs, _)| case_exprs.iter().any(|e| is_text_expr(e, declared)));
+                || cases
+                    .iter()
+                    .any(|(case_exprs, _)| case_exprs.iter().any(|e| is_text_expr(e, declared)));
             out.push_str(&pad);
             if when_is_text {
                 out.push_str("const char* ");
@@ -1230,7 +1367,12 @@ fn emit_statement(
                 out.push_str("}\n");
             }
         }
-        Statement::VarDecl { name, value, declared_type, .. } => {
+        Statement::VarDecl {
+            name,
+            value,
+            declared_type,
+            ..
+        } => {
             if let Some(dt) = declared_type.as_deref() {
                 if let Some(elem) = list_elem_from_decl(dt)
                     && {
@@ -1289,9 +1431,13 @@ fn emit_statement(
             out.push_str(" = ");
             out.push_str(&emit_expr(value, declared));
             out.push_str(";\n");
-            declared.insert(name.clone(), declared_type.clone().unwrap_or_else(|| "Int".to_string()));
+            declared.insert(
+                name.clone(),
+                declared_type.clone().unwrap_or_else(|| "Int".to_string()),
+            );
         }
-        Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => {
             let mut inner = declared.clone();
             for s in statements {
                 emit_statement(s, out, indent, &mut inner, fn_ctx);
@@ -1363,15 +1509,73 @@ fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
     }
 }
 
+fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind {
+    match expr {
+        Expression::LiteralInt(_) => ExprKind::Int,
+        Expression::LiteralFloat(_) => ExprKind::Float,
+        Expression::LiteralBool(_) => ExprKind::Bool,
+        Expression::LiteralString(_) => ExprKind::Text,
+        Expression::VariableReference(name) => match declared.get(name).map(String::as_str) {
+            Some("Float" | "f32" | "f64") => ExprKind::Float,
+            Some("bool" | "Bool") => ExprKind::Bool,
+            Some("char" | "Char") => ExprKind::Char,
+            Some("Text" | "Path") => ExprKind::Text,
+            Some(_) => ExprKind::Int,
+            None if matches!(name.as_str(), "PI" | "TAU" | "E" | "EPSILON") => ExprKind::Float,
+            None => ExprKind::Unknown,
+        },
+        Expression::Call { name, .. } => match name.as_str() {
+            "contains" | "fs.is_dir" => ExprKind::Bool,
+            "find" | "len" | "write" | "output" => ExprKind::Int,
+            "input" | "read" | "slice" | "concat" | "fs.join" => ExprKind::Text,
+            "abs" | "min" | "max" | "clamp" | "floor" | "ceil" | "round" | "sin" | "cos"
+            | "atan2" | "sqrt" | "root" | "deg_to_rad" | "rad_to_deg" => ExprKind::Float,
+            _ => ExprKind::Unknown,
+        },
+        Expression::Index { base, .. } if is_text_expr(base, declared) => ExprKind::Char,
+        Expression::BinaryOp { op, left, right } => {
+            if matches!(
+                op.as_str(),
+                "==" | "!=" | "<" | "<=" | ">" | ">=" | "and" | "or" | "not"
+            ) {
+                return ExprKind::Bool;
+            }
+            let left_kind = expr_kind(left, declared);
+            let right_kind = right
+                .as_ref()
+                .map(|r| expr_kind(r, declared))
+                .unwrap_or(left_kind);
+            if left_kind == ExprKind::Float || right_kind == ExprKind::Float {
+                ExprKind::Float
+            } else if left_kind == ExprKind::Int && right_kind == ExprKind::Int {
+                ExprKind::Int
+            } else {
+                ExprKind::Unknown
+            }
+        }
+        _ => ExprKind::Unknown,
+    }
+}
+
 fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
     match expr {
         Expression::LiteralInt(v) => v.to_string(),
         Expression::LiteralFloat(v) => v.to_string(),
         Expression::LiteralBool(v) => {
-            if *v { "true".to_string() } else { "false".to_string() }
+            if *v {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            }
         }
         Expression::LiteralString(s) => s.clone(),
-        Expression::VariableReference(name) => name.clone(),
+        Expression::VariableReference(name) => match name.as_str() {
+            "PI" => "M_PI".to_string(),
+            "TAU" => "(2.0 * M_PI)".to_string(),
+            "E" => "M_E".to_string(),
+            "EPSILON" => "1e-9".to_string(),
+            _ => name.clone(),
+        },
         Expression::MemberAccess { base, field } => {
             if base == "my" {
                 format!("my->{}", field)
@@ -1396,7 +1600,10 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     .and_then(|t| list_elem_from_decl(t))
                     .map(|elem| list_meta_dynamic(elem).1)
             {
-                return format!("sk_list_{}_get(&{}, {})", suffix, base_rendered, index_rendered);
+                return format!(
+                    "sk_list_{}_get(&{}, {})",
+                    suffix, base_rendered, index_rendered
+                );
             }
             format!("{}.data[{}]", base_rendered, index_rendered)
         }
@@ -1454,20 +1661,11 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     }
                     Builtin::Output if args.len() == 1 => {
                         let rendered = emit_expr(&args[0], declared);
-                        return match args[0] {
-                            Expression::LiteralFloat(_) => format!("sk_output_float({})", rendered),
-                            Expression::LiteralBool(_) => format!("sk_output_bool({})", rendered),
-                            Expression::LiteralString(_) => format!("sk_output_text({})", rendered),
-                            Expression::LiteralInt(_) => format!("sk_output_int({})", rendered),
-                            Expression::VariableReference(ref n) => {
-                                match declared.get(n).map(String::as_str).unwrap_or("Int") {
-                                    "Float" | "f32" | "f64" => format!("sk_output_float({})", rendered),
-                                    "bool" | "Bool" => format!("sk_output_bool({})", rendered),
-                                    "char" | "Char" => format!("sk_output_char({})", rendered),
-                                    "Text" => format!("sk_output_text({})", rendered),
-                                    _ => format!("sk_output_int({})", rendered),
-                                }
-                            }
+                        return match expr_kind(&args[0], declared) {
+                            ExprKind::Float => format!("sk_output_float({})", rendered),
+                            ExprKind::Bool => format!("sk_output_bool({})", rendered),
+                            ExprKind::Char => format!("sk_output_char({})", rendered),
+                            ExprKind::Text => format!("sk_output_text({})", rendered),
                             _ => format!("sk_output_int({})", rendered),
                         };
                     }
@@ -1484,6 +1682,74 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                         let data = emit_expr(&args[1], declared);
                         return format!("sk_write_file({}, {})", path, data);
                     }
+                    Builtin::Abs if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return match expr_kind(&args[0], declared) {
+                            ExprKind::Int => format!("llabs({})", a),
+                            _ => format!("fabs({})", a),
+                        };
+                    }
+                    Builtin::Min if args.len() == 2 => {
+                        let a = emit_expr(&args[0], declared);
+                        let b = emit_expr(&args[1], declared);
+                        return format!("(({} < {}) ? {} : {})", a, b, a, b);
+                    }
+                    Builtin::Max if args.len() == 2 => {
+                        let a = emit_expr(&args[0], declared);
+                        let b = emit_expr(&args[1], declared);
+                        return format!("(({} > {}) ? {} : {})", a, b, a, b);
+                    }
+                    Builtin::Clamp if args.len() == 3 => {
+                        let x = emit_expr(&args[0], declared);
+                        let lo = emit_expr(&args[1], declared);
+                        let hi = emit_expr(&args[2], declared);
+                        return format!(
+                            "(({} < {}) ? {} : (({} > {}) ? {} : {}))",
+                            x, lo, lo, x, hi, hi, x
+                        );
+                    }
+                    Builtin::Floor if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return format!("floor({})", a);
+                    }
+                    Builtin::Ceil if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return format!("ceil({})", a);
+                    }
+                    Builtin::Round if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return format!("round({})", a);
+                    }
+                    Builtin::Sin if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return format!("sin({})", a);
+                    }
+                    Builtin::Cos if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return format!("cos({})", a);
+                    }
+                    Builtin::Atan2 if args.len() == 2 => {
+                        let y = emit_expr(&args[0], declared);
+                        let x = emit_expr(&args[1], declared);
+                        return format!("atan2({}, {})", y, x);
+                    }
+                    Builtin::Sqrt if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return format!("sqrt({})", a);
+                    }
+                    Builtin::Root if args.len() == 2 => {
+                        let a = emit_expr(&args[0], declared);
+                        let n = emit_expr(&args[1], declared);
+                        return format!("pow({}, (1.0 / {}))", a, n);
+                    }
+                    Builtin::DegToRad if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return format!("(({} * M_PI) / 180.0)", a);
+                    }
+                    Builtin::RadToDeg if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        return format!("(({} * 180.0) / M_PI)", a);
+                    }
                     _ => {}
                 }
             }
@@ -1491,9 +1757,26 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 if let Some(obj_ty) = declared.get(obj)
                     && !matches!(
                         obj_ty.as_str(),
-                        "Int" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "Float"
-                            | "f32" | "f64" | "bool" | "Bool" | "char" | "Char" | "Text" | "Path"
-                    ) && !obj_ty.ends_with(" List")
+                        "Int"
+                            | "i8"
+                            | "i16"
+                            | "i32"
+                            | "i64"
+                            | "u8"
+                            | "u16"
+                            | "u32"
+                            | "u64"
+                            | "Float"
+                            | "f32"
+                            | "f64"
+                            | "bool"
+                            | "Bool"
+                            | "char"
+                            | "Char"
+                            | "Text"
+                            | "Path"
+                    )
+                    && !obj_ty.ends_with(" List")
                 {
                     let mut rendered: Vec<String> = Vec::new();
                     if obj == "my" {
@@ -1524,7 +1807,10 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             let l = emit_expr(left, declared);
             if let Some(r) = right {
                 let rr = emit_expr(r, declared);
-                if (op == "==" || op == "!=") && is_text_expr(left, declared) && is_text_expr(r, declared) {
+                if (op == "==" || op == "!=")
+                    && is_text_expr(left, declared)
+                    && is_text_expr(r, declared)
+                {
                     if op == "==" {
                         return format!("(strcmp({}, {}) == 0)", l, rr);
                     }
@@ -1546,4 +1832,133 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::StructConstruction { fields } => emit_struct_literal(fields, None, declared),
         Expression::ListLiteral(_) => "0 /* TODO(v1): list literal */".to_string(),
     }
+}
+
+fn expression_uses_math_call(expr: &Expression) -> bool {
+    match expr {
+        Expression::VariableReference(name) => {
+            matches!(name.as_str(), "PI" | "TAU" | "E" | "EPSILON")
+        }
+        Expression::Call { name, args } => {
+            matches!(
+                name.as_str(),
+                "abs"
+                    | "min"
+                    | "max"
+                    | "clamp"
+                    | "floor"
+                    | "ceil"
+                    | "round"
+                    | "sin"
+                    | "cos"
+                    | "atan2"
+                    | "sqrt"
+                    | "root"
+                    | "deg_to_rad"
+                    | "rad_to_deg"
+            ) || args.iter().any(expression_uses_math_call)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_math_call(left)
+                || right
+                    .as_ref()
+                    .map(|r| expression_uses_math_call(r))
+                    .unwrap_or(false)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_math_call(base) || expression_uses_math_call(index)
+        }
+        Expression::ListLiteral(items) => items.iter().any(expression_uses_math_call),
+        Expression::StructConstruction { fields } => {
+            fields.values().any(|v| expression_uses_math_call(v))
+        }
+        _ => false,
+    }
+}
+
+fn stmt_uses_math(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::VarDecl { value, .. }
+        | Statement::Assignment { value, .. }
+        | Statement::ExpressionStatement { expr: value, .. } => expression_uses_math_call(value),
+        Statement::ReturnStatement { value, .. } => value
+            .as_ref()
+            .map(|expr| expression_uses_math_call(expr))
+            .unwrap_or(false),
+        Statement::FieldAssignment { value, .. } => expression_uses_math_call(value),
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expression_uses_math_call(condition)
+                || then_block.statements.iter().any(stmt_uses_math)
+                || else_block
+                    .as_ref()
+                    .map(|b| b.statements.iter().any(stmt_uses_math))
+                    .unwrap_or(false)
+        }
+        Statement::WhileLoop {
+            condition, body, ..
+        } => expression_uses_math_call(condition) || body.statements.iter().any(stmt_uses_math),
+        Statement::LoopStatement { body, .. } => body.statements.iter().any(stmt_uses_math),
+        Statement::ForLoop {
+            initialization,
+            condition,
+            update,
+            body,
+            ..
+        } => {
+            initialization
+                .as_ref()
+                .map(|expr| expression_uses_math_call(expr))
+                .unwrap_or(false)
+                || condition
+                    .as_ref()
+                    .map(|expr| expression_uses_math_call(expr))
+                    .unwrap_or(false)
+                || update
+                    .as_ref()
+                    .map(|expr| expression_uses_math_call(expr))
+                    .unwrap_or(false)
+                || body.statements.iter().any(stmt_uses_math)
+        }
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+            ..
+        } => {
+            expression_uses_math_call(when_expression)
+                || cases.iter().any(|(exprs, block)| {
+                    exprs.iter().any(expression_uses_math_call)
+                        || block.statements.iter().any(stmt_uses_math)
+                })
+                || else_block
+                    .as_ref()
+                    .map(|b| b.statements.iter().any(stmt_uses_math))
+                    .unwrap_or(false)
+        }
+        Statement::DangerAssignOnError { args, on_error, .. }
+        | Statement::DangerCallOnError { args, on_error, .. } => {
+            args.iter().any(expression_uses_math_call)
+                || on_error.statements.iter().any(stmt_uses_math)
+        }
+        Statement::ListPush { value, .. } => expression_uses_math_call(value),
+        Statement::ListPopOnError { on_error, .. } => {
+            on_error.statements.iter().any(stmt_uses_math)
+        }
+        Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_math),
+        Statement::StructDecl { methods, .. } => methods
+            .iter()
+            .any(|m| m.body.statements.iter().any(stmt_uses_math)),
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => statements.iter().any(stmt_uses_math),
+        _ => false,
+    }
+}
+
+fn program_uses_math_runtime(program: &Program) -> bool {
+    program.statements.iter().any(stmt_uses_math)
 }

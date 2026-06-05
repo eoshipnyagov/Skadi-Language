@@ -1,6 +1,6 @@
 # Skadi VS Code Syntax (local draft)
 
-This folder contains a minimal VS Code syntax-highlighting extension for Skadi.
+This folder contains a local VS Code syntax-highlighting extension for Skadi.
 
 ## What is included
 
@@ -19,7 +19,7 @@ This folder contains a minimal VS Code syntax-highlighting extension for Skadi.
 1. Build package:
    - `npx @vscode/vsce package --allow-missing-repository`
 2. Install in VS Code:
-   - `code --install-extension skadi-syntax-0.1.0.vsix`
+   - `code --install-extension skadi-syntax-0.2.0.vsix`
 
 ## Current scope
 
@@ -27,15 +27,15 @@ This folder contains a minimal VS Code syntax-highlighting extension for Skadi.
 - strings with `__var__` interpolation token highlighting
 - numbers
 - declarations (`fn`, `struct`, `label`)
-- control-flow and modifiers (`danger`, `new`, `on error`, etc.)
-- core type names and constants
+- control-flow and modifiers (`danger`, `new`, `on error`, `allow`, `drop`, `direct`, etc.)
+- core type names, constants, and canonical aliases (`Bool`, `Char`, `PI`, `TAU`, `EPSILON`)
 - builtins (`output`, `read`, `len`, `slice`, `find`, `concat`, `args`, `fs.*`)
 - member calls/access (`.push()`, `.pop()`, `.field`, and custom methods like `.inc()`)
 - operators and function call highlighting
 
 ## Next step
 
-- Add better context-sensitive highlighting for declarations (`fn`, `struct`, `label`, `new`).
+- Add better context-sensitive highlighting for declaration heads and return types.
 - Add snippets and diagnostics bridge once LSP is introduced.
 
 

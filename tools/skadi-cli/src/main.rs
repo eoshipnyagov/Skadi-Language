@@ -1,25 +1,35 @@
+mod actions;
 mod commands;
 mod pipeline;
 mod project;
 mod targets;
+mod tui;
 
 use std::env;
 
+fn help_text() -> String {
+    [
+        "skadi-cli v1.1",
+        "Canonical CLI workflow for Skadi v1.1.",
+        "Usage:",
+        "  skadi <command> [args]",
+        "",
+        "Commands:",
+        "  new <name>         Create a new Skadi project",
+        "  init               Initialize Skadi project in current directory",
+        "  check              Run frontend checks",
+        "  build [--target] [--cc]  Build project",
+        "  run [--target] [--cc]    Build and run project",
+        "  target list        List supported targets",
+        "  tui                Full-screen interactive workflow",
+        "  format [--check] [path ...]  Format Skadi source files",
+        "  doctor             Verify toolchain environment",
+    ]
+    .join("\n")
+}
+
 fn print_help() {
-    println!("skadi-cli v0.1");
-    println!("Usage:");
-    println!("  skadi <command> [args]");
-    println!();
-    println!("Commands:");
-    println!("  new <name>         Create a new Skadi project");
-    println!("  init               Initialize Skadi project in current directory");
-    println!("  check              Run frontend checks");
-    println!("  build [--target] [--cc]  Build project");
-    println!("  run [--target] [--cc]    Build and run project");
-    println!("  target list        List supported targets");
-    println!("  tui                Interactive mode");
-    println!("  format             Format source files (planned)");
-    println!("  doctor             Verify toolchain environment");
+    println!("{}", help_text());
 }
 
 fn main() {
@@ -49,5 +59,19 @@ fn main() {
     if let Err(err) = result {
         eprintln!("error: {err}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::help_text;
+
+    #[test]
+    fn help_text_mentions_v1_1_and_format_status() {
+        let help = help_text();
+        assert!(help.contains("skadi-cli v1.1"));
+        assert!(help.contains("Canonical CLI workflow for Skadi v1.1."));
+        assert!(help.contains("format [--check] [path ...]  Format Skadi source files"));
+        assert!(help.contains("tui                Full-screen interactive workflow"));
     }
 }

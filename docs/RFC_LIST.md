@@ -7,10 +7,12 @@ Owner: Skadi core
 ## 1. Final syntax (v1)
 
 - Typed declaration uses type-before-name style:
+
   - `new i32 List xs = [1, 2, 3]`
   - `new Float List values = []`
 - `List(T)` is not user-facing syntax in v1.
 - Indexing:
+
   - read: `x = xs[i]`
   - write: `xs[i] = 42`
 
@@ -19,6 +21,7 @@ Owner: Skadi core
 - `len(xs)` -> returns list length (`Int`)
 - `xs.push(v)` -> append one value of list element type
 - `xs.pop()` -> returns element, must be used with `on error` when empty:
+
   - `v = xs.pop() on error { ... }`
 
 ## 3. Type rules (v1)
@@ -45,6 +48,7 @@ Exact `ErrorCode` naming is finalized in runtime/codegen phase.
 - advanced allocator tuning surface
 - mutation-safety policy for modifying a list during active iteration (e.g., `pop` in loop body)
   - candidate v2 decisions:
+
   - `A)` forbid structural mutation of iterated list
   - `B)` allow with defined dynamic-length semantics
 

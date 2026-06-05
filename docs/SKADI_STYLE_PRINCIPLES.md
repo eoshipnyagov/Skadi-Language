@@ -1,58 +1,75 @@
-# Skadi Style Principles
+# Стилевые принципы Skadi
 
-## Status
-Accepted baseline for near-term language design decisions.
-Date: 2026-05-20
+## Статус
 
-## Primary Goal
-Skadi syntax should be read without cognitive strain.
+Принятый базовый набор принципов для ближайших языковых решений.  
+Дата: 2026-05-20
 
-This is not a "shortest syntax" objective.
-This is a "smooth reading" objective.
+## Главная цель
 
-## Core Reading Rule
-Prefer forms that read like technical prose, even when they are longer.
+Синтаксис Skadi должен читаться без когнитивного напряжения.
 
-Example:
-- Prefer `returns` over symbolic `->`.
+Это не цель "сделать как можно короче".  
+Это цель "сделать чтение плавным".
 
-## Reference Writing Style
-The canonical style reference is:
-- `example_meteostation.txt`
+## Базовое правило чтения
 
-Any new syntax proposal should be checked against this writing style before adoption.
+Предпочитать формы, которые читаются как техническая проза, даже если они длиннее.
 
-## Language Positioning
-Skadi targets system programming with familiar C-class capabilities, while improving syntax readability.
+Пример:
 
-Practical interpretation:
-- keep low-level/system usefulness,
-- keep target flexibility through toolchain/targeted builds,
-- reduce symbolic noise when it harms readability.
+- `returns` предпочтительнее символического `->`
 
-## Canonicality Rule
-For each feature, define one canonical way to write it in v1.
-Avoid parallel styles for the same operation unless there is a critical technical reason.
+## Эталон стиля записи
 
-## Noise Reduction Rule
-Reduce punctuation-heavy forms when a readable keyword form is clearer.
+Канонический стиль для сверки:
 
-Examples of accepted direction:
-- `returns` instead of `->`
-- keyword-based constructs where they improve immediate comprehension
-- candidate loop prose form: `iterate collection as item` (experimental, not active in v1)
+- `examples/example_meteostation.skd`
 
-## Scope Discipline
-Do not expand syntax surface area during v1 unless it directly supports the core user flow.
+Любое новое синтаксическое предложение нужно проверять на совместимость с этим стилем до принятия.
+Сам образец намеренно компактный и не завязан на embedded-слои, чтобы его можно было читать как обычный showcase текущего `v1.1` surface.
 
-Core user flow for v1:
-- write system-style code,
-- read it easily,
-- compile predictably.
+## Позиционирование языка
 
-## Decision Filter for New Syntax
-A proposal should be accepted only if it passes all checks:
-1. It is easier to read without strain.
-2. It does not introduce ambiguity in parsing.
-3. It fits the style baseline from `example_meteostation.txt`.
-4. It does not create a second competing form for the same feature in v1.
+Skadi нацелен на системное программирование с привычными возможностями C-класса, но с более читаемым синтаксисом.
+
+Практическая интерпретация:
+
+- сохранять низкоуровневую и системную полезность;
+- сохранять гибкость по target/toolchain;
+- уменьшать символический шум там, где он мешает чтению.
+
+## Правило каноничности
+
+Для каждой фичи в `v1` должен быть один канонический способ записи.
+
+Нужно избегать параллельных стилей для одной и той же операции, если нет критической технической причины.
+
+## Правило снижения шума
+
+Нужно уменьшать punctuation-heavy формы там, где keyword-based форма читается яснее.
+
+Примеры принятого направления:
+
+- `returns` вместо `->`
+- keyword-based конструкции там, где они улучшают мгновенное понимание
+- кандидат на прозаический цикл: `iterate collection as item`
+
+## Дисциплина области видимости
+
+Не расширять синтаксическую поверхность в `v1`, если это не помогает прямо основному пользовательскому потоку.
+
+Основной пользовательский поток `v1`:
+
+- писать system-style code;
+- легко его читать;
+- предсказуемо компилировать.
+
+## Фильтр принятия нового синтаксиса
+
+Новое предложение должно проходить все проверки:
+
+1. Его легче читать без напряжения.
+2. Оно не вносит неоднозначность в parsing.
+3. Оно согласуется со стилем из `examples/example_meteostation.skd`.
+4. Оно не создаёт вторую конкурирующую форму для той же фичи в `v1`.

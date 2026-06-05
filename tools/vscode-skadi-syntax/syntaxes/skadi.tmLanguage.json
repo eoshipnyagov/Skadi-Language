@@ -80,7 +80,7 @@
       "patterns": [
         {
           "name": "keyword.control.skd",
-          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|on|event|interrupt|error|run|wait)\\b"
+          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|returns|break|continue|pass|on|event|interrupt|error|run|wait)\\b"
         }
       ]
     },
@@ -104,7 +104,7 @@
       "patterns": [
         {
           "name": "storage.type.skd",
-          "match": "\\b(Int|Float|Byte|bool|char|Text|String|Path|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List)\\b"
+          "match": "\\b(Int|Float|Bool|Char|Byte|bool|char|Text|String|Path|Time|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List|Canvas|Window|Point|Size)\\b"
         }
       ]
     },
@@ -112,7 +112,7 @@
       "patterns": [
         {
           "name": "constant.language.skd",
-          "match": "\\b(true|false|null|PI|E)\\b"
+          "match": "\\b(true|false|null|PI|TAU|E|EPSILON)\\b"
         },
         {
           "name": "constant.other.error-code.skd",

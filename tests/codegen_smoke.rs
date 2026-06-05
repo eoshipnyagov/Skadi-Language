@@ -527,3 +527,53 @@ while i < 5 {
     assert!(c.contains("continue;"));
     assert!(c.contains("break;"));
 }
+
+#[test]
+fn codegen_emits_math_constants_and_helpers() {
+    let src = r#"
+new Float pi = PI
+new Float tau = TAU
+new Float eps = EPSILON
+new Float angle = deg_to_rad(90)
+new Float x = cos(angle)
+new Float y = sin(angle)
+new Float a = atan2(y, x)
+new Float n = sqrt(9)
+new Float r = root(27, 3)
+new Float lo = min(1, 2)
+new Float hi = max(1.0, 2.0)
+new Float cl = clamp(3, 0, 2)
+new Float up = ceil(2.1)
+new Float dn = floor(2.9)
+new Float rr = round(2.5)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("#include <math.h>"));
+    assert!(c.contains("double pi = M_PI;"));
+    assert!(c.contains("double tau = (2.0 * M_PI);"));
+    assert!(c.contains("double angle = ((90 * M_PI) / 180.0);"));
+    assert!(c.contains("double x = cos(angle);"));
+    assert!(c.contains("double y = sin(angle);"));
+    assert!(c.contains("double a = atan2(y, x);"));
+    assert!(c.contains("double n = sqrt(9);"));
+    assert!(c.contains("double r = pow(27, (1.0 / 3));"));
+}
+
+#[test]
+fn codegen_output_lowers_text_calls_as_text_output() {
+    let src = r#"
+new Text a = "x"
+new Text b = "y"
+output(concat(a, b))
+output(read("in.txt"))
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_output_text(sk_text_concat(a, b));"));
+    assert!(c.contains("sk_output_text(sk_read_file(\"in.txt\"));"));
+}

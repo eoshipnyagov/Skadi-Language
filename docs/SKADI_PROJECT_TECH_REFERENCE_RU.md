@@ -1,11 +1,12 @@
-# Skadi: Техническая Документация Проекта (RU)
+# Skadi: Технический справочник проекта (RU)
 
 Дата актуальности: 2026-05-22  
-Версия проекта: текущий `master` (прототип v0.1)
+Версия проекта: текущая ветка `master`, прототип `v0.1`
 
 ## 1. Как это работает в общих чертах
 
 Компиляторный поток сейчас:
+
 1. `main.rs` читает входной `.txt`/`.skd` файл.
 2. `lexer::lex` превращает текст в `Vec<Token>`.
 3. `parser::parse_program` строит AST (`Program` + `Statement`/`Expression`).
@@ -17,14 +18,16 @@
 ## 2. Структура проекта
 
 Корень:
+
 - `Cargo.toml` — сборка и зависимости Rust crate.
-- `README_PROJECT_OVERVIEW.md` — краткий обзор проекта.
-- `SKADI_IMPLEMENTATION_PLAN.md` — дорожная карта.
-- `Skadi_design.txt` — дизайн-языка (источник идей/целей).
+- `docs/SKADI_PROJECT_OVERVIEW_RU.md` — краткий обзор проекта.
+- `docs/SKADI_IMPLEMENTATION_PLAN_RU.md` — дорожная карта.
+- `docs/legacy/Skadi_design.txt` — дизайн-языка (источник идей/целей).
 - `docs/` — RFC, покрытие, стиль, и эта документация.
 - `tests/` — unit/smoke/integration/e2e тесты.
 
 `src/`:
+
 - `lib.rs` — экспорт модулей библиотеки.
 - `main.rs` — CLI-точка входа.
 - `common_types.rs` — token-контракты и лексические типы.
@@ -40,22 +43,27 @@
 ### 3.1 `src/lib.rs`
 
 Назначение:
+
 - объявляет и реэкспортирует основные модули (`lexer`, `parser`, `semantic_analysis`, `codegen`, и т.д.).
 
 Роль:
+
 - библиотечная “склейка” проекта для использования из `main.rs` и тестов.
 
 ### 3.2 `src/main.rs`
 
 Назначение:
+
 - CLI-раннер компиляторного пайплайна.
 
 Поддерживаемые флаги:
+
 - `--input <path>`
 - `--emit-c <path>`
 - `--print-c`
 
 Поведение:
+
 - читает исходник,
 - запускает `lex -> parse -> semantic -> transpile_to_c`,
 - печатает диагностики при ошибках.
@@ -63,9 +71,11 @@
 ### 3.3 `src/common_types.rs`
 
 Назначение:
+
 - типы токенов и структура токена.
 
 Ключевые сущности:
+
 - `TokenKind` — классификация токенов (keywords, operators, literals, punctuation, etc.).
 - `Token` — `kind + lexeme + line + col`.
 - `LexError` (legacy-форма, фактически проект использует `lexer/structures.rs::LexError`).
@@ -73,18 +83,22 @@
 ### 3.4 `src/diagnostics.rs`
 
 Назначение:
+
 - единый формат сообщений ошибок.
 
 Ключевые сущности:
+
 - `DiagnosticKind` (`Lex`, `Parse`, `Semantic`).
 - `format_diagnostic(...)` — стандартная сборка текста диагностики с кодом, координатами и индексом.
 
 ### 3.5 `src/ast_nodes.rs`
 
 Назначение:
+
 - AST-контракты и базовый `ScopeManager`.
 
 Ключевые сущности:
+
 - `Location`
 - `Program`
 - `Statement` (VarDecl, Assignment, FunctionDef, If/While/Loop/For/When, OnBlock, Danger*OnError, ListPush/ListPopOnError, Return*, LabelDecl, StructDecl, ...)
@@ -95,29 +109,36 @@
 ### 3.6 `src/lexer/mod.rs`
 
 Назначение:
+
 - модульная точка входа для лексера.
 
 Что делает:
+
 - подключает `core` и `structures`,
 - реэкспортирует `lex`.
 
 ### 3.7 `src/lexer/structures.rs`
 
 Назначение:
+
 - структуры и helper-ы лексера.
 
 Ключевые элементы:
+
 - `LexError` с Display через `format_diagnostic`.
 - `is_operator_start(c)` — быстрый фильтр для потенциальных операторов/пунктуации.
 
 ### 3.8 `src/lexer/core.rs`
 
 Назначение:
+
 - полная реализация токенизации.
 
 Что внутри:
+
 - `Lexer`-итератор по символам,
 - распознавание:
+
   - чисел, идентификаторов, keyword-ов,
   - строк,
   - операторов и пунктуации,
@@ -127,9 +148,11 @@
 ### 3.9 `src/parser/mod.rs`
 
 Назначение:
+
 - orchestration-парсер.
 
 Что делает:
+
 - выбирает нужный statement parser по стартовому токену,
 - пропускает whitespace/newline,
 - собирает `Program`.
@@ -137,9 +160,11 @@
 ### 3.10 `src/parser/expressions.rs`
 
 Назначение:
+
 - Pratt-парсер выражений.
 
 Возможности:
+
 - префиксные и инфиксные операторы с приоритетами,
 - вызовы функций,
 - индексация,
@@ -149,9 +174,11 @@
 ### 3.11 `src/parser/statements.rs`
 
 Назначение:
+
 - парсинг деклараций и инструкций верхнего уровня/блоков.
 
 Покрывает:
+
 - `fn` / `danger fn`,
 - `if`, `while`, `loop`,
 - `for in` + `iterate ... as ...`,
@@ -161,6 +188,7 @@
 - `label`, `struct`,
 - `on ...` блоки,
 - специальные формы:
+
   - `x = parse(...) on error { ... }`,
   - `x = xs.pop() on error { ... }`,
   - `xs.push(v)`.
@@ -168,9 +196,11 @@
 ### 3.12 `src/semantic_analysis.rs`
 
 Назначение:
+
 - типизация и контекстные проверки AST.
 
 Ключевые проверки:
+
 - scope rules (`use-before-definition`, redeclaration),
 - type compatibility,
 - function call args/signatures,
@@ -183,22 +213,28 @@
 ### 3.13 `src/codegen/mod.rs`
 
 Назначение:
+
 - модульная точка входа codegen.
 
 Что делает:
+
 - реэкспорт `transpile_program_to_c`.
 
 ### 3.14 `src/codegen/c.rs`
 
 Назначение:
+
 - основной C-lowering.
 
 Что делает:
+
 - собирает include-ы,
 - генерирует runtime helper-ы:
+
   - `List`: new/push/pop/get,
   - `Text`: char_at/find/slice,
 - lower-ит:
+
   - функции,
   - var/assignment,
   - control-flow,
@@ -336,6 +372,7 @@
 ## 5. Тестовая подсистема
 
 Ключевые наборы:
+
 - `lexer_smoke.rs` — базовые проверки лексера.
 - `parser_smoke.rs` — позитивные parser-сценарии.
 - `parser_negative.rs` — негативные parser-сценарии.
@@ -348,6 +385,7 @@
 ## 6. Текущее состояние зрелости
 
 Готово:
+
 - стабильный базовый пайплайн,
 - развитый тестовый контур,
 - рабочий C-transpile для core-подмножества,
@@ -355,11 +393,13 @@
 - поддержка core I/O (`output/input/read/write`) и `args()`.
 
 Не завершено:
+
 - полноценная runtime-модель событий/конкурентности,
 - полное lowering для struct/advanced memory model,
 - финальный контракт error-flow для индексации (сейчас fail-soft runtime fallback).
 
 Принятое design-направление (1.x):
+
 - текущие `read(path)` / `write(path, data)` и `args()` остаются рабочим промежуточным слоем,
 - планируется переход к унифицированной stream-модели I/O:
   `read(stream)` / `write(stream, data)` с общим контрактом для файлов/консоли/CLI-входов.

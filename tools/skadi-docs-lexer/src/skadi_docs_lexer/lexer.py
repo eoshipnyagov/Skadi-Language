@@ -1,0 +1,119 @@
+from pygments.lexer import RegexLexer, words
+from pygments.token import Comment, Keyword, Name, Operator, Punctuation, String, Text
+
+
+class SkadiLexer(RegexLexer):
+    """Minimal Pygments lexer for Skadi code blocks."""
+
+    name = "Skadi"
+    aliases = ["skadi"]
+    filenames = ["*.skd"]
+
+    tokens = {
+        "root": [
+            (r"\s+", Text),
+            (r"//.*?$", Comment.Single),
+            (r"/\*", Comment.Multiline, "comment"),
+            (r'"', String.Double, "string"),
+            (r"'(?:\\.|[^'\\])'", String.Char),
+            (
+                words(
+                    (
+                        "fn",
+                        "danger",
+                        "struct",
+                        "label",
+                        "new",
+                        "fixed",
+                        "const",
+                        "hide",
+                        "local",
+                        "allow",
+                        "drop",
+                        "direct",
+                        "if",
+                        "else",
+                        "when",
+                        "is",
+                        "while",
+                        "for",
+                        "iterate",
+                        "as",
+                        "loop",
+                        "return",
+                        "returns",
+                        "break",
+                        "continue",
+                        "pass",
+                        "on",
+                        "error",
+                        "interrupt",
+                        "event",
+                        "run",
+                        "wait",
+                    ),
+                    suffix=r"\b",
+                ),
+                Keyword,
+            ),
+            (
+                words(
+                    (
+                        "Int",
+                        "Float",
+                        "Bool",
+                        "Char",
+                        "Text",
+                        "String",
+                        "Path",
+                        "Time",
+                        "List",
+                        "Link",
+                        "Canvas",
+                        "Window",
+                        "Point",
+                        "Size",
+                        "Vec2",
+                        "Vec3",
+                        "Vec4",
+                        "bool",
+                        "char",
+                        "i8",
+                        "i16",
+                        "i32",
+                        "i64",
+                        "u8",
+                        "u16",
+                        "u32",
+                        "u64",
+                        "f32",
+                        "f64",
+                    ),
+                    suffix=r"\b",
+                ),
+                Name.Builtin,
+            ),
+            (words(("true", "false", "null", "PI", "TAU", "E", "EPSILON"), suffix=r"\b"), Name.Constant),
+            (r"\bfs\.(list|read|write|is_dir|join)\b", Name.Builtin.Pseudo),
+            (
+                r"\b(output|print|input|read|write|len|find|slice|concat|args|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\b(?=\s*\()",
+                Name.Builtin,
+            ),
+            (r"\bmy\b", Name.Variable.Instance),
+            (r"==|!=|<=|>=|->|=|<|>|\+|\-|\*|\/|\^|%|\+=|-=|\*=|/=|\+\+|--|\band\b|\bor\b|\bnot\b", Operator),
+            (r"[{}()[\],.:;]", Punctuation),
+            (r"\b[A-Za-z_][A-Za-z0-9_]*\b", Name),
+            (r".", Text),
+        ],
+        "comment": [
+            (r"[^*]+", Comment.Multiline),
+            (r"\*/", Comment.Multiline, "#pop"),
+            (r"\*", Comment.Multiline),
+        ],
+        "string": [
+            (r'\\.', String.Escape),
+            (r"__", String.Interpol),
+            (r'"', String.Double, "#pop"),
+            (r"[^\\\"]+", String.Double),
+        ],
+    }

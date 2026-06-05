@@ -13,7 +13,11 @@ struct ExprParser<'a> {
 
 impl<'a> ExprParser<'a> {
     fn new(tokens: &'a [Token], start: usize, end: usize) -> Self {
-        Self { tokens, idx: start, end }
+        Self {
+            tokens,
+            idx: start,
+            end,
+        }
     }
 
     fn parse(mut self) -> Result<Expression, String> {
@@ -50,7 +54,10 @@ impl<'a> ExprParser<'a> {
                     || self.tokens[self.idx].kind != TokenKind::OpPunctuation
                     || self.tokens[self.idx].lexeme != "]"
                 {
-                    return Err(parse_err("SC-PARSE-209", "expected ']' to close index access."));
+                    return Err(parse_err(
+                        "SC-PARSE-209",
+                        "expected ']' to close index access.",
+                    ));
                 }
                 self.idx += 1; // skip ']'
                 lhs = Expression::Index {
@@ -83,7 +90,10 @@ impl<'a> ExprParser<'a> {
 
     fn parse_prefix(&mut self) -> Result<Expression, String> {
         if self.idx >= self.end {
-            return Err(parse_err("SC-PARSE-201", "expected expression, found end of input."));
+            return Err(parse_err(
+                "SC-PARSE-201",
+                "expected expression, found end of input.",
+            ));
         }
         let tok = &self.tokens[self.idx];
 
@@ -114,7 +124,10 @@ impl<'a> ExprParser<'a> {
                 || self.tokens[self.idx].kind != TokenKind::OpPunctuation
                 || self.tokens[self.idx].lexeme != ")"
             {
-                return Err(parse_err("SC-PARSE-202", "expected ')' to close grouped expression."));
+                return Err(parse_err(
+                    "SC-PARSE-202",
+                    "expected ')' to close grouped expression.",
+                ));
             }
             self.idx += 1;
             return Ok(expr);
@@ -134,7 +147,10 @@ impl<'a> ExprParser<'a> {
                 let item = self.parse_bp(0)?;
                 items.push(item);
                 if self.idx >= self.end {
-                    return Err(parse_err("SC-PARSE-207", "expected ']' to close list literal."));
+                    return Err(parse_err(
+                        "SC-PARSE-207",
+                        "expected ']' to close list literal.",
+                    ));
                 }
                 if self.tokens[self.idx].kind == TokenKind::OpPunctuation
                     && self.tokens[self.idx].lexeme == ","
@@ -148,7 +164,10 @@ impl<'a> ExprParser<'a> {
                     self.idx += 1;
                     break;
                 }
-                return Err(parse_err("SC-PARSE-208", "expected ',' or ']' in list literal."));
+                return Err(parse_err(
+                    "SC-PARSE-208",
+                    "expected ',' or ']' in list literal.",
+                ));
             }
             return Ok(Expression::ListLiteral(items));
         }
@@ -165,7 +184,10 @@ impl<'a> ExprParser<'a> {
             }
             loop {
                 if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {
-                    return Err(parse_err("SC-PARSE-210", "struct literal expected field name."));
+                    return Err(parse_err(
+                        "SC-PARSE-210",
+                        "struct literal expected field name.",
+                    ));
                 }
                 let field_name = self.tokens[self.idx].lexeme.clone();
                 self.idx += 1;
@@ -183,7 +205,10 @@ impl<'a> ExprParser<'a> {
                 fields.insert(field_name, Box::new(field_value));
 
                 if self.idx >= self.end {
-                    return Err(parse_err("SC-PARSE-211", "expected '}' to close struct literal."));
+                    return Err(parse_err(
+                        "SC-PARSE-211",
+                        "expected '}' to close struct literal.",
+                    ));
                 }
                 if self.tokens[self.idx].kind == TokenKind::OpPunctuation
                     && self.tokens[self.idx].lexeme == ","
@@ -258,7 +283,10 @@ impl<'a> ExprParser<'a> {
                         let arg = self.parse_bp(0)?;
                         args.push(arg);
                         if self.idx >= self.end {
-                            return Err(parse_err("SC-PARSE-203", "expected ')' to close function call."));
+                            return Err(parse_err(
+                                "SC-PARSE-203",
+                                "expected ')' to close function call.",
+                            ));
                         }
                         if self.tokens[self.idx].kind == TokenKind::OpPunctuation
                             && self.tokens[self.idx].lexeme == ","
@@ -272,7 +300,10 @@ impl<'a> ExprParser<'a> {
                             self.idx += 1;
                             break;
                         }
-                        return Err(parse_err("SC-PARSE-204", "expected ',' or ')' in argument list."));
+                        return Err(parse_err(
+                            "SC-PARSE-204",
+                            "expected ',' or ')' in argument list.",
+                        ));
                     }
                     Ok(Expression::Call {
                         name: call_name,
@@ -286,14 +317,20 @@ impl<'a> ExprParser<'a> {
             TokenKind::TypeChar => Ok(Expression::VariableReference(tok.lexeme.clone())),
             _ => Err(parse_err(
                 "SC-PARSE-205",
-                format!("unexpected token in expression: {:?} ('{}')", tok.kind, tok.lexeme),
+                format!(
+                    "unexpected token in expression: {:?} ('{}')",
+                    tok.kind, tok.lexeme
+                ),
             )),
         }
     }
 }
 
 fn is_infix_operator(tok: &Token) -> bool {
-    matches!(tok.kind, TokenKind::OpArithmetic | TokenKind::OpComparison | TokenKind::OpLogical)
+    matches!(
+        tok.kind,
+        TokenKind::OpArithmetic | TokenKind::OpComparison | TokenKind::OpLogical
+    )
 }
 
 fn infix_binding_power(op: &str) -> (u8, u8) {
@@ -308,9 +345,16 @@ fn infix_binding_power(op: &str) -> (u8, u8) {
     }
 }
 
-pub fn parse_expression_range(tokens: &[Token], start: usize, end: usize) -> Result<Expression, String> {
+pub fn parse_expression_range(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+) -> Result<Expression, String> {
     if start >= end {
-        return Err(parse_err("SC-PARSE-206", "expected expression, found empty range."));
+        return Err(parse_err(
+            "SC-PARSE-206",
+            "expected expression, found empty range.",
+        ));
     }
     ExprParser::new(tokens, start, end).parse()
 }

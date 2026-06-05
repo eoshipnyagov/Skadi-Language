@@ -56,7 +56,11 @@ pub fn resolve_profile(target: &str) -> Result<TargetProfile, String> {
         .ok_or_else(|| format!("unknown target '{target}'. Use: skadi target list"))
 }
 
-pub fn candidate_invocations(target: &str, c_path: &Path, exe_path: &Path) -> Result<Vec<CompilerInvocation>, String> {
+pub fn candidate_invocations(
+    target: &str,
+    c_path: &Path,
+    exe_path: &Path,
+) -> Result<Vec<CompilerInvocation>, String> {
     let c = c_path.display().to_string();
     let out = exe_path.display().to_string();
     let inv = match target {
@@ -64,15 +68,15 @@ pub fn candidate_invocations(target: &str, c_path: &Path, exe_path: &Path) -> Re
             let mut xs = vec![
                 CompilerInvocation {
                     program: "gcc".to_string(),
-                    args: vec![c.clone(), "-o".to_string(), out.clone()],
+                    args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
                 },
                 CompilerInvocation {
                     program: "clang".to_string(),
-                    args: vec![c.clone(), "-o".to_string(), out.clone()],
+                    args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
                 },
                 CompilerInvocation {
                     program: "cc".to_string(),
-                    args: vec![c.clone(), "-o".to_string(), out.clone()],
+                    args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
                 },
             ];
             if cfg!(windows) {
@@ -86,17 +90,17 @@ pub fn candidate_invocations(target: &str, c_path: &Path, exe_path: &Path) -> Re
         "x86_64-w64-mingw32" => vec![
             CompilerInvocation {
                 program: "x86_64-w64-mingw32-gcc".to_string(),
-                args: vec![c.clone(), "-o".to_string(), out.clone()],
+                args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
             },
             CompilerInvocation {
                 program: "gcc".to_string(),
-                args: vec![c.clone(), "-o".to_string(), out.clone()],
+                args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
             },
         ],
         "x86_64-unknown-linux-gnu" => vec![
             CompilerInvocation {
                 program: "x86_64-linux-gnu-gcc".to_string(),
-                args: vec![c.clone(), "-o".to_string(), out.clone()],
+                args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
             },
             CompilerInvocation {
                 program: "clang".to_string(),
@@ -105,6 +109,7 @@ pub fn candidate_invocations(target: &str, c_path: &Path, exe_path: &Path) -> Re
                     c.clone(),
                     "-o".to_string(),
                     out.clone(),
+                    "-lm".to_string(),
                 ],
             },
         ],
@@ -124,7 +129,9 @@ pub fn single_compiler_invocation(
     let inv = match compiler {
         "cl" => {
             if target != "host" {
-                return Err(format!("compiler 'cl' is only supported for host target, got '{target}'"));
+                return Err(format!(
+                    "compiler 'cl' is only supported for host target, got '{target}'"
+                ));
             }
             CompilerInvocation {
                 program: "cl".to_string(),
@@ -139,8 +146,9 @@ pub fn single_compiler_invocation(
                     c,
                     "-o".to_string(),
                     out,
+                    "-lm".to_string(),
                 ],
-                _ => vec![c, "-o".to_string(), out],
+                _ => vec![c, "-o".to_string(), out, "-lm".to_string()],
             },
         },
     };
@@ -206,7 +214,11 @@ mod tests {
             Path::new("a.out"),
         )
         .expect("explicit invocation should be created");
-        assert!(inv.args.iter().any(|a| a == "--target=x86_64-unknown-linux-gnu"));
+        assert!(
+            inv.args
+                .iter()
+                .any(|a| a == "--target=x86_64-unknown-linux-gnu")
+        );
     }
 
     #[test]

@@ -1,32 +1,29 @@
-# Skadi CLI Usage
+# Skadi: справка по использованию CLI
 
-Quick start (RU): `docs/SKADI_CLI_QUICK_START_RU.md`
+Основные пользовательские документы:
 
-Current CLI entrypoint: `src/main.rs`
+- быстрый старт: `SKADI_CLI_QUICK_START_RU.md`
+- справочник CLI/TUI: `SKADI_CLI_REFERENCE_RU.md`
+- руководство для новичка: `SKADI_GETTING_STARTED_RU.md`
 
-## Supported commands
+Канонический пользовательский вход:
 
-- Emit C file:
-  - `cargo run -- --input program.skd --emit-c out.c`
+- `tools/skadi-cli`
 
-- Build executable in one command (requires `gcc` or `clang` in PATH):
-  - `cargo run -- --input program.skd --emit-exe out.exe`
+Низкоуровневый драйвер компилятора по-прежнему существует:
 
-- Print generated C to stdout:
-  - `cargo run -- --input program.skd --print-c`
+- `cargo run -- --input program.skd --print-c`
+- `cargo run -- --input program.skd --emit-c out.c`
+- `cargo run -- --input program.skd --emit-exe out.exe`
 
-- Show help:
-  - `cargo run -- --help`
+Но для обычного пользовательского потока в `v1.1` лучше использовать:
 
-## Notes
-
-- `--emit-exe` uses a temporary `.c` file near output exe and removes it after compilation.
-- If both `--emit-c` and `--emit-exe` are provided, compiler writes C output and also builds executable.
-- You can pass source file directly without `--input`:
-  - `cargo run -- program.skd --emit-exe out.exe`
-
-## Planned next improvements
-
-- Add stable `Skadi` wrapper binary command format.
-
-
+- `new`
+- `init`
+- `check`
+- `build`
+- `run`
+- `format`
+- `doctor`
+- `target list`
+- `tui`

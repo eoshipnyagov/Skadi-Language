@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: skadi-docs-lexer
+Version: 0.1.0
+Summary: Pygments lexer for Skadi documentation code blocks
+Requires-Python: >=3.10

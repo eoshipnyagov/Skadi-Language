@@ -1,85 +1,171 @@
-# Skadi CLI Quick Start (RU, Cross-Platform)
+# Skadi: Быстрый старт CLI (RU)
 
-Быстрый старт для Windows, WSL, Linux и macOS.
+Короткий старт для нового пользователя Skadi `v1.1`.
 
-## 1. Prerequisites
+Роль этого документа: быстро провести через первый запуск и базовый цикл
+работы без подробного разбора всего синтаксиса.
 
-- Rust toolchain (`cargo`)
-- C-компилятор в `PATH`:
-  - Windows: `gcc` (MinGW-w64) или `cl` (Visual Studio Build Tools)
-  - WSL/Linux: `gcc` или `clang`
+Полный гайд по языку: [Начало работы](getting-started.md)  
+Полный справочник CLI/TUI: [Справочник CLI/TUI](cli-reference.md)
+
+## 1. Что нужно заранее
+
+- Rust с `cargo`
+- C-компилятор в `PATH`
+  - Windows: `gcc` из MinGW-w64, `clang` или `cl`
+  - Linux / WSL: `gcc`, `clang` или `cc`
   - macOS: Xcode Command Line Tools (`clang`)
 
-## 2. Проверка toolchain
+## 2. Канонический пользовательский путь
 
-### Windows (PowerShell)
+Для `v1.1` основной интерфейс пользователя - `skadi-cli`.
+
+Низкоуровневый запуск корневого компилятора через `cargo run -- --input ...`
+остаётся доступным, но для повседневной работы и документации основной путь -
+`skadi-cli`.
+
+## 3. Проверка окружения
+
+В рабочей директории репозитория запустите:
 
 ```powershell
-cd D:\YandexDisk\Skadi\v01\tools\skadi-cli
-cargo run -- doctor
+skadi-cli doctor
 ```
 
-### WSL/Linux/macOS (bash)
+`doctor` помогает понять:
 
-```bash
-cd /path/to/Skadi/v01/tools/skadi-cli
-cargo run -- doctor
-```
+- есть ли рабочий C-компилятор для текущей целевой платформы;
+- какие компиляторы доступны;
+- это ошибка фронтенда Skadi или проблема окружения.
 
-## 3. Почему в `cargo run` нужен `--`
+## 4. Если вы работаете из исходников
 
-- До `--` аргументы обрабатывает `cargo`.
-- После `--` аргументы передаются в программу (`skadi-cli`).
+Если `skadi-cli` уже установлен, этот раздел можно пропустить.
+
+Если вы запускаете команды прямо из репозитория, то до `--` аргументы
+обрабатывает `cargo`, а после `--` они передаются в `skadi-cli`.
 
 Пример:
 
 ```powershell
-cargo run -- build --target host --cc gcc
+cargo run --manifest-path skadi-cli/Cargo.toml -- build --target host --cc gcc
 ```
 
-Здесь `build --target host --cc gcc` получает именно `skadi-cli`.
+## 5. Новый проект
 
-## 4. Основной цикл (new/check/build/run)
-
-### Windows (PowerShell)
+В рабочей директории проекта:
 
 ```powershell
-cd D:\YandexDisk\Skadi\v01\tools\skadi-cli
-cargo run -- new hello_skadi
+skadi-cli new hello_skadi
 cd hello_skadi
-cargo run -- check
-cargo run -- build
-cargo run -- run
 ```
 
-### WSL/Linux/macOS (bash)
+Что создаётся:
 
-```bash
-cd /path/to/Skadi/v01/tools/skadi-cli
-cargo run -- new hello_skadi
-cd hello_skadi
-cargo run -- check
-cargo run -- build
-cargo run -- run
+- `Skadi.toml`
+- `src/main.skd`
+- `.gitignore`
+
+## 6. Основной цикл работы
+
+```powershell
+skadi-cli check
+skadi-cli format
+skadi-cli format --check
+skadi-cli build
+skadi-cli run
 ```
 
-## 5. Явный выбор компилятора
+Рекомендуемый ритм:
 
-- `--cc <compiler>` принудительно задает C-компилятор:
-  - `cargo run -- build --cc gcc`
-  - `cargo run -- build --cc clang`
-  - `cargo run -- build --cc cl` (Windows host)
+- `check` для фронтенда языка;
+- `format` для приведения к каноничному стилю;
+- `build` для сборки через C-компилятор;
+- `run` для полного smoke-пути.
+
+## 7. Инициализация проекта в текущей папке
+
+```powershell
+mkdir demo
+cd demo
+skadi-cli init
+```
+
+`init` создаёт отсутствующие базовые файлы, но не ломает уже существующие.
+
+## 8. Явный выбор target и компилятора
+
+```powershell
+skadi-cli build --target host --cc gcc
+skadi-cli run --target host --cc clang
+```
 
 Если `--cc` не задан:
-- Windows host: `gcc -> clang -> cl`
-- Linux/WSL/macOS host: `gcc -> clang -> cc`
 
-## 6. Troubleshooting
+- Windows: `gcc -> clang -> cl`
+- Linux / WSL / macOS: `gcc -> clang -> cc`
 
-- Ошибка: `failed to run <compiler>: ...`
-  - Проверьте наличие компилятора: `gcc --version`, `clang --version`, `cl`.
-- Ошибка: `no working C compiler for target ...`
-  - Запустите `cargo run -- doctor`.
-  - Проверьте PATH:
-    - Windows: `where gcc`, `where clang`, `where cl`
-    - Linux/macOS/WSL: `which gcc`, `which clang`, `which cc`
+## 9. Форматирование
+
+```powershell
+skadi-cli format
+skadi-cli format src/main.skd
+skadi-cli format --check
+```
+
+`format --check` полезен как локальный release-check перед коммитом.
+
+## 10. Работа через TUI
+
+```powershell
+skadi-cli tui
+```
+
+`skadi-cli tui` в `v1.1` - полноценный интерактивный путь работы с проектом.
+
+Полезные клавиши:
+
+- `c` - `check`
+- `b` - `build`
+- `r` - `run`
+- `f` - `format`
+- `d` - `doctor`
+- `m` - config / manifest view
+- `o` - открыть или переключить проект
+- `g` - создать отсутствующий `entry`-файл из `Config`
+- `p` - обзор проекта
+- `e` - diagnostics
+- `h` - help
+- `q` - выход
+
+Что уже умеет TUI:
+
+- обзор проекта;
+- экран диагностики;
+- build/run view с `stdout/stderr`;
+- `doctor` view;
+- редактирование `Skadi.toml`;
+- настройки сборки для текущего сеанса: `target` и preferred `compiler`;
+- создание отсутствующего `entry` файла.
+
+## 11. Типовые ошибки
+
+- Ошибка фронтенда Skadi:
+
+  - проблема в исходнике языка;
+  - обычно ловится на `check`.
+- Ошибка C-компилятора:
+
+  - проблема с `gcc` / `clang` / `cl`;
+  - проверяется через `doctor`.
+- Ошибка выполнения программы:
+
+  - Skadi-программа собралась, но уже сработала ошибка при запуске бинаря.
+
+## 12. Что читать дальше
+
+- [Начало работы](getting-started.md) - полный гайд для новичка
+- [Справочник языка](language-reference.md) - справочник по языку
+- [Справочник CLI/TUI](cli-reference.md) - справочник по CLI и TUI
+- [Статус синтаксиса](syntax-status.md) - точный срез текущего синтаксиса
+- [Showcase-программы](showcases.md) - витринные программы

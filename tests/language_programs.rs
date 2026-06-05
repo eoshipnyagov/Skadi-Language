@@ -115,7 +115,7 @@ new char c2 = t[9]
 
 #[test]
 fn program_tree_utility_pipeline_shape() {
-    let src = include_str!("../example_tree.skd");
+    let src = include_str!("../examples/example_tree.skd");
     let c = compile_pipeline(src);
     assert!(c.contains("SkadiList_text cli_args = sk_list_text_new();"));
     assert!(c.contains("cli_args = sk_args(argc, argv);"));
@@ -127,4 +127,8 @@ fn program_tree_utility_pipeline_shape() {
     assert!(c.contains("\"--dirs-only\") == 0"));
 }
 
-
+#[test]
+fn program_meteostation_showcase_compiles() {
+    let src = include_str!("../examples/example_meteostation.skd");
+    let _c = compile_pipeline(src);
+}

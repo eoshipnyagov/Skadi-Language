@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use crate::ast_nodes::{BlockStatement, Expression, ForLoopStyle, FunctionParam, Program, Statement};
-use crate::builtins::{builtin_arity, builtin_from_name, Builtin};
-use crate::diagnostics::{format_diagnostic, DiagnosticKind};
+use crate::ast_nodes::{
+    BlockStatement, Expression, ForLoopStyle, FunctionParam, Program, Statement,
+};
+use crate::builtins::{Builtin, builtin_arity, builtin_from_name};
+use crate::diagnostics::{DiagnosticKind, format_diagnostic};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ValueType {
@@ -116,7 +118,10 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 name.clone(),
                 FunctionSig {
                     is_danger: *is_danger,
-                    return_type: returns.as_deref().map(parse_type_name).or(Some(ValueType::Int)),
+                    return_type: returns
+                        .as_deref()
+                        .map(parse_type_name)
+                        .or(Some(ValueType::Int)),
                     param_types: params.iter().map(param_type_or_default).collect(),
                 },
             );
@@ -141,7 +146,11 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                     m.name.clone(),
                     FunctionSig {
                         is_danger: m.is_danger,
-                        return_type: m.returns.as_deref().map(parse_type_name).or(Some(ValueType::Int)),
+                        return_type: m
+                            .returns
+                            .as_deref()
+                            .map(parse_type_name)
+                            .or(Some(ValueType::Int)),
                         param_types: m.params.iter().map(param_type_or_default).collect(),
                     },
                 );
@@ -175,7 +184,9 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         .statements
         .iter()
         .filter_map(|s| match s {
-            Statement::StructDecl { name, .. } | Statement::LabelDecl { name, .. } => Some(name.clone()),
+            Statement::StructDecl { name, .. } | Statement::LabelDecl { name, .. } => {
+                Some(name.clone())
+            }
             _ => None,
         })
         .collect();
@@ -247,9 +258,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         for stmt in stmts {
             match stmt {
                 Statement::VarDecl {
-                    declared_type,
-                    loc,
-                    ..
+                    declared_type, loc, ..
                 } => {
                     if let Some(dt) = declared_type {
                         if let Some(elem) = dt.strip_suffix(" List") {
@@ -290,7 +299,9 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                         visit_statements(&b.statements, user_types, out);
                     }
                 }
-                Statement::ForLoop { style, body, loc, .. } => {
+                Statement::ForLoop {
+                    style, body, loc, ..
+                } => {
                     if *style == ForLoopStyle::ForIn {
                         out.push(format!(
                             "style warning at line {}, col {}: prefer 'iterate <collection> as <item>' over 'for <item> in <collection>' in showcase-style code.",
@@ -299,14 +310,11 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     }
                     visit_statements(&body.statements, user_types, out);
                 }
-                Statement::WhileLoop { body, .. }
-                | Statement::LoopStatement { body, .. } => {
+                Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => {
                     visit_statements(&body.statements, user_types, out);
                 }
                 Statement::WhenBlock {
-                    cases,
-                    else_block,
-                    ..
+                    cases, else_block, ..
                 } => {
                     for (_, b) in cases {
                         visit_statements(&b.statements, user_types, out);
@@ -337,10 +345,16 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
 fn validate_error_code_label(labels: &HashMap<String, Vec<String>>) -> Result<(), String> {
     if let Some(error_codes) = labels.get("ErrorCode") {
         if error_codes.is_empty() {
-            return Err("label ErrorCode must define at least one variant.".to_string());
+            return Err(sem_err(
+                SEM_ERRORCODE_RULE,
+                "label ErrorCode must define at least one variant.".to_string(),
+            ));
         }
         if error_codes[0] != "Ok" {
-            return Err("label ErrorCode must start with 'Ok' variant.".to_string());
+            return Err(sem_err(
+                SEM_ERRORCODE_RULE,
+                "label ErrorCode must start with 'Ok' variant.".to_string(),
+            ));
         }
     }
     Ok(())
@@ -364,6 +378,39 @@ fn parse_type_name(name: &str) -> ValueType {
     parse_primitive_type_name(name)
 }
 
+fn builtin_constant_type(name: &str) -> Option<ValueType> {
+    match name {
+        "PI" | "TAU" | "E" | "EPSILON" => Some(ValueType::Float),
+        _ => None,
+    }
+}
+
+fn is_numeric_type(ty: &ValueType) -> bool {
+    matches!(ty, ValueType::Int | ValueType::Float)
+}
+
+fn ensure_numeric_args(name: &str, arg_tys: &[ValueType]) -> Result<(), String> {
+    if arg_tys.iter().all(is_numeric_type) {
+        Ok(())
+    } else {
+        Err(sem_err(
+            SEM_TYPE_MISMATCH,
+            format!(
+                "builtin '{}' expects numeric arguments, got {:?}.",
+                name, arg_tys
+            ),
+        ))
+    }
+}
+
+fn numeric_result_type(arg_tys: &[ValueType], preserve_int: bool) -> ValueType {
+    if preserve_int && arg_tys.iter().all(|ty| *ty == ValueType::Int) {
+        ValueType::Int
+    } else {
+        ValueType::Float
+    }
+}
+
 fn can_assign(target: &ValueType, source: &ValueType) -> bool {
     if *source == ValueType::Unknown || *target == ValueType::Unknown {
         return true;
@@ -373,9 +420,7 @@ fn can_assign(target: &ValueType, source: &ValueType) -> bool {
     }
     match (target, source) {
         (ValueType::Float, ValueType::Int) => true,
-        (ValueType::List(t), ValueType::List(s)) => {
-            **s == ValueType::Unknown || can_assign(t, s)
-        }
+        (ValueType::List(t), ValueType::List(s)) => **s == ValueType::Unknown || can_assign(t, s),
         _ => false,
     }
 }
@@ -393,11 +438,12 @@ fn validate_call_args(
         return Err(sem_err(
             SEM_ARG_COUNT,
             format!(
-            "argument count mismatch for '{}': expected {}, got {}.",
-            name,
-            sig.param_types.len(),
-            args.len()
-        )));
+                "argument count mismatch for '{}': expected {}, got {}.",
+                name,
+                sig.param_types.len(),
+                args.len()
+            ),
+        ));
     }
     for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().cloned()) {
         let actual_ty = infer_expression_type(arg, scope, functions, structs, fn_ctx)?;
@@ -405,9 +451,10 @@ fn validate_call_args(
             return Err(sem_err(
                 SEM_ARG_TYPE,
                 format!(
-                "argument type mismatch for '{}': expected {:?}, got {:?}.",
-                name, expected_ty, actual_ty
-            )));
+                    "argument type mismatch for '{}': expected {:?}, got {:?}.",
+                    name, expected_ty, actual_ty
+                ),
+            ));
         }
     }
     Ok(())
@@ -440,7 +487,15 @@ fn analyze_statements(
     in_loop: bool,
 ) -> Result<(), String> {
     for stmt in statements {
-        analyze_statement(stmt, scope, functions, labels, structs, fn_ctx.clone(), in_loop)?;
+        analyze_statement(
+            stmt,
+            scope,
+            functions,
+            labels,
+            structs,
+            fn_ctx.clone(),
+            in_loop,
+        )?;
     }
     Ok(())
 }
@@ -465,30 +520,34 @@ fn analyze_statement(
                 return Err(err_at_code(
                     stmt,
                     SEM_REDECLARATION,
-                    format!("redeclaration in same scope: '{}' is already defined.", name),
+                    format!(
+                        "redeclaration in same scope: '{}' is already defined.",
+                        name
+                    ),
                 ));
             }
             if contains_variable(value, name) {
                 return Err(err_at_code(
                     stmt,
                     SEM_INVALID_INIT,
-                    format!("invalid initialization: '{}' is used in its own initializing expression.", name),
+                    format!(
+                        "invalid initialization: '{}' is used in its own initializing expression.",
+                        name
+                    ),
                 ));
             }
-            let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
+            let value_ty =
+                infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             let final_ty = if let Some(tn) = declared_type {
                 let declared = parse_declared_type_name(tn, structs);
                 if !can_assign(&declared, &value_ty) {
-                    return Err(format!(
-                        "{}",
-                        err_at_code(
-                            stmt,
-                            SEM_TYPE_MISMATCH,
-                            format!(
-                                "type mismatch in declaration '{}': cannot assign {:?} to {:?}.",
-                                name, value_ty, declared
-                            ),
-                        )
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "type mismatch in declaration '{}': cannot assign {:?} to {:?}.",
+                            name, value_ty, declared
+                        ),
                     ));
                 }
                 declared
@@ -500,27 +559,25 @@ fn analyze_statement(
         }
         Statement::Assignment { target, value, .. } => {
             let Some(target_ty) = scope.get(target).cloned() else {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_USE_BEFORE_DEF,
-                        format!("use-before-definition: '{}' is not defined in current scope.", target),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        target
+                    ),
                 ));
             };
-            let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
+            let value_ty =
+                infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             if !can_assign(&target_ty, &value_ty) {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_TYPE_MISMATCH,
-                        format!(
-                            "type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
-                            target, value_ty, target_ty
-                        ),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "type mismatch in assignment to '{}': cannot assign {:?} to {:?}.",
+                        target, value_ty, target_ty
+                    ),
                 ));
             }
             Ok(())
@@ -534,7 +591,10 @@ fn analyze_statement(
                 return Err(err_at_code(
                     stmt,
                     SEM_USE_BEFORE_DEF,
-                    format!("use-before-definition: '{}' is not defined in current scope.", target),
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        target
+                    ),
                 ));
             };
             match target_ty {
@@ -542,17 +602,33 @@ fn analyze_statement(
                 other => Err(err_at_code(
                     stmt,
                     SEM_TYPE_MISMATCH,
-                    format!("increment/decrement requires numeric variable, got {:?}.", other),
+                    format!(
+                        "increment/decrement requires numeric variable, got {:?}.",
+                        other
+                    ),
                 )),
             }
         }
-        Statement::FieldAssignment { object, field, value, .. } => {
+        Statement::FieldAssignment {
+            object,
+            field,
+            value,
+            ..
+        } => {
             let owner_ty = if object == "my" {
                 let Some(ctx) = fn_ctx.as_ref() else {
-                    return Err(err_at_code(stmt, SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "my is only allowed inside struct methods.".to_string(),
+                    ));
                 };
                 let Some(self_name) = ctx.self_struct.as_ref() else {
-                    return Err(err_at_code(stmt, SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "my is only allowed inside struct methods.".to_string(),
+                    ));
                 };
                 ValueType::Struct(self_name.clone())
             } else if let Some(v) = scope.get(object).cloned() {
@@ -561,21 +637,47 @@ fn analyze_statement(
                 return Err(err_at_code(
                     stmt,
                     SEM_USE_BEFORE_DEF,
-                    format!("use-before-definition: '{}' is not defined in current scope.", object),
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        object
+                    ),
                 ));
             };
             let ValueType::Struct(owner) = owner_ty else {
-                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("field assignment requires struct receiver, got {:?}.", owner_ty)));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "field assignment requires struct receiver, got {:?}.",
+                        owner_ty
+                    ),
+                ));
             };
             let Some(info) = structs.get(&owner) else {
-                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("unknown struct type '{}'.", owner)));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!("unknown struct type '{}'.", owner),
+                ));
             };
             let Some(field_ty) = info.fields.get(field).cloned() else {
-                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("unknown field '{}.{}'.", owner, field)));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!("unknown field '{}.{}'.", owner, field),
+                ));
             };
-            let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
+            let value_ty =
+                infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             if !can_assign(&field_ty, &value_ty) {
-                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, format!("type mismatch in field assignment '{}.{}': cannot assign {:?} to {:?}.", owner, field, value_ty, field_ty)));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "type mismatch in field assignment '{}.{}': cannot assign {:?} to {:?}.",
+                        owner, field, value_ty, field_ty
+                    ),
+                ));
             }
             Ok(())
         }
@@ -598,15 +700,23 @@ fn analyze_statement(
                 return_type: sig.return_type.clone(),
                 self_struct: None,
             };
-            analyze_block(body, &mut fn_scope, functions, labels, structs, Some(local_ctx), false)?;
+            analyze_block(
+                body,
+                &mut fn_scope,
+                functions,
+                labels,
+                structs,
+                Some(local_ctx),
+                false,
+            )?;
             if sig.is_danger && !block_guarantees_termination(body) {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_RETURN_RULE,
-                        format!("danger fn '{}' must end with explicit return/return error on all paths.", name),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_RETURN_RULE,
+                    format!(
+                        "danger fn '{}' must end with explicit return/return error on all paths.",
+                        name
+                    ),
                 ));
             }
             Ok(())
@@ -619,13 +729,33 @@ fn analyze_statement(
         } => {
             let cty = infer_expression_type(condition, scope, functions, structs, fn_ctx.as_ref())?;
             if cty != ValueType::Bool {
-                return Err(err_at_code(stmt, SEM_TYPE_MISMATCH, "if condition must be bool.".to_string()));
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    "if condition must be bool.".to_string(),
+                ));
             }
             let mut then_scope = scope.clone();
-            analyze_block(then_block, &mut then_scope, functions, labels, structs, fn_ctx.clone(), in_loop)?;
+            analyze_block(
+                then_block,
+                &mut then_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx.clone(),
+                in_loop,
+            )?;
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, structs, fn_ctx.clone(), in_loop)?;
+                analyze_block(
+                    else_block,
+                    &mut else_scope,
+                    functions,
+                    labels,
+                    structs,
+                    fn_ctx.clone(),
+                    in_loop,
+                )?;
             }
             Ok(())
         }
@@ -640,7 +770,13 @@ fn analyze_statement(
             if let Some(init) = initialization {
                 if let Expression::VariableReference(name) = init.as_ref() {
                     let inferred_item_ty = if let Some(coll) = condition {
-                        match infer_expression_type(coll, &loop_scope, functions, structs, fn_ctx.as_ref())? {
+                        match infer_expression_type(
+                            coll,
+                            &loop_scope,
+                            functions,
+                            structs,
+                            fn_ctx.as_ref(),
+                        )? {
                             ValueType::List(elem_ty) => (*elem_ty).clone(),
                             ValueType::Text => ValueType::Char,
                             other => {
@@ -651,7 +787,7 @@ fn analyze_statement(
                                         "for/iterate expects List or Text collection, got {:?}.",
                                         other
                                     ),
-                                ))
+                                ));
                             }
                         }
                     } else {
@@ -659,16 +795,32 @@ fn analyze_statement(
                     };
                     loop_scope.insert(name.clone(), inferred_item_ty);
                 } else {
-                    let _ = infer_expression_type(init, &loop_scope, functions, structs, fn_ctx.as_ref())?;
+                    let _ = infer_expression_type(
+                        init,
+                        &loop_scope,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
                 }
             }
             if let Some(cond) = condition {
-                let _ = infer_expression_type(cond, &loop_scope, functions, structs, fn_ctx.as_ref())?;
+                let _ =
+                    infer_expression_type(cond, &loop_scope, functions, structs, fn_ctx.as_ref())?;
             }
             if let Some(upd) = update {
-                let _ = infer_expression_type(upd, &loop_scope, functions, structs, fn_ctx.as_ref())?;
+                let _ =
+                    infer_expression_type(upd, &loop_scope, functions, structs, fn_ctx.as_ref())?;
             }
-            analyze_block(body, &mut loop_scope, functions, labels, structs, fn_ctx, true)
+            analyze_block(
+                body,
+                &mut loop_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx,
+                true,
+            )
         }
         Statement::WhenBlock {
             when_expression,
@@ -676,10 +828,12 @@ fn analyze_statement(
             else_block,
             ..
         } => {
-            let when_ty = infer_expression_type(when_expression, scope, functions, structs, fn_ctx.as_ref())?;
+            let when_ty =
+                infer_expression_type(when_expression, scope, functions, structs, fn_ctx.as_ref())?;
             for (case_exprs, block) in cases {
                 for expr in case_exprs {
-                    let case_ty = infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
+                    let case_ty =
+                        infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
                     if !can_assign(&when_ty, &case_ty) && !can_assign(&case_ty, &when_ty) {
                         return Err(err_at_code(
                             stmt,
@@ -692,15 +846,33 @@ fn analyze_statement(
                     }
                 }
                 let mut case_scope = scope.clone();
-                analyze_block(block, &mut case_scope, functions, labels, structs, fn_ctx.clone(), in_loop)?;
+                analyze_block(
+                    block,
+                    &mut case_scope,
+                    functions,
+                    labels,
+                    structs,
+                    fn_ctx.clone(),
+                    in_loop,
+                )?;
             }
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                analyze_block(else_block, &mut else_scope, functions, labels, structs, fn_ctx.clone(), in_loop)?;
+                analyze_block(
+                    else_block,
+                    &mut else_scope,
+                    functions,
+                    labels,
+                    structs,
+                    fn_ctx.clone(),
+                    in_loop,
+                )?;
             }
             Ok(())
         }
-        Statement::WhileLoop { condition, body, .. } => {
+        Statement::WhileLoop {
+            condition, body, ..
+        } => {
             let cty = infer_expression_type(condition, scope, functions, structs, fn_ctx.as_ref())?;
             if cty != ValueType::Bool {
                 return Err(err_at_code(
@@ -710,11 +882,27 @@ fn analyze_statement(
                 ));
             }
             let mut while_scope = scope.clone();
-            analyze_block(body, &mut while_scope, functions, labels, structs, fn_ctx, true)
+            analyze_block(
+                body,
+                &mut while_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx,
+                true,
+            )
         }
         Statement::LoopStatement { body, .. } => {
             let mut local_scope = scope.clone();
-            analyze_block(body, &mut local_scope, functions, labels, structs, fn_ctx, true)
+            analyze_block(
+                body,
+                &mut local_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx,
+                true,
+            )
         }
         Statement::BreakStatement { .. } | Statement::ContinueStatement { .. } => {
             if !in_loop {
@@ -726,14 +914,21 @@ fn analyze_statement(
             }
             Ok(())
         }
-        Statement::PassStatement { .. } => {
-            Ok(())
-        }
-        Statement::OnErrorBlock { statements, .. } | Statement::BlockStatement { statements, .. } => {
+        Statement::PassStatement { .. } => Ok(()),
+        Statement::OnErrorBlock { statements, .. }
+        | Statement::BlockStatement { statements, .. } => {
             let mut local_scope = scope.clone();
-            analyze_statements(statements, &mut local_scope, functions, labels, structs, fn_ctx, in_loop)
+            analyze_statements(
+                statements,
+                &mut local_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx,
+                in_loop,
+            )
         }
-        Statement::OnBlock { trigger, .. } => {
+        Statement::OnBlock { trigger, body, .. } => {
             if trigger == "error" {
                 return Err(
                     err_at_code(
@@ -744,7 +939,16 @@ fn analyze_statement(
                     ),
                 );
             }
-            Ok(())
+            let mut local_scope = scope.clone();
+            analyze_block(
+                body,
+                &mut local_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx,
+                in_loop,
+            )
         }
         Statement::DangerAssignOnError {
             target,
@@ -757,7 +961,10 @@ fn analyze_statement(
                 return Err(err_at_code(
                     stmt,
                     SEM_INVALID_CONTEXT,
-                    format!("on error requires danger fn call: builtin '{}' is not danger in v1.", call_name),
+                    format!(
+                        "on error requires danger fn call: builtin '{}' is not danger in v1.",
+                        call_name
+                    ),
                 ));
             }
             let Some(sig) = functions.get(call_name) else {
@@ -768,28 +975,44 @@ fn analyze_statement(
                 ));
             };
             if !sig.is_danger {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_INVALID_CONTEXT,
-                        format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "on error requires danger fn call: '{}' is not declared as danger.",
+                        call_name
+                    ),
                 ));
             }
             if !scope.contains_key(target) {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_USE_BEFORE_DEF,
-                        format!("use-before-definition: '{}' is not defined in current scope.", target),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        target
+                    ),
                 ));
             }
-            validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
+            validate_call_args(
+                call_name,
+                args,
+                sig,
+                scope,
+                functions,
+                structs,
+                fn_ctx.as_ref(),
+            )?;
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx, in_loop)
+            analyze_block(
+                on_error,
+                &mut on_error_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx,
+                in_loop,
+            )
         }
         Statement::DangerCallOnError {
             call_name,
@@ -801,7 +1024,10 @@ fn analyze_statement(
                 return Err(err_at_code(
                     stmt,
                     SEM_INVALID_CONTEXT,
-                    format!("on error requires danger fn call: builtin '{}' is not danger in v1.", call_name),
+                    format!(
+                        "on error requires danger fn call: builtin '{}' is not danger in v1.",
+                        call_name
+                    ),
                 ));
             }
             let Some(sig) = functions.get(call_name) else {
@@ -812,28 +1038,50 @@ fn analyze_statement(
                 ));
             };
             if !sig.is_danger {
-                return Err(format!(
-                    "{}",
-                    err_at_code(
-                        stmt,
-                        SEM_INVALID_CONTEXT,
-                        format!("on error requires danger fn call: '{}' is not declared as danger.", call_name),
-                    )
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "on error requires danger fn call: '{}' is not declared as danger.",
+                        call_name
+                    ),
                 ));
             }
-            validate_call_args(call_name, args, sig, scope, functions, structs, fn_ctx.as_ref())?;
+            validate_call_args(
+                call_name,
+                args,
+                sig,
+                scope,
+                functions,
+                structs,
+                fn_ctx.as_ref(),
+            )?;
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx, in_loop)
+            analyze_block(
+                on_error,
+                &mut on_error_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx,
+                in_loop,
+            )
         }
-        Statement::ListPush { list_name, value, .. } => {
+        Statement::ListPush {
+            list_name, value, ..
+        } => {
             let Some(list_ty) = scope.get(list_name).cloned() else {
                 return Err(err_at_code(
                     stmt,
                     SEM_USE_BEFORE_DEF,
-                    format!("use-before-definition: '{}' is not defined in current scope.", list_name),
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        list_name
+                    ),
                 ));
             };
-            let value_ty = infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
+            let value_ty =
+                infer_expression_type(value, scope, functions, structs, fn_ctx.as_ref())?;
             match list_ty {
                 ValueType::List(elem_ty) => {
                     if !can_assign(&elem_ty, &value_ty) {
@@ -865,14 +1113,20 @@ fn analyze_statement(
                 return Err(err_at_code(
                     stmt,
                     SEM_USE_BEFORE_DEF,
-                    format!("use-before-definition: '{}' is not defined in current scope.", target),
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        target
+                    ),
                 ));
             };
             let Some(list_ty) = scope.get(list_name).cloned() else {
                 return Err(err_at_code(
                     stmt,
                     SEM_USE_BEFORE_DEF,
-                    format!("use-before-definition: '{}' is not defined in current scope.", list_name),
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        list_name
+                    ),
                 ));
             };
             let elem_ty = match list_ty {
@@ -882,7 +1136,7 @@ fn analyze_statement(
                         stmt,
                         SEM_TYPE_MISMATCH,
                         format!("pop is supported only for List, got {:?}.", other),
-                    ))
+                    ));
                 }
             };
             if !can_assign(&target_ty, &elem_ty) {
@@ -896,7 +1150,15 @@ fn analyze_statement(
                 ));
             }
             let mut on_error_scope = scope.clone();
-            analyze_block(on_error, &mut on_error_scope, functions, labels, structs, fn_ctx, in_loop)
+            analyze_block(
+                on_error,
+                &mut on_error_scope,
+                functions,
+                labels,
+                structs,
+                fn_ctx,
+                in_loop,
+            )
         }
         Statement::ReturnError { code, .. } => {
             if fn_ctx.map(|c| c.is_danger) != Some(true) {
@@ -925,7 +1187,8 @@ fn analyze_statement(
         Statement::ReturnStatement { value, .. } => {
             if let Some(ref ctx) = fn_ctx {
                 if let Some(expr) = value {
-                    let actual = infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
+                    let actual =
+                        infer_expression_type(expr, scope, functions, structs, fn_ctx.as_ref())?;
                     if let Some(expected) = ctx.return_type.as_ref() {
                         if !can_assign(expected, &actual) {
                             return Err(err_at_code(
@@ -963,10 +1226,22 @@ fn analyze_statement(
                 }
                 let method_ctx = FnContext {
                     is_danger: m.is_danger,
-                    return_type: m.returns.as_deref().map(parse_type_name).or(Some(ValueType::Int)),
+                    return_type: m
+                        .returns
+                        .as_deref()
+                        .map(parse_type_name)
+                        .or(Some(ValueType::Int)),
                     self_struct: Some(name.clone()),
                 };
-                analyze_block(&m.body, &mut method_scope, functions, labels, structs, Some(method_ctx), false)?;
+                analyze_block(
+                    &m.body,
+                    &mut method_scope,
+                    functions,
+                    labels,
+                    structs,
+                    Some(method_ctx),
+                    false,
+                )?;
             }
             Ok(())
         }
@@ -983,7 +1258,15 @@ fn analyze_block(
     fn_ctx: Option<FnContext>,
     in_loop: bool,
 ) -> Result<(), String> {
-    analyze_statements(&block.statements, scope, functions, labels, structs, fn_ctx, in_loop)
+    analyze_statements(
+        &block.statements,
+        scope,
+        functions,
+        labels,
+        structs,
+        fn_ctx,
+        in_loop,
+    )
 }
 
 fn param_type_or_default(param: &FunctionParam) -> ValueType {
@@ -1030,36 +1313,70 @@ fn infer_expression_type(
             }
             Ok(ValueType::List(Box::new(elem_ty)))
         }
-        Expression::VariableReference(name) => scope
-            .get(name)
-            .cloned()
-            .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", name))),
+        Expression::VariableReference(name) => {
+            if let Some(ty) = builtin_constant_type(name) {
+                Ok(ty)
+            } else {
+                scope.get(name).cloned().ok_or_else(|| {
+                    sem_err(
+                        SEM_USE_BEFORE_DEF,
+                        format!(
+                            "use-before-definition: '{}' is not defined in current scope.",
+                            name
+                        ),
+                    )
+                })
+            }
+        }
         Expression::MemberAccess { base, .. } => {
             let owner_ty = if base == "my" {
                 if let Some(ctx) = fn_ctx {
                     if let Some(self_name) = ctx.self_struct.as_ref() {
                         ValueType::Struct(self_name.clone())
                     } else {
-                        return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                        return Err(sem_err(
+                            SEM_INVALID_CONTEXT,
+                            "my is only allowed inside struct methods.".to_string(),
+                        ));
                     }
                 } else {
-                    return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                    return Err(sem_err(
+                        SEM_INVALID_CONTEXT,
+                        "my is only allowed inside struct methods.".to_string(),
+                    ));
                 }
             } else {
-                scope
-                    .get(base)
-                    .cloned()
-                    .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", base)))?
+                scope.get(base).cloned().ok_or_else(|| {
+                    sem_err(
+                        SEM_USE_BEFORE_DEF,
+                        format!(
+                            "use-before-definition: '{}' is not defined in current scope.",
+                            base
+                        ),
+                    )
+                })?
             };
             if let Expression::MemberAccess { field, .. } = expr {
                 let ValueType::Struct(owner) = owner_ty else {
-                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("member access requires struct receiver, got {:?}.", owner_ty)));
+                    return Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "member access requires struct receiver, got {:?}.",
+                            owner_ty
+                        ),
+                    ));
                 };
                 let Some(info) = structs.get(&owner) else {
-                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown struct type '{}'.", owner)));
+                    return Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!("unknown struct type '{}'.", owner),
+                    ));
                 };
                 let Some(ft) = info.fields.get(field) else {
-                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown field '{}.{}'.", owner, field)));
+                    return Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!("unknown field '{}.{}'.", owner, field),
+                    ));
                 };
                 Ok(ft.clone())
             } else {
@@ -1080,7 +1397,10 @@ fn infer_expression_type(
                 ValueType::Text => Ok(ValueType::Char),
                 other => Err(sem_err(
                     SEM_TYPE_MISMATCH,
-                    format!("index access is supported only for List/Text, got {:?}.", other),
+                    format!(
+                        "index access is supported only for List/Text, got {:?}.",
+                        other
+                    ),
                 )),
             }
         }
@@ -1100,7 +1420,8 @@ fn infer_expression_type(
                 }
                 return match builtin {
                     Builtin::Len => {
-                        let arg_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let arg_ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         match arg_ty {
                             ValueType::List(_) | ValueType::Text => Ok(ValueType::Int),
                             _ => Err(sem_err(
@@ -1110,8 +1431,10 @@ fn infer_expression_type(
                         }
                     }
                     Builtin::Contains => {
-                        let hay_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
-                        let needle_ty = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
+                        let hay_ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let needle_ty =
+                            infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
                         if hay_ty != ValueType::Text || needle_ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1124,8 +1447,10 @@ fn infer_expression_type(
                         Ok(ValueType::Bool)
                     }
                     Builtin::Find => {
-                        let hay_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
-                        let needle_ty = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
+                        let hay_ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let needle_ty =
+                            infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
                         if hay_ty != ValueType::Text || needle_ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1138,10 +1463,16 @@ fn infer_expression_type(
                         Ok(ValueType::Int)
                     }
                     Builtin::Slice => {
-                        let text_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
-                        let start_ty = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
-                        let end_ty = infer_expression_type(&args[2], scope, functions, structs, fn_ctx)?;
-                        if text_ty != ValueType::Text || start_ty != ValueType::Int || end_ty != ValueType::Int {
+                        let text_ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let start_ty =
+                            infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
+                        let end_ty =
+                            infer_expression_type(&args[2], scope, functions, structs, fn_ctx)?;
+                        if text_ty != ValueType::Text
+                            || start_ty != ValueType::Int
+                            || end_ty != ValueType::Int
+                        {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
                                 format!(
@@ -1158,13 +1489,17 @@ fn infer_expression_type(
                         if a != ValueType::Text || b != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
-                                format!("builtin 'concat' expects (Text, Text), got ({:?}, {:?}).", a, b),
+                                format!(
+                                    "builtin 'concat' expects (Text, Text), got ({:?}, {:?}).",
+                                    a, b
+                                ),
                             ));
                         }
                         Ok(ValueType::Text)
                     }
                     Builtin::FsList => {
-                        let path_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let path_ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         if path_ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1174,7 +1509,8 @@ fn infer_expression_type(
                         Ok(ValueType::List(Box::new(ValueType::Text)))
                     }
                     Builtin::FsIsDir => {
-                        let path_ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let path_ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         if path_ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1189,16 +1525,24 @@ fn infer_expression_type(
                         if a != ValueType::Text || b != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
-                                format!("builtin 'fs.join' expects (Text, Text), got ({:?}, {:?}).", a, b),
+                                format!(
+                                    "builtin 'fs.join' expects (Text, Text), got ({:?}, {:?}).",
+                                    a, b
+                                ),
                             ));
                         }
                         Ok(ValueType::Text)
                     }
                     Builtin::Args => Ok(ValueType::List(Box::new(ValueType::Text))),
                     Builtin::Output => {
-                        let ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         match ty {
-                            ValueType::Int | ValueType::Float | ValueType::Bool | ValueType::Char | ValueType::Text => Ok(ValueType::Int),
+                            ValueType::Int
+                            | ValueType::Float
+                            | ValueType::Bool
+                            | ValueType::Char
+                            | ValueType::Text => Ok(ValueType::Int),
                             _ => Err(sem_err(
                                 SEM_TYPE_MISMATCH,
                                 format!("builtin 'output' unsupported argument type: {:?}.", ty),
@@ -1206,7 +1550,8 @@ fn infer_expression_type(
                         }
                     }
                     Builtin::Input => {
-                        let ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         if ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1216,7 +1561,8 @@ fn infer_expression_type(
                         Ok(ValueType::Text)
                     }
                     Builtin::Read => {
-                        let ty = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
                         if ty != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -1231,10 +1577,69 @@ fn infer_expression_type(
                         if p != ValueType::Text || d != ValueType::Text {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
-                                format!("builtin 'write' expects (Text, Text), got ({:?}, {:?}).", p, d),
+                                format!(
+                                    "builtin 'write' expects (Text, Text), got ({:?}, {:?}).",
+                                    p, d
+                                ),
                             ));
                         }
                         Ok(ValueType::Int)
+                    }
+                    Builtin::Abs => {
+                        let ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        ensure_numeric_args(name, std::slice::from_ref(&ty))?;
+                        Ok(numeric_result_type(&[ty], true))
+                    }
+                    Builtin::Min | Builtin::Max => {
+                        let a = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let b = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
+                        ensure_numeric_args(name, &[a.clone(), b.clone()])?;
+                        Ok(numeric_result_type(&[a, b], true))
+                    }
+                    Builtin::Clamp => {
+                        let x = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let lo =
+                            infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
+                        let hi =
+                            infer_expression_type(&args[2], scope, functions, structs, fn_ctx)?;
+                        ensure_numeric_args(name, &[x.clone(), lo.clone(), hi.clone()])?;
+                        Ok(numeric_result_type(&[x, lo, hi], true))
+                    }
+                    Builtin::Floor
+                    | Builtin::Ceil
+                    | Builtin::Round
+                    | Builtin::Sin
+                    | Builtin::Cos
+                    | Builtin::Sqrt
+                    | Builtin::DegToRad
+                    | Builtin::RadToDeg => {
+                        let ty =
+                            infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        if !is_numeric_type(&ty) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects numeric argument, got {:?}.",
+                                    name, ty
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Float)
+                    }
+                    Builtin::Atan2 | Builtin::Root => {
+                        let a = infer_expression_type(&args[0], scope, functions, structs, fn_ctx)?;
+                        let b = infer_expression_type(&args[1], scope, functions, structs, fn_ctx)?;
+                        if !is_numeric_type(&a) || !is_numeric_type(&b) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects numeric arguments, got ({:?}, {:?}).",
+                                    name, a, b
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Float)
                     }
                 };
             }
@@ -1244,33 +1649,68 @@ fn infer_expression_type(
                         if let Some(self_name) = ctx.self_struct.as_ref() {
                             ValueType::Struct(self_name.clone())
                         } else {
-                            return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                            return Err(sem_err(
+                                SEM_INVALID_CONTEXT,
+                                "my is only allowed inside struct methods.".to_string(),
+                            ));
                         }
                     } else {
-                        return Err(sem_err(SEM_INVALID_CONTEXT, "my is only allowed inside struct methods.".to_string()));
+                        return Err(sem_err(
+                            SEM_INVALID_CONTEXT,
+                            "my is only allowed inside struct methods.".to_string(),
+                        ));
                     }
                 } else {
-                    scope
-                        .get(base)
-                        .cloned()
-                        .ok_or_else(|| sem_err(SEM_USE_BEFORE_DEF, format!("use-before-definition: '{}' is not defined in current scope.", base)))?
+                    scope.get(base).cloned().ok_or_else(|| {
+                        sem_err(
+                            SEM_USE_BEFORE_DEF,
+                            format!(
+                                "use-before-definition: '{}' is not defined in current scope.",
+                                base
+                            ),
+                        )
+                    })?
                 };
                 let ValueType::Struct(owner) = owner_ty else {
-                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("method call requires struct receiver, got {:?}.", owner_ty)));
+                    return Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!("method call requires struct receiver, got {:?}.", owner_ty),
+                    ));
                 };
                 let Some(info) = structs.get(&owner) else {
-                    return Err(sem_err(SEM_TYPE_MISMATCH, format!("unknown struct type '{}'.", owner)));
+                    return Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!("unknown struct type '{}'.", owner),
+                    ));
                 };
                 let Some(sig) = info.methods.get(method) else {
-                    return Err(sem_err(SEM_UNKNOWN_FUNCTION, format!("unknown method '{}.{}'.", owner, method)));
+                    return Err(sem_err(
+                        SEM_UNKNOWN_FUNCTION,
+                        format!("unknown method '{}.{}'.", owner, method),
+                    ));
                 };
                 if args.len() != sig.param_types.len() {
-                    return Err(sem_err(SEM_ARG_COUNT, format!("argument count mismatch for '{}.{}': expected {}, got {}.", owner, method, sig.param_types.len(), args.len())));
+                    return Err(sem_err(
+                        SEM_ARG_COUNT,
+                        format!(
+                            "argument count mismatch for '{}.{}': expected {}, got {}.",
+                            owner,
+                            method,
+                            sig.param_types.len(),
+                            args.len()
+                        ),
+                    ));
                 }
                 for (arg, expected_ty) in args.iter().zip(sig.param_types.iter()) {
                     let actual_ty = infer_expression_type(arg, scope, functions, structs, fn_ctx)?;
                     if !can_assign(expected_ty, &actual_ty) {
-                        return Err(sem_err(SEM_ARG_TYPE, format!("argument type mismatch for '{}.{}': expected {:?}, got {:?}.", owner, method, expected_ty, actual_ty)));
+                        return Err(sem_err(
+                            SEM_ARG_TYPE,
+                            format!(
+                                "argument type mismatch for '{}.{}': expected {:?}, got {:?}.",
+                                owner, method, expected_ty, actual_ty
+                            ),
+                        ));
                     }
                 }
                 return Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown));
@@ -1373,7 +1813,8 @@ fn statement_guarantees_termination(stmt: &Statement) -> bool {
             };
             block_guarantees_termination(then_block) && block_guarantees_termination(else_block)
         }
-        Statement::BlockStatement { statements, .. } | Statement::OnErrorBlock { statements, .. } => {
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => {
             let Some(last) = statements.last() else {
                 return false;
             };

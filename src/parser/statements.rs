@@ -2,7 +2,10 @@
 // Parser Logic Helpers (Rust)
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
-use crate::ast_nodes::{BlockStatement, ForLoopStyle, FunctionParam, Location, ScopeManager, Statement, StructField, StructMethod};
+use crate::ast_nodes::{
+    BlockStatement, ForLoopStyle, FunctionParam, LegacyForParts, Location, ScopeManager, Statement,
+    StructField, StructMethod,
+};
 use crate::common_types::{Token, TokenKind};
 
 use super::expressions::parse_expression_range;
@@ -44,6 +47,39 @@ fn parse_expression_list(
     Ok(out)
 }
 
+fn render_token_slice(tokens: &[Token], start: usize, end: usize) -> String {
+    let mut out = String::new();
+    let mut prev: Option<&str> = None;
+
+    for token in &tokens[start..end] {
+        let lexeme = token.lexeme.as_str();
+        if token.kind() == TokenKind::Whitespace || token.kind() == TokenKind::NewLine {
+            continue;
+        }
+
+        let need_space = if out.is_empty() {
+            false
+        } else {
+            match (prev.unwrap_or(""), lexeme) {
+                ("(", _) | ("[", _) | ("{", _) => false,
+                (_, ")") | (_, "]") | (_, "}") | (_, ",") | (_, ";") => false,
+                (_, "(") | (_, "[") => false,
+                (_, "++") | (_, "--") => false,
+                (".", _) | (_, ".") => false,
+                _ => true,
+            }
+        };
+
+        if need_space {
+            out.push(' ');
+        }
+        out.push_str(lexeme);
+        prev = Some(lexeme);
+    }
+
+    out
+}
+
 fn find_block_end(tokens: &[Token], open_brace_index: usize) -> Result<usize, String> {
     if open_brace_index >= tokens.len() || tokens[open_brace_index].lexeme != "{" {
         return Err(parse_err("SC-PARSE-101", "expected '{'."));
@@ -61,22 +97,39 @@ fn find_block_end(tokens: &[Token], open_brace_index: usize) -> Result<usize, St
         current += 1;
     }
     if brace_count != 0 {
-        return Err(parse_err("SC-PARSE-102", "unterminated block: missing '}'."));
+        return Err(parse_err(
+            "SC-PARSE-102",
+            "unterminated block: missing '}'.",
+        ));
     }
     Ok(current - 1)
 }
 
-pub fn parse_control_keyword_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+pub fn parse_control_keyword_statement(
+    tokens: &[Token],
+    start_index: usize,
+) -> ParseResult<Statement> {
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     let stmt = match tokens[start_index].kind() {
         TokenKind::KeywordBreak => Statement::BreakStatement { loc },
         TokenKind::KeywordContinue => Statement::ContinueStatement { loc },
         TokenKind::KeywordPass => Statement::PassStatement { loc },
-        _ => return Err(parse_err("SC-PARSE-158", "expected break/continue/pass keyword.")),
+        _ => {
+            return Err(parse_err(
+                "SC-PARSE-158",
+                "expected break/continue/pass keyword.",
+            ));
+        }
     };
 
     let mut cursor = start_index + 1;
-    while cursor < tokens.len() && tokens[cursor].kind() != TokenKind::NewLine && tokens[cursor].lexeme != "}" {
+    while cursor < tokens.len()
+        && tokens[cursor].kind() != TokenKind::NewLine
+        && tokens[cursor].lexeme != "}"
+    {
         cursor += 1;
     }
     Ok((stmt, (cursor - start_index).max(1)))
@@ -88,7 +141,10 @@ pub fn parse_function_declaration(
     _scope: &ScopeManager,
 ) -> ParseResult<Statement> {
     let mut current_index = start_index;
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     let mut is_danger = false;
 
     if current_index < tokens.len()
@@ -108,14 +164,20 @@ pub fn parse_function_declaration(
     {
         tokens[current_index + 1].lexeme.clone()
     } else {
-        return Err(parse_err("SC-PARSE-104", "function definition must be followed by an identifier (function name)."));
+        return Err(parse_err(
+            "SC-PARSE-104",
+            "function definition must be followed by an identifier (function name).",
+        ));
     };
 
     if current_index + 2 >= tokens.len()
         || tokens[current_index + 2].kind() != TokenKind::OpPunctuation
         || tokens[current_index + 2].lexeme != "("
     {
-        return Err(parse_err("SC-PARSE-105", "function signature expected '('."));
+        return Err(parse_err(
+            "SC-PARSE-105",
+            "function signature expected '('.",
+        ));
     }
 
     let mut params = Vec::new();
@@ -158,7 +220,10 @@ pub fn parse_function_declaration(
         if current_index < tokens.len() && tokens[current_index].lexeme == ")" {
             current_index += 1;
         } else {
-            return Err(parse_err("SC-PARSE-106", "function signature expected ')' after parameters."));
+            return Err(parse_err(
+                "SC-PARSE-106",
+                "function signature expected ')' after parameters.",
+            ));
         }
     }
 
@@ -176,7 +241,10 @@ pub fn parse_function_declaration(
         || tokens[current_index].kind() != TokenKind::OpPunctuation
         || tokens[current_index].lexeme != "{"
     {
-        return Err(parse_err("SC-PARSE-107", "function signature expected '{' to begin the body block."));
+        return Err(parse_err(
+            "SC-PARSE-107",
+            "function signature expected '{' to begin the body block.",
+        ));
     }
 
     let open_brace = current_index;
@@ -199,12 +267,22 @@ pub fn parse_function_declaration(
     Ok((stmt, current_index - start_index))
 }
 
-pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
+pub fn parse_for_loop(
+    tokens: &[Token],
+    start_index: usize,
+    _scope: &ScopeManager,
+) -> ParseResult<Statement> {
     let mut current_index = start_index;
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
 
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordFor {
-        return Err(parse_err("SC-PARSE-108", "expected 'for' keyword to start loop."));
+        return Err(parse_err(
+            "SC-PARSE-108",
+            "expected 'for' keyword to start loop.",
+        ));
     }
 
     current_index += 1;
@@ -213,7 +291,10 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
         let loop_var = tokens[current_index].lexeme.clone();
         current_index += 1;
         if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordIn {
-            return Err(parse_err("SC-PARSE-109", "for loop expected 'in' after iterator variable."));
+            return Err(parse_err(
+                "SC-PARSE-109",
+                "for loop expected 'in' after iterator variable.",
+            ));
         }
         current_index += 1;
         let expr_start = current_index;
@@ -221,18 +302,26 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
             current_index += 1;
         }
         if current_index >= tokens.len() {
-            return Err(parse_err("SC-PARSE-110", "for-in loop expected '{' to begin body."));
+            return Err(parse_err(
+                "SC-PARSE-110",
+                "for-in loop expected '{' to begin body.",
+            ));
         }
         let collection_expr = parse_expression_range(tokens, expr_start, current_index)?;
         let block_end = find_block_end(tokens, current_index)?;
         let body_statements = parse_statements_range(tokens, current_index + 1, block_end)?;
         current_index = block_end + 1;
         let stmt = Statement::ForLoop {
-            initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(loop_var))),
+            initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(
+                loop_var,
+            ))),
             condition: Some(Box::new(collection_expr)),
             update: None,
+            legacy_parts: None,
             style: ForLoopStyle::ForIn,
-            body: Box::new(BlockStatement { statements: body_statements }),
+            body: Box::new(BlockStatement {
+                statements: body_statements,
+            }),
             loc,
         };
         return Ok((stmt, current_index - start_index));
@@ -242,32 +331,50 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
         || tokens[current_index].kind() != TokenKind::OpPunctuation
         || tokens[current_index].lexeme != "("
     {
-        return Err(parse_err("SC-PARSE-111", "for loop expected iterator variable or '(' after keyword."));
+        return Err(parse_err(
+            "SC-PARSE-111",
+            "for loop expected iterator variable or '(' after keyword.",
+        ));
     }
     current_index += 1;
+    let init_start = current_index;
     while current_index < tokens.len() && tokens[current_index].lexeme != ";" {
         current_index += 1;
     }
     if current_index >= tokens.len() || tokens[current_index].lexeme != ";" {
-        return Err(parse_err("SC-PARSE-112", "for loop expected ';' after initialization."));
+        return Err(parse_err(
+            "SC-PARSE-112",
+            "for loop expected ';' after initialization.",
+        ));
     }
+    let init_end = current_index;
     current_index += 1;
+    let cond_start = current_index;
     while current_index < tokens.len() && tokens[current_index].lexeme != ";" {
         current_index += 1;
     }
     if current_index >= tokens.len() || tokens[current_index].lexeme != ";" {
-        return Err(parse_err("SC-PARSE-113", "for loop expected ';' after condition."));
+        return Err(parse_err(
+            "SC-PARSE-113",
+            "for loop expected ';' after condition.",
+        ));
     }
+    let cond_end = current_index;
     current_index += 1;
+    let update_start = current_index;
     while current_index < tokens.len() && tokens[current_index].lexeme != ")" {
         current_index += 1;
     }
     if current_index >= tokens.len() || tokens[current_index].lexeme != ")" {
         return Err(parse_err("SC-PARSE-114", "for loop expected ')'."));
     }
+    let update_end = current_index;
     current_index += 1;
     if current_index >= tokens.len() || tokens[current_index].lexeme != "{" {
-        return Err(parse_err("SC-PARSE-115", "for loop expected '{' to begin body."));
+        return Err(parse_err(
+            "SC-PARSE-115",
+            "for loop expected '{' to begin body.",
+        ));
     }
     let block_end = find_block_end(tokens, current_index)?;
     let body_statements = parse_statements_range(tokens, current_index + 1, block_end)?;
@@ -277,17 +384,31 @@ pub fn parse_for_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManage
             initialization: None,
             condition: None,
             update: None,
+            legacy_parts: Some(LegacyForParts {
+                initialization: render_token_slice(tokens, init_start, init_end),
+                condition: render_token_slice(tokens, cond_start, cond_end),
+                update: render_token_slice(tokens, update_start, update_end),
+            }),
             style: ForLoopStyle::LegacyCStyle,
-            body: Box::new(BlockStatement { statements: body_statements }),
+            body: Box::new(BlockStatement {
+                statements: body_statements,
+            }),
             loc,
         },
         current_index - start_index,
     ))
 }
 
-pub fn parse_iterate_loop(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
+pub fn parse_iterate_loop(
+    tokens: &[Token],
+    start_index: usize,
+    _scope: &ScopeManager,
+) -> ParseResult<Statement> {
     let mut current_index = start_index;
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
 
     if current_index >= tokens.len()
         || tokens[current_index].kind() != TokenKind::Identifier
@@ -299,24 +420,34 @@ pub fn parse_iterate_loop(tokens: &[Token], start_index: usize, _scope: &ScopeMa
 
     let collection_start = current_index;
     while current_index < tokens.len()
-        && !(tokens[current_index].kind() == TokenKind::Identifier && tokens[current_index].lexeme == "as")
+        && !(tokens[current_index].kind() == TokenKind::Identifier
+            && tokens[current_index].lexeme == "as")
     {
         current_index += 1;
     }
     if current_index >= tokens.len() || current_index == collection_start {
-        return Err(parse_err("SC-PARSE-150", "iterate loop expected collection before 'as'."));
+        return Err(parse_err(
+            "SC-PARSE-150",
+            "iterate loop expected collection before 'as'.",
+        ));
     }
     let collection_expr = parse_expression_range(tokens, collection_start, current_index)?;
     current_index += 1; // skip 'as'
 
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::Identifier {
-        return Err(parse_err("SC-PARSE-151", "iterate loop expected item identifier after 'as'."));
+        return Err(parse_err(
+            "SC-PARSE-151",
+            "iterate loop expected item identifier after 'as'.",
+        ));
     }
     let loop_var = tokens[current_index].lexeme.clone();
     current_index += 1;
 
     if current_index >= tokens.len() || tokens[current_index].lexeme != "{" {
-        return Err(parse_err("SC-PARSE-152", "iterate loop expected '{' to begin body."));
+        return Err(parse_err(
+            "SC-PARSE-152",
+            "iterate loop expected '{' to begin body.",
+        ));
     }
     let block_end = find_block_end(tokens, current_index)?;
     let body_statements = parse_statements_range(tokens, current_index + 1, block_end)?;
@@ -324,23 +455,38 @@ pub fn parse_iterate_loop(tokens: &[Token], start_index: usize, _scope: &ScopeMa
 
     Ok((
         Statement::ForLoop {
-            initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(loop_var))),
+            initialization: Some(Box::new(crate::ast_nodes::Expression::VariableReference(
+                loop_var,
+            ))),
             condition: Some(Box::new(collection_expr)),
             update: None,
+            legacy_parts: None,
             style: ForLoopStyle::IterateAs,
-            body: Box::new(BlockStatement { statements: body_statements }),
+            body: Box::new(BlockStatement {
+                statements: body_statements,
+            }),
             loc,
         },
         current_index - start_index,
     ))
 }
 
-pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &ScopeManager) -> ParseResult<Statement> {
+pub fn parse_when_statement(
+    tokens: &[Token],
+    start_index: usize,
+    _scope: &ScopeManager,
+) -> ParseResult<Statement> {
     let mut current_index = start_index;
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
 
     if current_index >= tokens.len() || tokens[current_index].kind() != TokenKind::KeywordWhen {
-        return Err(parse_err("SC-PARSE-116", "expected 'when' keyword to start statement."));
+        return Err(parse_err(
+            "SC-PARSE-116",
+            "expected 'when' keyword to start statement.",
+        ));
     }
 
     current_index += 1;
@@ -351,7 +497,10 @@ pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &Scope
     }
 
     if current_index >= tokens.len() || tokens[current_index].lexeme != "{" {
-        return Err(parse_err("SC-PARSE-117", "when statement expected '{' to begin body."));
+        return Err(parse_err(
+            "SC-PARSE-117",
+            "when statement expected '{' to begin body.",
+        ));
     }
 
     let expr_end = current_index;
@@ -375,11 +524,15 @@ pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &Scope
                 current_index += 1;
             }
             if current_index >= block_end {
-                return Err(parse_err("SC-PARSE-118", "when case expected '{' after 'is ...'."));
+                return Err(parse_err(
+                    "SC-PARSE-118",
+                    "when case expected '{' after 'is ...'.",
+                ));
             }
             let case_exprs = parse_expression_list(tokens, case_expr_start, current_index)?;
             let case_block_end = find_block_end(tokens, current_index)?;
-            let case_statements = parse_statements_range(tokens, current_index + 1, case_block_end)?;
+            let case_statements =
+                parse_statements_range(tokens, current_index + 1, case_block_end)?;
             cases.push((
                 case_exprs,
                 Box::new(BlockStatement {
@@ -424,7 +577,10 @@ pub fn parse_when_statement(tokens: &[Token], start_index: usize, _scope: &Scope
 }
 
 pub fn parse_if_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordIf {
         return Err(parse_err("SC-PARSE-121", "expected 'if' keyword."));
     }
@@ -477,7 +633,10 @@ pub fn parse_if_statement(tokens: &[Token], start_index: usize) -> ParseResult<S
 }
 
 pub fn parse_while_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordWhile {
         return Err(parse_err("SC-PARSE-124", "expected 'while' keyword."));
     }
@@ -505,13 +664,19 @@ pub fn parse_while_statement(tokens: &[Token], start_index: usize) -> ParseResul
 }
 
 pub fn parse_loop_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordLoop {
         return Err(parse_err("SC-PARSE-126", "expected 'loop' keyword."));
     }
     let open = start_index + 1;
     if open >= tokens.len() || tokens[open].lexeme != "{" {
-        return Err(parse_err("SC-PARSE-127", "loop statement expected '{' after 'loop'."));
+        return Err(parse_err(
+            "SC-PARSE-127",
+            "loop statement expected '{' after 'loop'.",
+        ));
     }
     let block_end = find_block_end(tokens, open)?;
     let body_statements = parse_statements_range(tokens, open + 1, block_end)?;
@@ -527,7 +692,10 @@ pub fn parse_loop_statement(tokens: &[Token], start_index: usize) -> ParseResult
 }
 
 pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordReturn {
         return Err(parse_err("SC-PARSE-128", "expected 'return' keyword."));
     }
@@ -581,7 +749,9 @@ pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResu
     }
 
     let value = if cursor > expr_start {
-        Some(Box::new(parse_expression_range(tokens, expr_start, cursor)?))
+        Some(Box::new(parse_expression_range(
+            tokens, expr_start, cursor,
+        )?))
     } else {
         None
     };
@@ -593,12 +763,20 @@ pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResu
 }
 
 pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index + 1 >= tokens.len() {
         return Err(parse_err("SC-PARSE-129", "incomplete assignment."));
     }
-    if tokens[start_index].kind() != TokenKind::Identifier && tokens[start_index].kind() != TokenKind::KeywordMy {
-        return Err(parse_err("SC-PARSE-130", "assignment must start with identifier."));
+    if tokens[start_index].kind() != TokenKind::Identifier
+        && tokens[start_index].kind() != TokenKind::KeywordMy
+    {
+        return Err(parse_err(
+            "SC-PARSE-130",
+            "assignment must start with identifier.",
+        ));
     }
     if tokens[start_index + 1].kind() != TokenKind::OpAssignment {
         return Err(parse_err("SC-PARSE-131", "expected assignment operator."));
@@ -622,15 +800,28 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
     ))
 }
 
-fn parse_call_expression(tokens: &[Token], start: usize, end: usize) -> Result<(String, Vec<crate::ast_nodes::Expression>), String> {
+fn parse_call_expression(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+) -> Result<(String, Vec<crate::ast_nodes::Expression>), String> {
     if start + 2 >= end {
-        return Err(parse_err("SC-PARSE-132", "danger call expected 'name(...)'."));
+        return Err(parse_err(
+            "SC-PARSE-132",
+            "danger call expected 'name(...)'.",
+        ));
     }
     if tokens[start].kind() != TokenKind::Identifier {
-        return Err(parse_err("SC-PARSE-133", "danger call must start with function name."));
+        return Err(parse_err(
+            "SC-PARSE-133",
+            "danger call must start with function name.",
+        ));
     }
     if tokens[start + 1].lexeme != "(" {
-        return Err(parse_err("SC-PARSE-134", "danger call expected '(' after function name."));
+        return Err(parse_err(
+            "SC-PARSE-134",
+            "danger call expected '(' after function name.",
+        ));
     }
     if tokens[end - 1].lexeme != ")" {
         return Err(parse_err("SC-PARSE-135", "danger call expected ')'."));
@@ -661,8 +852,14 @@ fn parse_call_expression(tokens: &[Token], start: usize, end: usize) -> Result<(
     Ok((call_name, args))
 }
 
-pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+pub fn parse_identifier_led_statement(
+    tokens: &[Token],
+    start_index: usize,
+) -> ParseResult<Statement> {
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     let mut line_end = start_index;
     let mut depth_curly = 0usize;
     let mut depth_round = 0usize;
@@ -721,7 +918,8 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
 
     if on_idx.is_none()
         && start_index + 5 < line_end
-        && (tokens[start_index].kind() == TokenKind::Identifier || tokens[start_index].kind() == TokenKind::KeywordMy)
+        && (tokens[start_index].kind() == TokenKind::Identifier
+            || tokens[start_index].kind() == TokenKind::KeywordMy)
         && tokens[start_index + 1].lexeme == "."
         && tokens[start_index + 2].kind() == TokenKind::Identifier
         && tokens[start_index + 2].lexeme == "push"
@@ -806,7 +1004,8 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
 
     if start_index < line_end
         && start_index + 3 < line_end
-        && (tokens[start_index].kind() == TokenKind::Identifier || tokens[start_index].kind() == TokenKind::KeywordMy)
+        && (tokens[start_index].kind() == TokenKind::Identifier
+            || tokens[start_index].kind() == TokenKind::KeywordMy)
         && tokens[start_index + 1].lexeme == "."
         && tokens[start_index + 2].kind() == TokenKind::Identifier
         && tokens[start_index + 3].kind() == TokenKind::OpAssignment
@@ -826,13 +1025,11 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
     }
 
     if start_index < line_end
-        && (
-            (start_index + 1 < line_end && tokens[start_index + 1].lexeme == "(")
+        && ((start_index + 1 < line_end && tokens[start_index + 1].lexeme == "(")
             || (start_index + 3 < line_end
                 && tokens[start_index + 1].lexeme == "."
                 && tokens[start_index + 2].kind() == TokenKind::Identifier
-                && tokens[start_index + 3].lexeme == "(")
-        )
+                && tokens[start_index + 3].lexeme == "("))
     {
         let expr = parse_expression_range(tokens, start_index, line_end)?;
         return Ok((
@@ -848,12 +1045,18 @@ pub fn parse_identifier_led_statement(tokens: &[Token], start_index: usize) -> P
 }
 
 pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordNew {
         return Err(parse_err("SC-PARSE-137", "expected 'new' keyword."));
     }
     if start_index + 2 >= tokens.len() {
-        return Err(parse_err("SC-PARSE-138", "incomplete variable declaration after 'new'."));
+        return Err(parse_err(
+            "SC-PARSE-138",
+            "incomplete variable declaration after 'new'.",
+        ));
     }
     let mut idx = start_index + 1;
     let mut declared_type: Option<String> = None;
@@ -882,10 +1085,16 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
     }
 
     if idx >= tokens.len() || tokens[idx].kind() != TokenKind::Identifier {
-        return Err(parse_err("SC-PARSE-139", "variable declaration expected identifier after 'new'."));
+        return Err(parse_err(
+            "SC-PARSE-139",
+            "variable declaration expected identifier after 'new'.",
+        ));
     }
     if idx + 1 >= tokens.len() || tokens[idx + 1].kind() != TokenKind::OpAssignment {
-        return Err(parse_err("SC-PARSE-140", "variable declaration expected '=' after identifier."));
+        return Err(parse_err(
+            "SC-PARSE-140",
+            "variable declaration expected '=' after identifier.",
+        ));
     }
 
     let name = tokens[idx].lexeme.clone();
@@ -936,12 +1145,18 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
 }
 
 pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordLabel {
         return Err(parse_err("SC-PARSE-141", "expected 'label' keyword."));
     }
     if start_index + 1 >= tokens.len() || tokens[start_index + 1].kind() != TokenKind::Identifier {
-        return Err(parse_err("SC-PARSE-142", "label declaration expected identifier name."));
+        return Err(parse_err(
+            "SC-PARSE-142",
+            "label declaration expected identifier name.",
+        ));
     }
     let open = start_index + 2;
     if open >= tokens.len() || tokens[open].lexeme != "{" {
@@ -967,16 +1182,25 @@ pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseRes
 }
 
 pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordStruct {
         return Err(parse_err("SC-PARSE-144", "expected 'struct' keyword."));
     }
     if start_index + 1 >= tokens.len() || tokens[start_index + 1].kind() != TokenKind::Identifier {
-        return Err(parse_err("SC-PARSE-145", "struct declaration expected identifier name."));
+        return Err(parse_err(
+            "SC-PARSE-145",
+            "struct declaration expected identifier name.",
+        ));
     }
     let open = start_index + 2;
     if open >= tokens.len() || tokens[open].lexeme != "{" {
-        return Err(parse_err("SC-PARSE-146", "struct declaration expected '{'."));
+        return Err(parse_err(
+            "SC-PARSE-146",
+            "struct declaration expected '{'.",
+        ));
     }
     let close = find_block_end(tokens, open)?;
     let mut fields: Vec<StructField> = Vec::new();
@@ -991,7 +1215,9 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             cursor += 1;
             continue;
         }
-        let method_start = if tokens[cursor].kind() == TokenKind::Identifier && tokens[cursor].lexeme == "danger" {
+        let method_start = if tokens[cursor].kind() == TokenKind::Identifier
+            && tokens[cursor].lexeme == "danger"
+        {
             if cursor + 1 < close && tokens[cursor + 1].kind() == TokenKind::KeywordFn {
                 Some(cursor)
             } else {
@@ -1044,7 +1270,11 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
     ))
 }
 
-fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(StructMethod, usize), String> {
+fn parse_struct_method(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+) -> Result<(StructMethod, usize), String> {
     let mut current_index = start;
     let mut is_danger = false;
     if current_index < end
@@ -1062,7 +1292,10 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
     }
     let name = tokens[current_index + 1].lexeme.clone();
     if current_index + 2 >= end || tokens[current_index + 2].lexeme != "(" {
-        return Err(parse_err("SC-PARSE-155", "struct method expected '(' after name."));
+        return Err(parse_err(
+            "SC-PARSE-155",
+            "struct method expected '(' after name.",
+        ));
     }
     current_index += 3;
     let mut params = Vec::new();
@@ -1091,7 +1324,10 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
         current_index += 1;
     }
     if current_index >= end || tokens[current_index].lexeme != ")" {
-        return Err(parse_err("SC-PARSE-156", "struct method expected ')' after parameters."));
+        return Err(parse_err(
+            "SC-PARSE-156",
+            "struct method expected ')' after parameters.",
+        ));
     }
     current_index += 1;
     let mut returns = None;
@@ -1104,7 +1340,10 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
         current_index += 1;
     }
     if current_index >= end || tokens[current_index].lexeme != "{" {
-        return Err(parse_err("SC-PARSE-157", "struct method expected '{' body."));
+        return Err(parse_err(
+            "SC-PARSE-157",
+            "struct method expected '{' body.",
+        ));
     }
     let block_end = find_block_end(tokens, current_index)?;
     let body_stmts = parse_statements_range(tokens, current_index + 1, block_end)?;
@@ -1113,7 +1352,9 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
         StructMethod {
             name,
             params,
-            body: Box::new(BlockStatement { statements: body_stmts }),
+            body: Box::new(BlockStatement {
+                statements: body_stmts,
+            }),
             returns,
             is_danger,
         },
@@ -1122,7 +1363,10 @@ fn parse_struct_method(tokens: &[Token], start: usize, end: usize) -> Result<(St
 }
 
 pub fn parse_on_block_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    let loc = Location { line: tokens[start_index].line, column: tokens[start_index].col };
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
     if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordOnError {
         return Err(parse_err("SC-PARSE-147", "expected 'on' keyword."));
     }
@@ -1139,8 +1383,21 @@ pub fn parse_on_block_statement(tokens: &[Token], start_index: usize) -> ParseRe
     } else {
         "unknown".to_string()
     };
+    let target = if start_index + 2 < cursor {
+        Some(render_token_slice(tokens, start_index + 2, cursor))
+    } else {
+        None
+    };
+    let body_statements = parse_statements_range(tokens, cursor + 1, close)?;
     Ok((
-        Statement::OnBlock { trigger, loc },
+        Statement::OnBlock {
+            trigger,
+            target,
+            body: Box::new(BlockStatement {
+                statements: body_statements,
+            }),
+            loc,
+        },
         close + 1 - start_index,
     ))
 }

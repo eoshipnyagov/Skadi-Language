@@ -1,0 +1,12 @@
+new Float heading_deg = 45.0
+new Float heading_rad = deg_to_rad(heading_deg)
+new Float dx = cos(heading_rad)
+new Float dy = sin(heading_rad)
+new Float distance = sqrt((dx * dx) + (dy * dy))
+new Float snapped = round(distance)
+new Float restored_deg = rad_to_deg(atan2(dy, dx))
+new Float bounded = clamp(restored_deg, 0.0, 90.0)
+
+output(heading_rad)
+output(snapped)
+output(bounded)

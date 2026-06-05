@@ -1,6 +1,6 @@
 use crate::ast_nodes::{Program, ScopeManager, Statement};
 use crate::common_types::{Token, TokenKind};
-use crate::diagnostics::{format_diagnostic, DiagnosticKind};
+use crate::diagnostics::{DiagnosticKind, format_diagnostic};
 
 mod expressions;
 mod statements;
@@ -14,12 +14,22 @@ fn parse_statement_at(
     let start_token = &tokens[current_token_index];
 
     let parse_result = match start_token.kind() {
-        TokenKind::KeywordFn => statements::parse_function_declaration(tokens, current_token_index, parser_scope),
-        TokenKind::KeywordFor => statements::parse_for_loop(tokens, current_token_index, parser_scope),
-        TokenKind::KeywordWhen => statements::parse_when_statement(tokens, current_token_index, parser_scope),
+        TokenKind::KeywordFn => {
+            statements::parse_function_declaration(tokens, current_token_index, parser_scope)
+        }
+        TokenKind::KeywordFor => {
+            statements::parse_for_loop(tokens, current_token_index, parser_scope)
+        }
+        TokenKind::KeywordWhen => {
+            statements::parse_when_statement(tokens, current_token_index, parser_scope)
+        }
         TokenKind::KeywordLabel => statements::parse_label_declaration(tokens, current_token_index),
-        TokenKind::KeywordStruct => statements::parse_struct_declaration(tokens, current_token_index),
-        TokenKind::KeywordOnError => statements::parse_on_block_statement(tokens, current_token_index),
+        TokenKind::KeywordStruct => {
+            statements::parse_struct_declaration(tokens, current_token_index)
+        }
+        TokenKind::KeywordOnError => {
+            statements::parse_on_block_statement(tokens, current_token_index)
+        }
         TokenKind::KeywordIf => statements::parse_if_statement(tokens, current_token_index),
         TokenKind::KeywordWhile => statements::parse_while_statement(tokens, current_token_index),
         TokenKind::KeywordLoop => statements::parse_loop_statement(tokens, current_token_index),
@@ -98,11 +108,13 @@ pub(super) fn parse_statements_range(
             continue;
         }
 
-        let (statement, consumed_count) = parse_statement_at(tokens, current_token_index, end, &parser_scope)?;
+        let (statement, consumed_count) =
+            parse_statement_at(tokens, current_token_index, end, &parser_scope)?;
         statements_out.push(statement);
         current_token_index += consumed_count;
 
-        while current_token_index < end && tokens[current_token_index].kind() == TokenKind::NewLine {
+        while current_token_index < end && tokens[current_token_index].kind() == TokenKind::NewLine
+        {
             current_token_index += 1;
         }
     }

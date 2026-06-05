@@ -1,23 +1,27 @@
-use std::process::Command;
-
-use crate::commands::build_cmd;
-use crate::project::{ensure_build_dir, load_project};
+use crate::actions;
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    build_cmd::run(args)?;
-    let project = load_project()?;
-    let build_dir = ensure_build_dir(&project.root)?;
-    let exe_name = if cfg!(windows) {
-        format!("{}.exe", project.name)
+    let options = actions::parse_build_options(args).map_err(|e| e.to_string())?;
+    let result = actions::run_project(&options).map_err(|e| e.to_string())?;
+    if let Some(selected) = result.build.requested_compiler.clone() {
+        println!(
+            "build ok [{}] (cc={}): {}",
+            result.build.target,
+            selected,
+            result.build.exe_path.display()
+        );
     } else {
-        project.name
-    };
-    let exe_path = build_dir.join(exe_name);
-    let status = Command::new(&exe_path)
-        .status()
-        .map_err(|e| format!("failed to run {}: {e}", exe_path.display()))?;
-    if !status.success() {
-        return Err(format!("program exited with status {status}"));
+        println!(
+            "build ok [{}]: {}",
+            result.build.target,
+            result.build.exe_path.display()
+        );
+    }
+    if !result.stdout.is_empty() {
+        print!("{}", result.stdout);
+    }
+    if !result.stderr.is_empty() {
+        eprint!("{}", result.stderr);
     }
     Ok(())
 }

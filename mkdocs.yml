@@ -1,0 +1,137 @@
+site_name: Skadi Docs
+site_description: Skadi language and tooling documentation
+site_url: https://example.com/skadi-docs/
+repo_name: Skadi
+docs_dir: .docs-build
+site_dir: site
+use_directory_urls: false
+
+theme:
+  name: material
+  language: ru
+  font:
+    text: Noto Sans
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: ru
+          name: Русский
+          default: true
+          build: true
+          link: /
+        - locale: en
+          name: English
+          build: true
+          link: /en/
+          nav_translations:
+            Главная: Home
+            Пользовательские документы: User Docs
+            Внутренние документы: Internal Docs
+            Обзор: Overview
+            Начало работы: Getting Started
+            Быстрый старт CLI: CLI Quick Start
+            Справочник CLI/TUI: CLI/TUI Reference
+            Справочник языка: Language Reference
+            Статус синтаксиса: Syntax Status
+            Showcase-программы: Showcase Programs
+            Текущий компилятор: Current Compiler
+            Контракты и стиль v1: v1 Contracts and Style
+            Планы и блокеры: Plans and Blockers
+            Будущие треки: Future Tracks
+            Техсправочник проекта: Project Tech Reference
+            Границы Skadi -> C: Skadi -> C Scope
+            Покрытие тестами: Test Coverage
+            Стиль диагностики: Diagnostics Style
+            Что не поддерживается в v1: v1 Non-Goals
+            План реализации: Implementation Plan
+            План v1.1: v1.1 Plan
+            Стилевые принципы: Style Principles
+            Каноническая матрица синтаксиса: Canonical Syntax Matrix
+            Контракт Text v1: Text v1 Contract
+            Матрица on error v1: on error v1 Matrix
+            Контракт runtime memory v1: Runtime Memory v1 Contract
+            Блокеры v1: v1 Blockers
+            Сайт документации и i18n: Docs Site and i18n
+            Memory: Memory
+            Task / Concurrency: Task / Concurrency
+            Visual Core: Visual Core
+            Systems Additions: Systems Additions
+            Draft: Draft
+            MVP Contract: MVP Contract
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - tables
+  - pymdownx.highlight:
+      anchor_linenums: false
+      use_pygments: true
+      pygments_lang_class: true
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+extra_css:
+  - assets/extra.css
+
+nav:
+  - Главная: index.md
+  - Пользовательские документы:
+      - Обзор: user/index.md
+      - Начало работы: user/getting-started.md
+      - Быстрый старт CLI: user/cli-quick-start.md
+      - Справочник CLI/TUI: user/cli-reference.md
+      - Справочник языка: user/language-reference.md
+      - Статус синтаксиса: user/syntax-status.md
+      - Showcase-программы: user/showcases.md
+  - Внутренние документы:
+      - Обзор: internal/index.md
+      - Текущий компилятор:
+          - Техсправочник проекта: internal/project-tech-reference.md
+          - Границы Skadi -> C: internal/to-c-scope.md
+          - Покрытие тестами: internal/test-coverage.md
+          - Стиль диагностики: internal/diagnostics-style.md
+          - Сайт документации и i18n: internal/docs-site-and-i18n.md
+      - Контракты и стиль v1:
+          - Стилевые принципы: internal/style-principles.md
+          - Что не поддерживается в v1: internal/v1-non-goals.md
+          - Style Guide v1: internal/style-guide-v1.md
+          - Каноническая матрица синтаксиса: internal/syntax-canonical-matrix.md
+          - Контракт Text v1: internal/text-contract-v1.md
+          - Матрица on error v1: internal/on-error-v1.md
+          - Контракт runtime memory v1: internal/c-runtime-memory-contract-v1.md
+          - RFC Text: internal/rfc-text.md
+          - RFC List: internal/rfc-list.md
+          - RFC Math/Vector Core: internal/rfc-math-vector-core.md
+      - Планы и блокеры:
+          - План реализации: internal/implementation-plan.md
+          - План v1.1: internal/v1-1-plan.md
+          - Блокеры v1: internal/v1-blockers.md
+          - Backlog math/vector: internal/math-vector-backlog.md
+      - Будущие треки:
+          - Memory:
+              - Draft: internal/memory-model-draft.md
+              - MVP Contract: internal/memory-model-mvp.md
+          - Task / Concurrency:
+              - Draft: internal/task-model-draft.md
+              - MVP Contract: internal/task-model-mvp.md
+          - Visual Core:
+              - Draft: internal/visual-core-draft.md
+              - MVP Contract: internal/visual-core-mvp.md
+          - Systems Additions:
+              - Draft: internal/systems-additions-draft.md
+              - MVP Contract: internal/systems-additions-mvp.md

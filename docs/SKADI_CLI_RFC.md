@@ -6,10 +6,11 @@ Status: Draft
 ## Goal
 
 Create a Cargo-like tool for Skadi projects with:
+
 - project initialization,
 - build/check/run flows,
 - target compilation,
-- optional interactive mode via `skadi tui`.
+- optional interactive mode via `skadi-cli tui`.
 
 ## Command surface (v0.1)
 
@@ -19,7 +20,7 @@ Create a Cargo-like tool for Skadi projects with:
 - `skadi build [--target <triple>]`: compile project.
 - `skadi run`: build and run.
 - `skadi target list`: show supported targets.
-- `skadi tui`: interactive mode.
+- `skadi-cli tui`: interactive mode.
 - `skadi format`: source formatting command.
 - `skadi doctor`: environment checks.
 
@@ -51,6 +52,7 @@ entry = "src/main.skd"
 7. `format`, `doctor` production behavior. ◑
 
 Current built-in target profiles:
+
 - `host`
 - `x86_64-w64-mingw32`
 - `x86_64-unknown-linux-gnu`

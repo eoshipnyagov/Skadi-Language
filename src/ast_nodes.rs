@@ -14,7 +14,6 @@ impl Default for Location {
     }
 }
 
-
 // --- Core Nodes (Structural Contracts) ---
 
 /// The root of the Abstract Syntax Tree.
@@ -25,10 +24,11 @@ pub struct Program {
 
 impl Program {
     pub fn new() -> Self {
-        Program { statements: Vec::new() }
+        Program {
+            statements: Vec::new(),
+        }
     }
 }
-
 
 /// A general container for all top-level executable structures (Function definitions, etc.)
 #[derive(Debug)]
@@ -59,43 +59,102 @@ pub enum ForLoopStyle {
     LegacyCStyle,
 }
 
+#[derive(Debug, Clone)]
+pub struct LegacyForParts {
+    pub initialization: String,
+    pub condition: String,
+    pub update: String,
+}
+
 #[derive(Debug)]
 pub enum Statement {
-    VarDecl { name: String, value: Box<Expression>, is_fixed: bool, declared_type: Option<String>, loc: Location },
-    Assignment { target: String, value: Box<Expression>, loc: Location },
-    IncDec { target: String, is_increment: bool, loc: Location },
-    FieldAssignment { object: String, field: String, value: Box<Expression>, loc: Location },
-    FunctionDef { 
-        name: String, 
-        params: Vec<FunctionParam>, 
-        body: Box<BlockStatement>, 
+    VarDecl {
+        name: String,
+        value: Box<Expression>,
+        is_fixed: bool,
+        declared_type: Option<String>,
+        loc: Location,
+    },
+    Assignment {
+        target: String,
+        value: Box<Expression>,
+        loc: Location,
+    },
+    IncDec {
+        target: String,
+        is_increment: bool,
+        loc: Location,
+    },
+    FieldAssignment {
+        object: String,
+        field: String,
+        value: Box<Expression>,
+        loc: Location,
+    },
+    FunctionDef {
+        name: String,
+        params: Vec<FunctionParam>,
+        body: Box<BlockStatement>,
         returns: Option<String>, // Type of return
         is_danger: bool,
-        loc: Location
+        loc: Location,
     },
-    IfStatement { condition: Box<Expression>, then_block: Box<BlockStatement>, else_block: Option<Box<BlockStatement>>, loc: Location },
-    ForLoop { 
-        initialization: Option<Box<Expression>>, 
-        condition: Option<Box<Expression>>, 
-        update: Option<Box<Expression>>, 
+    IfStatement {
+        condition: Box<Expression>,
+        then_block: Box<BlockStatement>,
+        else_block: Option<Box<BlockStatement>>,
+        loc: Location,
+    },
+    ForLoop {
+        initialization: Option<Box<Expression>>,
+        condition: Option<Box<Expression>>,
+        update: Option<Box<Expression>>,
+        legacy_parts: Option<LegacyForParts>,
         style: ForLoopStyle,
         body: Box<BlockStatement>,
-        loc: Location
+        loc: Location,
     },
     WhenBlock {
         when_expression: Box<Expression>,
         cases: Vec<(Vec<Expression>, Box<BlockStatement>)>,
         else_block: Option<Box<BlockStatement>>,
-        loc: Location
+        loc: Location,
     },
-    WhileLoop { condition: Box<Expression>, body: Box<BlockStatement>, loc: Location },
-    LoopStatement { body: Box<BlockStatement>, loc: Location },
-    BreakStatement { loc: Location },
-    ContinueStatement { loc: Location },
-    PassStatement { loc: Location },
-    LabelDecl { name: String, variants: Vec<String>, loc: Location },
-    StructDecl { name: String, fields: Vec<StructField>, methods: Vec<StructMethod>, loc: Location },
-    OnBlock { trigger: String, loc: Location },
+    WhileLoop {
+        condition: Box<Expression>,
+        body: Box<BlockStatement>,
+        loc: Location,
+    },
+    LoopStatement {
+        body: Box<BlockStatement>,
+        loc: Location,
+    },
+    BreakStatement {
+        loc: Location,
+    },
+    ContinueStatement {
+        loc: Location,
+    },
+    PassStatement {
+        loc: Location,
+    },
+    LabelDecl {
+        name: String,
+        variants: Vec<String>,
+        loc: Location,
+    },
+    StructDecl {
+        name: String,
+        fields: Vec<StructField>,
+        methods: Vec<StructMethod>,
+        loc: Location,
+    },
+    OnBlock {
+        trigger: String,
+        target: Option<String>,
+        body: Box<BlockStatement>,
+        loc: Location,
+    },
     DangerAssignOnError {
         target: String,
         call_name: String,
@@ -120,13 +179,27 @@ pub enum Statement {
         on_error: Box<BlockStatement>,
         loc: Location,
     },
-    ReturnError { code: String, loc: Location },
-    ReturnStatement { value: Option<Box<Expression>>, loc: Location },
-    ExpressionStatement { expr: Box<Expression>, loc: Location },
-    BlockStatement { statements: Vec<Statement>, loc: Location },
-    OnErrorBlock { statements: Vec<Statement>, loc: Location }, // For 'on error' context
+    ReturnError {
+        code: String,
+        loc: Location,
+    },
+    ReturnStatement {
+        value: Option<Box<Expression>>,
+        loc: Location,
+    },
+    ExpressionStatement {
+        expr: Box<Expression>,
+        loc: Location,
+    },
+    BlockStatement {
+        statements: Vec<Statement>,
+        loc: Location,
+    },
+    OnErrorBlock {
+        statements: Vec<Statement>,
+        loc: Location,
+    }, // For 'on error' context
 }
-
 
 /// Represents a sequence of statements executed together (function body, if/else block).
 #[derive(Debug)]
@@ -140,31 +213,41 @@ impl From<Vec<Statement>> for Box<BlockStatement> {
     }
 }
 
-
 /// Represents an expression, which can be anything that evaluates to a value (variable, literal, call).
 #[derive(Debug)]
 pub enum Expression {
-    LiteralInt(i64), // Simple integer literal
-    LiteralFloat(f32),// Floating point literal
+    LiteralInt(i64),   // Simple integer literal
+    LiteralFloat(f32), // Floating point literal
     LiteralBool(bool),
     LiteralString(String),
     ListLiteral(Vec<Expression>),
-    Index { base: Box<Expression>, index: Box<Expression> },
-    VariableReference(String), // Usage of a defined variable name
-    MemberAccess { base: String, field: String },
-    Call { name: String, args: Vec<Expression> },
-    BinaryOp { 
-        op: String,     // Operator (+, -, etc.)
-        left: Box<Expression>, 
-        right: Option<Box<Expression>> 
+    Index {
+        base: Box<Expression>,
+        index: Box<Expression>,
     },
-    StructConstruction { fields: HashMap<String, Box<Expression>> }, // e.g., WeatherData { temperature = ... }
+    VariableReference(String), // Usage of a defined variable name
+    MemberAccess {
+        base: String,
+        field: String,
+    },
+    Call {
+        name: String,
+        args: Vec<Expression>,
+    },
+    BinaryOp {
+        op: String, // Operator (+, -, etc.)
+        left: Box<Expression>,
+        right: Option<Box<Expression>>,
+    },
+    StructConstruction {
+        fields: HashMap<String, Box<Expression>>,
+    }, // e.g., WeatherData { temperature = ... }
 }
 
 // --- Scope Management (Symbol Table Implementation) ---
 #[derive(Debug)]
 pub struct ScopeManager {
-    scope_stack: Vec<HashMap<String, &'static str>>, 
+    scope_stack: Vec<HashMap<String, &'static str>>,
 }
 
 impl ScopeManager {
@@ -181,7 +264,9 @@ impl ScopeManager {
     /// Returns a mutable reference to the newly added, empty scope for immediate definition use (e.g., `let`).
     pub fn enter_scope(&mut self) -> &mut HashMap<String, &'static str> {
         self.scope_stack.push(HashMap::new());
-        self.scope_stack.last_mut().expect("scope stack is never empty")
+        self.scope_stack
+            .last_mut()
+            .expect("scope stack is never empty")
     }
 
     /// Exits the current lexical scope, discarding variables defined within it.
@@ -193,10 +278,17 @@ impl ScopeManager {
             eprintln!("Warning: Attempted to pop the global scope.");
         }
     }
-    
+
     /// Defines a symbol (variable/function) in the *currently active* lexical scope. Returns an error if already present.
-    pub fn define_symbol(&mut self, name: &str, kind_type: &'static str) -> Result<(), &'static str> {
-        let current = self.scope_stack.last_mut().expect("scope stack is never empty");
+    pub fn define_symbol(
+        &mut self,
+        name: &str,
+        kind_type: &'static str,
+    ) -> Result<(), &'static str> {
+        let current = self
+            .scope_stack
+            .last_mut()
+            .expect("scope stack is never empty");
         if current.contains_key(name) {
             return Err("Symbol already defined in this scope (re-declaration detected).");
         }
@@ -206,7 +298,8 @@ impl ScopeManager {
 
     /// Looks up a symbol name, searching from the *local* scope outwards through all active scopes until found.
     pub fn lookup(&self, name: &str) -> Option<&'static str> {
-        for scope in self.scope_stack.iter().rev() { // Search reverse (top-down/local to global)
+        for scope in self.scope_stack.iter().rev() {
+            // Search reverse (top-down/local to global)
             if let Some(type_info) = scope.get(name) {
                 return Some(type_info);
             }

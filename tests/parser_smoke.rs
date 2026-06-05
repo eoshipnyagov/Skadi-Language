@@ -111,7 +111,11 @@ for item in items {
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 1);
     match &program.statements[0] {
-        Statement::ForLoop { initialization, condition, .. } => {
+        Statement::ForLoop {
+            initialization,
+            condition,
+            ..
+        } => {
             assert!(initialization.is_some());
             assert!(condition.is_some());
         }
@@ -130,7 +134,9 @@ danger fn parse_value(input) {
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 1);
     match &program.statements[0] {
-        Statement::FunctionDef { name, is_danger, .. } => {
+        Statement::FunctionDef {
+            name, is_danger, ..
+        } => {
             assert_eq!(name, "parse_value");
             assert!(*is_danger);
         }
@@ -157,7 +163,11 @@ while y {
     assert_eq!(program.statements.len(), 2);
 
     match &program.statements[0] {
-        Statement::IfStatement { then_block, else_block, .. } => {
+        Statement::IfStatement {
+            then_block,
+            else_block,
+            ..
+        } => {
             assert_eq!(then_block.statements.len(), 1);
             assert!(else_block.is_some());
             let else_block = else_block.as_ref().expect("else block");
@@ -188,7 +198,10 @@ fn add(a, b) {
         panic!("expected FunctionDef");
     };
     assert_eq!(body.statements.len(), 1);
-    assert!(matches!(body.statements[0], Statement::ReturnStatement { .. }));
+    assert!(matches!(
+        body.statements[0],
+        Statement::ReturnStatement { .. }
+    ));
 }
 
 #[test]
@@ -202,9 +215,39 @@ iterate items as item {
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 1);
     match &program.statements[0] {
-        Statement::ForLoop { initialization, condition, .. } => {
+        Statement::ForLoop {
+            initialization,
+            condition,
+            ..
+        } => {
             assert!(initialization.is_some());
             assert!(condition.is_some());
+        }
+        _ => panic!("expected ForLoop"),
+    }
+}
+
+#[test]
+fn parses_legacy_c_style_for_loop() {
+    let src = r#"
+for (i = 0; i < 10; i++) {
+    output(i)
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 1);
+    match &program.statements[0] {
+        Statement::ForLoop {
+            style,
+            legacy_parts,
+            ..
+        } => {
+            assert!(matches!(style, v01::ast_nodes::ForLoopStyle::LegacyCStyle));
+            let parts = legacy_parts.as_ref().expect("legacy parts");
+            assert_eq!(parts.initialization, "i = 0");
+            assert_eq!(parts.condition, "i < 10");
+            assert_eq!(parts.update, "i++");
         }
         _ => panic!("expected ForLoop"),
     }
@@ -215,7 +258,12 @@ fn parses_typed_new_declaration() {
     let src = "new Float t = 21.5\n";
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    let Statement::VarDecl { name, declared_type, .. } = &program.statements[0] else {
+    let Statement::VarDecl {
+        name,
+        declared_type,
+        ..
+    } = &program.statements[0]
+    else {
         panic!("expected VarDecl");
     };
     assert_eq!(name, "t");
@@ -227,7 +275,13 @@ fn parses_typed_list_new_declaration_with_literal() {
     let src = "new i32 List xs = [1, 2, 3]\n";
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    let Statement::VarDecl { name, declared_type, value, .. } = &program.statements[0] else {
+    let Statement::VarDecl {
+        name,
+        declared_type,
+        value,
+        ..
+    } = &program.statements[0]
+    else {
         panic!("expected VarDecl");
     };
     assert_eq!(name, "xs");
@@ -259,7 +313,12 @@ new Text t = "hello"
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    let Statement::VarDecl { declared_type, value, .. } = &program.statements[0] else {
+    let Statement::VarDecl {
+        declared_type,
+        value,
+        ..
+    } = &program.statements[0]
+    else {
         panic!("expected VarDecl");
     };
     assert_eq!(declared_type.as_deref(), Some("Text"));
@@ -288,7 +347,10 @@ x = xs.pop() on error {
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    assert!(matches!(program.statements[2], Statement::ListPopOnError { .. }));
+    assert!(matches!(
+        program.statements[2],
+        Statement::ListPopOnError { .. }
+    ));
 }
 
 #[test]
@@ -300,7 +362,10 @@ fn add(Int a, Int b) Int {
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    let Statement::FunctionDef { params, returns, .. } = &program.statements[0] else {
+    let Statement::FunctionDef {
+        params, returns, ..
+    } = &program.statements[0]
+    else {
         panic!("expected FunctionDef");
     };
     assert_eq!(params.len(), 2);
@@ -323,7 +388,13 @@ x = parse_value(x) on error {
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 2);
     match &program.statements[1] {
-        Statement::DangerAssignOnError { target, call_name, args, on_error, .. } => {
+        Statement::DangerAssignOnError {
+            target,
+            call_name,
+            args,
+            on_error,
+            ..
+        } => {
             assert_eq!(target, "x");
             assert_eq!(call_name, "parse_value");
             assert_eq!(args.len(), 1);
@@ -384,7 +455,10 @@ when x {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 1);
-    let Statement::WhenBlock { cases, else_block, .. } = &program.statements[0] else {
+    let Statement::WhenBlock {
+        cases, else_block, ..
+    } = &program.statements[0]
+    else {
         panic!("expected WhenBlock");
     };
     assert_eq!(cases.len(), 2);
@@ -450,7 +524,10 @@ output("hello")
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     assert_eq!(program.statements.len(), 1);
-    assert!(matches!(program.statements[0], Statement::ExpressionStatement { .. }));
+    assert!(matches!(
+        program.statements[0],
+        Statement::ExpressionStatement { .. }
+    ));
 }
 
 #[test]
@@ -462,8 +539,20 @@ i--
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    assert!(matches!(program.statements[1], Statement::IncDec { is_increment: true, .. }));
-    assert!(matches!(program.statements[2], Statement::IncDec { is_increment: false, .. }));
+    assert!(matches!(
+        program.statements[1],
+        Statement::IncDec {
+            is_increment: true,
+            ..
+        }
+    ));
+    assert!(matches!(
+        program.statements[2],
+        Statement::IncDec {
+            is_increment: false,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -491,7 +580,16 @@ loop {
     let Statement::LoopStatement { body, .. } = &program.statements[0] else {
         panic!("expected LoopStatement");
     };
-    assert!(matches!(body.statements[0], Statement::PassStatement { .. }));
-    assert!(matches!(body.statements[1], Statement::ContinueStatement { .. }));
-    assert!(matches!(body.statements[2], Statement::BreakStatement { .. }));
+    assert!(matches!(
+        body.statements[0],
+        Statement::PassStatement { .. }
+    ));
+    assert!(matches!(
+        body.statements[1],
+        Statement::ContinueStatement { .. }
+    ));
+    assert!(matches!(
+        body.statements[2],
+        Statement::BreakStatement { .. }
+    ));
 }

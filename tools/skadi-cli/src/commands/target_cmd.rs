@@ -1,9 +1,10 @@
-use crate::targets::builtin_profiles;
+use crate::actions;
 
 pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(|s| s.as_str()) {
         Some("list") => {
-            for p in builtin_profiles() {
+            let result = actions::list_targets();
+            for p in result.targets {
                 println!("{}    {}", p.triple, p.description);
             }
             Ok(())

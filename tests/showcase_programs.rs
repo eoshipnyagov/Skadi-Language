@@ -57,4 +57,12 @@ fn showcase_push_pop_compiles() {
     assert!(c.contains("sk_list_i64_pop("));
 }
 
-
+#[test]
+fn showcase_math_navigation_compiles() {
+    let src = include_str!("../benchmarks/bench_09_math_navigation.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("#include <math.h>"));
+    assert!(c.contains("cos("));
+    assert!(c.contains("sin("));
+    assert!(c.contains("atan2("));
+}

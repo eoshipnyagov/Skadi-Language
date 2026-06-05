@@ -567,6 +567,40 @@ new Text p = fs.join(".", "src")
 }
 
 #[test]
+fn semantic_allows_math_constants_and_calls() {
+    let src = r#"
+new Float pi = PI
+new Float tau = TAU
+new Float eps = EPSILON
+new Float angle = deg_to_rad(90)
+new Float x = cos(angle)
+new Float y = sin(angle)
+new Float r = sqrt((x * x) + (y * y))
+new Float back = rad_to_deg(atan2(y, x))
+new Float v = root(27, 3)
+new Float low = min(1, 2.5)
+new Float high = max(1, 2.5)
+new Float bounded = clamp(back, 0, 180)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_math_builtin_non_numeric_argument() {
+    let src = r#"
+new Text t = "abc"
+new Float x = sin(t)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-020"));
+    assert!(err.contains("builtin 'sin' expects numeric argument"));
+}
+
+#[test]
 fn semantic_allows_struct_literal_field_punning_for_defined_vars() {
     let source = r#"
 new Int value = 10
@@ -576,7 +610,11 @@ new result = {value, status}
     let tokens = v01::lexer::lex(source).expect("lexing should succeed");
     let program = v01::parser::parse_program(&tokens).expect("parsing should succeed");
     let result = v01::semantic_analysis::semantic_analyze(&program);
-    assert!(result.is_ok(), "expected semantic success, got: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "expected semantic success, got: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -707,12 +745,16 @@ new char ch = 'a'
     let program = parse_program(&tokens).expect("parse should succeed");
     let warnings = semantic_style_warnings(&program);
     assert!(
-        warnings.iter().any(|w| w.contains("prefer 'Bool' over 'bool'")),
+        warnings
+            .iter()
+            .any(|w| w.contains("prefer 'Bool' over 'bool'")),
         "expected Bool warning, got: {:?}",
         warnings
     );
     assert!(
-        warnings.iter().any(|w| w.contains("prefer 'Char' over 'char'")),
+        warnings
+            .iter()
+            .any(|w| w.contains("prefer 'Char' over 'char'")),
         "expected Char warning, got: {:?}",
         warnings
     );
@@ -821,4 +863,63 @@ fn semantic_rejects_continue_outside_loop() {
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("SC-SEM-040"));
     assert!(err.contains("break/continue are allowed only inside loops"));
+}
+
+#[test]
+fn semantic_scope_diagnostic_snapshot() {
+    let src = "b = a + 2\nnew a = 1\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.starts_with("Semantic error at line"));
+    assert!(err.contains("col"));
+    assert!(err.contains("[SC-SEM-012]"));
+    assert!(err.contains("use-before-definition: 'b' is not defined in current scope."));
+}
+
+#[test]
+fn semantic_on_error_diagnostic_snapshot() {
+    let src = r#"
+fn parse_value(bool x) Int {
+    if x {
+        return 1
+    } else {
+        return 0
+    }
+}
+
+new bool x = true
+x = parse_value(x) on error {
+    x = 1
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.starts_with("Semantic error at line"));
+    assert!(err.contains("col"));
+    assert!(err.contains("[SC-SEM-040]"));
+    assert!(
+        err.contains("on error requires danger fn call: 'parse_value' is not declared as danger.")
+    );
+}
+
+#[test]
+fn semantic_errorcode_contract_diagnostic_snapshot() {
+    let src = r#"
+label ErrorCode {
+    ZeroDivision
+    Ok
+}
+
+danger fn parse_value(bool x) Int {
+    return error ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.starts_with("Semantic error:"));
+    assert!(err.contains("[SC-SEM-051]"));
+    assert!(err.contains("label ErrorCode must start with 'Ok' variant."));
 }

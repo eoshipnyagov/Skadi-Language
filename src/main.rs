@@ -9,7 +9,9 @@ use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
 fn print_usage() {
     println!("Skadi compiler (current toolchain)");
     println!("Usage:");
-    println!("  cargo run -- --input <file.skd> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]");
+    println!(
+        "  cargo run -- --input <file.skd> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]"
+    );
     println!("  cargo run -- <file.skd> [--print-c] [--emit-c <out.c>] [--emit-exe <out.exe>]");
     println!();
     println!("Options:");
@@ -25,7 +27,11 @@ fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
     let mut errs: Vec<String> = Vec::new();
 
     for compiler in candidates {
-        let output = Command::new(compiler).arg(c_path).arg("-o").arg(exe_path).output();
+        let output = Command::new(compiler)
+            .arg(c_path)
+            .arg("-o")
+            .arg(exe_path)
+            .output();
         match output {
             Ok(out) => {
                 if out.status.success() {
@@ -57,7 +63,7 @@ fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
 
 fn main() {
     let mut had_error = false;
-    let mut input_file = "example_meteostation.txt".to_string();
+    let mut input_file = "examples/example_meteostation.skd".to_string();
     let mut emit_c_path: Option<String> = None;
     let mut emit_exe_path: Option<String> = None;
     let mut print_c = false;
@@ -119,10 +125,16 @@ fn main() {
 
     match lex(&source_code) {
         Ok(tokens) => {
-            println!("Lexing completed successfully. Token count: {}", tokens.len());
+            println!(
+                "Lexing completed successfully. Token count: {}",
+                tokens.len()
+            );
             match parse_program(&tokens) {
                 Ok(program) => {
-                    println!("Parsing completed successfully. Statement count: {}", program.statements.len());
+                    println!(
+                        "Parsing completed successfully. Statement count: {}",
+                        program.statements.len()
+                    );
                     match semantic_analyze(&program) {
                         Ok(()) => {
                             println!("Semantic analysis completed successfully.");
@@ -130,10 +142,16 @@ fn main() {
                                 eprintln!("{}", warning);
                             }
                             let c_code = transpile_program_to_c(&program);
-                            println!("C transpilation completed. Output size: {} bytes", c_code.len());
+                            println!(
+                                "C transpilation completed. Output size: {} bytes",
+                                c_code.len()
+                            );
 
                             if print_c {
-                                println!("\n----- GENERATED C -----\n{}\n-----------------------", c_code);
+                                println!(
+                                    "\n----- GENERATED C -----\n{}\n-----------------------",
+                                    c_code
+                                );
                             }
 
                             if let Some(path) = emit_c_path {
@@ -153,7 +171,10 @@ fn main() {
                                         match compile_c_to_exe(&temp_c_path, &exe_path) {
                                             Ok(()) => println!("Executable built: {}", exe_path),
                                             Err(e) => {
-                                                eprintln!("Failed to build executable '{}': {}", exe_path, e);
+                                                eprintln!(
+                                                    "Failed to build executable '{}': {}",
+                                                    exe_path, e
+                                                );
                                                 had_error = true;
                                             }
                                         }
@@ -196,5 +217,3 @@ fn main() {
         exit(1);
     }
 }
-
-

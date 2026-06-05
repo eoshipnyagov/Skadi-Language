@@ -3,3 +3,6 @@
 .sloplobster-progress-default.md
 *.vsix
 *.scadi.c
+.docs-build/
+site/
+.venv-docs/

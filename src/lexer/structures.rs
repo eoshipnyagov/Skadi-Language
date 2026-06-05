@@ -1,6 +1,6 @@
 // File: src/lexer/structures.rs
 use crate::common_types::Token;
-use crate::diagnostics::{format_diagnostic, DiagnosticKind};
+use crate::diagnostics::{DiagnosticKind, format_diagnostic};
 
 /// Represents an error during lexical analysis.
 #[derive(Debug)]
@@ -32,5 +32,26 @@ pub type LexerToken = Token;
 
 /// Utility function to check if a character is likely the start of an operator.
 pub fn is_operator_start(c: char) -> bool {
-    matches!(c, '{' | '}' | '(' | ')' | '[' | ']' | '.' | ',' | ':' | '+' | '-' | '*' | '/' | '=' | '!' | '>' | '<' | '&' | '|' | '^')
+    matches!(
+        c,
+        '{' | '}'
+            | '('
+            | ')'
+            | '['
+            | ']'
+            | '.'
+            | ','
+            | ':'
+            | '+'
+            | '-'
+            | '*'
+            | '/'
+            | '='
+            | '!'
+            | '>'
+            | '<'
+            | '&'
+            | '|'
+            | '^'
+    )
 }

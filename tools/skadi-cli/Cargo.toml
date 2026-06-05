@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 v01 = { path = "../.." }
+crossterm = "0.28"
+ratatui = "0.28"

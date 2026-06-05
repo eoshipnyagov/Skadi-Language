@@ -12,8 +12,8 @@ Set-Location $root
 
 $benches = @(
     @{ name = "bench_01_tree"; file = "benchmarks/bench_01_tree.skd"; args = @("--dirs-only", "--depth-3") },
-    @{ name = "bench_02_read_stats"; file = "benchmarks/bench_02_read_stats.skd"; args = @("--input", "example_meteostation.txt") },
-    @{ name = "bench_03_find_count"; file = "benchmarks/bench_03_find_count.skd"; args = @("--input", "example_meteostation.txt", "--needle", "temperature") },
+    @{ name = "bench_02_read_stats"; file = "benchmarks/bench_02_read_stats.skd"; args = @("--input", "examples/example_meteostation.skd") },
+    @{ name = "bench_03_find_count"; file = "benchmarks/bench_03_find_count.skd"; args = @("--input", "examples/example_meteostation.skd", "--needle", "temperature") },
     @{ name = "bench_04_sum_ints"; file = "benchmarks/bench_04_sum_ints.skd"; args = @("--medium") },
     @{ name = "bench_05_push_pop"; file = "benchmarks/bench_05_push_pop.skd"; args = @("--medium") },
     @{ name = "bench_06_struct_account"; file = "benchmarks/bench_06_struct_account.skd"; args = @() },

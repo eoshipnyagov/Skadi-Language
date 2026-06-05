@@ -1,0 +1,8 @@
+pyproject.toml
+src/skadi_docs_lexer/__init__.py
+src/skadi_docs_lexer/lexer.py
+src/skadi_docs_lexer.egg-info/PKG-INFO
+src/skadi_docs_lexer.egg-info/SOURCES.txt
+src/skadi_docs_lexer.egg-info/dependency_links.txt
+src/skadi_docs_lexer.egg-info/entry_points.txt
+src/skadi_docs_lexer.egg-info/top_level.txt
