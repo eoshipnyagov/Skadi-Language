@@ -34,6 +34,11 @@ jobs:
           install: >-
             mingw-w64-ucrt-x86_64-gcc
 
+      - name: Add MSYS2 GCC to PATH
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: echo "C:\msys64\ucrt64\bin" >> $env:GITHUB_PATH
+
       - name: Run tests except codegen_e2e
         run: cargo test -q -- --skip e2e_
 
@@ -65,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -73,6 +78,20 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install MSYS2 GCC
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+
+      - name: Add MSYS2 GCC to PATH
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: echo "C:\msys64\ucrt64\bin" >> $env:GITHUB_PATH
 
       - name: Run dedicated codegen e2e suite
         run: cargo test -q --test codegen_e2e

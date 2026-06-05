@@ -112,6 +112,23 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
     out.push_str("    return 0;\n");
     out.push_str("}\n\n");
     out.push_str(&format!(
+        "static void sk_list_{}_free(SkadiList_{} *xs) {{\n",
+        suffix, suffix
+    ));
+    out.push_str("    if (!xs) return;\n");
+    out.push_str("    free(xs->data);\n");
+    out.push_str("    xs->data = NULL;\n");
+    out.push_str("    xs->len = 0;\n");
+    out.push_str("    xs->cap = 0;\n");
+    out.push_str("}\n\n");
+    if suffix == "text" {
+        out.push_str("static void sk_list_text_free_owned(SkadiList_text *xs) {\n");
+        out.push_str("    if (!xs) return;\n");
+        out.push_str("    for (size_t i = 0; i < xs->len; ++i) free(xs->data[i]);\n");
+        out.push_str("    sk_list_text_free(xs);\n");
+        out.push_str("}\n\n");
+    }
+    out.push_str(&format!(
         "static {} sk_list_{}_get(const SkadiList_{} *xs, int64_t idx) {{\n",
         c_ty, suffix, suffix
     ));
@@ -349,10 +366,62 @@ pub fn transpile_program_to_c(program: &Program) -> String {
             emit_statement(stmt, &mut out, 1, &mut declared, None);
         }
     }
+    emit_top_level_cleanup(program, &mut out);
     out.push_str("    return 0;\n");
     out.push_str("}\n");
 
     out
+}
+
+fn emit_top_level_cleanup(program: &Program, out: &mut String) {
+    for stmt in program.statements.iter().rev() {
+        let Statement::VarDecl {
+            name,
+            value,
+            declared_type,
+            ..
+        } = stmt
+        else {
+            continue;
+        };
+
+        let Some(dt) = declared_type.as_deref() else {
+            continue;
+        };
+
+        if let Some(elem) = list_elem_from_decl(dt) {
+            let suffix = list_meta_dynamic(elem).1;
+            out.push_str("    ");
+            if suffix == "text" && expression_returns_owned_text_list(value) {
+                out.push_str("sk_list_text_free_owned(&");
+            } else {
+                out.push_str("sk_list_");
+                out.push_str(&suffix);
+                out.push_str("_free(&");
+            }
+            out.push_str(name);
+            out.push_str(");\n");
+            continue;
+        }
+
+        if matches!(dt, "Text" | "Path") && expression_returns_owned_text(value) {
+            out.push_str("    free(");
+            out.push_str(name);
+            out.push_str(");\n");
+        }
+    }
+}
+
+fn expression_returns_owned_text(expr: &Expression) -> bool {
+    matches!(
+        expr,
+        Expression::Call { name, .. }
+            if matches!(name.as_str(), "input" | "read" | "slice" | "concat" | "fs.join")
+    )
+}
+
+fn expression_returns_owned_text_list(expr: &Expression) -> bool {
+    matches!(expr, Expression::Call { name, .. } if name == "fs.list")
 }
 
 fn emit_struct_declarations(program: &Program, out: &mut String) {

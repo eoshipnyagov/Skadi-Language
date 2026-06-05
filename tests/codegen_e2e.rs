@@ -9,7 +9,12 @@ use v01::parser::parse_program;
 use v01::semantic_analysis::semantic_analyze;
 
 fn find_c_compiler() -> Option<&'static str> {
-    for c in ["clang", "gcc", "cc"] {
+    let candidates: &[&str] = if cfg!(windows) {
+        &["gcc", "clang", "cc"]
+    } else {
+        &["clang", "gcc", "cc"]
+    };
+    for c in candidates {
         if Command::new(c).arg("--version").output().is_ok() {
             return Some(c);
         }
@@ -73,12 +78,9 @@ fn compile_c_and_run(compiler: &str, c_src: &str, stem: &str, extra_flags: &[&st
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let mut run_cmd = Command::new(&exe_path);
-    if extra_flags.iter().any(|flag| flag.contains("sanitize")) {
-        run_cmd.env("ASAN_OPTIONS", "detect_leaks=0");
-        run_cmd.env("LSAN_OPTIONS", "detect_leaks=0");
-    }
-    let run = run_cmd.output().expect("run compiled binary");
+    let run = Command::new(&exe_path)
+        .output()
+        .expect("run compiled binary");
     assert!(
         run.status.success(),
         "Binary execution failed: {}",
