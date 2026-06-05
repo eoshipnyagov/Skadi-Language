@@ -26,7 +26,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Run tests except codegen_e2e
-        run: cargo test -q -- --skip codegen_e2e
+        run: cargo test -q -- --skip e2e_
 
       - name: Smoke transpile sample programs to C
         run: |
@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout

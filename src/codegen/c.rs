@@ -1097,6 +1097,7 @@ fn emit_statement(
                         .and_then(|t| list_elem_from_decl(t))
                         .map(|elem| list_meta_dynamic(elem).0)
                         .unwrap_or_else(|| "int64_t".to_string()),
+                    expr if is_text_list_expr(expr, declared) => "char*".to_string(),
                     _ => "int64_t".to_string(),
                 };
                 let item_decl_ty = match coll.as_ref() {
@@ -1105,6 +1106,7 @@ fn emit_statement(
                         .and_then(|t| list_elem_from_decl(t))
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "Int".to_string()),
+                    expr if is_text_list_expr(expr, declared) => "Text".to_string(),
                     _ => "Int".to_string(),
                 };
                 out.push_str(&pad);
@@ -1509,6 +1511,18 @@ fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
     }
 }
 
+fn is_text_list_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
+    match expr {
+        Expression::VariableReference(name) => declared
+            .get(name)
+            .and_then(|t| list_elem_from_decl(t))
+            .map(|elem| elem == "Text" || elem == "Path")
+            .unwrap_or(false),
+        Expression::Call { name, .. } => name == "fs.list",
+        _ => false,
+    }
+}
+
 fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind {
     match expr {
         Expression::LiteralInt(_) => ExprKind::Int,
@@ -1612,11 +1626,8 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 match builtin {
                     Builtin::Len if args.len() == 1 => {
                         let arg_rendered = emit_expr(&args[0], declared);
-                        if let Expression::VariableReference(var_name) = &args[0]
-                            && declared
-                                .get(var_name)
-                                .map(|t| t.as_str() == "Text")
-                                .unwrap_or(false)
+                        if is_text_expr(&args[0], declared)
+                            || expr_kind(&args[0], declared) == ExprKind::Text
                         {
                             return format!("((int64_t)strlen({}))", arg_rendered);
                         }

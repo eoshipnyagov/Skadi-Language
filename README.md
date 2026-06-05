@@ -1,7 +1,7 @@
 # Skadi
 
 ![CI](https://github.com/eoshipnyagov/Skadi-Language/actions/workflows/ci.yml/badge.svg)
-![Docs](https://github.com/eoshipnyagov/Skadi-Language/actions/workflows/docs-site.yml/badge.svg)
+![Docs](https://github.com/eoshipnyagov/Skadi-Language/actions/workflows/docs-site.yml/badge.svg?branch=master)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 
 **Skadi is an experimental systems language and toolchain focused on calm readability, explicit behavior, and practical native workflows.**
