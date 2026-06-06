@@ -150,6 +150,38 @@ fn positive_memory_examples_build_to_native_binaries() {
 }
 
 #[test]
+fn large_memory_example_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping large memory example runtime test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let program = parse_ok("examples/memory/large/01_log_analyzer.skd");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+    ensure_codegen_supported(&program).expect("memory backend support should pass");
+    let c_src = transpile_program_to_c(&program);
+    let run = compile_c_and_execute(compiler, &c_src, "memory_large_01", &[], Some(&repo_root));
+
+    assert!(run.status.success(), "large memory example should run");
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("preview status"));
+    assert!(stdout.contains("preview contains service"));
+    assert!(stdout.contains("true"));
+    assert!(stdout.contains("total lines"));
+    assert!(stdout.contains("8"));
+    assert!(stdout.contains("error lines"));
+    assert!(stdout.contains("warning lines"));
+    assert!(stdout.contains("todo lines"));
+    assert!(stdout.contains("alert lines"));
+    assert!(stdout.contains("6"));
+    assert!(stdout.contains("WARN cache warmup slow"));
+    assert!(stdout.contains("ERROR failed to open config"));
+    assert!(stdout.contains("TODO review alert thresholds"));
+}
+
+#[test]
 fn memory_runtime_examples_build_and_run() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping memory runtime e2e test: no clang/gcc/cc in PATH.");

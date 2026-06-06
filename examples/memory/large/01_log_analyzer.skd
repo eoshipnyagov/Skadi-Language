@@ -1,0 +1,157 @@
+// Memory large example 01: analyze a log file with external and scratch memory.
+
+struct AlertCounters {
+    Int total_lines
+    Int error_lines
+    Int warning_lines
+    Int todo_lines
+}
+
+fn find_line_end(Text full_text, Int start_index) Int {
+    new Text tail_text = slice(full_text, start_index, len(full_text))
+    new Int relative_newline = find(tail_text, "\n")
+    if relative_newline == -1 {
+        return len(full_text)
+    }
+
+    return start_index + relative_newline
+}
+
+fn next_line_start(Text full_text, Int line_end) Int {
+    if line_end >= len(full_text) {
+        return len(full_text)
+    }
+
+    return line_end + 1
+}
+
+fn is_error_line(Text line_text) Bool {
+    return contains(line_text, "ERROR")      
+}
+
+fn is_warning_line(Text line_text) Bool {
+    return contains(line_text, "WARN")
+}
+
+fn is_todo_line(Text line_text) Bool {
+    return contains(line_text, "TODO")
+}
+
+fn is_alert_line(Text line_text) Bool {
+    if is_error_line(line_text) {
+        return true
+    }
+
+    if is_warning_line(line_text) {
+        return true
+    }
+
+    return is_todo_line(line_text)
+}
+
+fn preview_log(Path log_path) Int {
+    Memory scratch_memory = memory(16kb) on error {
+        return 1
+    }
+
+    place in scratch_memory {
+        new Text preview_text = read(log_path)
+        output("preview contains service")
+        output(contains(preview_text, "service"))
+    } on error {
+        scratch_memory.clear()
+        return 2
+    }
+
+    scratch_memory.clear()
+    return 0
+}
+
+fn load_log_text(Memory assets_memory, Path log_path) Text {
+    place in assets_memory {
+        new Text log_text = read(log_path)
+        return log_text
+    }
+}
+
+fn collect_alert_lines(Memory assets_memory, Text log_text) Text List {
+    place in assets_memory {
+        new Text List alert_lines = []
+        new Int start_index = 0
+        new Int total_length = len(log_text)
+
+        while start_index < total_length {
+            new Int line_end = find_line_end(log_text, start_index)
+            new Text line_text = slice(log_text, start_index, line_end)
+
+            if is_alert_line(line_text) {
+                alert_lines.push(line_text)
+            }
+
+            start_index = next_line_start(log_text, line_end)
+        }
+
+        return alert_lines
+    }
+}
+
+fn count_alerts(Text log_text) AlertCounters {
+    new Int total_line_count = 0
+    new Int error_line_count = 0
+    new Int warning_line_count = 0
+    new Int todo_line_count = 0
+    new Int start_index = 0
+    new Int total_length = len(log_text)
+
+    while start_index < total_length {
+        new Int line_end = find_line_end(log_text, start_index)
+        new Text line_text = slice(log_text, start_index, line_end)
+        total_line_count++
+
+        if is_error_line(line_text) {
+            error_line_count++
+        }
+
+        if is_warning_line(line_text) {
+            warning_line_count++
+        }
+
+        if is_todo_line(line_text) {
+            todo_line_count++
+        }
+
+        start_index = next_line_start(log_text, line_end)
+    }
+
+    new AlertCounters counters_result = {total_lines = total_line_count, error_lines = error_line_count, warning_lines = warning_line_count, todo_lines = todo_line_count}
+
+    return counters_result
+}
+
+new Path log_path = "examples/memory/large/data/sample_service.log"
+output("preview status")
+output(preview_log(log_path))
+
+Memory assets_memory = memory(64kb) on error {
+    output("could not create assets memory")
+}
+
+new Text log_text = load_log_text(assets_memory, log_path)
+new Text List alert_lines = collect_alert_lines(assets_memory, log_text)
+new AlertCounters counters = count_alerts(log_text)
+
+output("total lines")
+output(counters.total_lines)
+output("error lines")
+output(counters.error_lines)
+output("warning lines")
+output(counters.warning_lines)
+output("todo lines")
+output(counters.todo_lines)
+output("alert lines")
+output(len(alert_lines))
+output("alert payload")
+
+iterate alert_lines as alert_line {
+    output(alert_line)
+}
