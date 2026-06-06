@@ -199,6 +199,48 @@ fn render(Memory frame_memory) Int {
 }
 
 #[test]
+fn semantic_allows_nested_place_in_for_different_memories() {
+    let src = r#"
+fn load(Memory assets_memory, Memory scratch_memory, Path path) Text {
+    place in assets_memory {
+        place in scratch_memory {
+            new Text preview_text = read(path)
+            output(preview_text)
+        } on error {
+            scratch_memory.clear()
+            output("scratch overflow")
+        }
+
+        new Text result_text = read(path)
+        return result_text
+    }
+}
+"#;
+    let program = parse_ok(src);
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_nested_place_in_same_memory() {
+    let src = r#"
+fn invalid_nested(Memory assets_memory) Int {
+    place in assets_memory {
+        place in assets_memory {
+            new Text msg = "bad"
+            output(msg)
+        }
+    }
+
+    return 0
+}
+"#;
+    let program = parse_ok(src);
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-060"));
+    assert!(err.contains("nested place in same Memory is forbidden"));
+}
+
+#[test]
 fn semantic_rejects_return_memory_handle() {
     let src = r#"
 fn leak(Memory frame_memory) Memory {

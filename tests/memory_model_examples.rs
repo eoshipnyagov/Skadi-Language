@@ -93,6 +93,7 @@ fn positive_memory_examples_pass_frontend_and_codegen() {
         "examples/memory/positive/02_local_scratch_preview.skd",
         "examples/memory/positive/03_sensor_batch_external_memory.skd",
         "examples/memory/positive/04_explicit_recovery.skd",
+        "examples/memory/positive/05_nested_scratch_inside_result_region.skd",
     ];
 
     for rel in examples {
@@ -133,6 +134,10 @@ fn positive_memory_examples_build_to_native_binaries() {
         (
             "mem_positive_04",
             "examples/memory/positive/04_explicit_recovery.skd",
+        ),
+        (
+            "mem_positive_05",
+            "examples/memory/positive/05_nested_scratch_inside_result_region.skd",
         ),
     ];
 
@@ -313,6 +318,50 @@ output(cfg.fallback_used == true)
         "expected overflow recovery output, got: {}",
         String::from_utf8_lossy(&run.stdout)
     );
+
+    let nested_regions = r#"
+struct LoadedSnippet {
+    Text content
+}
+
+fn load_with_preview(Memory assets_memory, Memory scratch_memory, Path path) LoadedSnippet {
+    place in assets_memory {
+        place in scratch_memory {
+            new Text preview_text = read(path)
+            new Text head_text = slice(preview_text, 0, 16)
+            output(head_text)
+        } on error {
+            scratch_memory.clear()
+            output("scratch overflow")
+        }
+
+        new Text result_text = read(path)
+        new LoadedSnippet result = {content = result_text}
+        return result
+    } on error {
+        assets_memory.clear()
+        return {content = "outer overflow"}
+    }
+}
+
+Memory assets_memory = memory(8kb)
+Memory scratch_memory = memory(16b)
+new LoadedSnippet loaded = load_with_preview(assets_memory, scratch_memory, "benchmarks/showcase-data/sample_weather.txt")
+output("nested ok")
+output(contains(loaded.content, "temperature"))
+"#;
+    let run = compile_c_and_execute(
+        compiler,
+        &compile_program_to_c(nested_regions),
+        "memory_runtime_nested_regions",
+        &[],
+        Some(&repo_root),
+    );
+    assert!(run.status.success());
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("scratch overflow"));
+    assert!(stdout.contains("nested ok"));
+    assert!(stdout.contains("true"));
 }
 
 #[test]
@@ -365,6 +414,11 @@ fn negative_memory_examples_fail_with_expected_diagnostics() {
             "examples/memory/negative/07_store_into_longer_lived_owner.skd",
             "SC-SEM-060",
             "longer-lived owner",
+        ),
+        (
+            "examples/memory/negative/08_nested_same_memory_place_in.skd",
+            "SC-SEM-060",
+            "nested place in same Memory is forbidden",
         ),
     ];
 

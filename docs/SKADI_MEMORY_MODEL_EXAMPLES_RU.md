@@ -121,6 +121,19 @@ fn load_text(Memory assets_memory, Path path) LoadedText {
 - `load_log_text(...)` и `collect_alert_lines(...)` как возврат region-owned значений через внешнюю `Memory`;
 - файл `sample_service.log` как стабильный вход для запуска и e2e-проверки.
 
+### 3.6. Nested scratch-region внутри result-region
+
+Файл:
+
+- `examples/memory/positive/05_nested_scratch_inside_result_region.skd`
+
+Что показывает:
+
+- nested `place in` нужен не ради вложенности как таковой, а ради отделения временной работы от результата;
+- внешний `assets_memory` хранит то, что переживёт операцию;
+- внутренний `scratch_memory` обслуживает preview и промежуточные аллокации;
+- inner `on error` остаётся локальным и не ломает внешний region.
+
 ## 4. Style pitfalls
 
 ### 4.1. Схлопнутые имена полей и переменных
@@ -200,6 +213,14 @@ new LoadedText result = {content}
 ### 5.7. Нельзя сохранять local-region payload в более долгоживущий owner
 
 Файл: `examples/memory/negative/07_store_into_longer_lived_owner.skd`
+
+Ожидаемый diagnostic:
+
+- `SC-SEM-060`
+
+### 5.8. Нельзя делать nested `place in` в ту же самую `Memory`
+
+Файл: `examples/memory/negative/08_nested_same_memory_place_in.skd`
 
 Ожидаемый diagnostic:
 

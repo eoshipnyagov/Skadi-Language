@@ -26,7 +26,8 @@
 6. `on error` при невозможности создать `Memory`;
 7. `on error` при нехватке места внутри `place in`;
 8. `Memory.clear()` как уничтожение всего содержимого региона;
-9. упрощённое safety rule для возврата значений из `place in`.
+9. упрощённое safety rule для возврата значений из `place in`;
+10. ограниченно разрешённое nested `place in` для отдельного scratch-region внутри result-region.
 
 ## 3. Scope lifetime по умолчанию
 
@@ -205,7 +206,59 @@ fn load_text(Path path) LoadedText {
 }
 ```
 
-## 11. Что именно обещает MVP
+## 11. Nested `place in`
+
+Nested `place in` в MVP разрешён только для одного практического сценария:
+
+```text
+Внешний region хранит результат.
+Внутренний region обслуживает временную работу.
+```
+
+Это нужно, когда внутри одной операции есть два разных lifetime-класса данных:
+
+- долгоживущий полезный результат;
+- короткоживущие промежуточные аллокации.
+
+Разрешено:
+
+```scadi
+place in assets_memory {
+    place in scratch_memory {
+        new Text preview_text = read(path)
+        output(preview_text)
+    } on error {
+        scratch_memory.clear()
+        output("scratch overflow")
+    }
+
+    new Text result_text = read(path)
+    return result_text
+}
+```
+
+MVP-правила:
+
+- nested `place in` разрешён только между разными `Memory`;
+- `place in` в ту же самую `Memory` внутри уже активного `place in` запрещён;
+- внутренний `on error` ловит только overflow внутреннего блока;
+- выход из внутреннего блока возвращает active region к внешнему;
+- никакого автоматического rollback не обещается.
+
+Запрещено:
+
+```scadi
+place in assets_memory {
+    place in assets_memory {
+        new Text msg = "bad"
+        output(msg)
+    }
+}
+```
+
+Это считается ошибкой не потому, что runtime не справится, а потому, что same-memory nesting не даёт новой выразительности и только делает код менее прямолинейным.
+
+## 12. Что именно обещает MVP
 
 MVP memory model обещает:
 
@@ -217,7 +270,7 @@ MVP memory model обещает:
 - базовую защиту от возврата значения из умершего региона.
 - `Memory` как special capability handle, а не как обычный storable value.
 
-## 12. Что MVP пока не обещает
+## 13. Что MVP пока не обещает
 
 MVP memory model не обещает:
 
@@ -236,7 +289,13 @@ MVP memory model не обещает:
 - `Memory List`;
 - обычное копирование/переприсваивание `Memory` как regular value.
 
-## 13. Рекомендация для реализации
+Nested `place in` при этом не обещает:
+
+- глубокую произвольную матрёшку placement-блоков как рекомендуемый стиль;
+- special semantics для same-memory nesting;
+- дополнительную magic-логику поверх обычного active-region switch.
+
+## 14. Рекомендация для реализации
 
 Если брать этот контракт в работу, ближайший practical order такой:
 
@@ -245,7 +304,7 @@ MVP memory model не обещает:
 3. Затем реализовать semantic rule на возврат из `place in`.
 4. Только после этого обсуждать `allow grow`, `allow drop`, `memory.child`, `memory.static`.
 
-## 14. Короткая формула MVP-контракта
+## 15. Короткая формула MVP-контракта
 
 ```text
 Scope owns local values.
@@ -254,4 +313,5 @@ Memory owns groups of dynamic data.
 place in chooses the region.
 clear destroys the region contents.
 Returning from a dead region is forbidden.
+Nested place in is only for a shorter-lived scratch region inside a longer-lived result region.
 ```

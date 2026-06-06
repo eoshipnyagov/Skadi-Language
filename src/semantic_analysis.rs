@@ -1480,6 +1480,16 @@ fn analyze_statement(
                     ),
                 ));
             }
+            if memory_state.active_memory.as_deref() == Some(memory_name.as_str()) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_MEMORY_RULE,
+                    format!(
+                        "nested place in same Memory is forbidden: '{}'. Reuse the current placement block or switch to a different scratch region.",
+                        memory_name
+                    ),
+                ));
+            }
             let mut place_scope = scope.clone();
             let mut place_memory_state = memory_state.clone();
             place_memory_state.active_memory = Some(memory_name.clone());

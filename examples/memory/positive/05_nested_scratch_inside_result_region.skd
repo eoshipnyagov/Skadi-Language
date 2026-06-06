@@ -1,0 +1,22 @@
+// Memory example 05: nested place in with outer result region and inner scratch region.
+
+struct LoadedSnippet {
+    Text content
+}
+
+fn load_with_preview(Memory assets_memory, Memory scratch_memory, Path path) LoadedSnippet {
+    place in assets_memory {
+        place in scratch_memory {
+            new Text preview_text = read(path)
+            new Text head_text = slice(preview_text, 0, 24)
+            output(head_text)
+        } on error {
+            scratch_memory.clear()
+            output("scratch overflow")
+        }
+
+        new Text result_text = read(path)
+        new LoadedSnippet result = {content = result_text}
+        return result
+    }
+}
