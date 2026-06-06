@@ -4,9 +4,12 @@
 Статус: draft / design reference
 Назначение: зафиксировать опорную модель памяти Skadi до полноценной реализации syntax/runtime/backend.
 
-Связанный рабочий документ:
+Связанные рабочие документы:
 
 - [Memory MVP Contract](memory-model-mvp.md)
+- [Memory Examples and Negative Cases](memory-model-examples.md)
+
+Если нужен минимальный набор current-примеров без скрытого контекста и без broad-design допущений, сначала стоит читать examples-документ.
 
 ## 1. Зачем Skadi отдельная memory model
 
@@ -84,12 +87,12 @@ fn process() {
 Если значение явно возвращается из функции, оно не уничтожается вместе с локальным scope.
 
 ```scadi
-fn make_numbers() returns List(Int) {
-    new numbers = List(Int)
+fn make_numbers() Int List {
+    new Int List numbers = []
 
-    numbers.append(1)
-    numbers.append(2)
-    numbers.append(3)
+    numbers.push(1)
+    numbers.push(2)
+    numbers.push(3)
 
     return numbers
 }
@@ -119,18 +122,14 @@ fn main() {
 Если структура содержит динамические поля, они принадлежат самой структуре.
 
 ```scadi
-struct Level {
-    List(Entity) entities
-    List(Texture) textures
+struct LevelData {
+    Text source
 }
 
-fn load_level(Path path) returns Level {
-    new level = Level {
-        entities = List(Entity),
-        textures = List(Texture)
-    }
-
-    return level
+fn load_level(Path path) LevelData {
+    new Text file_text = read(path)
+    new LevelData result = {source = file_text}
+    return result
 }
 ```
 
@@ -197,26 +196,24 @@ place in отвечает за место размещения.
 Простой случай:
 
 ```scadi
-fn make_list() returns List(Int) {
-    new list = List(Int)
-    return list
+fn make_list() Int List {
+    new Int List values = []
+    return values
 }
 ```
 
 Региональный случай:
 
 ```scadi
-fn build_scene(Memory scene_memory, SceneConfig config) returns Scene {
-    new temp_data = read_config(config)
+struct LoadedText {
+    Text content
+}
 
-    place in scene_memory {
-        new scene = Scene {
-            entities = List(Entity),
-            lights = List(Light),
-            meshes = List(Mesh)
-        }
-
-        return scene
+fn load_text(Memory assets_memory, Path path) LoadedText {
+    place in assets_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
     }
 }
 ```
@@ -468,12 +465,17 @@ loop {
 Плохо:
 
 ```scadi
-fn bad() returns Texture {
-    Memory temp = memory(4mb)
+struct LoadedText {
+    Text content
+}
 
-    place in temp {
-        new texture = Texture(...)
-        return texture
+fn bad() LoadedText {
+    Memory temp_memory = memory(4mb)
+
+    place in temp_memory {
+        new Text file_text = read(Path("asset.txt"))
+        new LoadedText result = {content = file_text}
+        return result
     }
 }
 ```
@@ -501,10 +503,15 @@ fn bad() returns Texture {
 Разрешено:
 
 ```scadi
-fn load_texture(Memory assets, Path path) returns Texture {
-    place in assets {
-        new texture = Texture(...)
-        return texture
+struct LoadedText {
+    Text content
+}
+
+fn load_text(Memory assets_memory, Path path) LoadedText {
+    place in assets_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
     }
 }
 ```
@@ -512,12 +519,17 @@ fn load_texture(Memory assets, Path path) returns Texture {
 Запрещено:
 
 ```scadi
-fn load_texture(Path path) returns Texture {
-    Memory temp = memory(4mb)
+struct LoadedText {
+    Text content
+}
 
-    place in temp {
-        new texture = Texture(...)
-        return texture
+fn load_text(Path path) LoadedText {
+    Memory temp_memory = memory(4mb)
+
+    place in temp_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
     }
 }
 ```
@@ -571,7 +583,12 @@ struct Level {
     NavMesh navmesh
 }
 
-fn load_level(Memory level_memory, Path path) returns struct {Level level, LoadStatus status} {
+struct LevelLoadResult {
+    Level level
+    LoadStatus status
+}
+
+fn load_level(Memory level_memory, Path path) LevelLoadResult {
     new file = fs.read(path) on error {
         return {level = Level.empty(), status = LoadStatus.FileError}
     }
@@ -581,17 +598,17 @@ fn load_level(Memory level_memory, Path path) returns struct {Level level, LoadS
     }
 
     place in level_memory {
-        new level = Level {
+        new level_value = Level {
             entities = List(Entity),
             textures = List(Texture),
             navmesh = NavMesh()
         }
 
         for token in tokens {
-            level.entities.append(make_entity(token))
+            level_value.entities.append(make_entity(token))
         }
 
-        return {level = level, status = LoadStatus.Ok}
+        return {level = level_value, status = LoadStatus.Ok}
     } on error {
         level_memory.clear()
         return {level = Level.empty(), status = LoadStatus.OutOfMemory}

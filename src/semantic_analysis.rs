@@ -319,6 +319,47 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         }
     }
 
+    fn visit_expression_style(expr: &Expression, line: u32, col: u32, out: &mut Vec<String>) {
+        match expr {
+            Expression::ListLiteral(items) => {
+                for item in items {
+                    visit_expression_style(item, line, col, out);
+                }
+            }
+            Expression::Index { base, index } => {
+                visit_expression_style(base, line, col, out);
+                visit_expression_style(index, line, col, out);
+            }
+            Expression::Call { args, .. } => {
+                for arg in args {
+                    visit_expression_style(arg, line, col, out);
+                }
+            }
+            Expression::BinaryOp { left, right, .. } => {
+                visit_expression_style(left, line, col, out);
+                if let Some(right) = right {
+                    visit_expression_style(right, line, col, out);
+                }
+            }
+            Expression::StructConstruction { fields } => {
+                for (field_name, field_value) in fields {
+                    if let Expression::VariableReference(var_name) = field_value.as_ref()
+                        && field_name == var_name
+                    {
+                        out.push(format!(
+                            "style warning at line {line}, col {col}: avoid collapsed field init like '{{{field} = {field}}}' or '{{{field}}}'; prefer a distinct value name such as '{field}_value'.",
+                            line = line,
+                            col = col,
+                            field = field_name
+                        ));
+                    }
+                    visit_expression_style(field_value, line, col, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn visit_statements(
         stmts: &[Statement],
         user_types: &std::collections::HashSet<String>,
@@ -328,6 +369,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
             match stmt {
                 Statement::VarDecl {
                     declared_type: Some(dt),
+                    value,
                     loc,
                     ..
                 } => {
@@ -336,6 +378,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     } else {
                         warn_type_style(dt, loc.line, loc.column, user_types, out);
                     }
+                    visit_expression_style(value, loc.line, loc.column, out);
                 }
                 Statement::MemoryDecl {
                     name,
@@ -348,7 +391,9 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                         visit_statements(&on_error.statements, user_types, out);
                     }
                 }
-                Statement::VarDecl { .. } => {}
+                Statement::VarDecl { value, loc, .. } => {
+                    visit_expression_style(value, loc.line, loc.column, out);
+                }
                 Statement::FunctionDef {
                     params,
                     returns,
@@ -374,17 +419,26 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     visit_statements(&body.statements, user_types, out);
                 }
                 Statement::IfStatement {
+                    condition,
                     then_block,
                     else_block,
+                    loc,
                     ..
                 } => {
+                    visit_expression_style(condition, loc.line, loc.column, out);
                     visit_statements(&then_block.statements, user_types, out);
                     if let Some(b) = else_block {
                         visit_statements(&b.statements, user_types, out);
                     }
                 }
                 Statement::ForLoop {
-                    style, body, loc, ..
+                    initialization,
+                    condition,
+                    update,
+                    style,
+                    body,
+                    loc,
+                    ..
                 } => {
                     if *style == ForLoopStyle::ForIn {
                         out.push(format!(
@@ -392,9 +446,26 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                             loc.line, loc.column
                         ));
                     }
+                    if let Some(initialization) = initialization {
+                        visit_expression_style(initialization, loc.line, loc.column, out);
+                    }
+                    if let Some(condition) = condition {
+                        visit_expression_style(condition, loc.line, loc.column, out);
+                    }
+                    if let Some(update) = update {
+                        visit_expression_style(update, loc.line, loc.column, out);
+                    }
                     visit_statements(&body.statements, user_types, out);
                 }
-                Statement::WhileLoop { body, .. } | Statement::LoopStatement { body, .. } => {
+                Statement::WhileLoop {
+                    condition,
+                    body,
+                    loc,
+                } => {
+                    visit_expression_style(condition, loc.line, loc.column, out);
+                    visit_statements(&body.statements, user_types, out);
+                }
+                Statement::LoopStatement { body, .. } => {
                     visit_statements(&body.statements, user_types, out);
                 }
                 Statement::PlaceIn { on_error, body, .. } => {
@@ -404,8 +475,13 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     visit_statements(&body.statements, user_types, out);
                 }
                 Statement::WhenBlock {
-                    cases, else_block, ..
+                    when_expression,
+                    cases,
+                    else_block,
+                    loc,
+                    ..
                 } => {
+                    visit_expression_style(when_expression, loc.line, loc.column, out);
                     for (_, b) in cases {
                         visit_statements(&b.statements, user_types, out);
                     }
@@ -417,10 +493,42 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 | Statement::BlockStatement { statements, .. } => {
                     visit_statements(statements, user_types, out);
                 }
-                Statement::DangerAssignOnError { on_error, .. }
-                | Statement::DangerCallOnError { on_error, .. }
-                | Statement::ListPopOnError { on_error, .. } => {
+                Statement::ListPopOnError { on_error, .. } => {
                     visit_statements(&on_error.statements, user_types, out);
+                }
+                Statement::Assignment { value, loc, .. }
+                | Statement::FieldAssignment { value, loc, .. }
+                | Statement::ListPush { value, loc, .. } => {
+                    visit_expression_style(value, loc.line, loc.column, out);
+                }
+                Statement::DangerAssignOnError {
+                    args,
+                    on_error,
+                    loc,
+                    ..
+                }
+                | Statement::DangerCallOnError {
+                    args,
+                    on_error,
+                    loc,
+                    ..
+                } => {
+                    for arg in args {
+                        visit_expression_style(arg, loc.line, loc.column, out);
+                    }
+                    visit_statements(&on_error.statements, user_types, out);
+                }
+                Statement::ReturnStatement {
+                    value: Some(value),
+                    loc,
+                } => visit_expression_style(value, loc.line, loc.column, out),
+                Statement::ExpressionStatement { expr, loc } => {
+                    visit_expression_style(expr, loc.line, loc.column, out);
+                }
+                Statement::StructDecl { methods, .. } => {
+                    for method in methods {
+                        visit_statements(&method.body.statements, user_types, out);
+                    }
                 }
                 _ => {}
             }

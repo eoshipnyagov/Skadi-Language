@@ -1,0 +1,11 @@
+// Negative memory example 02: clear() inside active place in block is forbidden.
+
+fn render_frame(Memory frame_memory) Int {
+    place in frame_memory {
+        new Text line_text = "hello"
+        frame_memory.clear()
+        output(line_text)
+    }
+
+    return 0
+}

@@ -36,6 +36,7 @@ ROUTE_MAP = [
     ("internal/docs-site-and-i18n", "DOCS_SITE_AND_I18N_RU.md"),
     ("internal/memory-model-draft", "SKADI_MEMORY_MODEL_DRAFT_RU.md"),
     ("internal/memory-model-mvp", "SKADI_MEMORY_MODEL_MVP_CONTRACT_RU.md"),
+    ("internal/memory-model-examples", "SKADI_MEMORY_MODEL_EXAMPLES_RU.md"),
     ("internal/task-model-draft", "SKADI_TASK_MODEL_DRAFT_RU.md"),
     ("internal/task-model-mvp", "SKADI_TASK_MODEL_MVP_CONTRACT_RU.md"),
     ("internal/visual-core-draft", "SKADI_VISUAL_CORE_DRAFT_RU.md"),

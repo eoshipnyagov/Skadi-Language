@@ -67,6 +67,7 @@ plugins:
             Блокеры v1: v1 Blockers
             Сайт документации и i18n: Docs Site and i18n
             Memory: Memory
+            РџСЂРёРјРµСЂС‹ Рё Р°РЅС‚РёРїСЂРёРјРµСЂС‹: Examples and Negative Cases
             Task / Concurrency: Task / Concurrency
             Visual Core: Visual Core
             Systems Additions: Systems Additions
@@ -129,6 +130,7 @@ nav:
           - Memory:
               - Draft: internal/memory-model-draft.md
               - MVP Contract: internal/memory-model-mvp.md
+              - РџСЂРёРјРµСЂС‹ Рё Р°РЅС‚РёРїСЂРёРјРµСЂС‹: internal/memory-model-examples.md
           - Task / Concurrency:
               - Draft: internal/task-model-draft.md
               - MVP Contract: internal/task-model-mvp.md

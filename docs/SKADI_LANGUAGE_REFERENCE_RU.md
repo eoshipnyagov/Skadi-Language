@@ -484,6 +484,8 @@ on interrupt shutdown {
 
 Этот слой пока не является stable частью `v1.1`, но frontend уже понимает его syntax surface.
 
+Если нужен self-contained набор текущих memory-примеров и антипримеров без скрытого контекста, см. [Memory examples](../internal/memory-model-examples.md).
+
 Поддерживаемые формы первого milestone:
 
 ```skadi
@@ -518,6 +520,7 @@ arena.clear()
 
 - prefer names with `_memory` suffix: `frame_memory`, `assets_memory`, `scratch_memory`;
 - prefer explicit field init over field punning in memory examples;
+- avoid collapsed names like `{raw = raw}` or `{raw}` in canonical examples; prefer `raw_text`, `scene_data`, `frame_value`;
 - prefer `clear()` after placement block или в trailing `on error`, а не внутри active `place in`.
 
 Если memory syntax прошла parser и semantic, текущий backend завершит pipeline явной diagnostics `SC-CG-201`, а не будет делать частичный pseudo-lowering.

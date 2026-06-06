@@ -270,6 +270,30 @@ fn render(Memory arena) Int {
 }
 
 #[test]
+fn style_warnings_avoid_collapsed_struct_field_init_names() {
+    let src = r#"
+struct Scene {
+    Text raw
+}
+
+fn build_scene() Scene {
+    new Text raw = "hello"
+    new Scene scene = {raw = raw}
+    return scene
+}
+"#;
+    let program = parse_ok(src);
+    let warnings = semantic_style_warnings(&program);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("avoid collapsed field init")),
+        "expected collapsed field init warning, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
 fn backend_gate_rejects_memory_model_after_semantic_success() {
     let src = r#"
 fn warmup(Memory arena) Int {

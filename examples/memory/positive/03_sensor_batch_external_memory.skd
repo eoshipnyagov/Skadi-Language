@@ -1,0 +1,13 @@
+// Memory example 03: struct with List payload returned from external Memory.
+
+struct SensorBatch {
+    Int List values
+}
+
+fn collect_batch(Memory frame_memory) SensorBatch {
+    place in frame_memory {
+        new Int List reading_values = [10, 20, 30]
+        new SensorBatch batch_result = {values = reading_values}
+        return batch_result
+    }
+}

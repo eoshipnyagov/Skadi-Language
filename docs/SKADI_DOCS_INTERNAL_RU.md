@@ -68,6 +68,7 @@
 
 - [Memory Draft](memory-model-draft.md)
 - [Memory MVP Contract](memory-model-mvp.md)
+- [Примеры и антипримеры Memory](memory-model-examples.md)
 
 ### Task / concurrency
 

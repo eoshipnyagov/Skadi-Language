@@ -1,0 +1,3 @@
+// Negative memory example 04: Memory List is forbidden.
+
+new Memory List memory_pool = []

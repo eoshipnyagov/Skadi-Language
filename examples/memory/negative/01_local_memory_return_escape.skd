@@ -1,0 +1,15 @@
+// Negative memory example 01: region-owned value escapes local Memory.
+
+struct LoadedText {
+    Text content
+}
+
+fn load_text(Path path) LoadedText {
+    Memory scratch_memory = memory(64kb)
+
+    place in scratch_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
+    }
+}

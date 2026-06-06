@@ -1,0 +1,5 @@
+// Negative memory example 03: Memory cannot be stored in a struct field.
+
+struct MemoryHolder {
+    Memory frame_memory
+}

@@ -7,7 +7,12 @@
 
 Этот документ фиксирует не полную желаемую memory model Skadi, а именно тот минимальный контракт, который можно брать в parser/semantic/runtime design ближайшей реализации.
 
-Широкая design-версия описана в [Memory Draft](memory-model-draft.md).
+Связанные документы:
+
+- [Memory Draft](memory-model-draft.md)
+- [Memory Examples and Negative Cases](memory-model-examples.md)
+
+Если нужен self-contained набор примеров без скрытого контекста, сначала стоит читать именно examples-документ.
 
 ## 2. Что считается частью MVP
 
@@ -47,8 +52,8 @@ fn process() {
 Если значение возвращается из функции, оно не уничтожается вместе с локальным scope функции.
 
 ```scadi
-fn make_numbers() returns List(Int) {
-    new numbers = List(Int)
+fn make_numbers() Int List {
+    new Int List numbers = []
     return numbers
 }
 ```
@@ -118,8 +123,8 @@ MVP-контракт:
 
 ```scadi
 place in level_memory {
-    new texture = load_texture(path)
-    new mesh = load_mesh(path)
+    new Text file_text = read(path)
+    output(file_text)
 } on error {
     level_memory.clear()
     return LoadStatus.OutOfMemory
@@ -169,10 +174,15 @@ clear уничтожает всё содержимое выбранной Memory
 Разрешено:
 
 ```scadi
-fn load_texture(Memory assets, Path path) returns Texture {
-    place in assets {
-        new texture = Texture(...)
-        return texture
+struct LoadedText {
+    Text content
+}
+
+fn load_text(Memory assets_memory, Path path) LoadedText {
+    place in assets_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
     }
 }
 ```
@@ -180,12 +190,17 @@ fn load_texture(Memory assets, Path path) returns Texture {
 Запрещено:
 
 ```scadi
-fn load_texture(Path path) returns Texture {
-    Memory temp = memory(4mb)
+struct LoadedText {
+    Text content
+}
 
-    place in temp {
-        new texture = Texture(...)
-        return texture
+fn load_text(Path path) LoadedText {
+    Memory scratch_memory = memory(4mb)
+
+    place in scratch_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
     }
 }
 ```
