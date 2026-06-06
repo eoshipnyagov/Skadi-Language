@@ -114,6 +114,15 @@ fn find_block_end(tokens: &[Token], open_brace_index: usize) -> Result<usize, St
     Ok(current - 1)
 }
 
+fn parse_braced_block(
+    tokens: &[Token],
+    open_brace_index: usize,
+) -> Result<(Box<BlockStatement>, usize), String> {
+    let block_end = find_block_end(tokens, open_brace_index)?;
+    let statements = parse_statements_range(tokens, open_brace_index + 1, block_end)?;
+    Ok((Box::new(BlockStatement { statements }), block_end))
+}
+
 pub fn parse_control_keyword_statement(
     tokens: &[Token],
     start_index: usize,
@@ -910,6 +919,24 @@ pub fn parse_identifier_led_statement(
     });
 
     if on_idx.is_none()
+        && start_index + 4 < line_end
+        && tokens[start_index].kind() == TokenKind::Identifier
+        && tokens[start_index + 1].lexeme == "."
+        && tokens[start_index + 2].kind() == TokenKind::Identifier
+        && tokens[start_index + 2].lexeme == "clear"
+        && tokens[start_index + 3].lexeme == "("
+        && tokens[start_index + 4].lexeme == ")"
+    {
+        return Ok((
+            Statement::MemoryClear {
+                memory_name: tokens[start_index].lexeme.clone(),
+                loc,
+            },
+            line_end - start_index,
+        ));
+    }
+
+    if on_idx.is_none()
         && start_index + 1 < line_end
         && tokens[start_index].kind() == TokenKind::Identifier
         && tokens[start_index + 1].kind() == TokenKind::OpIncDec
@@ -1150,6 +1177,163 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
             loc,
         },
         (cursor - start_index).max(4),
+    ))
+}
+
+pub fn parse_memory_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
+    if start_index >= tokens.len()
+        || tokens[start_index].kind() != TokenKind::Identifier
+        || tokens[start_index].lexeme != "Memory"
+    {
+        return Err(parse_err(
+            "SC-PARSE-159",
+            "expected 'Memory' declaration start.",
+        ));
+    }
+    if start_index + 4 >= tokens.len() {
+        return Err(parse_err("SC-PARSE-160", "incomplete Memory declaration."));
+    }
+    if tokens[start_index + 1].kind() != TokenKind::Identifier {
+        return Err(parse_err(
+            "SC-PARSE-161",
+            "Memory declaration expected identifier name.",
+        ));
+    }
+    if tokens[start_index + 2].kind() != TokenKind::OpAssignment {
+        return Err(parse_err(
+            "SC-PARSE-162",
+            "Memory declaration expected '=' after name.",
+        ));
+    }
+    if tokens[start_index + 3].kind() != TokenKind::Identifier
+        || tokens[start_index + 3].lexeme != "memory"
+    {
+        return Err(parse_err(
+            "SC-PARSE-163",
+            "Memory declaration expected memory(...) initializer.",
+        ));
+    }
+    if tokens[start_index + 4].lexeme != "(" {
+        return Err(parse_err(
+            "SC-PARSE-164",
+            "Memory declaration expected '(' after memory.",
+        ));
+    }
+
+    let mut cursor = start_index + 5;
+    let mut depth = 1usize;
+    while cursor < tokens.len() && depth > 0 {
+        if tokens[cursor].lexeme == "(" {
+            depth += 1;
+        } else if tokens[cursor].lexeme == ")" {
+            depth -= 1;
+        }
+        cursor += 1;
+    }
+    if depth != 0 {
+        return Err(parse_err(
+            "SC-PARSE-165",
+            "Memory declaration expected ')' after size.",
+        ));
+    }
+    let close_paren = cursor - 1;
+    let size_spec = render_token_slice(tokens, start_index + 5, close_paren);
+    if size_spec.trim().is_empty() {
+        return Err(parse_err(
+            "SC-PARSE-166",
+            "Memory declaration expected non-empty size inside memory(...).",
+        ));
+    }
+
+    let mut consumed_end = close_paren + 1;
+    let mut on_error = None;
+    if consumed_end + 2 < tokens.len()
+        && tokens[consumed_end].kind() == TokenKind::KeywordOnError
+        && tokens[consumed_end + 1].lexeme == "error"
+    {
+        if tokens[consumed_end + 2].lexeme != "{" {
+            return Err(parse_err(
+                "SC-PARSE-167",
+                "Memory declaration on error expected '{'.",
+            ));
+        }
+        let (block, block_end) = parse_braced_block(tokens, consumed_end + 2)?;
+        on_error = Some(block);
+        consumed_end = block_end + 1;
+    }
+
+    Ok((
+        Statement::MemoryDecl {
+            name: tokens[start_index + 1].lexeme.clone(),
+            size_spec,
+            on_error,
+            loc,
+        },
+        consumed_end - start_index,
+    ))
+}
+
+pub fn parse_place_in_statement(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
+    if start_index >= tokens.len()
+        || tokens[start_index].kind() != TokenKind::Identifier
+        || tokens[start_index].lexeme != "place"
+    {
+        return Err(parse_err("SC-PARSE-168", "expected 'place' keyword."));
+    }
+    if start_index + 2 >= tokens.len() {
+        return Err(parse_err("SC-PARSE-169", "incomplete place in statement."));
+    }
+    if tokens[start_index + 1].kind() != TokenKind::KeywordIn {
+        return Err(parse_err(
+            "SC-PARSE-170",
+            "place statement expected 'in' after place.",
+        ));
+    }
+    if tokens[start_index + 2].kind() != TokenKind::Identifier {
+        return Err(parse_err(
+            "SC-PARSE-171",
+            "place in expected memory identifier.",
+        ));
+    }
+
+    let memory_name = tokens[start_index + 2].lexeme.clone();
+    let mut cursor = start_index + 3;
+    let mut on_error = None;
+    if cursor + 2 < tokens.len()
+        && tokens[cursor].kind() == TokenKind::KeywordOnError
+        && tokens[cursor + 1].lexeme == "error"
+    {
+        if tokens[cursor + 2].lexeme != "{" {
+            return Err(parse_err("SC-PARSE-172", "place in on error expected '{'."));
+        }
+        let (block, block_end) = parse_braced_block(tokens, cursor + 2)?;
+        on_error = Some(block);
+        cursor = block_end + 1;
+    }
+
+    if cursor >= tokens.len() || tokens[cursor].lexeme != "{" {
+        return Err(parse_err(
+            "SC-PARSE-173",
+            "place in expected body block '{ ... }'.",
+        ));
+    }
+    let (body, body_end) = parse_braced_block(tokens, cursor)?;
+    Ok((
+        Statement::PlaceIn {
+            memory_name,
+            on_error,
+            body,
+            loc,
+        },
+        body_end + 1 - start_index,
     ))
 }
 

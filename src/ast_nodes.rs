@@ -75,6 +75,12 @@ pub enum Statement {
         declared_type: Option<String>,
         loc: Location,
     },
+    MemoryDecl {
+        name: String,
+        size_spec: String,
+        on_error: Option<Box<BlockStatement>>,
+        loc: Location,
+    },
     Assignment {
         target: String,
         value: Box<Expression>,
@@ -177,6 +183,16 @@ pub enum Statement {
         target: String,
         list_name: String,
         on_error: Box<BlockStatement>,
+        loc: Location,
+    },
+    PlaceIn {
+        memory_name: String,
+        on_error: Option<Box<BlockStatement>>,
+        body: Box<BlockStatement>,
+        loc: Location,
+    },
+    MemoryClear {
+        memory_name: String,
         loc: Location,
     },
     ReturnError {

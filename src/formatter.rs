@@ -72,6 +72,23 @@ impl Formatter {
                 self.out.push_str(" = ");
                 self.out.push_str(&self.render_expression(value, 0));
             }
+            Statement::MemoryDecl {
+                name,
+                size_spec,
+                on_error,
+                ..
+            } => {
+                self.write_indent(indent);
+                self.out.push_str("Memory ");
+                self.out.push_str(name);
+                self.out.push_str(" = memory(");
+                self.out.push_str(size_spec.trim());
+                self.out.push(')');
+                if let Some(on_error) = on_error {
+                    self.out.push_str(" on error ");
+                    self.render_block(on_error, indent)?;
+                }
+            }
             Statement::Assignment { target, value, .. } => {
                 self.write_indent(indent);
                 self.out.push_str(target);
@@ -380,6 +397,29 @@ impl Formatter {
                 self.out.push_str(list_name);
                 self.out.push_str(".pop() on error ");
                 self.render_block(on_error, indent)?;
+            }
+            Statement::PlaceIn {
+                memory_name,
+                on_error,
+                body,
+                ..
+            } => {
+                self.write_indent(indent);
+                self.out.push_str("place in ");
+                self.out.push_str(memory_name);
+                if let Some(on_error) = on_error {
+                    self.out.push_str(" on error ");
+                    self.render_block(on_error, indent)?;
+                    self.out.push(' ');
+                } else {
+                    self.out.push(' ');
+                }
+                self.render_block(body, indent)?;
+            }
+            Statement::MemoryClear { memory_name, .. } => {
+                self.write_indent(indent);
+                self.out.push_str(memory_name);
+                self.out.push_str(".clear()");
             }
             Statement::ReturnError { code, .. } => {
                 self.write_indent(indent);

@@ -480,6 +480,45 @@ on interrupt shutdown {
 
 Но полноценная семантика выполнения этого трека пока не считается завершённой в `v1.1`.
 
+## 18.1 Experimental memory model MVP
+
+Этот слой пока не является stable частью `v1.1`, но frontend уже понимает его syntax surface.
+
+Поддерживаемые формы первого milestone:
+
+```skadi
+Memory arena = memory(8mb)
+Memory arena = memory(8mb) on error {
+    output("oom")
+}
+
+place in arena {
+    new Text msg = "hello"
+}
+
+place in arena on error {
+    output("overflow")
+} {
+    new Text msg = "hello"
+}
+
+arena.clear()
+```
+
+Что уже делает compiler:
+
+- parser принимает `Memory`, `memory(size)`, `place in`, `on error` и `clear`;
+- semantic layer проверяет базовые rules для escape и obvious use-after-clear;
+- возвращать region-owned dynamic payload можно только если `Memory` передана в функцию извне.
+
+Что этот milestone пока не обещает:
+
+- runtime / allocator semantics;
+- lowering в C backend;
+- `allow grow`, `allow drop`, `memory.child`, `memory.static`.
+
+Если memory syntax прошла parser и semantic, текущий backend завершит pipeline явной diagnostics `SC-CG-201`, а не будет делать частичный pseudo-lowering.
+
 ## 19. Диагностика
 
 Пользовательские ошибки стараются быть нормализованными:
@@ -496,7 +535,7 @@ on interrupt shutdown {
 
 - модульную систему / imports;
 - concurrency primitives;
-- memory-model features из future docs;
+- stable runtime/backend поддержку memory model;
 - visual core;
 - systems additions tracks;
 - завершённую семантику выполнения для `on interrupt` и родственных будущих hooks.

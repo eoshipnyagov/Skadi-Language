@@ -38,6 +38,12 @@ fn parse_statement_at(
         }
         TokenKind::KeywordReturn => statements::parse_return_statement(tokens, current_token_index),
         TokenKind::KeywordNew => statements::parse_new_declaration(tokens, current_token_index),
+        TokenKind::Identifier if start_token.lexeme == "Memory" => {
+            statements::parse_memory_declaration(tokens, current_token_index)
+        }
+        TokenKind::Identifier if start_token.lexeme == "place" => {
+            statements::parse_place_in_statement(tokens, current_token_index)
+        }
         TokenKind::Identifier if start_token.lexeme == "iterate" => {
             statements::parse_iterate_loop(tokens, current_token_index, parser_scope)
         }

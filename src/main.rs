@@ -1,7 +1,7 @@
 use std::fs;
 use std::process::Command;
 use std::process::exit;
-use v01::codegen::transpile_program_to_c;
+use v01::codegen::{ensure_codegen_supported, transpile_program_to_c};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
@@ -141,57 +141,70 @@ fn main() {
                             for warning in semantic_style_warnings(&program) {
                                 eprintln!("{}", warning);
                             }
-                            let c_code = transpile_program_to_c(&program);
-                            println!(
-                                "C transpilation completed. Output size: {} bytes",
-                                c_code.len()
-                            );
+                            match ensure_codegen_supported(&program) {
+                                Ok(()) => {
+                                    let c_code = transpile_program_to_c(&program);
+                                    println!(
+                                        "C transpilation completed. Output size: {} bytes",
+                                        c_code.len()
+                                    );
 
-                            if print_c {
-                                println!(
-                                    "\n----- GENERATED C -----\n{}\n-----------------------",
-                                    c_code
-                                );
-                            }
-
-                            if let Some(path) = emit_c_path {
-                                match fs::write(&path, c_code.as_bytes()) {
-                                    Ok(_) => println!("C output written to {}", path),
-                                    Err(e) => {
-                                        eprintln!("Failed to write C output to '{}': {}", path, e);
-                                        had_error = true;
+                                    if print_c {
+                                        println!(
+                                            "\n----- GENERATED C -----\n{}\n-----------------------",
+                                            c_code
+                                        );
                                     }
-                                }
-                            }
 
-                            if let Some(exe_path) = emit_exe_path {
-                                let temp_c_path = format!("{}.skd_tmp.c", exe_path);
-                                match fs::write(&temp_c_path, c_code.as_bytes()) {
-                                    Ok(_) => {
-                                        match compile_c_to_exe(&temp_c_path, &exe_path) {
-                                            Ok(()) => println!("Executable built: {}", exe_path),
+                                    if let Some(path) = emit_c_path {
+                                        match fs::write(&path, c_code.as_bytes()) {
+                                            Ok(_) => println!("C output written to {}", path),
                                             Err(e) => {
                                                 eprintln!(
-                                                    "Failed to build executable '{}': {}",
-                                                    exe_path, e
+                                                    "Failed to write C output to '{}': {}",
+                                                    path, e
                                                 );
                                                 had_error = true;
                                             }
                                         }
-                                        if let Err(e) = fs::remove_file(&temp_c_path) {
-                                            eprintln!(
-                                                "Warning: failed to remove temporary C file '{}': {}",
-                                                temp_c_path, e
-                                            );
+                                    }
+
+                                    if let Some(exe_path) = emit_exe_path {
+                                        let temp_c_path = format!("{}.skd_tmp.c", exe_path);
+                                        match fs::write(&temp_c_path, c_code.as_bytes()) {
+                                            Ok(_) => {
+                                                match compile_c_to_exe(&temp_c_path, &exe_path) {
+                                                    Ok(()) => {
+                                                        println!("Executable built: {}", exe_path)
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!(
+                                                            "Failed to build executable '{}': {}",
+                                                            exe_path, e
+                                                        );
+                                                        had_error = true;
+                                                    }
+                                                }
+                                                if let Err(e) = fs::remove_file(&temp_c_path) {
+                                                    eprintln!(
+                                                        "Warning: failed to remove temporary C file '{}': {}",
+                                                        temp_c_path, e
+                                                    );
+                                                }
+                                            }
+                                            Err(e) => {
+                                                eprintln!(
+                                                    "Failed to write temporary C file '{}': {}",
+                                                    temp_c_path, e
+                                                );
+                                                had_error = true;
+                                            }
                                         }
                                     }
-                                    Err(e) => {
-                                        eprintln!(
-                                            "Failed to write temporary C file '{}': {}",
-                                            temp_c_path, e
-                                        );
-                                        had_error = true;
-                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", e);
+                                    had_error = true;
                                 }
                             }
                         }

@@ -125,6 +125,11 @@
 - `on interrupt ... { ... }` - `Partial`
   - parse-level поддержка уже есть;
   - семантика выполнения ещё не считается завершённой частью `v1.1`.
+- memory model MVP surface - `Partial`
+  - frontend принимает `Memory name = memory(size)`, `place in memory { ... }`, `place in memory on error { ... } { ... }` и `memory.clear()`;
+  - semantic layer проверяет базовые escape / use-after-clear правила только для dynamic payload (`Text`, `List`, и struct-значений с такими полями);
+  - C backend пока не lower'ит memory model и завершает компиляцию явной diagnostics `SC-CG-201`;
+  - `allow grow`, `allow drop`, `memory.child`, `memory.static` остаются design-level future surface.
 - formatter coverage - `Partial`
   - ориентирован на текущий рабочий слой `v1.1`;
   - уже пригоден для повседневной работы, но продолжает развиваться вместе с синтаксисом.
@@ -133,7 +138,6 @@
 
 - imports / modules
 - task / channel concurrency model
-- memory model features
 - visual core / canvas
 - systems additions track
 - более строгая модель ошибок индексации

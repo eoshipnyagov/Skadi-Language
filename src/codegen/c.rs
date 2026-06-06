@@ -326,6 +326,88 @@ fn has_user_main(program: &Program) -> bool {
         .any(|stmt| matches!(stmt, Statement::FunctionDef { name, .. } if name == "main"))
 }
 
+fn function_uses_memory_surface(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::FunctionDef { params, body, .. } => {
+            params
+                .iter()
+                .any(|param| param.param_type.as_deref() == Some("Memory"))
+                || statement_list_uses_memory_surface(&body.statements)
+        }
+        Statement::StructDecl { methods, .. } => methods.iter().any(|method| {
+            method
+                .params
+                .iter()
+                .any(|param| param.param_type.as_deref() == Some("Memory"))
+                || statement_list_uses_memory_surface(&method.body.statements)
+        }),
+        _ => false,
+    }
+}
+
+fn statement_list_uses_memory_surface(statements: &[Statement]) -> bool {
+    statements.iter().any(statement_uses_memory_surface)
+}
+
+fn statement_uses_memory_surface(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::MemoryDecl { .. }
+        | Statement::PlaceIn { .. }
+        | Statement::MemoryClear { .. } => true,
+        Statement::FunctionDef { .. } | Statement::StructDecl { .. } => {
+            function_uses_memory_surface(stmt)
+        }
+        Statement::IfStatement {
+            then_block,
+            else_block,
+            ..
+        } => {
+            statement_list_uses_memory_surface(&then_block.statements)
+                || else_block
+                    .as_ref()
+                    .map(|block| statement_list_uses_memory_surface(&block.statements))
+                    .unwrap_or(false)
+        }
+        Statement::ForLoop { body, .. }
+        | Statement::WhileLoop { body, .. }
+        | Statement::LoopStatement { body, .. } => {
+            statement_list_uses_memory_surface(&body.statements)
+        }
+        Statement::WhenBlock {
+            cases, else_block, ..
+        } => {
+            cases
+                .iter()
+                .any(|(_, block)| statement_list_uses_memory_surface(&block.statements))
+                || else_block
+                    .as_ref()
+                    .map(|block| statement_list_uses_memory_surface(&block.statements))
+                    .unwrap_or(false)
+        }
+        Statement::OnBlock { body, .. } => statement_list_uses_memory_surface(&body.statements),
+        Statement::DangerAssignOnError { on_error, .. }
+        | Statement::DangerCallOnError { on_error, .. }
+        | Statement::ListPopOnError { on_error, .. } => {
+            statement_list_uses_memory_surface(&on_error.statements)
+        }
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => {
+            statement_list_uses_memory_surface(statements)
+        }
+        _ => false,
+    }
+}
+
+pub fn ensure_codegen_supported(program: &Program) -> Result<(), String> {
+    if statement_list_uses_memory_surface(&program.statements) {
+        return Err(
+            "Codegen error [SC-CG-201]: memory model frontend is implemented, but C backend lowering is not available yet."
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
     let struct_names = collect_struct_names(program);
@@ -1087,6 +1169,12 @@ fn emit_statement(
 ) {
     let pad = "    ".repeat(indent);
     match stmt {
+        Statement::MemoryDecl { name, .. } => {
+            out.push_str(&pad);
+            out.push_str("/* unsupported memory declaration: ");
+            out.push_str(name);
+            out.push_str(" */\n");
+        }
         Statement::Assignment { target, value, .. } => {
             let expr = emit_expr(value, declared);
             out.push_str(&pad);
@@ -1357,6 +1445,22 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str("}\n");
         }
+        Statement::PlaceIn {
+            memory_name, body, ..
+        } => {
+            out.push_str(&pad);
+            out.push_str("/* unsupported place in ");
+            out.push_str(memory_name);
+            out.push_str(" */\n");
+            let mut inner = declared.clone();
+            emit_block(body, out, indent, &mut inner, fn_ctx);
+        }
+        Statement::MemoryClear { memory_name, .. } => {
+            out.push_str(&pad);
+            out.push_str("/* unsupported ");
+            out.push_str(memory_name);
+            out.push_str(".clear() */\n");
+        }
         Statement::ReturnStatement { value, .. } => {
             if let Some(ctx) = fn_ctx
                 && ctx.is_danger
@@ -1573,6 +1677,7 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "Float" | "f64" => "double".to_string(),
         "bool" | "Bool" => "bool".to_string(),
         "char" | "Char" => "char".to_string(),
+        "Memory" => "void*".to_string(),
         "Text" | "Path" => "const char*".to_string(),
         other => other.to_string(),
     }
