@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::targets::{
     CompilerInvocation, candidate_invocations, resolve_profile, single_compiler_invocation,
 };
-use v01::codegen::transpile_program_to_c;
+use v01::codegen::{ensure_codegen_supported, transpile_program_to_c};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
@@ -29,6 +29,7 @@ pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
     let tokens = lex(&source).map_err(|e| format!("lex failed: {e}"))?;
     let program = parse_program(&tokens).map_err(|e| format!("parse failed: {e}"))?;
     semantic_analyze(&program).map_err(|e| format!("semantic failed: {e}"))?;
+    ensure_codegen_supported(&program).map_err(|e| format!("codegen failed: {e}"))?;
     let warnings = semantic_style_warnings(&program);
     Ok(FrontendOutput {
         c_code: transpile_program_to_c(&program),

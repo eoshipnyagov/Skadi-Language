@@ -1,0 +1,13 @@
+// Memory example 01: return region-owned Text through externally supplied Memory.
+
+struct LoadedText {
+    Text content
+}
+
+fn load_text(Memory assets_memory, Path path) LoadedText {
+    place in assets_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
+    }
+}

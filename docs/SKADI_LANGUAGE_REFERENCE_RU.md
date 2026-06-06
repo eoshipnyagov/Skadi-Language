@@ -480,6 +480,51 @@ on interrupt shutdown {
 
 Но полноценная семантика выполнения этого трека пока не считается завершённой в `v1.1`.
 
+## 18.1 Experimental memory model MVP
+
+Этот слой пока не является stable частью `v1.1`, но frontend уже понимает его syntax surface.
+
+Если нужен self-contained набор текущих memory-примеров и антипримеров без скрытого контекста, см. [Memory examples](../internal/memory-model-examples.md).
+
+Поддерживаемые формы первого milestone:
+
+```skadi
+Memory arena = memory(8mb)
+Memory arena = memory(8mb) on error {
+    output("oom")
+}
+
+place in arena {
+    new Text msg = "hello"
+} on error {
+    output("overflow")
+}
+
+arena.clear()
+```
+
+Что уже делает compiler:
+
+- parser принимает `Memory`, `memory(size)`, `place in`, `on error` и `clear`;
+- semantic layer проверяет базовые rules для escape и obvious use-after-clear;
+- возвращать region-owned dynamic payload можно только если `Memory` передана в функцию извне.
+- `Memory` рассматривается как capability/resource surface, а не как обычный storable value type.
+
+Что этот milestone пока не обещает:
+
+- runtime / allocator semantics;
+- lowering в C backend;
+- `allow grow`, `allow drop`, `memory.child`, `memory.static`.
+
+Канонический style для memory-oriented кода:
+
+- prefer names with `_memory` suffix: `frame_memory`, `assets_memory`, `scratch_memory`;
+- prefer explicit field init over field punning in memory examples;
+- avoid collapsed names like `{raw = raw}` or `{raw}` in canonical examples; prefer `raw_text`, `scene_data`, `frame_value`;
+- prefer `clear()` after placement block или в trailing `on error`, а не внутри active `place in`.
+
+Если memory syntax прошла parser и semantic, текущий backend strict MVP уже доводит её до `Skadi -> C -> native` через fixed-capacity region runtime. Experimental-ограничения при этом сохраняются: `allow grow`, `allow drop`, `memory.child` и `memory.static` пока не входят в supported surface.
+
 ## 19. Диагностика
 
 Пользовательские ошибки стараются быть нормализованными:
@@ -496,7 +541,7 @@ on interrupt shutdown {
 
 - модульную систему / imports;
 - concurrency primitives;
-- memory-model features из future docs;
+- stable runtime/backend поддержку memory model;
 - visual core;
 - systems additions tracks;
 - завершённую семантику выполнения для `on interrupt` и родственных будущих hooks.

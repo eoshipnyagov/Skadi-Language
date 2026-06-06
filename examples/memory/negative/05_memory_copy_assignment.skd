@@ -1,0 +1,6 @@
+// Negative memory example 05: Memory handles cannot be reassigned or copied.
+
+fn mirror_memory(Memory frame_memory, Memory scratch_memory) Int {
+    frame_memory = scratch_memory
+    return 0
+}

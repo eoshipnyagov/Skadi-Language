@@ -1,0 +1,13 @@
+// Memory pitfall: collapsed field names are valid, but not recommended in canonical examples.
+
+struct LoadedText {
+    Text content
+}
+
+fn load_text(Memory assets_memory, Path path) LoadedText {
+    place in assets_memory {
+        new Text content = read(path)
+        new LoadedText result = {content}
+        return result
+    }
+}

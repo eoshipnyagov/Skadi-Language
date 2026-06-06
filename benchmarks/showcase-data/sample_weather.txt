@@ -1,0 +1,5 @@
+sun
+temperature
+temperature
+rain
+temperature

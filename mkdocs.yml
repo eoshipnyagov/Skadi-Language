@@ -1,10 +1,11 @@
 site_name: Skadi Docs
 site_description: Skadi language and tooling documentation
-site_url: https://example.com/skadi-docs/
+site_url: https://eoshipnyagov.github.io/Skadi-Language/
+repo_url: https://github.com/eoshipnyagov/Skadi-Language
 repo_name: Skadi
 docs_dir: .docs-build
 site_dir: site
-use_directory_urls: false
+use_directory_urls: true
 
 theme:
   name: material
@@ -45,6 +46,7 @@ plugins:
             Справочник CLI/TUI: CLI/TUI Reference
             Справочник языка: Language Reference
             Статус синтаксиса: Syntax Status
+            Skadi для AI и vibe coding: Skadi for AI and vibe coding
             Showcase-программы: Showcase Programs
             Текущий компилятор: Current Compiler
             Контракты и стиль v1: v1 Contracts and Style
@@ -65,6 +67,7 @@ plugins:
             Блокеры v1: v1 Blockers
             Сайт документации и i18n: Docs Site and i18n
             Memory: Memory
+            РџСЂРёРјРµСЂС‹ Рё Р°РЅС‚РёРїСЂРёРјРµСЂС‹: Examples and Negative Cases
             Task / Concurrency: Task / Concurrency
             Visual Core: Visual Core
             Systems Additions: Systems Additions
@@ -97,6 +100,7 @@ nav:
       - Справочник CLI/TUI: user/cli-reference.md
       - Справочник языка: user/language-reference.md
       - Статус синтаксиса: user/syntax-status.md
+      - Skadi для AI и vibe coding: user/ai-guide.md
       - Showcase-программы: user/showcases.md
   - Внутренние документы:
       - Обзор: internal/index.md
@@ -126,6 +130,7 @@ nav:
           - Memory:
               - Draft: internal/memory-model-draft.md
               - MVP Contract: internal/memory-model-mvp.md
+              - РџСЂРёРјРµСЂС‹ Рё Р°РЅС‚РёРїСЂРёРјРµСЂС‹: internal/memory-model-examples.md
           - Task / Concurrency:
               - Draft: internal/task-model-draft.md
               - MVP Contract: internal/task-model-mvp.md

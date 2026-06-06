@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -14,12 +14,10 @@ fn find_c_compiler() -> Option<&'static str> {
     } else {
         &["clang", "gcc", "cc"]
     };
-    for c in candidates {
-        if Command::new(c).arg("--version").output().is_ok() {
-            return Some(c);
-        }
-    }
-    None
+    candidates
+        .iter()
+        .find(|&&c| Command::new(c).arg("--version").output().is_ok())
+        .copied()
 }
 
 fn compiler_supports_flags(compiler: &str, flags: &[&str]) -> bool {
@@ -52,6 +50,22 @@ fn compiler_supports_flags(compiler: &str, flags: &[&str]) -> bool {
 }
 
 fn compile_c_and_run(compiler: &str, c_src: &str, stem: &str, extra_flags: &[&str]) {
+    let run = compile_c_and_execute(compiler, c_src, stem, extra_flags, &[], None);
+    assert!(
+        run.status.success(),
+        "Binary execution failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+fn compile_c_and_execute(
+    compiler: &str,
+    c_src: &str,
+    stem: &str,
+    extra_flags: &[&str],
+    run_args: &[&str],
+    cwd: Option<&Path>,
+) -> std::process::Output {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("time")
@@ -78,17 +92,41 @@ fn compile_c_and_run(compiler: &str, c_src: &str, stem: &str, extra_flags: &[&st
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = Command::new(&exe_path)
-        .output()
-        .expect("run compiled binary");
-    assert!(
-        run.status.success(),
-        "Binary execution failed: {}",
-        String::from_utf8_lossy(&run.stderr)
-    );
+    let mut run_cmd = Command::new(&exe_path);
+    run_cmd.args(run_args);
+    if let Some(cwd) = cwd {
+        run_cmd.current_dir(cwd);
+    }
+    let run = run_cmd.output().expect("run compiled binary");
 
     let _ = fs::remove_file(c_path);
     let _ = fs::remove_file(exe_path);
+    run
+}
+
+fn compile_showcase_to_c(src: &str) -> String {
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    transpile_program_to_c(&program)
+}
+
+fn value_after_label<'a>(stdout: &'a str, label: &str) -> Option<&'a str> {
+    let mut lines = stdout.lines();
+    while let Some(line) = lines.next() {
+        if line.trim() == label {
+            return lines.next().map(str::trim);
+        }
+    }
+    None
+}
+
+struct CliShowcaseCase<'a> {
+    name: &'a str,
+    src: &'a str,
+    extra_flags: &'a [&'a str],
+    run_args: &'a [&'a str],
+    cwd: Option<&'a Path>,
 }
 
 #[test]
@@ -704,6 +742,158 @@ fn e2e_v1_1_toolbox_showcase_builds_and_runs() {
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("sk_list_Waypoint_free(&route);"));
-    assert!(c.contains("free((void*)summary);"));
+    assert!(c.contains("sk_free_text((void*)summary);"));
     compile_c_and_run(compiler, &c, "Skadi_e2e_v1_1_toolbox", &["-lm"]);
+}
+
+#[test]
+fn e2e_stable_showcase_subset_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping showcase subset e2e test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let stable_showcases: &[(&str, &str, &[&str])] = &[
+        (
+            "bench_06_struct_account",
+            include_str!("../benchmarks/bench_06_struct_account.skd"),
+            &[],
+        ),
+        (
+            "bench_07_struct_list",
+            include_str!("../benchmarks/bench_07_struct_list.skd"),
+            &[],
+        ),
+        (
+            "bench_08_path_list_helpers",
+            include_str!("../benchmarks/bench_08_path_list_helpers.skd"),
+            &[],
+        ),
+        (
+            "bench_09_math_navigation",
+            include_str!("../benchmarks/bench_09_math_navigation.skd"),
+            &["-lm"],
+        ),
+    ];
+
+    for (name, src, extra_flags) in stable_showcases {
+        let c = compile_showcase_to_c(src);
+        compile_c_and_run(compiler, &c, name, extra_flags);
+    }
+}
+
+#[test]
+fn e2e_cli_driven_showcase_subset_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping CLI-driven showcase e2e test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let manifest_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let showcase_data_root = manifest_root.join("benchmarks").join("showcase-data");
+    let tree_fixture = showcase_data_root.join("tree_fixture");
+    let weather_fixture = showcase_data_root.join("sample_weather.txt");
+    let weather_text =
+        fs::read_to_string(&weather_fixture).expect("weather fixture should be readable");
+    let expected_weather_chars = weather_text.chars().count().to_string();
+    let expected_weather_lines = weather_text.lines().count().to_string();
+
+    let showcase_cases = [
+        CliShowcaseCase {
+            name: "bench_01_tree",
+            src: include_str!("../benchmarks/bench_01_tree.skd"),
+            extra_flags: &[],
+            run_args: &["--dirs-only", "--depth-1"],
+            cwd: Some(tree_fixture.as_path()),
+        },
+        CliShowcaseCase {
+            name: "bench_02_read_stats",
+            src: include_str!("../benchmarks/bench_02_read_stats.skd"),
+            extra_flags: &[],
+            run_args: &["--input", "benchmarks/showcase-data/sample_weather.txt"],
+            cwd: Some(manifest_root),
+        },
+        CliShowcaseCase {
+            name: "bench_03_find_count",
+            src: include_str!("../benchmarks/bench_03_find_count.skd"),
+            extra_flags: &[],
+            run_args: &[
+                "--input",
+                "benchmarks/showcase-data/sample_weather.txt",
+                "--needle",
+                "temperature",
+            ],
+            cwd: Some(manifest_root),
+        },
+        CliShowcaseCase {
+            name: "bench_04_sum_ints",
+            src: include_str!("../benchmarks/bench_04_sum_ints.skd"),
+            extra_flags: &[],
+            run_args: &["--small"],
+            cwd: Some(manifest_root),
+        },
+        CliShowcaseCase {
+            name: "bench_05_push_pop",
+            src: include_str!("../benchmarks/bench_05_push_pop.skd"),
+            extra_flags: &[],
+            run_args: &["--small"],
+            cwd: Some(manifest_root),
+        },
+    ];
+
+    for case in showcase_cases {
+        let c = compile_showcase_to_c(case.src);
+        let run = compile_c_and_execute(
+            compiler,
+            &c,
+            case.name,
+            case.extra_flags,
+            case.run_args,
+            case.cwd,
+        );
+        assert!(
+            run.status.success(),
+            "Binary execution failed for {}: {}",
+            case.name,
+            String::from_utf8_lossy(&run.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&run.stdout);
+        match case.name {
+            "bench_01_tree" => {
+                assert!(stdout.contains("[D] ."));
+                assert!(stdout.contains("[D] ./alpha"));
+                assert!(!stdout.contains("[F] "));
+            }
+            "bench_02_read_stats" => {
+                assert!(stdout.contains("file: benchmarks/showcase-data/sample_weather.txt"));
+                assert_eq!(
+                    value_after_label(&stdout, "chars:"),
+                    Some(expected_weather_chars.as_str())
+                );
+                assert_eq!(
+                    value_after_label(&stdout, "lines:"),
+                    Some(expected_weather_lines.as_str())
+                );
+            }
+            "bench_03_find_count" => {
+                assert!(stdout.contains("needle: temperature"));
+                assert!(stdout.contains("count:"));
+                assert!(stdout.contains("3"));
+            }
+            "bench_04_sum_ints" => {
+                assert!(stdout.contains("n:"));
+                assert!(stdout.contains("50000"));
+                assert!(stdout.contains("sum:"));
+                assert!(stdout.contains("1249975000"));
+            }
+            "bench_05_push_pop" => {
+                assert!(stdout.contains("n:"));
+                assert!(stdout.contains("50000"));
+                assert!(stdout.contains("popped:"));
+                assert!(stdout.contains("50000"));
+            }
+            _ => unreachable!("unexpected showcase case"),
+        }
+    }
+    assert!(weather_fixture.exists());
 }

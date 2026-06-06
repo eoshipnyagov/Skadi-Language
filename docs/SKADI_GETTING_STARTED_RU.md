@@ -564,6 +564,10 @@ Showcase-программы:
 
 Описание: [Showcase-программы](showcases.md)
 
+Для быстрых и воспроизводимых smoke-запусков используйте данные из
+`benchmarks/showcase-data/`: текстовый fixture для file/text showcase и
+мини-дерево каталогов для directory/path showcase.
+
 ## 21. Что читать после этого
 
 - [Справочник языка](language-reference.md) - полный справочник синтаксиса и builtins

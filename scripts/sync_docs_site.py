@@ -16,6 +16,7 @@ ROUTE_MAP = [
     ("user/cli-reference", "SKADI_CLI_REFERENCE_RU.md"),
     ("user/language-reference", "SKADI_LANGUAGE_REFERENCE_RU.md"),
     ("user/syntax-status", "SKADI_SYNTAX_STATUS.md"),
+    ("user/ai-guide", "SKADI_FOR_AI_RU.md"),
     ("user/showcases", "SHOWCASE_PROGRAMS.md"),
     ("internal/project-tech-reference", "SKADI_PROJECT_TECH_REFERENCE_RU.md"),
     ("internal/to-c-scope", "SKADI_TO_C_SCOPE.md"),
@@ -35,6 +36,7 @@ ROUTE_MAP = [
     ("internal/docs-site-and-i18n", "DOCS_SITE_AND_I18N_RU.md"),
     ("internal/memory-model-draft", "SKADI_MEMORY_MODEL_DRAFT_RU.md"),
     ("internal/memory-model-mvp", "SKADI_MEMORY_MODEL_MVP_CONTRACT_RU.md"),
+    ("internal/memory-model-examples", "SKADI_MEMORY_MODEL_EXAMPLES_RU.md"),
     ("internal/task-model-draft", "SKADI_TASK_MODEL_DRAFT_RU.md"),
     ("internal/task-model-mvp", "SKADI_TASK_MODEL_MVP_CONTRACT_RU.md"),
     ("internal/visual-core-draft", "SKADI_VISUAL_CORE_DRAFT_RU.md"),
@@ -92,7 +94,7 @@ def make_home_ru() -> str:
 ## Как пользоваться
 
 - если вы хотите писать программы на Skadi, начните с пользовательского раздела;
-- если вы развиваете язык, компилятор или контракты runtime, идите во внутренний раздел.
+- если вы развиваете язык, компилятор или runtime-контракты, идите во внутренний раздел.
 """
 
 

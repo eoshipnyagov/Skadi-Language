@@ -7,7 +7,12 @@
 
 Этот документ фиксирует не полную желаемую memory model Skadi, а именно тот минимальный контракт, который можно брать в parser/semantic/runtime design ближайшей реализации.
 
-Широкая design-версия описана в [Memory Draft](memory-model-draft.md).
+Связанные документы:
+
+- [Memory Draft](memory-model-draft.md)
+- [Memory Examples and Negative Cases](memory-model-examples.md)
+
+Если нужен self-contained набор примеров без скрытого контекста, сначала стоит читать именно examples-документ.
 
 ## 2. Что считается частью MVP
 
@@ -21,7 +26,8 @@
 6. `on error` при невозможности создать `Memory`;
 7. `on error` при нехватке места внутри `place in`;
 8. `Memory.clear()` как уничтожение всего содержимого региона;
-9. упрощённое safety rule для возврата значений из `place in`.
+9. упрощённое safety rule для возврата значений из `place in`;
+10. ограниченно разрешённое nested `place in` для отдельного scratch-region внутри result-region.
 
 ## 3. Scope lifetime по умолчанию
 
@@ -47,8 +53,8 @@ fn process() {
 Если значение возвращается из функции, оно не уничтожается вместе с локальным scope функции.
 
 ```scadi
-fn make_numbers() returns List(Int) {
-    new numbers = List(Int)
+fn make_numbers() Int List {
+    new Int List numbers = []
     return numbers
 }
 ```
@@ -117,11 +123,12 @@ MVP-контракт:
 Базовый синтаксис:
 
 ```scadi
-place in level_memory on error {
+place in level_memory {
+    new Text file_text = read(path)
+    output(file_text)
+} on error {
+    level_memory.clear()
     return LoadStatus.OutOfMemory
-} {
-    new texture = load_texture(path)
-    new mesh = load_mesh(path)
 }
 ```
 
@@ -129,6 +136,7 @@ MVP-контракт:
 
 ```text
 Если внутри региона не хватает места, аллокация попадает в общий on error блока place in.
+Автоматический rollback уже созданных объектов не обещается: если нужен чистый регион, это делается явно через Memory.clear().
 ```
 
 ## 9. `Memory.clear()`
@@ -146,6 +154,7 @@ clear уничтожает всё содержимое выбранной Memory
 ```
 
 Это group-destroy primitive, а не пообъектное освобождение.
+Внутри активного `place in` того же Memory вызов `clear()` считается ошибкой: канонический стиль — очищать регион после блока или в trailing `on error`.
 
 ## 10. Главный safety rule для MVP
 
@@ -166,10 +175,15 @@ clear уничтожает всё содержимое выбранной Memory
 Разрешено:
 
 ```scadi
-fn load_texture(Memory assets, Path path) returns Texture {
-    place in assets {
-        new texture = Texture(...)
-        return texture
+struct LoadedText {
+    Text content
+}
+
+fn load_text(Memory assets_memory, Path path) LoadedText {
+    place in assets_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
     }
 }
 ```
@@ -177,17 +191,74 @@ fn load_texture(Memory assets, Path path) returns Texture {
 Запрещено:
 
 ```scadi
-fn load_texture(Path path) returns Texture {
-    Memory temp = memory(4mb)
+struct LoadedText {
+    Text content
+}
 
-    place in temp {
-        new texture = Texture(...)
-        return texture
+fn load_text(Path path) LoadedText {
+    Memory scratch_memory = memory(4mb)
+
+    place in scratch_memory {
+        new Text file_text = read(path)
+        new LoadedText result = {content = file_text}
+        return result
     }
 }
 ```
 
-## 11. Что именно обещает MVP
+## 11. Nested `place in`
+
+Nested `place in` в MVP разрешён только для одного практического сценария:
+
+```text
+Внешний region хранит результат.
+Внутренний region обслуживает временную работу.
+```
+
+Это нужно, когда внутри одной операции есть два разных lifetime-класса данных:
+
+- долгоживущий полезный результат;
+- короткоживущие промежуточные аллокации.
+
+Разрешено:
+
+```scadi
+place in assets_memory {
+    place in scratch_memory {
+        new Text preview_text = read(path)
+        output(preview_text)
+    } on error {
+        scratch_memory.clear()
+        output("scratch overflow")
+    }
+
+    new Text result_text = read(path)
+    return result_text
+}
+```
+
+MVP-правила:
+
+- nested `place in` разрешён только между разными `Memory`;
+- `place in` в ту же самую `Memory` внутри уже активного `place in` запрещён;
+- внутренний `on error` ловит только overflow внутреннего блока;
+- выход из внутреннего блока возвращает active region к внешнему;
+- никакого автоматического rollback не обещается.
+
+Запрещено:
+
+```scadi
+place in assets_memory {
+    place in assets_memory {
+        new Text msg = "bad"
+        output(msg)
+    }
+}
+```
+
+Это считается ошибкой не потому, что runtime не справится, а потому, что same-memory nesting не даёт новой выразительности и только делает код менее прямолинейным.
+
+## 12. Что именно обещает MVP
 
 MVP memory model обещает:
 
@@ -197,8 +268,9 @@ MVP memory model обещает:
 - явную обработку out-of-memory;
 - явный `clear`;
 - базовую защиту от возврата значения из умершего региона.
+- `Memory` как special capability handle, а не как обычный storable value.
 
-## 12. Что MVP пока не обещает
+## 13. Что MVP пока не обещает
 
 MVP memory model не обещает:
 
@@ -210,7 +282,20 @@ MVP memory model не обещает:
 - сложный escape analysis;
 - прозрачную региональную семантику для всех возможных value/reference edge cases.
 
-## 13. Рекомендация для реализации
+И дополнительно не разрешает:
+
+- `return Memory`;
+- `Memory` в `struct`;
+- `Memory List`;
+- обычное копирование/переприсваивание `Memory` как regular value.
+
+Nested `place in` при этом не обещает:
+
+- глубокую произвольную матрёшку placement-блоков как рекомендуемый стиль;
+- special semantics для same-memory nesting;
+- дополнительную magic-логику поверх обычного active-region switch.
+
+## 14. Рекомендация для реализации
 
 Если брать этот контракт в работу, ближайший practical order такой:
 
@@ -219,7 +304,7 @@ MVP memory model не обещает:
 3. Затем реализовать semantic rule на возврат из `place in`.
 4. Только после этого обсуждать `allow grow`, `allow drop`, `memory.child`, `memory.static`.
 
-## 14. Короткая формула MVP-контракта
+## 15. Короткая формула MVP-контракта
 
 ```text
 Scope owns local values.
@@ -228,4 +313,5 @@ Memory owns groups of dynamic data.
 place in chooses the region.
 clear destroys the region contents.
 Returning from a dead region is forbidden.
+Nested place in is only for a shorter-lived scratch region inside a longer-lived result region.
 ```

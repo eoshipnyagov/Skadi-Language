@@ -8,6 +8,26 @@ struct FunctionContext {
     return_type: Option<String>,
 }
 
+#[derive(Clone, Debug)]
+struct PlaceContext {
+    memory_name: String,
+    restore_region_var: String,
+    fail_label: String,
+}
+
+#[derive(Default)]
+struct CodegenState {
+    next_label_id: usize,
+}
+
+impl CodegenState {
+    fn next_id(&mut self) -> usize {
+        let id = self.next_label_id;
+        self.next_label_id += 1;
+        id
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ExprKind {
     Int,
@@ -70,9 +90,111 @@ fn collect_struct_names(program: &Program) -> Vec<String> {
         .collect()
 }
 
+fn emit_memory_runtime(out: &mut String) {
+    out.push_str("typedef struct SkMemoryRegion {\n");
+    out.push_str("    unsigned char *buffer;\n");
+    out.push_str("    size_t capacity;\n");
+    out.push_str("    size_t offset;\n");
+    out.push_str("    bool failed;\n");
+    out.push_str("} SkMemoryRegion;\n\n");
+    out.push_str("typedef struct SkAllocHeader {\n");
+    out.push_str("    uint32_t magic;\n");
+    out.push_str("    SkMemoryRegion *owner_region;\n");
+    out.push_str("    size_t size;\n");
+    out.push_str("} SkAllocHeader;\n\n");
+    out.push_str("#define SK_ALLOC_MAGIC 0x534B4144u\n\n");
+    out.push_str("static SkMemoryRegion *sk_active_region = NULL;\n\n");
+    out.push_str("static size_t sk_mem_align_up(size_t value, size_t alignment) {\n");
+    out.push_str("    size_t rem = value % alignment;\n");
+    out.push_str("    return rem == 0 ? value : (value + (alignment - rem));\n");
+    out.push_str("}\n\n");
+    out.push_str("static SkAllocHeader* sk_header_from_ptr(const void *ptr) {\n");
+    out.push_str("    if (!ptr) return NULL;\n");
+    out.push_str("    SkAllocHeader *header = ((SkAllocHeader*)ptr) - 1;\n");
+    out.push_str("    if (header->magic != SK_ALLOC_MAGIC) return NULL;\n");
+    out.push_str("    return header;\n");
+    out.push_str("}\n\n");
+    out.push_str("static SkMemoryRegion* sk_mem_set_active(SkMemoryRegion *region) {\n");
+    out.push_str("    SkMemoryRegion *previous = sk_active_region;\n");
+    out.push_str("    sk_active_region = region;\n");
+    out.push_str("    return previous;\n");
+    out.push_str("}\n\n");
+    out.push_str("static SkMemoryRegion* sk_mem_current(void) {\n");
+    out.push_str("    return sk_active_region;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_mem_clear_failure(SkMemoryRegion *region) {\n");
+    out.push_str("    if (region) region->failed = false;\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_mem_failed(SkMemoryRegion *region) {\n");
+    out.push_str("    return region && region->failed;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_mem_panic(const char *message) {\n");
+    out.push_str("    fprintf(stderr, \"Skadi memory runtime error: %s\\n\", message ? message : \"unknown\");\n");
+    out.push_str("    exit(1);\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_mem_region_init(SkMemoryRegion *region, size_t capacity) {\n");
+    out.push_str("    if (!region) return false;\n");
+    out.push_str("    region->buffer = NULL;\n");
+    out.push_str("    region->capacity = capacity;\n");
+    out.push_str("    region->offset = 0;\n");
+    out.push_str("    region->failed = false;\n");
+    out.push_str("    if (capacity == 0) return true;\n");
+    out.push_str("    region->buffer = (unsigned char*)malloc(capacity);\n");
+    out.push_str("    return region->buffer != NULL;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_mem_region_clear(SkMemoryRegion *region) {\n");
+    out.push_str("    if (!region) return;\n");
+    out.push_str("    region->offset = 0;\n");
+    out.push_str("    region->failed = false;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void* sk_alloc_bytes_in(SkMemoryRegion *region, size_t size) {\n");
+    out.push_str("    size_t total = sizeof(SkAllocHeader) + size;\n");
+    out.push_str("    if (region) {\n");
+    out.push_str("        size_t start = sk_mem_align_up(region->offset, sizeof(max_align_t));\n");
+    out.push_str("        if (!region->buffer || start + total > region->capacity) {\n");
+    out.push_str("            region->failed = true;\n");
+    out.push_str("            return NULL;\n");
+    out.push_str("        }\n");
+    out.push_str("        SkAllocHeader *header = (SkAllocHeader*)(region->buffer + start);\n");
+    out.push_str("        header->magic = SK_ALLOC_MAGIC;\n");
+    out.push_str("        header->owner_region = region;\n");
+    out.push_str("        header->size = size;\n");
+    out.push_str("        region->offset = start + total;\n");
+    out.push_str("        return (void*)(header + 1);\n");
+    out.push_str("    }\n");
+    out.push_str("    SkAllocHeader *header = (SkAllocHeader*)malloc(total);\n");
+    out.push_str("    if (!header) return NULL;\n");
+    out.push_str("    header->magic = SK_ALLOC_MAGIC;\n");
+    out.push_str("    header->owner_region = NULL;\n");
+    out.push_str("    header->size = size;\n");
+    out.push_str("    return (void*)(header + 1);\n");
+    out.push_str("}\n\n");
+    out.push_str("static void* sk_alloc_bytes(size_t size) {\n");
+    out.push_str("    return sk_alloc_bytes_in(sk_mem_current(), size);\n");
+    out.push_str("}\n\n");
+    out.push_str("static char* sk_text_alloc(size_t size) {\n");
+    out.push_str("    return (char*)sk_alloc_bytes(size + 1);\n");
+    out.push_str("}\n\n");
+    out.push_str("static char* sk_text_dup(const char *s) {\n");
+    out.push_str("    const char *src = s ? s : \"\";\n");
+    out.push_str("    size_t n = strlen(src);\n");
+    out.push_str("    char *out = sk_text_alloc(n);\n");
+    out.push_str("    if (!out) return NULL;\n");
+    out.push_str("    memcpy(out, src, n);\n");
+    out.push_str("    out[n] = '\\0';\n");
+    out.push_str("    return out;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_free_text(void *ptr) {\n");
+    out.push_str("    SkAllocHeader *header = sk_header_from_ptr(ptr);\n");
+    out.push_str("    if (!header) return;\n");
+    out.push_str("    if (header->owner_region) return;\n");
+    out.push_str("    free(header);\n");
+    out.push_str("}\n\n");
+}
+
 fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
     out.push_str(&format!(
-        "typedef struct {{\n    {} *data;\n    size_t len;\n    size_t cap;\n}} SkadiList_{};\n\n",
+        "typedef struct {{\n    {} *data;\n    size_t len;\n    size_t cap;\n    SkMemoryRegion *owner_region;\n}} SkadiList_{};\n\n",
         c_ty, suffix
     ));
     out.push_str(&format!(
@@ -83,6 +205,7 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
     out.push_str("    xs.data = NULL;\n");
     out.push_str("    xs.len = 0;\n");
     out.push_str("    xs.cap = 0;\n");
+    out.push_str("    xs.owner_region = sk_mem_current();\n");
     out.push_str("    return xs;\n");
     out.push_str("}\n\n");
     out.push_str(&format!(
@@ -91,12 +214,29 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
     ));
     out.push_str("    if (xs->len == xs->cap) {\n");
     out.push_str("        size_t next = xs->cap == 0 ? 4 : xs->cap * 2;\n");
-    out.push_str(&format!(
-        "        {} *p = ({0}*)realloc(xs->data, next * sizeof({0}));\n",
-        c_ty
-    ));
-    out.push_str("        if (!p) return 1;\n");
-    out.push_str("        xs->data = p;\n");
+    out.push_str("        size_t bytes = next * sizeof(*xs->data);\n");
+    out.push_str("        if (xs->owner_region) {\n");
+    out.push_str("            void *raw = sk_alloc_bytes_in(xs->owner_region, bytes);\n");
+    out.push_str("            if (!raw) return 1;\n");
+    out.push_str("            if (xs->data && xs->len > 0) memcpy(raw, xs->data, xs->len * sizeof(*xs->data));\n");
+    out.push_str(&format!("            xs->data = ({c_ty}*)raw;\n"));
+    out.push_str("        } else {\n");
+    out.push_str("            SkAllocHeader *header = sk_header_from_ptr(xs->data);\n");
+    out.push_str("            size_t total = sizeof(SkAllocHeader) + bytes;\n");
+    out.push_str("            if (header) {\n");
+    out.push_str("                header = (SkAllocHeader*)realloc(header, total);\n");
+    out.push_str("                if (!header) return 1;\n");
+    out.push_str("                header->magic = SK_ALLOC_MAGIC;\n");
+    out.push_str("                header->owner_region = NULL;\n");
+    out.push_str("                header->size = bytes;\n");
+    out.push_str("                xs->data = ");
+    out.push_str(&format!("({c_ty}*)(header + 1);\n"));
+    out.push_str("            } else {\n");
+    out.push_str("                void *raw = sk_alloc_bytes_in(NULL, bytes);\n");
+    out.push_str("                if (!raw) return 1;\n");
+    out.push_str(&format!("                xs->data = ({c_ty}*)raw;\n"));
+    out.push_str("            }\n");
+    out.push_str("        }\n");
     out.push_str("        xs->cap = next;\n");
     out.push_str("    }\n");
     out.push_str("    xs->data[xs->len++] = v;\n");
@@ -116,15 +256,21 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
         suffix, suffix
     ));
     out.push_str("    if (!xs) return;\n");
-    out.push_str("    free(xs->data);\n");
+    out.push_str("    if (!xs->owner_region) {\n");
+    out.push_str("        SkAllocHeader *header = sk_header_from_ptr(xs->data);\n");
+    out.push_str("        if (header) free(header);\n");
+    out.push_str("    }\n");
     out.push_str("    xs->data = NULL;\n");
     out.push_str("    xs->len = 0;\n");
     out.push_str("    xs->cap = 0;\n");
+    out.push_str("    xs->owner_region = NULL;\n");
     out.push_str("}\n\n");
     if suffix == "text" {
         out.push_str("static void sk_list_text_free_owned(SkadiList_text *xs) {\n");
         out.push_str("    if (!xs) return;\n");
-        out.push_str("    for (size_t i = 0; i < xs->len; ++i) free(xs->data[i]);\n");
+        out.push_str(
+            "    for (size_t i = 0; i < xs->len; ++i) sk_free_text((void*)xs->data[i]);\n",
+        );
         out.push_str("    sk_list_text_free(xs);\n");
         out.push_str("}\n\n");
     }
@@ -132,7 +278,10 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
         "static {} sk_list_{}_get(const SkadiList_{} *xs, int64_t idx) {{\n",
         c_ty, suffix, suffix
     ));
-    let fallback = if LIST_TYPE_MAP.iter().any(|(_, mapped_ty, _)| *mapped_ty == c_ty) {
+    let fallback = if LIST_TYPE_MAP
+        .iter()
+        .any(|(_, mapped_ty, _)| *mapped_ty == c_ty)
+    {
         "0".to_string()
     } else {
         format!("({}){{0}}", c_ty)
@@ -180,7 +329,7 @@ fn emit_text_runtime(out: &mut String) {
     out.push_str("    if (start > n) start = n;\n");
     out.push_str("    if (end > n) end = n;\n");
     out.push_str("    size_t len = (size_t)(end - start);\n");
-    out.push_str("    char *out = (char*)malloc(len + 1);\n");
+    out.push_str("    char *out = sk_text_alloc(len);\n");
     out.push_str("    if (!out) return NULL;\n");
     out.push_str("    if (len > 0) {\n");
     out.push_str("        memcpy(out, s + start, len);\n");
@@ -193,8 +342,8 @@ fn emit_text_runtime(out: &mut String) {
     out.push_str("    const char *right = b ? b : \"\";\n");
     out.push_str("    size_t alen = strlen(left);\n");
     out.push_str("    size_t blen = strlen(right);\n");
-    out.push_str("    char *out = (char*)malloc(alen + blen + 1);\n");
-    out.push_str("    if (!out) return strdup(\"\");\n");
+    out.push_str("    char *out = sk_text_alloc(alen + blen);\n");
+    out.push_str("    if (!out) return NULL;\n");
     out.push_str("    memcpy(out, left, alen);\n");
     out.push_str("    memcpy(out + alen, right, blen);\n");
     out.push_str("    out[alen + blen] = '\\0';\n");
@@ -220,7 +369,7 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_jo
         out.push_str("    struct dirent *ent;\n");
         out.push_str("    while ((ent = readdir(dir)) != NULL) {\n");
         out.push_str("        if (strcmp(ent->d_name, \".\") == 0 || strcmp(ent->d_name, \"..\") == 0) continue;\n");
-        out.push_str("        char *name = strdup(ent->d_name);\n");
+        out.push_str("        char *name = sk_text_dup(ent->d_name);\n");
         out.push_str("        if (!name) continue;\n");
         out.push_str("        (void)sk_list_text_push(&out, name);\n");
         out.push_str("    }\n");
@@ -238,8 +387,8 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_jo
             "    bool need_sep = alen > 0 && left[alen - 1] != '/' && left[alen - 1] != '\\\\';\n",
         );
         out.push_str("    size_t n = alen + (need_sep ? 1 : 0) + blen;\n");
-        out.push_str("    char *outp = (char*)malloc(n + 1);\n");
-        out.push_str("    if (!outp) return strdup(\"\");\n");
+        out.push_str("    char *outp = sk_text_alloc(n);\n");
+        out.push_str("    if (!outp) return NULL;\n");
         out.push_str("    memcpy(outp, left, alen);\n");
         out.push_str("    size_t p = alen;\n");
         out.push_str("    if (need_sep) outp[p++] = '/';\n");
@@ -263,20 +412,20 @@ fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
     out.push_str("static char* sk_input(const char *prompt) {\n");
     out.push_str("    if (prompt) printf(\"%s\", prompt);\n");
     out.push_str("    char buf[4096];\n");
-    out.push_str("    if (!fgets(buf, sizeof(buf), stdin)) return strdup(\"\");\n");
+    out.push_str("    if (!fgets(buf, sizeof(buf), stdin)) return sk_text_dup(\"\");\n");
     out.push_str("    size_t n = strlen(buf);\n");
     out.push_str("    if (n > 0 && buf[n - 1] == '\\n') buf[n - 1] = '\\0';\n");
-    out.push_str("    return strdup(buf);\n");
+    out.push_str("    return sk_text_dup(buf);\n");
     out.push_str("}\n\n");
     out.push_str("static char* sk_read_file(const char *path) {\n");
     out.push_str("    FILE *f = fopen(path, \"rb\");\n");
-    out.push_str("    if (!f) return strdup(\"\");\n");
+    out.push_str("    if (!f) return sk_text_dup(\"\");\n");
     out.push_str("    fseek(f, 0, SEEK_END);\n");
     out.push_str("    long n = ftell(f);\n");
     out.push_str("    fseek(f, 0, SEEK_SET);\n");
-    out.push_str("    if (n < 0) { fclose(f); return strdup(\"\"); }\n");
-    out.push_str("    char *buf = (char*)malloc((size_t)n + 1);\n");
-    out.push_str("    if (!buf) { fclose(f); return strdup(\"\"); }\n");
+    out.push_str("    if (n < 0) { fclose(f); return sk_text_dup(\"\"); }\n");
+    out.push_str("    char *buf = sk_text_alloc((size_t)n);\n");
+    out.push_str("    if (!buf) { fclose(f); return NULL; }\n");
     out.push_str("    size_t r = fread(buf, 1, (size_t)n, f);\n");
     out.push_str("    buf[r] = '\\0';\n");
     out.push_str("    fclose(f);\n");
@@ -294,7 +443,7 @@ fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
         out.push_str("static SkadiList_text sk_args(int argc, char **argv) {\n");
         out.push_str("    SkadiList_text out = sk_list_text_new();\n");
         out.push_str("    for (int i = 1; i < argc; ++i) {\n");
-        out.push_str("        char *v = strdup(argv[i] ? argv[i] : \"\");\n");
+        out.push_str("        char *v = sk_text_dup(argv[i] ? argv[i] : \"\");\n");
         out.push_str("        if (!v) continue;\n");
         out.push_str("        (void)sk_list_text_push(&out, v);\n");
         out.push_str("    }\n");
@@ -308,8 +457,100 @@ fn emit_math_runtime(out: &mut String) {
     out.push_str("#ifndef M_E\n#define M_E 2.71828182845904523536\n#endif\n\n");
 }
 
+fn map_function_name(name: &str) -> &str {
+    if name == "main" {
+        "skadi_user_main"
+    } else {
+        name
+    }
+}
+
+fn has_user_main(program: &Program) -> bool {
+    program
+        .statements
+        .iter()
+        .any(|stmt| matches!(stmt, Statement::FunctionDef { name, .. } if name == "main"))
+}
+
+fn function_uses_memory_surface(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::FunctionDef { params, body, .. } => {
+            params
+                .iter()
+                .any(|param| param.param_type.as_deref() == Some("Memory"))
+                || statement_list_uses_memory_surface(&body.statements)
+        }
+        Statement::StructDecl { methods, .. } => methods.iter().any(|method| {
+            method
+                .params
+                .iter()
+                .any(|param| param.param_type.as_deref() == Some("Memory"))
+                || statement_list_uses_memory_surface(&method.body.statements)
+        }),
+        _ => false,
+    }
+}
+
+fn statement_list_uses_memory_surface(statements: &[Statement]) -> bool {
+    statements.iter().any(statement_uses_memory_surface)
+}
+
+fn statement_uses_memory_surface(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::MemoryDecl { .. }
+        | Statement::PlaceIn { .. }
+        | Statement::MemoryClear { .. } => true,
+        Statement::FunctionDef { .. } | Statement::StructDecl { .. } => {
+            function_uses_memory_surface(stmt)
+        }
+        Statement::IfStatement {
+            then_block,
+            else_block,
+            ..
+        } => {
+            statement_list_uses_memory_surface(&then_block.statements)
+                || else_block
+                    .as_ref()
+                    .map(|block| statement_list_uses_memory_surface(&block.statements))
+                    .unwrap_or(false)
+        }
+        Statement::ForLoop { body, .. }
+        | Statement::WhileLoop { body, .. }
+        | Statement::LoopStatement { body, .. } => {
+            statement_list_uses_memory_surface(&body.statements)
+        }
+        Statement::WhenBlock {
+            cases, else_block, ..
+        } => {
+            cases
+                .iter()
+                .any(|(_, block)| statement_list_uses_memory_surface(&block.statements))
+                || else_block
+                    .as_ref()
+                    .map(|block| statement_list_uses_memory_surface(&block.statements))
+                    .unwrap_or(false)
+        }
+        Statement::OnBlock { body, .. } => statement_list_uses_memory_surface(&body.statements),
+        Statement::DangerAssignOnError { on_error, .. }
+        | Statement::DangerCallOnError { on_error, .. }
+        | Statement::ListPopOnError { on_error, .. } => {
+            statement_list_uses_memory_surface(&on_error.statements)
+        }
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => {
+            statement_list_uses_memory_surface(statements)
+        }
+        _ => false,
+    }
+}
+
+pub fn ensure_codegen_supported(_program: &Program) -> Result<(), String> {
+    Ok(())
+}
+
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
+    let mut codegen_state = CodegenState::default();
     let struct_names = collect_struct_names(program);
     let (needs_fs_list, needs_fs_is_dir, needs_fs_join) = program_uses_fs_runtime(program);
     let needs_list_runtime = program_uses_list_runtime(program) || needs_fs_list;
@@ -317,8 +558,16 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
     let needs_math_runtime = program_uses_math_runtime(program);
+    let needs_memory_runtime = statement_list_uses_memory_surface(&program.statements)
+        || needs_list_runtime
+        || needs_text_runtime
+        || needs_io_runtime
+        || needs_fs_list
+        || needs_fs_join
+        || needs_args_runtime;
+    let user_main_present = has_user_main(program);
     out.push_str("#include <stdio.h>\n\n");
-    if needs_list_runtime || needs_text_runtime || needs_io_runtime {
+    if needs_list_runtime || needs_text_runtime || needs_io_runtime || needs_memory_runtime {
         out.push_str("#include <stddef.h>\n");
         out.push_str("#include <stdlib.h>\n");
     }
@@ -329,6 +578,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         || needs_fs_join
         || needs_io_runtime
         || needs_args_runtime
+        || needs_memory_runtime
     {
         out.push_str("#include <string.h>\n\n");
     }
@@ -339,6 +589,9 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     if needs_fs_list || needs_fs_is_dir || needs_fs_join {
         out.push_str("#include <dirent.h>\n");
         out.push_str("#include <sys/stat.h>\n\n");
+    }
+    if needs_memory_runtime {
+        emit_memory_runtime(&mut out);
     }
     emit_struct_declarations(program, &mut out);
     if needs_list_runtime {
@@ -357,11 +610,11 @@ pub fn transpile_program_to_c(program: &Program) -> String {
 
     for stmt in &program.statements {
         if let Statement::FunctionDef { .. } = stmt {
-            emit_function(stmt, &mut out);
+            emit_function(stmt, &mut out, &mut codegen_state);
             out.push('\n');
         }
     }
-    emit_struct_methods(program, &mut out);
+    emit_struct_methods(program, &mut out, &mut codegen_state);
 
     if needs_args_runtime {
         out.push_str("int main(int argc, char **argv) {\n");
@@ -371,8 +624,21 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let mut declared: HashMap<String, String> = HashMap::new();
     for stmt in &program.statements {
         if !matches!(stmt, Statement::FunctionDef { .. }) {
-            emit_statement(stmt, &mut out, 1, &mut declared, None);
+            emit_statement(
+                stmt,
+                &mut out,
+                1,
+                &mut declared,
+                None,
+                None,
+                &mut codegen_state,
+            );
         }
+    }
+    if user_main_present {
+        out.push_str("    ");
+        out.push_str(map_function_name("main"));
+        out.push_str("();\n");
     }
     emit_top_level_cleanup(program, &mut out);
     out.push_str("    return 0;\n");
@@ -413,7 +679,7 @@ fn emit_top_level_cleanup(program: &Program, out: &mut String) {
         }
 
         if matches!(dt, "Text" | "Path") && expression_returns_owned_text(value) {
-            out.push_str("    free((void*)");
+            out.push_str("    sk_free_text((void*)");
             out.push_str(name);
             out.push_str(");\n");
         }
@@ -430,6 +696,47 @@ fn expression_returns_owned_text(expr: &Expression) -> bool {
 
 fn expression_returns_owned_text_list(expr: &Expression) -> bool {
     matches!(expr, Expression::Call { name, .. } if name == "fs.list")
+}
+
+fn emit_default_return_tail(
+    out: &mut String,
+    indent: usize,
+    return_type: Option<&str>,
+    is_danger: bool,
+) {
+    let pad = "    ".repeat(indent);
+    if is_danger {
+        out.push_str(&pad);
+        out.push_str("return 1;\n");
+        return;
+    }
+    if let Some(ret_ty) = return_type {
+        out.push_str(&pad);
+        match ret_ty {
+            "Text" | "Path" => out.push_str("return NULL;\n"),
+            "Bool" | "bool" => out.push_str("return false;\n"),
+            "Float" | "f32" | "f64" => out.push_str("return 0.0;\n"),
+            "Char" | "char" => out.push_str("return '\\0';\n"),
+            "Int" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" => {
+                out.push_str("return 0;\n")
+            }
+            other if other.ends_with(" List") => {
+                let elem = list_elem_from_decl(other).unwrap_or("i64");
+                let suffix = list_meta_dynamic(elem).1;
+                out.push_str("return sk_list_");
+                out.push_str(&suffix);
+                out.push_str("_new();\n");
+            }
+            other => {
+                out.push_str("return (");
+                out.push_str(other);
+                out.push_str("){0};\n");
+            }
+        }
+    } else {
+        out.push_str(&pad);
+        out.push_str("return 0;\n");
+    }
 }
 
 fn emit_struct_declarations(program: &Program, out: &mut String) {
@@ -451,7 +758,7 @@ fn emit_struct_declarations(program: &Program, out: &mut String) {
     }
 }
 
-fn emit_struct_methods(program: &Program, out: &mut String) {
+fn emit_struct_methods(program: &Program, out: &mut String, state: &mut CodegenState) {
     for stmt in &program.statements {
         let Statement::StructDecl { name, methods, .. } = stmt else {
             continue;
@@ -495,12 +802,16 @@ fn emit_struct_methods(program: &Program, out: &mut String) {
                 is_danger: method.is_danger,
                 return_type: method.returns.clone(),
             };
-            emit_block(&method.body, out, 1, &mut declared, Some(&fn_ctx));
-            if method.is_danger {
-                out.push_str("    return 1;\n");
-            } else if method.returns.as_deref().is_some() {
-                out.push_str("    return 0;\n");
-            }
+            emit_block(
+                &method.body,
+                out,
+                1,
+                &mut declared,
+                Some(&fn_ctx),
+                None,
+                state,
+            );
+            emit_default_return_tail(out, 1, method.returns.as_deref(), method.is_danger);
             out.push_str("}\n\n");
         }
     }
@@ -543,6 +854,17 @@ fn program_uses_text_runtime(program: &Program) -> bool {
             Statement::DangerAssignOnError { on_error, .. }
             | Statement::DangerCallOnError { on_error, .. }
             | Statement::ListPopOnError { on_error, .. } => block_has_text(on_error),
+            Statement::PlaceIn { body, on_error, .. } => {
+                block_has_text(body)
+                    || on_error
+                        .as_ref()
+                        .map(|b| block_has_text(b))
+                        .unwrap_or(false)
+            }
+            Statement::MemoryDecl { on_error, .. } => on_error
+                .as_ref()
+                .map(|b| block_has_text(b))
+                .unwrap_or(false),
             Statement::BlockStatement { statements, .. }
             | Statement::OnErrorBlock { statements, .. } => {
                 statements.iter().any(statement_has_text)
@@ -591,6 +913,12 @@ fn program_uses_list_runtime(program: &Program) -> bool {
             }
             Statement::DangerAssignOnError { on_error, .. }
             | Statement::DangerCallOnError { on_error, .. } => block_has_for(on_error),
+            Statement::PlaceIn { body, on_error, .. } => {
+                block_has_for(body) || on_error.as_ref().map(|b| block_has_for(b)).unwrap_or(false)
+            }
+            Statement::MemoryDecl { on_error, .. } => {
+                on_error.as_ref().map(|b| block_has_for(b)).unwrap_or(false)
+            }
             Statement::BlockStatement { statements, .. }
             | Statement::OnErrorBlock { statements, .. } => {
                 statements.iter().any(statement_needs_list)
@@ -759,6 +1087,20 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
             }
             Statement::ListPush { value, .. } => expression_uses_fs_call(value),
             Statement::ListPopOnError { on_error, .. } => block_uses_fs(on_error),
+            Statement::PlaceIn { body, on_error, .. } => {
+                let (mut nl, mut nd, mut nj) = block_uses_fs(body);
+                if let Some(on_error) = on_error {
+                    let (l2, d2, j2) = block_uses_fs(on_error);
+                    nl |= l2;
+                    nd |= d2;
+                    nj |= j2;
+                }
+                (nl, nd, nj)
+            }
+            Statement::MemoryDecl { on_error, .. } => on_error
+                .as_ref()
+                .map(|b| block_uses_fs(b))
+                .unwrap_or((false, false, false)),
             Statement::BlockStatement { statements, .. }
             | Statement::OnErrorBlock { statements, .. } => statements_uses_fs(statements),
             Statement::ReturnStatement { value, .. } => value
@@ -888,6 +1230,17 @@ fn program_uses_io_runtime(program: &Program) -> bool {
             Statement::ListPopOnError { on_error, .. } => {
                 on_error.statements.iter().any(stmt_uses_io)
             }
+            Statement::PlaceIn { body, on_error, .. } => {
+                body.statements.iter().any(stmt_uses_io)
+                    || on_error
+                        .as_ref()
+                        .map(|b| b.statements.iter().any(stmt_uses_io))
+                        .unwrap_or(false)
+            }
+            Statement::MemoryDecl { on_error, .. } => on_error
+                .as_ref()
+                .map(|b| b.statements.iter().any(stmt_uses_io))
+                .unwrap_or(false),
             Statement::ReturnStatement { value, .. } => value
                 .as_ref()
                 .map(|v| expression_uses_io_call(v))
@@ -957,6 +1310,17 @@ fn program_uses_args_runtime(program: &Program) -> bool {
             Statement::ListPopOnError { on_error, .. } => {
                 on_error.statements.iter().any(stmt_uses_args)
             }
+            Statement::PlaceIn { body, on_error, .. } => {
+                body.statements.iter().any(stmt_uses_args)
+                    || on_error
+                        .as_ref()
+                        .map(|b| b.statements.iter().any(stmt_uses_args))
+                        .unwrap_or(false)
+            }
+            Statement::MemoryDecl { on_error, .. } => on_error
+                .as_ref()
+                .map(|b| b.statements.iter().any(stmt_uses_args))
+                .unwrap_or(false),
             Statement::ReturnStatement { value, .. } => value
                 .as_ref()
                 .map(|v| expression_uses_args_call(v))
@@ -971,24 +1335,25 @@ fn program_uses_args_runtime(program: &Program) -> bool {
 
 fn emit_error_code_enum(program: &Program, out: &mut String) {
     for stmt in &program.statements {
-        if let Statement::LabelDecl { name, variants, .. } = stmt {
-            if name == "ErrorCode" && !variants.is_empty() {
-                out.push_str("typedef enum ErrorCode {\n");
-                for (i, v) in variants.iter().enumerate() {
-                    if i == 0 {
-                        out.push_str(&format!("    ErrorCode_{} = 0,\n", v));
-                    } else {
-                        out.push_str(&format!("    ErrorCode_{} = {},\n", v, i));
-                    }
+        if let Statement::LabelDecl { name, variants, .. } = stmt
+            && name == "ErrorCode"
+            && !variants.is_empty()
+        {
+            out.push_str("typedef enum ErrorCode {\n");
+            for (i, v) in variants.iter().enumerate() {
+                if i == 0 {
+                    out.push_str(&format!("    ErrorCode_{} = 0,\n", v));
+                } else {
+                    out.push_str(&format!("    ErrorCode_{} = {},\n", v, i));
                 }
-                out.push_str("} ErrorCode;\n\n");
-                break;
             }
+            out.push_str("} ErrorCode;\n\n");
+            break;
         }
     }
 }
 
-fn emit_function(stmt: &Statement, out: &mut String) {
+fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
     if let Statement::FunctionDef {
         name,
         params,
@@ -1004,7 +1369,7 @@ fn emit_function(stmt: &Statement, out: &mut String) {
             out.push_str(&map_skadi_type_to_c(returns.as_deref()));
         }
         out.push(' ');
-        out.push_str(name);
+        out.push_str(map_function_name(name));
         out.push('(');
         for (i, p) in params.iter().enumerate() {
             if i > 0 {
@@ -1035,8 +1400,8 @@ fn emit_function(stmt: &Statement, out: &mut String) {
             is_danger: *is_danger,
             return_type: returns.clone(),
         };
-        emit_block(body, out, 1, &mut declared, Some(&fn_ctx));
-        out.push_str("    return 0;\n");
+        emit_block(body, out, 1, &mut declared, Some(&fn_ctx), None, state);
+        emit_default_return_tail(out, 1, returns.as_deref(), *is_danger);
         out.push_str("}\n");
     }
 }
@@ -1047,9 +1412,20 @@ fn emit_block(
     indent: usize,
     declared: &mut HashMap<String, String>,
     fn_ctx: Option<&FunctionContext>,
+    place_ctx: Option<&PlaceContext>,
+    state: &mut CodegenState,
 ) {
     for stmt in &block.statements {
-        emit_statement(stmt, out, indent, declared, fn_ctx);
+        emit_statement(stmt, out, indent, declared, fn_ctx, place_ctx, state);
+        if let Some(place_ctx) = place_ctx {
+            let pad = "    ".repeat(indent);
+            out.push_str(&pad);
+            out.push_str("if (sk_mem_failed(");
+            out.push_str(&place_ctx.memory_name);
+            out.push_str(")) goto ");
+            out.push_str(&place_ctx.fail_label);
+            out.push_str(";\n");
+        }
     }
 }
 
@@ -1059,9 +1435,53 @@ fn emit_statement(
     indent: usize,
     declared: &mut HashMap<String, String>,
     fn_ctx: Option<&FunctionContext>,
+    place_ctx: Option<&PlaceContext>,
+    state: &mut CodegenState,
 ) {
     let pad = "    ".repeat(indent);
     match stmt {
+        Statement::MemoryDecl {
+            name,
+            size_spec,
+            on_error,
+            ..
+        } => {
+            let size_bytes = parse_memory_size_to_bytes(size_spec).unwrap_or(0);
+            out.push_str(&pad);
+            out.push_str("SkMemoryRegion ");
+            out.push_str(name);
+            out.push_str("_storage = {0};\n");
+            out.push_str(&pad);
+            out.push_str("SkMemoryRegion *");
+            out.push_str(name);
+            out.push_str(" = &");
+            out.push_str(name);
+            out.push_str("_storage;\n");
+            out.push_str(&pad);
+            out.push_str("if (!sk_mem_region_init(");
+            out.push_str(name);
+            out.push_str(", ");
+            out.push_str(&format!("{size_bytes}ull"));
+            out.push_str(")) {\n");
+            if let Some(on_error) = on_error {
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+            } else {
+                out.push_str(&"    ".repeat(indent + 1));
+                out.push_str("sk_mem_panic(\"Memory allocation failed\");\n");
+            }
+            out.push_str(&pad);
+            out.push_str("}\n");
+            declared.insert(name.clone(), "Memory".to_string());
+        }
         Statement::Assignment { target, value, .. } => {
             let expr = emit_expr(value, declared);
             out.push_str(&pad);
@@ -1112,15 +1532,31 @@ fn emit_statement(
             out.push_str(&emit_expr(condition, declared));
             out.push_str(") {\n");
             let mut then_decl = declared.clone();
-            emit_block(then_block, out, indent + 1, &mut then_decl, fn_ctx);
+            emit_block(
+                then_block,
+                out,
+                indent + 1,
+                &mut then_decl,
+                fn_ctx,
+                place_ctx,
+                state,
+            );
             out.push_str(&pad);
-            out.push_str("}");
+            out.push('}');
             if let Some(else_block) = else_block {
                 out.push_str(" else {\n");
                 let mut else_decl = declared.clone();
-                emit_block(else_block, out, indent + 1, &mut else_decl, fn_ctx);
+                emit_block(
+                    else_block,
+                    out,
+                    indent + 1,
+                    &mut else_decl,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
                 out.push_str(&pad);
-                out.push_str("}");
+                out.push('}');
             }
             out.push('\n');
         }
@@ -1132,7 +1568,7 @@ fn emit_statement(
             out.push_str(&emit_expr(condition, declared));
             out.push_str(") {\n");
             let mut inner = declared.clone();
-            emit_block(body, out, indent + 1, &mut inner, fn_ctx);
+            emit_block(body, out, indent + 1, &mut inner, fn_ctx, place_ctx, state);
             out.push_str(&pad);
             out.push_str("}\n");
         }
@@ -1140,15 +1576,27 @@ fn emit_statement(
             out.push_str(&pad);
             out.push_str("while (1) {\n");
             let mut inner = declared.clone();
-            emit_block(body, out, indent + 1, &mut inner, fn_ctx);
+            emit_block(body, out, indent + 1, &mut inner, fn_ctx, place_ctx, state);
             out.push_str(&pad);
             out.push_str("}\n");
         }
         Statement::BreakStatement { .. } => {
+            if let Some(place_ctx) = place_ctx {
+                out.push_str(&pad);
+                out.push_str("sk_mem_set_active(");
+                out.push_str(&place_ctx.restore_region_var);
+                out.push_str(");\n");
+            }
             out.push_str(&pad);
             out.push_str("break;\n");
         }
         Statement::ContinueStatement { .. } => {
+            if let Some(place_ctx) = place_ctx {
+                out.push_str(&pad);
+                out.push_str("sk_mem_set_active(");
+                out.push_str(&place_ctx.restore_region_var);
+                out.push_str(");\n");
+            }
             out.push_str(&pad);
             out.push_str("continue;\n");
         }
@@ -1200,7 +1648,7 @@ fn emit_statement(
                 out.push_str(";\n");
                 let mut inner = declared.clone();
                 inner.insert(var_name, item_decl_ty);
-                emit_block(body, out, indent + 1, &mut inner, fn_ctx);
+                emit_block(body, out, indent + 1, &mut inner, fn_ctx, place_ctx, state);
                 out.push_str(&pad);
                 out.push_str("}\n");
             } else {
@@ -1238,7 +1686,7 @@ fn emit_statement(
             out.push_str("/* TODO(v1): danger call lowering */\n");
             out.push_str(&pad);
             out.push_str("if (");
-            out.push_str(call_name);
+            out.push_str(map_function_name(call_name));
             out.push('(');
             for (i, a) in args.iter().enumerate() {
                 if i > 0 {
@@ -1253,7 +1701,15 @@ fn emit_statement(
             out.push_str(target);
             out.push_str(") != 0) {\n");
             let mut inner = declared.clone();
-            emit_block(on_error, out, indent + 1, &mut inner, fn_ctx);
+            emit_block(
+                on_error,
+                out,
+                indent + 1,
+                &mut inner,
+                fn_ctx,
+                place_ctx,
+                state,
+            );
             out.push_str(&pad);
             out.push_str("}\n");
         }
@@ -1267,7 +1723,7 @@ fn emit_statement(
             out.push_str("/* TODO(v1): danger call lowering */\n");
             out.push_str(&pad);
             out.push_str("if (");
-            out.push_str(call_name);
+            out.push_str(map_function_name(call_name));
             out.push('(');
             for (i, a) in args.iter().enumerate() {
                 if i > 0 {
@@ -1277,7 +1733,15 @@ fn emit_statement(
             }
             out.push_str(") != 0) {\n");
             let mut inner = declared.clone();
-            emit_block(on_error, out, indent + 1, &mut inner, fn_ctx);
+            emit_block(
+                on_error,
+                out,
+                indent + 1,
+                &mut inner,
+                fn_ctx,
+                place_ctx,
+                state,
+            );
             out.push_str(&pad);
             out.push_str("}\n");
         }
@@ -1294,7 +1758,7 @@ fn emit_statement(
                 .map(|elem| list_meta_dynamic(elem).1)
                 .unwrap_or_else(|| "i64".to_string());
             out.push_str(&pad);
-            out.push_str("(void)sk_list_");
+            out.push_str("if (sk_list_");
             out.push_str(&suffix);
             out.push_str("_push(&");
             out.push_str(list_name);
@@ -1306,7 +1770,17 @@ fn emit_statement(
             } else {
                 out.push_str(&emit_expr(value, declared));
             }
-            out.push_str(");\n");
+            out.push_str(") != 0) {\n");
+            out.push_str(&"    ".repeat(indent + 1));
+            if let Some(place_ctx) = place_ctx {
+                out.push_str("goto ");
+                out.push_str(&place_ctx.fail_label);
+                out.push_str(";\n");
+            } else {
+                out.push_str("sk_mem_panic(\"list push allocation failed\");\n");
+            }
+            out.push_str(&pad);
+            out.push_str("}\n");
         }
         Statement::ListPopOnError {
             target,
@@ -1328,40 +1802,141 @@ fn emit_statement(
             out.push_str(target);
             out.push_str(") != 0) {\n");
             let mut inner = declared.clone();
-            emit_block(on_error, out, indent + 1, &mut inner, fn_ctx);
+            emit_block(
+                on_error,
+                out,
+                indent + 1,
+                &mut inner,
+                fn_ctx,
+                place_ctx,
+                state,
+            );
             out.push_str(&pad);
             out.push_str("}\n");
         }
+        Statement::PlaceIn {
+            memory_name,
+            body,
+            on_error,
+            ..
+        } => {
+            let id = state.next_id();
+            let previous_region = format!("__sk_prev_region_{id}");
+            let fail_label = format!("__sk_place_fail_{id}");
+            let end_label = format!("__sk_place_end_{id}");
+            out.push_str(&pad);
+            out.push_str("SkMemoryRegion *");
+            out.push_str(&previous_region);
+            out.push_str(" = sk_mem_set_active(");
+            out.push_str(memory_name);
+            out.push_str(");\n");
+            out.push_str(&pad);
+            out.push_str("sk_mem_clear_failure(");
+            out.push_str(memory_name);
+            out.push_str(");\n");
+            let inner_place = PlaceContext {
+                memory_name: memory_name.clone(),
+                restore_region_var: previous_region.clone(),
+                fail_label: fail_label.clone(),
+            };
+            let mut inner = declared.clone();
+            emit_block(
+                body,
+                out,
+                indent,
+                &mut inner,
+                fn_ctx,
+                Some(&inner_place),
+                state,
+            );
+            out.push_str(&pad);
+            out.push_str("sk_mem_set_active(");
+            out.push_str(&previous_region);
+            out.push_str(");\n");
+            out.push_str(&pad);
+            out.push_str("goto ");
+            out.push_str(&end_label);
+            out.push_str(";\n");
+            out.push_str(&pad);
+            out.push_str(&fail_label);
+            out.push_str(":\n");
+            out.push_str(&pad);
+            out.push_str("sk_mem_clear_failure(");
+            out.push_str(memory_name);
+            out.push_str(");\n");
+            out.push_str(&pad);
+            out.push_str("sk_mem_set_active(");
+            out.push_str(&previous_region);
+            out.push_str(");\n");
+            if let Some(on_error) = on_error {
+                let mut on_error_declared = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent,
+                    &mut on_error_declared,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+            } else {
+                out.push_str(&pad);
+                out.push_str("sk_mem_panic(\"memory overflow in place in block\");\n");
+            }
+            out.push_str(&pad);
+            out.push_str(&end_label);
+            out.push_str(":\n");
+        }
+        Statement::MemoryClear { memory_name, .. } => {
+            out.push_str(&pad);
+            out.push_str("sk_mem_region_clear(");
+            out.push_str(memory_name);
+            out.push_str(");\n");
+        }
         Statement::ReturnStatement { value, .. } => {
-            if let Some(ctx) = fn_ctx {
-                if ctx.is_danger {
-                    match (ctx.return_type.is_some(), value) {
-                        (true, Some(expr)) => {
-                            out.push_str(&pad);
-                            out.push_str("*out = ");
-                            out.push_str(&emit_expr(expr, declared));
-                            out.push_str(";\n");
-                            out.push_str(&pad);
-                            out.push_str("return 0;\n");
-                            return;
-                        }
-                        (true, None) => {
-                            out.push_str(&pad);
-                            out.push_str("return 1;\n");
-                            return;
-                        }
-                        (false, Some(expr)) => {
-                            out.push_str(&pad);
-                            out.push_str("return ");
-                            out.push_str(&emit_expr(expr, declared));
-                            out.push_str(";\n");
-                            return;
-                        }
-                        (false, None) => {
-                            out.push_str(&pad);
-                            out.push_str("return 1;\n");
-                            return;
-                        }
+            if let Some(place_ctx) = place_ctx {
+                out.push_str(&pad);
+                out.push_str("sk_mem_set_active(");
+                out.push_str(&place_ctx.restore_region_var);
+                out.push_str(");\n");
+            }
+            if let Some(ctx) = fn_ctx
+                && ctx.is_danger
+            {
+                match (ctx.return_type.is_some(), value) {
+                    (true, Some(expr)) => {
+                        out.push_str(&pad);
+                        out.push_str("*out = ");
+                        out.push_str(&emit_return_expr(
+                            expr,
+                            ctx.return_type.as_deref(),
+                            declared,
+                        ));
+                        out.push_str(";\n");
+                        out.push_str(&pad);
+                        out.push_str("return 0;\n");
+                        return;
+                    }
+                    (true, None) => {
+                        out.push_str(&pad);
+                        out.push_str("return 1;\n");
+                        return;
+                    }
+                    (false, Some(expr)) => {
+                        out.push_str(&pad);
+                        out.push_str("return ");
+                        out.push_str(&emit_return_expr(
+                            expr,
+                            ctx.return_type.as_deref(),
+                            declared,
+                        ));
+                        out.push_str(";\n");
+                        return;
+                    }
+                    (false, None) => {
+                        out.push_str(&pad);
+                        out.push_str("return 1;\n");
+                        return;
                     }
                 }
             }
@@ -1369,7 +1944,11 @@ fn emit_statement(
             out.push_str("return");
             if let Some(expr) = value {
                 out.push(' ');
-                out.push_str(&emit_expr(expr, declared));
+                out.push_str(&emit_return_expr(
+                    expr,
+                    fn_ctx.and_then(|ctx| ctx.return_type.as_deref()),
+                    declared,
+                ));
             }
             out.push_str(";\n");
         }
@@ -1379,6 +1958,12 @@ fn emit_statement(
             out.push_str(";\n");
         }
         Statement::ReturnError { code, .. } => {
+            if let Some(place_ctx) = place_ctx {
+                out.push_str(&pad);
+                out.push_str("sk_mem_set_active(");
+                out.push_str(&place_ctx.restore_region_var);
+                out.push_str(");\n");
+            }
             out.push_str(&pad);
             out.push_str("return ErrorCode_");
             out.push_str(code);
@@ -1392,7 +1977,7 @@ fn emit_statement(
         } => {
             if cases.is_empty() {
                 if let Some(else_block) = else_block {
-                    emit_block(else_block, out, indent, declared, fn_ctx);
+                    emit_block(else_block, out, indent, declared, fn_ctx, place_ctx, state);
                 }
                 return;
             }
@@ -1420,7 +2005,7 @@ fn emit_statement(
                     out.push_str("else if (");
                 }
                 if case_exprs.is_empty() {
-                    out.push_str("0");
+                    out.push('0');
                 } else {
                     for (j, expr) in case_exprs.iter().enumerate() {
                         if j > 0 {
@@ -1443,7 +2028,15 @@ fn emit_statement(
                 }
                 out.push_str(") {\n");
                 let mut inner = declared.clone();
-                emit_block(case_block, out, indent + 1, &mut inner, fn_ctx);
+                emit_block(
+                    case_block,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
                 out.push_str(&pad);
                 out.push_str("}\n");
             }
@@ -1451,7 +2044,15 @@ fn emit_statement(
                 out.push_str(&pad);
                 out.push_str("else {\n");
                 let mut inner = declared.clone();
-                emit_block(else_block, out, indent + 1, &mut inner, fn_ctx);
+                emit_block(
+                    else_block,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
                 out.push_str(&pad);
                 out.push_str("}\n");
             }
@@ -1462,47 +2063,52 @@ fn emit_statement(
             declared_type,
             ..
         } => {
-            if let Some(dt) = declared_type.as_deref() {
-                if let Some(elem) = list_elem_from_decl(dt)
-                    && {
-                        let _ = elem;
-                        true
-                    }
-                {
-                    let suffix = list_meta_dynamic(elem).1;
-                    out.push_str(&pad);
-                    out.push_str("SkadiList_");
-                    out.push_str(&suffix);
-                    out.push(' ');
-                    out.push_str(name);
-                    out.push_str(" = sk_list_");
-                    out.push_str(&suffix);
-                    out.push_str("_new();\n");
-                    if let Expression::ListLiteral(items) = value.as_ref() {
-                        for item in items {
-                            out.push_str(&pad);
-                            out.push_str("(void)sk_list_");
-                            out.push_str(&suffix);
-                            out.push_str("_push(&");
-                            out.push_str(name);
-                            out.push_str(", ");
-                            if let Expression::StructConstruction { fields } = item {
-                                out.push_str(&emit_struct_literal(fields, Some(elem), declared));
-                            } else {
-                                out.push_str(&emit_expr(item, declared));
-                            }
-                            out.push_str(");\n");
-                        }
-                    } else {
+            if let Some(dt) = declared_type.as_deref()
+                && let Some(elem) = list_elem_from_decl(dt)
+            {
+                let suffix = list_meta_dynamic(elem).1;
+                out.push_str(&pad);
+                out.push_str("SkadiList_");
+                out.push_str(&suffix);
+                out.push(' ');
+                out.push_str(name);
+                out.push_str(" = sk_list_");
+                out.push_str(&suffix);
+                out.push_str("_new();\n");
+                if let Expression::ListLiteral(items) = value.as_ref() {
+                    for item in items {
                         out.push_str(&pad);
+                        out.push_str("if (sk_list_");
+                        out.push_str(&suffix);
+                        out.push_str("_push(&");
                         out.push_str(name);
-                        out.push_str(" = ");
-                        out.push_str(&emit_expr(value, declared));
-                        out.push_str(";\n");
+                        out.push_str(", ");
+                        if let Expression::StructConstruction { fields } = item {
+                            out.push_str(&emit_struct_literal(fields, Some(elem), declared));
+                        } else {
+                            out.push_str(&emit_expr(item, declared));
+                        }
+                        out.push_str(") != 0) {\n");
+                        out.push_str(&"    ".repeat(indent + 1));
+                        if let Some(place_ctx) = place_ctx {
+                            out.push_str("goto ");
+                            out.push_str(&place_ctx.fail_label);
+                            out.push_str(";\n");
+                        } else {
+                            out.push_str("sk_mem_panic(\"list literal allocation failed\");\n");
+                        }
+                        out.push_str(&pad);
+                        out.push_str("}\n");
                     }
-                    declared.insert(name.clone(), dt.to_string());
-                    return;
+                } else {
+                    out.push_str(&pad);
+                    out.push_str(name);
+                    out.push_str(" = ");
+                    out.push_str(&emit_expr(value, declared));
+                    out.push_str(";\n");
                 }
+                declared.insert(name.clone(), dt.to_string());
+                return;
             }
             out.push_str(&pad);
             if let Some(dt) = declared_type.as_deref()
@@ -1533,13 +2139,17 @@ fn emit_statement(
         | Statement::OnErrorBlock { statements, .. } => {
             let mut inner = declared.clone();
             for s in statements {
-                emit_statement(s, out, indent, &mut inner, fn_ctx);
+                emit_statement(s, out, indent, &mut inner, fn_ctx, place_ctx, state);
             }
         }
     }
 }
 
 fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
+    if let Some(list_elem) = skadi_type.and_then(list_elem_from_decl) {
+        let suffix = list_meta_dynamic(list_elem).1;
+        return format!("SkadiList_{}", suffix);
+    }
     match skadi_type.unwrap_or("Int") {
         "i8" => "int8_t".to_string(),
         "i16" => "int16_t".to_string(),
@@ -1553,9 +2163,42 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "Float" | "f64" => "double".to_string(),
         "bool" | "Bool" => "bool".to_string(),
         "char" | "Char" => "char".to_string(),
+        "Memory" => "SkMemoryRegion*".to_string(),
         "Text" | "Path" => "const char*".to_string(),
         other => other.to_string(),
     }
+}
+
+fn parse_memory_size_to_bytes(size_spec: &str) -> Option<u64> {
+    let compact = size_spec.trim().replace(' ', "").to_ascii_lowercase();
+    if compact.is_empty() {
+        return None;
+    }
+    let digits_len = compact.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits_len == 0 || digits_len >= compact.len() {
+        return None;
+    }
+    let (digits, unit) = compact.split_at(digits_len);
+    let value = digits.parse::<u64>().ok()?;
+    let multiplier = match unit {
+        "b" => 1,
+        "kb" => 1024,
+        "mb" => 1024 * 1024,
+        "gb" => 1024 * 1024 * 1024,
+        _ => return None,
+    };
+    value.checked_mul(multiplier)
+}
+
+fn emit_return_expr(
+    expr: &Expression,
+    return_type: Option<&str>,
+    declared: &HashMap<String, String>,
+) -> String {
+    if let (Some(ret_ty), Expression::StructConstruction { fields }) = (return_type, expr) {
+        return emit_struct_literal(fields, Some(ret_ty), declared);
+    }
+    emit_expr(expr, declared)
 }
 
 fn emit_struct_literal(
@@ -1855,43 +2498,42 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     _ => {}
                 }
             }
-            if let Some((obj, method)) = name.split_once(".") {
-                if let Some(obj_ty) = declared.get(obj)
-                    && !matches!(
-                        obj_ty.as_str(),
-                        "Int"
-                            | "i8"
-                            | "i16"
-                            | "i32"
-                            | "i64"
-                            | "u8"
-                            | "u16"
-                            | "u32"
-                            | "u64"
-                            | "Float"
-                            | "f32"
-                            | "f64"
-                            | "bool"
-                            | "Bool"
-                            | "char"
-                            | "Char"
-                            | "Text"
-                            | "Path"
-                    )
-                    && !obj_ty.ends_with(" List")
-                {
-                    let mut rendered: Vec<String> = Vec::new();
-                    if obj == "my" {
-                        rendered.push("my".to_string());
-                    } else {
-                        rendered.push(format!("&{}", obj));
-                    }
-                    rendered.extend(args.iter().map(|a| emit_expr(a, declared)));
-                    return format!("{}_{}({})", obj_ty, method, rendered.join(", "));
+            if let Some((obj, method)) = name.split_once(".")
+                && let Some(obj_ty) = declared.get(obj)
+                && !matches!(
+                    obj_ty.as_str(),
+                    "Int"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "Float"
+                        | "f32"
+                        | "f64"
+                        | "bool"
+                        | "Bool"
+                        | "char"
+                        | "Char"
+                        | "Text"
+                        | "Path"
+                )
+                && !obj_ty.ends_with(" List")
+            {
+                let mut rendered: Vec<String> = Vec::new();
+                if obj == "my" {
+                    rendered.push("my".to_string());
+                } else {
+                    rendered.push(format!("&{}", obj));
                 }
+                rendered.extend(args.iter().map(|a| emit_expr(a, declared)));
+                return format!("{}_{}({})", obj_ty, method, rendered.join(", "));
             }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
-            format!("{}({})", name, rendered.join(", "))
+            format!("{}({})", map_function_name(name), rendered.join(", "))
         }
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {

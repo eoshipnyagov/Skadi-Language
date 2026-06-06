@@ -17,7 +17,7 @@ impl Default for Location {
 // --- Core Nodes (Structural Contracts) ---
 
 /// The root of the Abstract Syntax Tree.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }
@@ -73,6 +73,12 @@ pub enum Statement {
         value: Box<Expression>,
         is_fixed: bool,
         declared_type: Option<String>,
+        loc: Location,
+    },
+    MemoryDecl {
+        name: String,
+        size_spec: String,
+        on_error: Option<Box<BlockStatement>>,
         loc: Location,
     },
     Assignment {
@@ -177,6 +183,16 @@ pub enum Statement {
         target: String,
         list_name: String,
         on_error: Box<BlockStatement>,
+        loc: Location,
+    },
+    PlaceIn {
+        memory_name: String,
+        on_error: Option<Box<BlockStatement>>,
+        body: Box<BlockStatement>,
+        loc: Location,
+    },
+    MemoryClear {
+        memory_name: String,
         loc: Location,
     },
     ReturnError {

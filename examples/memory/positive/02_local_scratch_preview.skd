@@ -1,0 +1,18 @@
+// Memory example 02: local scratch Memory for temporary data that does not escape.
+
+fn preview_file(Path path) Int {
+    Memory scratch_memory = memory(64kb) on error {
+        return 1
+    }
+
+    place in scratch_memory {
+        new Text file_text = read(path)
+        output(file_text)
+    } on error {
+        scratch_memory.clear()
+        return 2
+    }
+
+    scratch_memory.clear()
+    return 0
+}

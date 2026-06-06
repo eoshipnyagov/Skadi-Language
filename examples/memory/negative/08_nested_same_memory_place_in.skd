@@ -1,0 +1,10 @@
+fn invalid_nested(Memory assets_memory) Int {
+    place in assets_memory {
+        place in assets_memory {
+            new Text msg = "bad"
+            output(msg)
+        }
+    }
+
+    return 0
+}

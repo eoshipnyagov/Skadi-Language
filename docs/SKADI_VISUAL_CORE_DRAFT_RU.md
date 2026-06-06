@@ -338,16 +338,17 @@ fn game_loop(Window window, World world) {
     loop {
         frame_memory.clear()
 
-        place in frame_memory on error {
-            output("Frame memory overflow")
-            continue
-        } {
+        place in frame_memory {
             canvas.clear(Color.black)
 
             draw_world(canvas, world)
             draw_ui(canvas, world.ui)
 
             window.present()
+        } on error {
+            frame_memory.clear()
+            output("Frame memory overflow")
+            continue
         }
     }
 }

@@ -55,6 +55,17 @@
   - semantic positive/negative checks для constants и numeric builtin typing
   - codegen shape checks для `math.h`, constants, trigonometry, `root`, angle conversion
   - showcase coverage через `bench_09_math_navigation.skd` и `bench_10_v1_1_toolbox.skd`
+- showcase coverage
+  - compile-pipeline shape tests покрывают `bench_01..10`
+  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..10`
+  - runtime showcase e2e покрывает:
+    - CLI-driven subset `bench_01..05`
+    - stable subset `bench_06..09`
+    - dedicated full showcase `bench_10_v1_1_toolbox.skd`
+  - showcase fixtures лежат в `benchmarks/showcase-data/` и используются в script/e2e smoke-path
+- experimental memory frontend coverage
+  - `tests/memory_model_frontend.rs` проверяет parser/semantic contract для `Memory`, `place in`, `clear`, escape rules и illegal `Memory` usage
+  - `tests/memory_model_examples.rs` проверяет self-contained positive examples, большой canonical example, native build/run path, style pitfalls и negative example suite из `examples/memory/`
 
 ## 2. Что покрыто частично / что ещё требует углубления
 
