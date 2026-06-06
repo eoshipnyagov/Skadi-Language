@@ -494,12 +494,8 @@ Memory arena = memory(8mb) on error {
 
 place in arena {
     new Text msg = "hello"
-}
-
-place in arena on error {
+} on error {
     output("overflow")
-} {
-    new Text msg = "hello"
 }
 
 arena.clear()
@@ -510,12 +506,19 @@ arena.clear()
 - parser принимает `Memory`, `memory(size)`, `place in`, `on error` и `clear`;
 - semantic layer проверяет базовые rules для escape и obvious use-after-clear;
 - возвращать region-owned dynamic payload можно только если `Memory` передана в функцию извне.
+- `Memory` рассматривается как capability/resource surface, а не как обычный storable value type.
 
 Что этот milestone пока не обещает:
 
 - runtime / allocator semantics;
 - lowering в C backend;
 - `allow grow`, `allow drop`, `memory.child`, `memory.static`.
+
+Канонический style для memory-oriented кода:
+
+- prefer names with `_memory` suffix: `frame_memory`, `assets_memory`, `scratch_memory`;
+- prefer explicit field init over field punning in memory examples;
+- prefer `clear()` after placement block или в trailing `on error`, а не внутри active `place in`.
 
 Если memory syntax прошла parser и semantic, текущий backend завершит pipeline явной diagnostics `SC-CG-201`, а не будет делать частичный pseudo-lowering.
 

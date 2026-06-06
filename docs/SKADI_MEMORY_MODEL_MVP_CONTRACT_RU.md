@@ -117,11 +117,12 @@ MVP-контракт:
 Базовый синтаксис:
 
 ```scadi
-place in level_memory on error {
-    return LoadStatus.OutOfMemory
-} {
+place in level_memory {
     new texture = load_texture(path)
     new mesh = load_mesh(path)
+} on error {
+    level_memory.clear()
+    return LoadStatus.OutOfMemory
 }
 ```
 
@@ -129,6 +130,7 @@ MVP-контракт:
 
 ```text
 Если внутри региона не хватает места, аллокация попадает в общий on error блока place in.
+Автоматический rollback уже созданных объектов не обещается: если нужен чистый регион, это делается явно через Memory.clear().
 ```
 
 ## 9. `Memory.clear()`
@@ -146,6 +148,7 @@ clear уничтожает всё содержимое выбранной Memory
 ```
 
 Это group-destroy primitive, а не пообъектное освобождение.
+Внутри активного `place in` того же Memory вызов `clear()` считается ошибкой: канонический стиль — очищать регион после блока или в trailing `on error`.
 
 ## 10. Главный safety rule для MVP
 
@@ -197,6 +200,7 @@ MVP memory model обещает:
 - явную обработку out-of-memory;
 - явный `clear`;
 - базовую защиту от возврата значения из умершего региона.
+- `Memory` как special capability handle, а не как обычный storable value.
 
 ## 12. Что MVP пока не обещает
 
@@ -209,6 +213,13 @@ MVP memory model не обещает:
 - `allow drop` как полноценно реализованную runtime-фичу;
 - сложный escape analysis;
 - прозрачную региональную семантику для всех возможных value/reference edge cases.
+
+И дополнительно не разрешает:
+
+- `return Memory`;
+- `Memory` в `struct`;
+- `Memory List`;
+- обычное копирование/переприсваивание `Memory` как regular value.
 
 ## 13. Рекомендация для реализации
 

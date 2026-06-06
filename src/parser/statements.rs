@@ -1306,17 +1306,14 @@ pub fn parse_place_in_statement(tokens: &[Token], start_index: usize) -> ParseRe
 
     let memory_name = tokens[start_index + 2].lexeme.clone();
     let mut cursor = start_index + 3;
-    let mut on_error = None;
-    if cursor + 2 < tokens.len()
+    if cursor + 1 < tokens.len()
         && tokens[cursor].kind() == TokenKind::KeywordOnError
         && tokens[cursor + 1].lexeme == "error"
     {
-        if tokens[cursor + 2].lexeme != "{" {
-            return Err(parse_err("SC-PARSE-172", "place in on error expected '{'."));
-        }
-        let (block, block_end) = parse_braced_block(tokens, cursor + 2)?;
-        on_error = Some(block);
-        cursor = block_end + 1;
+        return Err(parse_err(
+            "SC-PARSE-172",
+            "legacy placement syntax removed: use 'place in memory { ... } on error { ... }'.",
+        ));
     }
 
     if cursor >= tokens.len() || tokens[cursor].lexeme != "{" {
@@ -1326,6 +1323,24 @@ pub fn parse_place_in_statement(tokens: &[Token], start_index: usize) -> ParseRe
         ));
     }
     let (body, body_end) = parse_braced_block(tokens, cursor)?;
+    cursor = body_end + 1;
+
+    let mut on_error = None;
+    if cursor + 2 < tokens.len()
+        && tokens[cursor].kind() == TokenKind::KeywordOnError
+        && tokens[cursor + 1].lexeme == "error"
+    {
+        if tokens[cursor + 2].lexeme != "{" {
+            return Err(parse_err(
+                "SC-PARSE-174",
+                "place in trailing on error expected '{'.",
+            ));
+        }
+        let (block, block_end) = parse_braced_block(tokens, cursor + 2)?;
+        on_error = Some(block);
+        cursor = block_end + 1;
+    }
+
     Ok((
         Statement::PlaceIn {
             memory_name,
@@ -1333,7 +1348,7 @@ pub fn parse_place_in_statement(tokens: &[Token], start_index: usize) -> ParseRe
             body,
             loc,
         },
-        body_end + 1 - start_index,
+        cursor - start_index,
     ))
 }
 

@@ -833,15 +833,7 @@ fn asset_loader(
     while not stopping {
         new request = requests.receive()
 
-        place in assets on error {
-            results.send(LoadResult {
-                path = request.path,
-                texture = Texture.empty(),
-                status = LoadStatus.OutOfMemory
-            })
-
-            continue
-        } {
+        place in assets {
             new texture = load_texture(request.path) on error {
                 results.send(LoadResult {
                     path = request.path,
@@ -857,6 +849,15 @@ fn asset_loader(
                 texture = texture,
                 status = LoadStatus.Ok
             })
+        } on error {
+            assets.clear()
+            results.send(LoadResult {
+                path = request.path,
+                texture = Texture.empty(),
+                status = LoadStatus.OutOfMemory
+            })
+
+            continue
         }
     }
 }

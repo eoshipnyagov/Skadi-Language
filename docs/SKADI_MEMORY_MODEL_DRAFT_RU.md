@@ -258,11 +258,12 @@ Skadi не должен молча падать или запускать скр
 Если внутри выбранной памяти не осталось места, аллокации внутри `place in` должны попадать в общий `on error`.
 
 ```scadi
-place in level_memory on error {
-    return LoadStatus.OutOfMemory
-} {
+place in level_memory {
     new texture = load_texture(Path("huge_texture.png"))
     new mesh = load_mesh(Path("level.mesh"))
+} on error {
+    level_memory.clear()
+    return LoadStatus.OutOfMemory
 }
 ```
 
@@ -270,6 +271,8 @@ place in level_memory on error {
 
 ```text
 Любая нехватка памяти внутри блока попадает в общий on error.
+Автоматический rollback уже созданного внутри блока не гарантируется.
+Если нужен чистый регион, это делается явно через Memory.clear().
 ```
 
 Это лучше, чем требовать `on error` после каждой отдельной аллокации.
@@ -577,9 +580,7 @@ fn load_level(Memory level_memory, Path path) returns struct {Level level, LoadS
         return {level = Level.empty(), status = LoadStatus.ParseError}
     }
 
-    place in level_memory on error {
-        return {level = Level.empty(), status = LoadStatus.OutOfMemory}
-    } {
+    place in level_memory {
         new level = Level {
             entities = List(Entity),
             textures = List(Texture),
@@ -591,6 +592,9 @@ fn load_level(Memory level_memory, Path path) returns struct {Level level, LoadS
         }
 
         return {level = level, status = LoadStatus.Ok}
+    } on error {
+        level_memory.clear()
+        return {level = Level.empty(), status = LoadStatus.OutOfMemory}
     }
 }
 ```
@@ -612,16 +616,16 @@ fn game_loop(Level level) {
     }
 
     loop {
-        place in frame_memory on error {
-            output("Frame memory overflow")
-            frame_memory.clear()
-            continue
-        } {
+        place in frame_memory {
             new visible_entities = collect_visible(level.entities)
             new draw_commands = build_draw_commands(visible_entities)
             new ui_commands = build_ui()
 
             render(draw_commands, ui_commands)
+        } on error {
+            frame_memory.clear()
+            output("Frame memory overflow")
+            continue
         }
 
         frame_memory.clear()
@@ -644,10 +648,7 @@ fn sensor_main() {
     loop {
         sensor_memory.clear()
 
-        place in sensor_memory on error {
-            output("Sensor memory overflow")
-            continue
-        } {
+        place in sensor_memory {
             new samples = List(Sample)
 
             for i in 0..128 {
@@ -655,6 +656,10 @@ fn sensor_main() {
             }
 
             process_samples(samples)
+        } on error {
+            sensor_memory.clear()
+            output("Sensor memory overflow")
+            continue
         }
 
         sleep(10ms)

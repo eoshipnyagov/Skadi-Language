@@ -65,6 +65,7 @@ const SEM_RETURN_RULE: &str = "SC-SEM-050";
 const SEM_ERRORCODE_RULE: &str = "SC-SEM-051";
 const SEM_MEMORY_RULE: &str = "SC-SEM-060";
 const SEM_MEMORY_LIFETIME: &str = "SC-SEM-061";
+const SEM_MEMORY_CAPABILITY: &str = "SC-SEM-062";
 const SEM_INTERNAL: &str = "SC-SEM-900";
 
 fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
@@ -133,6 +134,21 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             ..
         } = stmt
         {
+            if let Some(return_name) = returns.as_deref() {
+                let return_ty = parse_type_name(return_name);
+                ensure_memory_type_allowed(stmt, &return_ty, "function return type", false)?;
+            }
+            for param in params {
+                if let Some(param_name) = param.param_type.as_deref() {
+                    let param_ty = parse_type_name(param_name);
+                    ensure_memory_type_allowed(
+                        stmt,
+                        &param_ty,
+                        "function parameter type",
+                        param_ty == ValueType::Memory,
+                    )?;
+                }
+            }
             functions.insert(
                 name.clone(),
                 FunctionSig {
@@ -157,10 +173,32 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         {
             let mut fmap = HashMap::new();
             for f in fields {
-                fmap.insert(f.name.clone(), parse_type_name(&f.field_type));
+                let field_ty = parse_type_name(&f.field_type);
+                ensure_memory_type_allowed(stmt, &field_ty, "struct field type", false)?;
+                fmap.insert(f.name.clone(), field_ty);
             }
             let mut mmap = HashMap::new();
             for m in methods {
+                if let Some(return_name) = m.returns.as_deref() {
+                    let return_ty = parse_type_name(return_name);
+                    ensure_memory_type_allowed(
+                        stmt,
+                        &return_ty,
+                        "struct method return type",
+                        false,
+                    )?;
+                }
+                for param in &m.params {
+                    if let Some(param_name) = param.param_type.as_deref() {
+                        let param_ty = parse_type_name(param_name);
+                        ensure_memory_type_allowed(
+                            stmt,
+                            &param_ty,
+                            "struct method parameter type",
+                            param_ty == ValueType::Memory,
+                        )?;
+                    }
+                }
                 mmap.insert(
                     m.name.clone(),
                     FunctionSig {
@@ -272,6 +310,15 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         }
     }
 
+    fn warn_memory_name(name: &str, line: u32, col: u32, out: &mut Vec<String>) {
+        if !name.ends_with("_memory") {
+            out.push(format!(
+                "style warning at line {}, col {}: prefer '_memory' suffix for Memory handles like '{}_memory'.",
+                line, col, name
+            ));
+        }
+    }
+
     fn visit_statements(
         stmts: &[Statement],
         user_types: &std::collections::HashSet<String>,
@@ -291,12 +338,16 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     }
                 }
                 Statement::MemoryDecl {
-                    on_error: Some(on_error),
+                    name,
+                    loc,
+                    on_error,
                     ..
                 } => {
-                    visit_statements(&on_error.statements, user_types, out);
+                    warn_memory_name(name, loc.line, loc.column, out);
+                    if let Some(on_error) = on_error {
+                        visit_statements(&on_error.statements, user_types, out);
+                    }
                 }
-                Statement::MemoryDecl { on_error: None, .. } => {}
                 Statement::VarDecl { .. } => {}
                 Statement::FunctionDef {
                     params,
@@ -308,6 +359,9 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     for p in params {
                         if let Some(pt) = p.param_type.as_deref() {
                             warn_type_style(pt, loc.line, loc.column, user_types, out);
+                            if pt == "Memory" {
+                                warn_memory_name(&p.name, loc.line, loc.column, out);
+                            }
                         }
                     }
                     if let Some(rt) = returns.as_deref() {
@@ -517,6 +571,36 @@ fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -
     }
 }
 
+fn type_contains_memory(ty: &ValueType) -> bool {
+    match ty {
+        ValueType::Memory => true,
+        ValueType::List(inner) => type_contains_memory(inner),
+        _ => false,
+    }
+}
+
+fn ensure_memory_type_allowed(
+    stmt: &Statement,
+    ty: &ValueType,
+    context: &str,
+    allow_direct_memory: bool,
+) -> Result<(), String> {
+    if *ty == ValueType::Memory && allow_direct_memory {
+        return Ok(());
+    }
+    if type_contains_memory(ty) {
+        return Err(err_at_code(
+            stmt,
+            SEM_MEMORY_CAPABILITY,
+            format!(
+                "illegal Memory value usage: {} must not use Memory as a regular storable/returnable value.",
+                context
+            ),
+        ));
+    }
+    Ok(())
+}
+
 fn is_region_relevant_type(
     ty: &ValueType,
     structs: &HashMap<String, StructInfo>,
@@ -722,6 +806,7 @@ fn analyze_statement(
             )?;
             let final_ty = if let Some(tn) = declared_type {
                 let declared = parse_declared_type_name(tn, structs);
+                ensure_memory_type_allowed(stmt, &declared, "variable declaration type", false)?;
                 if !can_assign(&declared, &value_ty) {
                     return Err(err_at_code(
                         stmt,
@@ -736,6 +821,7 @@ fn analyze_statement(
             } else {
                 value_ty
             };
+            ensure_memory_type_allowed(stmt, &final_ty, "variable declaration value", false)?;
             let source_memory = infer_expression_memory_provenance(
                 value,
                 &final_ty,
@@ -768,6 +854,16 @@ fn analyze_statement(
                     ),
                 ));
             };
+            if target_ty == ValueType::Memory {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_MEMORY_CAPABILITY,
+                    format!(
+                        "illegal Memory value usage: '{}' cannot be reassigned or copied as a regular value.",
+                        target
+                    ),
+                ));
+            }
             let value_ty = infer_expression_type(
                 value,
                 scope,
@@ -1276,20 +1372,6 @@ fn analyze_statement(
                     ),
                 ));
             }
-            if let Some(on_error) = on_error {
-                let mut on_error_scope = scope.clone();
-                let mut on_error_memory = memory_state.clone();
-                analyze_block(
-                    on_error,
-                    &mut on_error_scope,
-                    &mut on_error_memory,
-                    functions,
-                    labels,
-                    structs,
-                    fn_ctx.clone(),
-                    in_loop,
-                )?;
-            }
             let mut place_scope = scope.clone();
             let mut place_memory_state = memory_state.clone();
             place_memory_state.active_memory = Some(memory_name.clone());
@@ -1300,10 +1382,33 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
-                fn_ctx,
+                fn_ctx.clone(),
                 in_loop,
             )?;
+            for name in scope.keys() {
+                if let Some(memory_name) = place_memory_state.variable_memory.get(name).cloned() {
+                    memory_state
+                        .variable_memory
+                        .insert(name.clone(), memory_name);
+                } else {
+                    memory_state.variable_memory.remove(name);
+                }
+            }
             memory_state.memories = place_memory_state.memories;
+            if let Some(on_error) = on_error {
+                let mut on_error_scope = scope.clone();
+                let mut on_error_memory = memory_state.clone();
+                analyze_block(
+                    on_error,
+                    &mut on_error_scope,
+                    &mut on_error_memory,
+                    functions,
+                    labels,
+                    structs,
+                    fn_ctx,
+                    in_loop,
+                )?;
+            }
             Ok(())
         }
         Statement::MemoryClear { memory_name, .. } => {
@@ -1324,6 +1429,16 @@ fn analyze_statement(
                     format!(
                         "clear() is only allowed on Memory values, got {:?}.",
                         memory_ty
+                    ),
+                ));
+            }
+            if memory_state.active_memory.as_deref() == Some(memory_name.as_str()) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_MEMORY_RULE,
+                    format!(
+                        "forbidden in-block clear: '{}.clear()' is not allowed inside an active 'place in {} {{ ... }}' block. Clear the region after the block or in the trailing on error handler.",
+                        memory_name, memory_name
                     ),
                 ));
             }
@@ -1666,6 +1781,14 @@ fn analyze_statement(
                         structs,
                         fn_ctx.as_ref(),
                     )?;
+                    if actual == ValueType::Memory {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_MEMORY_CAPABILITY,
+                            "illegal Memory value usage: Memory handles cannot be returned from functions."
+                                .to_string(),
+                        ));
+                    }
                     if let Some(memory_name) = source_memory
                         && !memory_is_external(memory_state, &memory_name)
                     {
