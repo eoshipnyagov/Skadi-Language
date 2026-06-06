@@ -1,0 +1,165 @@
+// Dense highlight fixture for screenshots and syntax grammar checks.
+// Goal: keep many Skadi surfaces visible in one valid file.
+
+label ErrorCode {
+    Ok
+    InvalidScale
+}
+
+danger fn parse_scale(Text raw_text) Float {
+    if contains(raw_text, "bad") {
+        return error InvalidScale
+    } else {
+        return 2.5
+    }
+}
+
+struct DeviceState {
+    Int id
+    Text name
+    Float reading
+
+    fn rename(Text suffix_text) Text {
+        my.name = concat(my.name, suffix_text)
+        return my.name
+    }
+
+    fn is_hot(Float threshold_value) Bool {
+        if my.reading >= threshold_value {
+            return true
+        } else {
+            return false
+        }
+    }
+}
+
+fn preview_log(Path log_path) Int {
+    Memory scratch_memory = memory(16kb) on error {
+        return 1
+    }
+
+    place in scratch_memory {
+        new Text preview_text = read(log_path)
+        new Text head_text = slice(preview_text, 0, 24)
+        output("preview contains service")
+        output(contains(preview_text, "service"))
+        output(head_text)
+    } on error {
+        scratch_memory.clear()
+        return 2
+    }
+
+    scratch_memory.clear()
+    return 0
+}
+
+new Path log_path = "examples/memory/large/data/sample_service.log"
+new Path repo_root = "."
+new Path joined_path = fs.join(repo_root, "examples")
+new Text List cli_args = args()
+new Path List repo_entries = fs.list(repo_root)
+
+output("preview status")
+output(preview_log(log_path))
+output(joined_path)
+
+new Int dir_count = 0
+iterate repo_entries as entry_path {
+    if fs.is_dir(entry_path) {
+        dir_count++
+    }
+}
+
+new DeviceState List devices = []
+devices.push({id = 1, name = "alpha", reading = 21.5})
+devices.push({id = 2, name = "beta", reading = 34.0})
+devices.push({id = 3, name = "gamma", reading = 29.5})
+
+new Int hot_count = 0
+new Int device_index = 0
+
+iterate devices as device_state {
+    if device_state.is_hot(30.0) {
+        hot_count++
+    }
+
+    device_index++
+}
+
+device_index--
+
+new Float scale_value = 0.0
+scale_value = parse_scale("ok") on error {
+    scale_value = 1.0
+}
+
+new Float fallback_scale = 0.0
+fallback_scale = parse_scale("bad input") on error {
+    fallback_scale = -1.0
+}
+
+new Float heading_rad = deg_to_rad(90.0)
+new Float dx = cos(heading_rad)
+new Float dy = sin(heading_rad)
+new Float distance = sqrt((dx * dx) + (dy * dy))
+new Float restored_deg = rad_to_deg(atan2(dy, dx))
+new Float normalized = clamp(restored_deg, 0.0, 360.0)
+new Float root_value = root(81.0, 2.0)
+new Float low_value = floor(min(distance, root_value))
+new Float high_value = ceil(max(abs(fallback_scale), scale_value))
+
+Memory assets_memory = memory(64kb) on error {
+    output("assets memory init failed")
+}
+
+place in assets_memory {
+    new Text log_text = read(log_path)
+    new Text label_text = concat("source:", log_path)
+    new Text List samples = []
+    new Text last_sample = ""
+
+    samples.push(slice(log_text, 0, 20))
+    samples.push(slice(log_text, 21, 45))
+    last_sample = samples.pop() on error {
+        last_sample = "empty"
+    }
+
+    output(label_text)
+    output(last_sample)
+} on error {
+    assets_memory.clear()
+    output("placement failed")
+}
+
+new Int bucket = 0
+
+if hot_count >= 2 {
+    bucket = 2
+} else {
+    bucket = 1
+}
+
+when bucket {
+    is 1 {
+        output("warm set")
+    }
+
+    is 2 {
+        output("hot set")
+    }
+
+    else {
+        output("unknown set")
+    }
+}
+
+if len(cli_args) > 0 {
+    output(cli_args[0])
+}
+
+output(dir_count)
+output(hot_count)
+output(device_index)
+output(round(normalized))
+output(low_value)
+output(high_value)

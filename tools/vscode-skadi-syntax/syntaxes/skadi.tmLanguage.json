@@ -6,10 +6,15 @@
     { "include": "#strings" },
     { "include": "#memory-size-literals" },
     { "include": "#numbers" },
+    { "include": "#typed-declarations" },
     { "include": "#function-signature" },
     { "include": "#function-declaration" },
     { "include": "#type-declaration" },
+    { "include": "#label-members" },
+    { "include": "#struct-field-declarations" },
     { "include": "#struct-literal-fields" },
+    { "include": "#paired-keywords" },
+    { "include": "#iterate-alias" },
     { "include": "#control-keywords" },
     { "include": "#modifiers" },
     { "include": "#memory-surface" },
@@ -109,6 +114,20 @@
         }
       ]
     },
+    "typed-declarations": {
+      "patterns": [
+        {
+          "name": "meta.variable.declaration.skd",
+          "match": "\\b(new|const|fixed)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(List))?\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "storage.modifier.skd" },
+            "2": { "name": "storage.type.skd" },
+            "3": { "name": "storage.type.skd" },
+            "4": { "name": "variable.other.definition.skd" }
+          }
+        }
+      ]
+    },
     "function-declaration": {
       "patterns": [
         {
@@ -117,6 +136,30 @@
           "captures": {
             "1": { "name": "storage.type.function.skd" },
             "2": { "name": "entity.name.function.skd" }
+          }
+        }
+      ]
+    },
+    "label-members": {
+      "patterns": [
+        {
+          "name": "constant.other.error-code.member.skd",
+          "match": "^\\s*([A-Z][A-Za-z0-9_]*)\\b\\s*$",
+          "captures": {
+            "1": { "name": "constant.other.error-code.skd" }
+          }
+        }
+      ]
+    },
+    "struct-field-declarations": {
+      "patterns": [
+        {
+          "name": "meta.struct.field.declaration.skd",
+          "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(List))?\\s+([A-Za-z_][A-Za-z0-9_]*)\\b\\s*$",
+          "captures": {
+            "1": { "name": "storage.type.skd" },
+            "2": { "name": "storage.type.skd" },
+            "3": { "name": "variable.other.property.declaration.skd" }
           }
         }
       ]
@@ -146,6 +189,40 @@
         {
           "name": "variable.other.property.struct-literal.skd",
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*=)"
+        }
+      ]
+    },
+    "paired-keywords": {
+      "patterns": [
+        {
+          "name": "meta.control.on-error.skd",
+          "match": "\\b(on)\\s+(error)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.exception.skd" },
+            "2": { "name": "keyword.control.exception.skd" }
+          }
+        },
+        {
+          "name": "meta.control.place-in.skd",
+          "match": "\\b(place)\\s+(in)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.resource.skd" },
+            "2": { "name": "keyword.control.resource.skd" }
+          }
+        }
+      ]
+    },
+    "iterate-alias": {
+      "patterns": [
+        {
+          "name": "meta.iterate.alias.skd",
+          "match": "\\b(iterate)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(as)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.skd" },
+            "2": { "name": "variable.other.readwrite.skd" },
+            "3": { "name": "keyword.control.skd" },
+            "4": { "name": "variable.other.definition.skd" }
+          }
         }
       ]
     },
@@ -216,8 +293,12 @@
           "match": "\\b(output|print|input|read|write|len|contains|find|slice|concat|args|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\\b(?=\\s*\\()"
         },
         {
-          "name": "support.function.builtin.fs.skd",
-          "match": "\\bfs\\.(list|read|write|is_dir|join)\\b"
+          "name": "meta.namespace.fs.skd",
+          "match": "\\b(fs)\\.(list|read|write|is_dir|join)\\b",
+          "captures": {
+            "1": { "name": "entity.name.namespace.skd" },
+            "2": { "name": "support.function.builtin.fs.skd" }
+          }
         }
       ]
     },
