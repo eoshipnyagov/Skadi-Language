@@ -294,7 +294,7 @@ fn build_scene() Scene {
 }
 
 #[test]
-fn backend_gate_rejects_memory_model_after_semantic_success() {
+fn backend_supports_memory_model_after_semantic_success() {
     let src = r#"
 fn warmup(Memory arena) Int {
     place in arena {
@@ -306,7 +306,5 @@ fn warmup(Memory arena) Int {
 "#;
     let program = parse_ok(src);
     semantic_analyze(&program).expect("semantic analysis should pass");
-    let err = ensure_codegen_supported(&program).expect_err("backend gate should fail");
-    assert!(err.contains("SC-CG-201"));
-    assert!(err.contains("memory model frontend is implemented"));
+    ensure_codegen_supported(&program).expect("memory backend support should pass");
 }

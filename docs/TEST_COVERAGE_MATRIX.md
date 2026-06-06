@@ -64,8 +64,8 @@
     - dedicated full showcase `bench_10_v1_1_toolbox.skd`
   - showcase fixtures лежат в `benchmarks/showcase-data/` и используются в script/e2e smoke-path
 - experimental memory frontend coverage
-  - `tests/memory_model_frontend.rs` проверяет parser/semantic/backend-gate contract для `Memory`, `place in`, `clear`, escape rules и illegal `Memory` usage
-  - `tests/memory_model_examples.rs` проверяет self-contained positive examples, style pitfalls и negative example suite из `examples/memory/`
+  - `tests/memory_model_frontend.rs` проверяет parser/semantic contract для `Memory`, `place in`, `clear`, escape rules и illegal `Memory` usage
+  - `tests/memory_model_examples.rs` проверяет self-contained positive examples, native build/run path, style pitfalls и negative example suite из `examples/memory/`
 
 ## 2. Что покрыто частично / что ещё требует углубления
 

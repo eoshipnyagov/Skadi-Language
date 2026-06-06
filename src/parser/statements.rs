@@ -246,7 +246,15 @@ pub fn parse_function_declaration(
     }
 
     let mut returns = None;
-    if current_index < tokens.len()
+    if current_index + 2 < tokens.len()
+        && tokens[current_index].kind() == TokenKind::Identifier
+        && tokens[current_index + 1].kind() == TokenKind::Identifier
+        && tokens[current_index + 1].lexeme == "List"
+        && tokens[current_index + 2].lexeme == "{"
+    {
+        returns = Some(format!("{} List", tokens[current_index].lexeme));
+        current_index += 2;
+    } else if current_index < tokens.len()
         && tokens[current_index].kind() == TokenKind::Identifier
         && current_index + 1 < tokens.len()
         && tokens[current_index + 1].lexeme == "{"
@@ -1442,6 +1450,21 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             cursor = ms + consumed;
             continue;
         }
+        if cursor + 2 < close
+            && tokens[cursor].kind() == TokenKind::Identifier
+            && tokens[cursor + 1].kind() == TokenKind::Identifier
+            && tokens[cursor + 1].lexeme == "List"
+            && tokens[cursor + 2].kind() == TokenKind::Identifier
+        {
+            let field_type = format!("{} List", tokens[cursor].lexeme);
+            let first_name = tokens[cursor + 2].lexeme.clone();
+            fields.push(StructField {
+                field_type,
+                name: first_name,
+            });
+            cursor += 3;
+            continue;
+        }
         if cursor + 1 < close
             && tokens[cursor].kind() == TokenKind::Identifier
             && tokens[cursor + 1].kind() == TokenKind::Identifier
@@ -1539,7 +1562,15 @@ fn parse_struct_method(
     }
     current_index += 1;
     let mut returns = None;
-    if current_index < end
+    if current_index + 2 < end
+        && tokens[current_index].kind() == TokenKind::Identifier
+        && tokens[current_index + 1].kind() == TokenKind::Identifier
+        && tokens[current_index + 1].lexeme == "List"
+        && tokens[current_index + 2].lexeme == "{"
+    {
+        returns = Some(format!("{} List", tokens[current_index].lexeme));
+        current_index += 2;
+    } else if current_index < end
         && tokens[current_index].kind() == TokenKind::Identifier
         && current_index + 1 < end
         && tokens[current_index + 1].lexeme == "{"

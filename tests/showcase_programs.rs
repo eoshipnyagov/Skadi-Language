@@ -135,5 +135,5 @@ fn showcase_v1_1_toolbox_compiles() {
     assert!(c.contains("Waypoint_distance_from_origin(&point)"));
     assert!(c.contains("if (safe_speed(total, 0, &fallback) != 0) {"));
     assert!(c.contains("sk_list_Waypoint_free(&route);"));
-    assert!(c.contains("free((void*)summary);"));
+    assert!(c.contains("sk_free_text((void*)summary);"));
 }

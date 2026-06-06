@@ -523,7 +523,7 @@ arena.clear()
 - avoid collapsed names like `{raw = raw}` or `{raw}` in canonical examples; prefer `raw_text`, `scene_data`, `frame_value`;
 - prefer `clear()` after placement block или в trailing `on error`, а не внутри active `place in`.
 
-Если memory syntax прошла parser и semantic, текущий backend завершит pipeline явной diagnostics `SC-CG-201`, а не будет делать частичный pseudo-lowering.
+Если memory syntax прошла parser и semantic, текущий backend strict MVP уже доводит её до `Skadi -> C -> native` через fixed-capacity region runtime. Experimental-ограничения при этом сохраняются: `allow grow`, `allow drop`, `memory.child` и `memory.static` пока не входят в supported surface.
 
 ## 19. Диагностика
 

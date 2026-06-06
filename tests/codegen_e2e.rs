@@ -742,7 +742,7 @@ fn e2e_v1_1_toolbox_showcase_builds_and_runs() {
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("sk_list_Waypoint_free(&route);"));
-    assert!(c.contains("free((void*)summary);"));
+    assert!(c.contains("sk_free_text((void*)summary);"));
     compile_c_and_run(compiler, &c, "Skadi_e2e_v1_1_toolbox", &["-lm"]);
 }
 
