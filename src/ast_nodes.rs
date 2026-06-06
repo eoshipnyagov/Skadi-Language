@@ -17,7 +17,7 @@ impl Default for Location {
 // --- Core Nodes (Structural Contracts) ---
 
 /// The root of the Abstract Syntax Tree.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }

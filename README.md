@@ -436,7 +436,7 @@ skadi-cli tui
 If you want to run directly from the source tree, use Cargo as a fallback:
 
 ```bash
-cargo run --manifest-path tools/skadi-cli/Cargo.toml -- check
+cargo run -p skadi-cli -- check
 ```
 
 ## CLI Commands

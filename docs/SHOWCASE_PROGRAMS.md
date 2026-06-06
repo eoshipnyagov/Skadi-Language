@@ -24,6 +24,15 @@
   <li><code>bench_10_v1_1_toolbox.skd</code><ul><li>Сборный showcase для ключевых обновлений <code>v1.1</code>.</li><li>Покрытие: <code>danger fn</code>, <code>on error</code>, <code>label ErrorCode</code>, <code>struct</code>, методы, <code>List</code>, <code>iterate ... as ...</code>, <code>when</code>, math core и cleanup generated C.</li></ul></li>
 </ol>
 
+## Репозиторные входные данные
+
+Для воспроизводимого smoke-прогона рядом с showcase лежат стабильные входные данные:
+
+- `benchmarks/showcase-data/sample_weather.txt` для `bench_02_read_stats.skd` и `bench_03_find_count.skd`;
+- `benchmarks/showcase-data/tree_fixture/` для `bench_01_tree.skd` и `bench_08_path_list_helpers.skd`.
+
+Это позволяет гонять showcase не на случайном состоянии репозитория, а на фиксированных примерах.
+
 ## Сборка всех showcase-программ
 
 Из корня репозитория:
@@ -41,31 +50,42 @@ cargo run -- --input benchmarks/bench_09_math_navigation.skd --emit-exe bench_09
 cargo run -- --input benchmarks/bench_10_v1_1_toolbox.skd --emit-exe bench_10_v1_1_toolbox.exe
 ```
 
-Или через вспомогательный скрипт:
+Или через вспомогательные скрипты:
 
 ```powershell
 .\scripts\run_showcase.ps1 -Mode build
 ```
 
+```bash
+./scripts/run_showcase.sh build
+```
+
 ## Smoke-запуск
 
 ```powershell
-.\bench_01_tree.exe --dirs-only --depth-3
-.\bench_02_read_stats.exe --input examples/example_meteostation.skd
-.\bench_03_find_count.exe --input examples/example_meteostation.skd --needle temperature
-.\bench_04_sum_ints.exe --medium
-.\bench_05_push_pop.exe --medium
+Push-Location benchmarks\showcase-data\tree_fixture
+..\..\bench_01_tree.exe --dirs-only --depth-1
+..\..\bench_08_path_list_helpers.exe
+Pop-Location
+
+.\bench_02_read_stats.exe --input benchmarks/showcase-data/sample_weather.txt
+.\bench_03_find_count.exe --input benchmarks/showcase-data/sample_weather.txt --needle temperature
+.\bench_04_sum_ints.exe --small
+.\bench_05_push_pop.exe --small
 .\bench_06_struct_account.exe
 .\bench_07_struct_list.exe
-.\bench_08_path_list_helpers.exe
 .\bench_09_math_navigation.exe
 .\bench_10_v1_1_toolbox.exe
 ```
 
-Или через вспомогательный скрипт:
+Или через вспомогательные скрипты:
 
 ```powershell
 .\scripts\run_showcase.ps1 -Mode smoke
+```
+
+```bash
+./scripts/run_showcase.sh smoke
 ```
 
 Сборка и smoke-проверка одним проходом:
@@ -74,11 +94,17 @@ cargo run -- --input benchmarks/bench_10_v1_1_toolbox.skd --emit-exe bench_10_v1
 .\scripts\run_showcase.ps1 -Mode all
 ```
 
+```bash
+./scripts/run_showcase.sh all
+```
+
 ## Замечания
 
-- `run_showcase.ps1` проверяет, что каждый ожидаемый `.exe` действительно создан.
+- `run_showcase.ps1` и `run_showcase.sh` проверяют, что каждый ожидаемый `.exe` действительно создан.
 - Если вызов компилятора завершается ошибкой, скрипт завершается с ненулевым кодом и сообщает, какие showcase-программы не прошли.
-- В `v1.1` проверка showcase-программ остаётся CLI/script-driven.
+- Для `bench_01` и `bench_08` smoke-скрипты временно меняют рабочую директорию на `benchmarks/showcase-data/tree_fixture`.
+- Для `bench_02` и `bench_03` smoke-скрипты используют `benchmarks/showcase-data/sample_weather.txt`.
+- В `v1.1` проверка showcase-программ остаётся CLI/script-driven, но теперь опирается на репозиторные fixture-данные.
 - `skadi-cli tui` можно использовать внутри showcase-проекта для ручного `check`, `build` и `run`, но отдельного браузера showcase-программ в TUI пока нет.
 
 ## Зачем нужен именно этот набор

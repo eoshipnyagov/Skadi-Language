@@ -60,14 +60,23 @@ fn render_token_slice(tokens: &[Token], start: usize, end: usize) -> String {
         let need_space = if out.is_empty() {
             false
         } else {
-            match (prev.unwrap_or(""), lexeme) {
-                ("(", _) | ("[", _) | ("{", _) => false,
-                (_, ")") | (_, "]") | (_, "}") | (_, ",") | (_, ";") => false,
-                (_, "(") | (_, "[") => false,
-                (_, "++") | (_, "--") => false,
-                (".", _) | (_, ".") => false,
-                _ => true,
-            }
+            !matches!(
+                (prev.unwrap_or(""), lexeme),
+                ("(", _)
+                    | ("[", _)
+                    | ("{", _)
+                    | (_, ")")
+                    | (_, "]")
+                    | (_, "}")
+                    | (_, ",")
+                    | (_, ";")
+                    | (_, "(")
+                    | (_, "[")
+                    | (_, "++")
+                    | (_, "--")
+                    | (".", _)
+                    | (_, ".")
+            )
         };
 
         if need_space {

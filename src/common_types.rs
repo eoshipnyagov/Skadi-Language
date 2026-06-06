@@ -72,23 +72,3 @@ impl Token {
         self.kind.clone()
     }
 }
-
-// --- Error Handling ---
-
-/// Represents an error during lexical analysis.
-#[derive(Debug)]
-pub struct LexError {
-    message: String,
-    line: u32,
-    col: u32,
-}
-
-impl std::fmt::Display for LexError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Lexical Error at line {}: col {} - {}",
-            self.line, self.col, self.message
-        )
-    }
-}

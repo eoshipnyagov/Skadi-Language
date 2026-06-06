@@ -11,14 +11,14 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 $benches = @(
-    @{ name = "bench_01_tree"; file = "benchmarks/bench_01_tree.skd"; args = @("--dirs-only", "--depth-3") },
-    @{ name = "bench_02_read_stats"; file = "benchmarks/bench_02_read_stats.skd"; args = @("--input", "examples/example_meteostation.skd") },
-    @{ name = "bench_03_find_count"; file = "benchmarks/bench_03_find_count.skd"; args = @("--input", "examples/example_meteostation.skd", "--needle", "temperature") },
-    @{ name = "bench_04_sum_ints"; file = "benchmarks/bench_04_sum_ints.skd"; args = @("--medium") },
-    @{ name = "bench_05_push_pop"; file = "benchmarks/bench_05_push_pop.skd"; args = @("--medium") },
+    @{ name = "bench_01_tree"; file = "benchmarks/bench_01_tree.skd"; args = @("--dirs-only", "--depth-1"); cwd = "benchmarks/showcase-data/tree_fixture" },
+    @{ name = "bench_02_read_stats"; file = "benchmarks/bench_02_read_stats.skd"; args = @("--input", "benchmarks/showcase-data/sample_weather.txt") },
+    @{ name = "bench_03_find_count"; file = "benchmarks/bench_03_find_count.skd"; args = @("--input", "benchmarks/showcase-data/sample_weather.txt", "--needle", "temperature") },
+    @{ name = "bench_04_sum_ints"; file = "benchmarks/bench_04_sum_ints.skd"; args = @("--small") },
+    @{ name = "bench_05_push_pop"; file = "benchmarks/bench_05_push_pop.skd"; args = @("--small") },
     @{ name = "bench_06_struct_account"; file = "benchmarks/bench_06_struct_account.skd"; args = @() },
     @{ name = "bench_07_struct_list"; file = "benchmarks/bench_07_struct_list.skd"; args = @() },
-    @{ name = "bench_08_path_list_helpers"; file = "benchmarks/bench_08_path_list_helpers.skd"; args = @() },
+    @{ name = "bench_08_path_list_helpers"; file = "benchmarks/bench_08_path_list_helpers.skd"; args = @(); cwd = "benchmarks/showcase-data/tree_fixture" },
     @{ name = "bench_09_math_navigation"; file = "benchmarks/bench_09_math_navigation.skd"; args = @() },
     @{ name = "bench_10_v1_1_toolbox"; file = "benchmarks/bench_10_v1_1_toolbox.skd"; args = @() }
 )
@@ -52,10 +52,19 @@ function Smoke-Bench {
     param($bench)
     $exePath = Join-Path $root "$($bench.name).exe"
     if (-not (Test-Path $exePath)) {
-        throw "Missing executable: $exePath. Run build first."
+        Build-Bench $bench
     }
     Invoke-Step "Run $($bench.name)" {
-        & $exePath @($bench.args)
+        $benchCwd = $root
+        if ($bench.ContainsKey("cwd")) {
+            $benchCwd = Join-Path $root $bench.cwd
+        }
+        Push-Location $benchCwd
+        try {
+            & $exePath @($bench.args)
+        } finally {
+            Pop-Location
+        }
     }
 }
 

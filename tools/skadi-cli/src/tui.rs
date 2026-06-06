@@ -466,13 +466,12 @@ impl App {
                 self.focus = AppFocus::DiagnosticsList;
             }
             KeyCode::Down | KeyCode::Char('j') => match self.focus {
-                AppFocus::DiagnosticsHistory => {
-                    if !self.diagnostics.history.is_empty() {
-                        self.diagnostics.history_selected = (self.diagnostics.history_selected + 1)
-                            .min(self.diagnostics.history.len() - 1);
-                        self.diagnostics.selected = 0;
-                    }
+                AppFocus::DiagnosticsHistory if !self.diagnostics.history.is_empty() => {
+                    self.diagnostics.history_selected = (self.diagnostics.history_selected + 1)
+                        .min(self.diagnostics.history.len() - 1);
+                    self.diagnostics.selected = 0;
                 }
+                AppFocus::DiagnosticsHistory => {}
                 AppFocus::DiagnosticsList => {
                     let items = self.current_diagnostics();
                     if !items.is_empty() {
@@ -1270,7 +1269,7 @@ fn render_home(frame: &mut Frame<'_>, area: Rect, app: &App) {
             } else {
                 "miss"
             },
-            project.summary.manifest.display().to_string()
+            project.summary.manifest.display()
         )),
         Line::from(format!(
             "entry: [{}] {}",
@@ -1467,12 +1466,12 @@ fn render_config(frame: &mut Frame<'_>, area: Rect, app: &App) {
             lines.push(Line::from(""));
             lines.push(Line::from("Manifest Preview"));
             for line in [
-                format!("[package]"),
+                "[package]".to_string(),
                 format!("name = \"{}\"", manifest.name),
                 format!("version = \"{}\"", manifest.version),
                 format!("edition = \"{}\"", manifest.edition),
                 String::new(),
-                format!("[build]"),
+                "[build]".to_string(),
                 format!("entry = \"{}\"", manifest.entry),
             ] {
                 lines.push(Line::from(line));

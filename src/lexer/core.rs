@@ -239,39 +239,33 @@ impl<'a> Lexer<'a> {
         // Already handled above — single quotes can be char or string context
 
         // 5. Numbers
-        if let Some(c) = self.peek() {
-            if c.is_ascii_digit()
-                || (c == '.' && self.peek_next().map_or(false, |nc| nc.is_ascii_digit()))
-            {
-                let lexeme = self.scan_number();
-                return Some(Ok((
-                    if lexeme.contains('.') {
-                        TokenKind::TypeFloat
-                    } else {
-                        TokenKind::TypeInt
-                    },
-                    lexeme,
-                )));
-            }
+        if let Some(c) = self.peek()
+            && (c.is_ascii_digit()
+                || (c == '.' && self.peek_next().is_some_and(|nc| nc.is_ascii_digit())))
+        {
+            let lexeme = self.scan_number();
+            return Some(Ok((
+                if lexeme.contains('.') {
+                    TokenKind::TypeFloat
+                } else {
+                    TokenKind::TypeInt
+                },
+                lexeme,
+            )));
         }
 
         // 6. Identifiers and keywords (check AFTER numbers)
-        if let Some(c) = self.peek() {
-            if c.is_alphabetic() || c == '_' {
-                let lexeme = self.scan_identifier();
-                return Some(Ok((Self::resolve_keyword(&lexeme), lexeme)));
-            }
+        if let Some(c) = self.peek()
+            && (c.is_alphabetic() || c == '_')
+        {
+            let lexeme = self.scan_identifier();
+            return Some(Ok((Self::resolve_keyword(&lexeme), lexeme)));
         }
 
         // 7. Two-character operators (check before single-char)
-        let two_char_op = self.peek().and_then(|c1| {
-            let c2 = self.peek_next();
-            if let Some(c2) = c2 {
-                Some(format!("{}{}", c1, c2))
-            } else {
-                None
-            }
-        });
+        let two_char_op = self
+            .peek()
+            .and_then(|c1| self.peek_next().map(|c2| format!("{}{}", c1, c2)));
 
         match two_char_op.as_deref() {
             Some("==") => {
@@ -410,10 +404,10 @@ impl<'a> Lexer<'a> {
             '!' => {
                 self.advance();
                 // Could be != already handled above; or just ! (not unary)
-                if let Some(next) = self.peek() {
-                    if next == '=' {
-                        return Some(Ok((TokenKind::OpComparison, "!=".into())));
-                    }
+                if let Some(next) = self.peek()
+                    && next == '='
+                {
+                    return Some(Ok((TokenKind::OpComparison, "!=".into())));
                 }
                 Some(Ok((TokenKind::OpLogical, "!".into())))
             }

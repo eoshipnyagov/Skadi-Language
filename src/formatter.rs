@@ -319,11 +319,11 @@ impl Formatter {
                 self.write_indent(indent);
                 self.out.push_str("on ");
                 self.out.push_str(trigger);
-                if let Some(target) = target {
-                    if !target.trim().is_empty() {
-                        self.out.push(' ');
-                        self.out.push_str(target.trim());
-                    }
+                if let Some(target) = target
+                    && !target.trim().is_empty()
+                {
+                    self.out.push(' ');
+                    self.out.push_str(target.trim());
                 }
                 self.out.push(' ');
                 self.render_block(body, indent)?;

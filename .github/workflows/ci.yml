@@ -5,7 +5,76 @@ on:
   pull_request:
 
 jobs:
+  showcase-builds:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install MSYS2 GCC
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+
+      - name: Add MSYS2 GCC to PATH
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: echo "C:\msys64\ucrt64\bin" >> $env:GITHUB_PATH
+
+      - name: Build all showcase programs through native backend path
+        run: cargo test -q --test showcase_builds
+
+  quality-gates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-docs.txt
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run workspace tests except codegen_e2e
+        run: cargo test --workspace -q -- --skip e2e_
+
+      - name: Sync docs sources
+        run: python scripts/sync_docs_site.py
+
+      - name: Build MkDocs site
+        run: python -m mkdocs build --strict
+
   core-tests:
+    needs: [showcase-builds, quality-gates]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -40,16 +109,10 @@ jobs:
         run: echo "C:\msys64\ucrt64\bin" >> $env:GITHUB_PATH
 
       - name: Run tests except codegen_e2e
-        run: cargo test -q -- --skip e2e_
-
-      - name: Smoke transpile sample programs to C
-        run: |
-          cargo run -- --input examples/example_tree.skd --emit-c target/ci_example_tree.c
-          cargo run -- --input benchmarks/bench_04_sum_ints.skd --emit-c target/ci_bench_04.c
-          cargo run -- --input benchmarks/bench_08_path_list_helpers.skd --emit-c target/ci_bench_08.c
+        run: cargo test --workspace -q -- --skip e2e_
 
       - name: skadi-cli doctor
-        run: cargo run --manifest-path tools/skadi-cli/Cargo.toml -- doctor
+        run: cargo run -p skadi-cli -- doctor
 
       - name: skadi-cli init/check/build on temp project
         shell: pwsh
@@ -61,11 +124,12 @@ jobs:
           New-Item -ItemType Directory -Path $demoDir | Out-Null
           Set-Location $demoDir
 
-          cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- init
-          cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- check
-          cargo run --manifest-path "$env:GITHUB_WORKSPACE/tools/skadi-cli/Cargo.toml" -- build --target host --cc ${{ matrix.cc }}
+          cargo run --manifest-path "$env:GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- init
+          cargo run --manifest-path "$env:GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- check
+          cargo run --manifest-path "$env:GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- build --target host --cc ${{ matrix.cc }}
 
   codegen-e2e:
+    needs: [showcase-builds, quality-gates]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

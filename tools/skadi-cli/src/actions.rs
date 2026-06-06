@@ -624,10 +624,10 @@ pub fn parse_diagnostics(input: &str) -> Vec<DiagnosticSummary> {
             diagnostics.push(diag);
         }
     }
-    if diagnostics.is_empty() {
-        if let Some(diag) = parse_structured_diagnostic(input.trim()) {
-            diagnostics.push(diag);
-        }
+    if diagnostics.is_empty()
+        && let Some(diag) = parse_structured_diagnostic(input.trim())
+    {
+        diagnostics.push(diag);
     }
     diagnostics
 }
