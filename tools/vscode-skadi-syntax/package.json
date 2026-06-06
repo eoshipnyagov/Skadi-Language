@@ -2,7 +2,7 @@
   "name": "skadi-syntax",
   "displayName": "Skadi Syntax",
   "description": "Syntax highlighting for the current Skadi language surface",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "skadi-local",
   "license": "UNLICENSED",
   "engines": {
@@ -22,8 +22,8 @@
     "languages": [
       {
         "id": "skadi",
-        "aliases": ["Skadi", "skadi"],
-        "extensions": [".skd"],
+        "aliases": ["Skadi", "skadi", "Scadi (legacy)", "scadi (legacy)"],
+        "extensions": [".skd", ".scadi"],
         "configuration": "./language-configuration.json"
       }
     ],

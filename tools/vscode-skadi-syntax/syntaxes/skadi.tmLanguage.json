@@ -4,9 +4,12 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#memory-size-literals" },
     { "include": "#numbers" },
+    { "include": "#function-signature" },
     { "include": "#function-declaration" },
     { "include": "#type-declaration" },
+    { "include": "#struct-literal-fields" },
     { "include": "#control-keywords" },
     { "include": "#modifiers" },
     { "include": "#memory-surface" },
@@ -45,6 +48,67 @@
         { "name": "constant.numeric.integer.skd", "match": "\\b\\d+\\b" }
       ]
     },
+    "memory-size-literals": {
+      "patterns": [
+        {
+          "name": "constant.numeric.memory-size.skd",
+          "match": "\\b\\d+(?:b|kb|mb|gb)\\b"
+        }
+      ]
+    },
+    "function-signature": {
+      "patterns": [
+        {
+          "name": "meta.function.signature.danger.skd",
+          "begin": "\\b(danger)\\s+(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "storage.modifier.skd" },
+            "2": { "name": "storage.type.function.skd" },
+            "3": { "name": "entity.name.function.skd" },
+            "4": { "name": "punctuation.section.parameters.begin.skd" }
+          },
+          "end": "(\\))(?=\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*(?:List)?\\s*)?\\{)",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.parameters.end.skd" }
+          },
+          "patterns": [
+            { "include": "#types" },
+            {
+              "name": "variable.parameter.skd",
+              "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b(?=\\s*(?:,|\\)))"
+            },
+            {
+              "name": "punctuation.separator.parameter.skd",
+              "match": ","
+            }
+          ]
+        },
+        {
+          "name": "meta.function.signature.skd",
+          "begin": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "storage.type.function.skd" },
+            "2": { "name": "entity.name.function.skd" },
+            "3": { "name": "punctuation.section.parameters.begin.skd" }
+          },
+          "end": "(\\))(?=\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*(?:List)?\\s*)?\\{)",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.parameters.end.skd" }
+          },
+          "patterns": [
+            { "include": "#types" },
+            {
+              "name": "variable.parameter.skd",
+              "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b(?=\\s*(?:,|\\)))"
+            },
+            {
+              "name": "punctuation.separator.parameter.skd",
+              "match": ","
+            }
+          ]
+        }
+      ]
+    },
     "function-declaration": {
       "patterns": [
         {
@@ -74,6 +138,14 @@
             "1": { "name": "storage.type.skd" },
             "2": { "name": "entity.name.type.skd" }
           }
+        }
+      ]
+    },
+    "struct-literal-fields": {
+      "patterns": [
+        {
+          "name": "variable.other.property.struct-literal.skd",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*=)"
         }
       ]
     },
@@ -141,7 +213,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.skd",
-          "match": "\\b(output|print|input|read|write|len|find|slice|concat|args|delay|sleep)\\b(?=\\s*\\()"
+          "match": "\\b(output|print|input|read|write|len|contains|find|slice|concat|args|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\\b(?=\\s*\\()"
         },
         {
           "name": "support.function.builtin.fs.skd",
