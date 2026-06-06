@@ -793,7 +793,8 @@ fn e2e_cli_driven_showcase_subset_runs() {
     let showcase_data_root = manifest_root.join("benchmarks").join("showcase-data");
     let tree_fixture = showcase_data_root.join("tree_fixture");
     let weather_fixture = showcase_data_root.join("sample_weather.txt");
-    let weather_text = fs::read_to_string(&weather_fixture).expect("weather fixture should be readable");
+    let weather_text =
+        fs::read_to_string(&weather_fixture).expect("weather fixture should be readable");
     let expected_weather_chars = weather_text.chars().count().to_string();
     let expected_weather_lines = weather_text.lines().count().to_string();
 
