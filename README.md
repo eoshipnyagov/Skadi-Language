@@ -4,6 +4,8 @@
 ![Docs](https://github.com/eoshipnyagov/Skadi-Language/actions/workflows/docs-site.yml/badge.svg?branch=master)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 
+Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
+
 **Skadi is an experimental systems language and toolchain focused on calm readability, explicit behavior, and practical native workflows.**
 
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
