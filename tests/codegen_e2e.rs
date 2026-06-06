@@ -111,6 +111,16 @@ fn compile_showcase_to_c(src: &str) -> String {
     transpile_program_to_c(&program)
 }
 
+fn value_after_label<'a>(stdout: &'a str, label: &str) -> Option<&'a str> {
+    let mut lines = stdout.lines();
+    while let Some(line) = lines.next() {
+        if line.trim() == label {
+            return lines.next().map(str::trim);
+        }
+    }
+    None
+}
+
 struct CliShowcaseCase<'a> {
     name: &'a str,
     src: &'a str,
@@ -783,6 +793,9 @@ fn e2e_cli_driven_showcase_subset_runs() {
     let showcase_data_root = manifest_root.join("benchmarks").join("showcase-data");
     let tree_fixture = showcase_data_root.join("tree_fixture");
     let weather_fixture = showcase_data_root.join("sample_weather.txt");
+    let weather_text = fs::read_to_string(&weather_fixture).expect("weather fixture should be readable");
+    let expected_weather_chars = weather_text.chars().count().to_string();
+    let expected_weather_lines = weather_text.lines().count().to_string();
 
     let showcase_cases = [
         CliShowcaseCase {
@@ -852,10 +865,14 @@ fn e2e_cli_driven_showcase_subset_runs() {
             }
             "bench_02_read_stats" => {
                 assert!(stdout.contains("file: benchmarks/showcase-data/sample_weather.txt"));
-                assert!(stdout.contains("chars:"));
-                assert!(stdout.contains("44"));
-                assert!(stdout.contains("lines:"));
-                assert!(stdout.contains("5"));
+                assert_eq!(
+                    value_after_label(&stdout, "chars:"),
+                    Some(expected_weather_chars.as_str())
+                );
+                assert_eq!(
+                    value_after_label(&stdout, "lines:"),
+                    Some(expected_weather_lines.as_str())
+                );
             }
             "bench_03_find_count" => {
                 assert!(stdout.contains("needle: temperature"));
