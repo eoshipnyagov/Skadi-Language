@@ -89,6 +89,58 @@ fn render_token_slice(tokens: &[Token], start: usize, end: usize) -> String {
     out
 }
 
+fn parse_parenthesized_type_name(tokens: &[Token], start: usize) -> Option<(String, usize)> {
+    if start >= tokens.len() || tokens[start].kind() != TokenKind::Identifier {
+        return None;
+    }
+    let base = tokens[start].lexeme.as_str();
+    if base != "Task" && base != "Channel" {
+        return None;
+    }
+    if start + 1 >= tokens.len() || tokens[start + 1].lexeme != "(" {
+        return if base == "Task" {
+            Some(("Task".to_string(), start + 1))
+        } else {
+            None
+        };
+    }
+    let mut cursor = start + 2;
+    let mut depth = 1usize;
+    while cursor < tokens.len() && depth > 0 {
+        if tokens[cursor].lexeme == "(" {
+            depth += 1;
+        } else if tokens[cursor].lexeme == ")" {
+            depth -= 1;
+        }
+        cursor += 1;
+    }
+    if depth != 0 || cursor <= start + 3 {
+        return None;
+    }
+    let inner = render_token_slice(tokens, start + 2, cursor - 1);
+    if inner.trim().is_empty() {
+        return None;
+    }
+    Some((format!("{base}({})", inner.trim()), cursor))
+}
+
+fn parse_type_name_at(tokens: &[Token], start: usize) -> Option<(String, usize)> {
+    if let Some(parsed) = parse_parenthesized_type_name(tokens, start) {
+        return Some(parsed);
+    }
+    if start + 1 < tokens.len()
+        && tokens[start].kind() == TokenKind::Identifier
+        && tokens[start + 1].kind() == TokenKind::Identifier
+        && tokens[start + 1].lexeme == "List"
+    {
+        return Some((format!("{} List", tokens[start].lexeme), start + 2));
+    }
+    if start < tokens.len() && tokens[start].kind() == TokenKind::Identifier {
+        return Some((tokens[start].lexeme.clone(), start + 1));
+    }
+    None
+}
+
 fn find_block_end(tokens: &[Token], open_brace_index: usize) -> Result<usize, String> {
     if open_brace_index >= tokens.len() || tokens[open_brace_index].lexeme != "{" {
         return Err(parse_err("SC-PARSE-101", "expected '{'."));
@@ -215,15 +267,19 @@ pub fn parse_function_declaration(
                 continue;
             }
 
-            if current_index + 1 < tokens.len()
-                && tokens[current_index].kind() == TokenKind::Identifier
-                && tokens[current_index + 1].kind() == TokenKind::Identifier
+            if let Some((param_type, name_index)) = parse_type_name_at(tokens, current_index)
+                && name_index < tokens.len()
+                && tokens[name_index].kind() == TokenKind::Identifier
+                && (name_index + 1 >= tokens.len()
+                    || tokens[name_index + 1].lexeme == ","
+                    || tokens[name_index + 1].lexeme == ")")
+                && tokens[current_index].lexeme != tokens[name_index].lexeme
             {
                 params.push(FunctionParam {
-                    param_type: Some(tokens[current_index].lexeme.clone()),
-                    name: tokens[current_index + 1].lexeme.clone(),
+                    param_type: Some(param_type),
+                    name: tokens[name_index].lexeme.clone(),
                 });
-                current_index += 2;
+                current_index = name_index + 1;
                 continue;
             }
 
@@ -246,21 +302,12 @@ pub fn parse_function_declaration(
     }
 
     let mut returns = None;
-    if current_index + 2 < tokens.len()
-        && tokens[current_index].kind() == TokenKind::Identifier
-        && tokens[current_index + 1].kind() == TokenKind::Identifier
-        && tokens[current_index + 1].lexeme == "List"
-        && tokens[current_index + 2].lexeme == "{"
+    if let Some((return_type, next_index)) = parse_type_name_at(tokens, current_index)
+        && next_index < tokens.len()
+        && tokens[next_index].lexeme == "{"
     {
-        returns = Some(format!("{} List", tokens[current_index].lexeme));
-        current_index += 2;
-    } else if current_index < tokens.len()
-        && tokens[current_index].kind() == TokenKind::Identifier
-        && current_index + 1 < tokens.len()
-        && tokens[current_index + 1].lexeme == "{"
-    {
-        returns = Some(tokens[current_index].lexeme.clone());
-        current_index += 1;
+        returns = Some(return_type);
+        current_index = next_index;
     }
 
     if current_index >= tokens.len()
@@ -826,6 +873,53 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
     ))
 }
 
+pub fn parse_task_or_channel_declaration(
+    tokens: &[Token],
+    start_index: usize,
+) -> ParseResult<Statement> {
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
+    let Some((declared_type, name_index)) = parse_parenthesized_type_name(tokens, start_index)
+    else {
+        return Err(parse_err(
+            "SC-PARSE-175",
+            "expected Task or Channel declaration.",
+        ));
+    };
+    if name_index >= tokens.len() || tokens[name_index].kind() != TokenKind::Identifier {
+        return Err(parse_err(
+            "SC-PARSE-176",
+            "Task/Channel declaration expected identifier name.",
+        ));
+    }
+    if name_index + 1 >= tokens.len() || tokens[name_index + 1].kind() != TokenKind::OpAssignment {
+        return Err(parse_err(
+            "SC-PARSE-177",
+            "Task/Channel declaration expected '=' after name.",
+        ));
+    }
+    let mut cursor = name_index + 2;
+    while cursor < tokens.len()
+        && tokens[cursor].kind() != TokenKind::NewLine
+        && tokens[cursor].lexeme != "}"
+    {
+        cursor += 1;
+    }
+    let value = parse_expression_range(tokens, name_index + 2, cursor)?;
+    Ok((
+        Statement::VarDecl {
+            name: tokens[name_index].lexeme.clone(),
+            value: Box::new(value),
+            is_fixed: false,
+            declared_type: Some(declared_type),
+            loc,
+        },
+        cursor - start_index,
+    ))
+}
+
 fn parse_call_expression(
     tokens: &[Token],
     start: usize,
@@ -925,6 +1019,36 @@ pub fn parse_identifier_led_statement(
             && i + 1 < line_end
             && tokens[i + 1].lexeme == "error"
     });
+
+    if on_idx.is_none()
+        && start_index + 1 < line_end
+        && tokens[start_index].kind() == TokenKind::Identifier
+        && (tokens[start_index].lexeme == "wait" || tokens[start_index].lexeme == "run")
+    {
+        let expr = parse_expression_range(tokens, start_index, line_end)?;
+        return Ok((
+            Statement::ExpressionStatement {
+                expr: Box::new(expr),
+                loc,
+            },
+            line_end - start_index,
+        ));
+    }
+
+    if on_idx.is_none()
+        && start_index + 1 < line_end
+        && tokens[start_index].kind() == TokenKind::Identifier
+        && tokens[start_index].lexeme == "stop"
+        && tokens[start_index + 1].kind() == TokenKind::Identifier
+    {
+        return Ok((
+            Statement::StopTask {
+                task_name: tokens[start_index + 1].lexeme.clone(),
+                loc,
+            },
+            line_end - start_index,
+        ));
+    }
 
     if on_idx.is_none()
         && start_index + 4 < line_end

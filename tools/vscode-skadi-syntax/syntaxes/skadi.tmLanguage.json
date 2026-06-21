@@ -18,6 +18,7 @@
     { "include": "#control-keywords" },
     { "include": "#modifiers" },
     { "include": "#memory-surface" },
+    { "include": "#task-surface" },
     { "include": "#self-keyword" },
     { "include": "#builtins" },
     { "include": "#constants" },
@@ -230,7 +231,7 @@
       "patterns": [
         {
           "name": "keyword.control.skd",
-          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|returns|break|continue|pass|on|event|interrupt|error|run|wait|place)\\b"
+          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|returns|break|continue|pass|on|event|interrupt|error|run|wait|stop|stopping|place)\\b"
         }
       ]
     },
@@ -258,6 +259,18 @@
         }
       ]
     },
+    "task-surface": {
+      "patterns": [
+        {
+          "name": "storage.type.resource.task.skd",
+          "match": "\\b(Task|Channel)\\b"
+        },
+        {
+          "name": "support.function.task.channel.skd",
+          "match": "\\b(channel|send|receive)\\b(?=\\s*\\()"
+        }
+      ]
+    },
     "self-keyword": {
       "patterns": [
         {
@@ -270,7 +283,7 @@
       "patterns": [
         {
           "name": "storage.type.skd",
-          "match": "\\b(Int|Float|Bool|Char|Byte|bool|char|Text|String|Path|Time|Memory|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List|Canvas|Window|Point|Size)\\b"
+          "match": "\\b(Int|Float|Bool|Char|Byte|bool|char|Text|String|Path|Time|Memory|Task|Channel|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List|Canvas|Window|Point|Size)\\b"
         }
       ]
     },

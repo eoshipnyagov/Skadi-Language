@@ -131,6 +131,11 @@
   - `Memory` считается capability/resource handle, а не обычным storable value type;
   - C backend уже lower'ит strict MVP surface в fixed-capacity region runtime и доводит её до `Skadi -> C -> native`;
   - `allow grow`, `allow drop`, `memory.child`, `memory.static` остаются design-level future surface.
+- task/channel frontend MVP - `Partial`
+  - parser принимает `Task`, `Task(T)`, `run worker(...)`, `wait task`, `stop task`, `stopping`, `Channel(T)`, `channel(N)`, `channel.send(value)` и `channel.receive()`;
+  - semantic layer проверяет task handle lifecycle, запрет `Task` как обычного value-type, task-context для `stopping` и value-safe channel messages;
+  - игнорирование результата `run worker()` остаётся warning;
+  - C backend намеренно останавливается на `SC-CG-301`, потому что runtime/backend concurrency ещё не реализованы.
 - formatter coverage - `Partial`
   - ориентирован на текущий рабочий слой `v1.1`;
   - уже пригоден для повседневной работы, но продолжает развиваться вместе с синтаксисом.
@@ -138,7 +143,6 @@
 ## Сознательно отложенное
 
 - imports / modules
-- task / channel concurrency model
 - visual core / canvas
 - systems additions track
 - более строгая модель ошибок индексации

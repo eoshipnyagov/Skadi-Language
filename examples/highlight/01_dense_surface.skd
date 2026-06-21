@@ -1,5 +1,5 @@
 // Dense highlight fixture for screenshots and syntax grammar checks.
-// Goal: keep many Skadi surfaces visible in one valid file.
+// Goal: keep many Skadi surfaces visible in one frontend-valid file.
 
 label ErrorCode {
     Ok
@@ -53,15 +53,31 @@ fn preview_log(Path log_path) Int {
     return 0
 }
 
+fn background_scan(Channel(Text) alerts) {
+    while not stopping {
+        alerts.send("heartbeat")
+        pass
+    }
+}
+
+fn parse_header() Text {
+    return "header"
+}
+
 new Path log_path = "examples/memory/large/data/sample_service.log"
 new Path repo_root = "."
 new Path joined_path = fs.join(repo_root, "examples")
 new Text List cli_args = args()
 new Path List repo_entries = fs.list(repo_root)
+Channel(Text) alert_events = channel(8)
+Task scanner_task = run background_scan(alert_events)
+Task(Text) header_task = run parse_header()
+new Text header_text = wait header_task
 
 output("preview status")
 output(preview_log(log_path))
 output(joined_path)
+output(header_text)
 
 new Int dir_count = 0
 iterate repo_entries as entry_path {
@@ -156,6 +172,9 @@ when bucket {
 if len(cli_args) > 0 {
     output(cli_args[0])
 }
+
+stop scanner_task
+wait scanner_task
 
 output(dir_count)
 output(hot_count)

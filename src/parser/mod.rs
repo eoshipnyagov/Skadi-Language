@@ -41,6 +41,11 @@ fn parse_statement_at(
         TokenKind::Identifier if start_token.lexeme == "Memory" => {
             statements::parse_memory_declaration(tokens, current_token_index)
         }
+        TokenKind::Identifier
+            if start_token.lexeme == "Task" || start_token.lexeme == "Channel" =>
+        {
+            statements::parse_task_or_channel_declaration(tokens, current_token_index)
+        }
         TokenKind::Identifier if start_token.lexeme == "place" => {
             statements::parse_place_in_statement(tokens, current_token_index)
         }

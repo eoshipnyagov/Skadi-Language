@@ -419,6 +419,11 @@ impl Formatter {
                 self.out.push_str(memory_name);
                 self.out.push_str(".clear()");
             }
+            Statement::StopTask { task_name, .. } => {
+                self.write_indent(indent);
+                self.out.push_str("stop ");
+                self.out.push_str(task_name);
+            }
             Statement::ReturnError { code, .. } => {
                 self.write_indent(indent);
                 self.out.push_str("return error ");
@@ -528,6 +533,11 @@ impl Formatter {
             Expression::Call { name, args } => {
                 format!("{name}({})", self.render_arg_list(args))
             }
+            Expression::RunTask { call_name, args } => {
+                format!("run {call_name}({})", self.render_arg_list(args))
+            }
+            Expression::WaitTask { task_name } => format!("wait {task_name}"),
+            Expression::Stopping => "stopping".to_string(),
             Expression::BinaryOp { op, left, right } if op == "neg" => {
                 let value = right
                     .as_ref()

@@ -66,6 +66,9 @@
 - experimental memory frontend coverage
   - `tests/memory_model_frontend.rs` проверяет parser/semantic contract для `Memory`, `place in`, `clear`, escape rules и illegal `Memory` usage
   - `tests/memory_model_examples.rs` проверяет self-contained positive examples, большой canonical example, native build/run path, style pitfalls и negative example suite из `examples/memory/`
+- experimental task/channel frontend coverage
+  - `tests/task_model_frontend.rs` проверяет parser/semantic contract для `Task`, `run`, `wait`, `stop`, `stopping`, `Channel(T)`, `channel(N)`, `send` и `receive`
+  - тот же suite проверяет ignored-run warning, value-safe channel messages и backend gate `SC-CG-301`
 
 ## 2. Что покрыто частично / что ещё требует углубления
 
@@ -74,8 +77,9 @@
   - codegen contract tests проверяют форму вспомогательных runtime helpers
 - runtime semantics для `on interrupt` / `on event`
   - parse-level coverage уже есть, runtime binding остаётся TODO
-- concurrency primitives (`run`, `wait`, `Link`) и embedded APIs
-  - не реализованы в текущем transpiler/runtime слое
+- task/channel backend/runtime
+  - frontend MVP реализован, но C backend останавливается на `SC-CG-301`
+  - реальный scheduler/runtime, `select`, task groups и embedded APIs остаются TODO
 
 ## 3. Политика для новых фич
 

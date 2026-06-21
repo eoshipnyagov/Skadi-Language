@@ -195,6 +195,10 @@ pub enum Statement {
         memory_name: String,
         loc: Location,
     },
+    StopTask {
+        task_name: String,
+        loc: Location,
+    },
     ReturnError {
         code: String,
         loc: Location,
@@ -250,6 +254,14 @@ pub enum Expression {
         name: String,
         args: Vec<Expression>,
     },
+    RunTask {
+        call_name: String,
+        args: Vec<Expression>,
+    },
+    WaitTask {
+        task_name: String,
+    },
+    Stopping,
     BinaryOp {
         op: String, // Operator (+, -, etc.)
         left: Box<Expression>,

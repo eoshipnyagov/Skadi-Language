@@ -507,13 +507,12 @@ arena.clear()
 
 - parser принимает `Memory`, `memory(size)`, `place in`, `on error` и `clear`;
 - semantic layer проверяет базовые rules для escape и obvious use-after-clear;
-- возвращать region-owned dynamic payload можно только если `Memory` передана в функцию извне.
+- возвращать region-owned dynamic payload можно только если `Memory` передана в функцию извне;
 - `Memory` рассматривается как capability/resource surface, а не как обычный storable value type.
+- C backend lower'ит strict MVP surface в fixed-capacity region runtime и доводит его до `Skadi -> C -> native`.
 
 Что этот milestone пока не обещает:
 
-- runtime / allocator semantics;
-- lowering в C backend;
 - `allow grow`, `allow drop`, `memory.child`, `memory.static`.
 
 Канонический style для memory-oriented кода:
@@ -524,6 +523,42 @@ arena.clear()
 - prefer `clear()` after placement block или в trailing `on error`, а не внутри active `place in`.
 
 Если memory syntax прошла parser и semantic, текущий backend strict MVP уже доводит её до `Skadi -> C -> native` через fixed-capacity region runtime. Experimental-ограничения при этом сохраняются: `allow grow`, `allow drop`, `memory.child` и `memory.static` пока не входят в supported surface.
+
+## 18.2 Experimental task/channel frontend MVP
+
+Task model сейчас является experimental frontend surface, а не runtime/backend feature.
+
+Канонический syntax первого milestone:
+
+```skadi
+Task worker_task = run worker()
+Task(Text) load_task = run load_text(path)
+wait worker_task
+new Text loaded_text = wait load_task
+stop worker_task
+
+Channel(Event) events = channel(32)
+events.send(event)
+new Event next_event = events.receive()
+```
+
+Что уже делает compiler:
+
+- parser принимает `Task`, `Task(T)`, `run`, `wait`, `stop`, `stopping`, `Channel(T)`, `channel(N)`, `send` и `receive`;
+- semantic layer проверяет, что `Task` не используется как обычное storable/returnable значение;
+- `wait` и `stop` разрешены только для task handles;
+- `stopping` разрешён только внутри функции, которая локально запускается через `run`;
+- `Channel(T)` принимает только value-safe messages;
+- ignored `run worker()` выдаёт warning про потерянный task handle.
+
+Что этот milestone пока не обещает:
+
+- реальный runtime scheduler;
+- OS threads или platform-specific concurrency ABI;
+- backend lowering в C;
+- `try_send`, `try_receive`, `select`, task groups, `allow drop`, async/await.
+
+Если task/channel syntax прошла parser и semantic, текущий backend намеренно останавливается на `SC-CG-301`: task frontend уже реализован, но backend lowering ещё не доступен.
 
 ## 19. Диагностика
 
@@ -540,8 +575,7 @@ arena.clear()
 Не стоит пока закладываться на это как на законченный слой `v1.1`:
 
 - модульную систему / imports;
-- concurrency primitives;
-- stable runtime/backend поддержку memory model;
+- runtime/backend поддержку task/channel model;
 - visual core;
 - systems additions tracks;
 - завершённую семантику выполнения для `on interrupt` и родственных будущих hooks.

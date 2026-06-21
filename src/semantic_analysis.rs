@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast_nodes::{
     BlockStatement, Expression, ForLoopStyle, FunctionParam, Program, Statement,
@@ -14,6 +14,8 @@ enum ValueType {
     Char,
     Text,
     Memory,
+    Task(Option<Box<ValueType>>),
+    Channel(Box<ValueType>),
     List(Box<ValueType>),
     Struct(String),
     Unknown,
@@ -23,6 +25,7 @@ enum ValueType {
 struct FunctionSig {
     is_danger: bool,
     return_type: Option<ValueType>,
+    has_explicit_return: bool,
     param_types: Vec<ValueType>,
 }
 
@@ -31,6 +34,7 @@ struct FnContext {
     is_danger: bool,
     return_type: Option<ValueType>,
     self_struct: Option<String>,
+    is_task_context: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -39,11 +43,20 @@ struct MemoryBinding {
     is_cleared: bool,
 }
 
+#[derive(Clone, Debug)]
+struct TaskBinding {
+    result_type: Option<ValueType>,
+    waited: bool,
+    stopped: bool,
+}
+
 #[derive(Clone, Debug, Default)]
 struct MemoryState {
     active_memory: Option<String>,
     memories: HashMap<String, MemoryBinding>,
     variable_memory: HashMap<String, String>,
+    tasks: HashMap<String, TaskBinding>,
+    channels: HashMap<String, ValueType>,
 }
 
 #[derive(Clone, Debug)]
@@ -66,6 +79,9 @@ const SEM_ERRORCODE_RULE: &str = "SC-SEM-051";
 const SEM_MEMORY_RULE: &str = "SC-SEM-060";
 const SEM_MEMORY_LIFETIME: &str = "SC-SEM-061";
 const SEM_MEMORY_CAPABILITY: &str = "SC-SEM-062";
+const SEM_TASK_RULE: &str = "SC-SEM-070";
+const SEM_TASK_CAPABILITY: &str = "SC-SEM-071";
+const SEM_CHANNEL_RULE: &str = "SC-SEM-080";
 const SEM_INTERNAL: &str = "SC-SEM-900";
 
 fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
@@ -93,6 +109,7 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
         | Statement::ListPopOnError { loc, .. }
         | Statement::PlaceIn { loc, .. }
         | Statement::MemoryClear { loc, .. }
+        | Statement::StopTask { loc, .. }
         | Statement::ReturnError { loc, .. }
         | Statement::ReturnStatement { loc, .. }
         | Statement::ExpressionStatement { loc, .. }
@@ -124,6 +141,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
     let mut functions: HashMap<String, FunctionSig> = HashMap::new();
     let mut labels: HashMap<String, Vec<String>> = HashMap::new();
     let mut structs: HashMap<String, StructInfo> = HashMap::new();
+    let task_context_functions = collect_task_context_functions(&program.statements);
 
     for stmt in &program.statements {
         if let Statement::FunctionDef {
@@ -137,6 +155,8 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             if let Some(return_name) = returns.as_deref() {
                 let return_ty = parse_type_name(return_name);
                 ensure_memory_type_allowed(stmt, &return_ty, "function return type", false)?;
+                ensure_task_type_allowed(stmt, &return_ty, "function return type", false)?;
+                ensure_channel_type_allowed(stmt, &return_ty, "function return type", false)?;
             }
             for param in params {
                 if let Some(param_name) = param.param_type.as_deref() {
@@ -146,6 +166,13 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                         &param_ty,
                         "function parameter type",
                         param_ty == ValueType::Memory,
+                    )?;
+                    ensure_task_type_allowed(stmt, &param_ty, "function parameter type", false)?;
+                    ensure_channel_type_allowed(
+                        stmt,
+                        &param_ty,
+                        "function parameter type",
+                        matches!(param_ty, ValueType::Channel(_)),
                     )?;
                 }
             }
@@ -157,6 +184,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                         .as_deref()
                         .map(parse_type_name)
                         .or(Some(ValueType::Int)),
+                    has_explicit_return: returns.is_some(),
                     param_types: params.iter().map(param_type_or_default).collect(),
                 },
             );
@@ -175,6 +203,8 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             for f in fields {
                 let field_ty = parse_type_name(&f.field_type);
                 ensure_memory_type_allowed(stmt, &field_ty, "struct field type", false)?;
+                ensure_task_type_allowed(stmt, &field_ty, "struct field type", false)?;
+                ensure_channel_type_allowed(stmt, &field_ty, "struct field type", false)?;
                 fmap.insert(f.name.clone(), field_ty);
             }
             let mut mmap = HashMap::new();
@@ -182,6 +212,13 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 if let Some(return_name) = m.returns.as_deref() {
                     let return_ty = parse_type_name(return_name);
                     ensure_memory_type_allowed(
+                        stmt,
+                        &return_ty,
+                        "struct method return type",
+                        false,
+                    )?;
+                    ensure_task_type_allowed(stmt, &return_ty, "struct method return type", false)?;
+                    ensure_channel_type_allowed(
                         stmt,
                         &return_ty,
                         "struct method return type",
@@ -197,6 +234,18 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                             "struct method parameter type",
                             param_ty == ValueType::Memory,
                         )?;
+                        ensure_task_type_allowed(
+                            stmt,
+                            &param_ty,
+                            "struct method parameter type",
+                            false,
+                        )?;
+                        ensure_channel_type_allowed(
+                            stmt,
+                            &param_ty,
+                            "struct method parameter type",
+                            matches!(param_ty, ValueType::Channel(_)),
+                        )?;
                     }
                 }
                 mmap.insert(
@@ -208,6 +257,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                             .as_deref()
                             .map(parse_type_name)
                             .or(Some(ValueType::Int)),
+                        has_explicit_return: m.returns.is_some(),
                         param_types: m.params.iter().map(param_type_or_default).collect(),
                     },
                 );
@@ -233,6 +283,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         &functions,
         &labels,
         &structs,
+        &task_context_functions,
         None,
         false,
     )
@@ -251,6 +302,21 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         .collect();
 
     fn is_known_type_name(type_name: &str, user_types: &std::collections::HashSet<String>) -> bool {
+        if type_name == "Task" {
+            return true;
+        }
+        if let Some(inner) = type_name
+            .strip_prefix("Task(")
+            .and_then(|s| s.strip_suffix(')'))
+        {
+            return is_known_type_name(inner.trim(), user_types);
+        }
+        if let Some(inner) = type_name
+            .strip_prefix("Channel(")
+            .and_then(|s| s.strip_suffix(')'))
+        {
+            return is_known_type_name(inner.trim(), user_types);
+        }
         if user_types.contains(type_name) {
             return true;
         }
@@ -330,11 +396,12 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 visit_expression_style(base, line, col, out);
                 visit_expression_style(index, line, col, out);
             }
-            Expression::Call { args, .. } => {
+            Expression::Call { args, .. } | Expression::RunTask { args, .. } => {
                 for arg in args {
                     visit_expression_style(arg, line, col, out);
                 }
             }
+            Expression::WaitTask { .. } | Expression::Stopping => {}
             Expression::BinaryOp { left, right, .. } => {
                 visit_expression_style(left, line, col, out);
                 if let Some(right) = right {
@@ -523,6 +590,12 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     loc,
                 } => visit_expression_style(value, loc.line, loc.column, out),
                 Statement::ExpressionStatement { expr, loc } => {
+                    if matches!(expr.as_ref(), Expression::RunTask { .. }) {
+                        out.push(format!(
+                            "style warning at line {}, col {}: task handle ignored; assign run result to a Task handle and wait or stop/wait it.",
+                            loc.line, loc.column
+                        ));
+                    }
                     visit_expression_style(expr, loc.line, loc.column, out);
                 }
                 Statement::StructDecl { methods, .. } => {
@@ -571,10 +644,173 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
 }
 
 fn parse_type_name(name: &str) -> ValueType {
+    if let Some(inner) = name.strip_prefix("Task(").and_then(|s| s.strip_suffix(')')) {
+        return ValueType::Task(Some(Box::new(parse_type_name(inner.trim()))));
+    }
+    if name == "Task" {
+        return ValueType::Task(None);
+    }
+    if let Some(inner) = name
+        .strip_prefix("Channel(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return ValueType::Channel(Box::new(parse_type_name(inner.trim())));
+    }
     if let Some(elem) = name.strip_suffix(" List") {
-        return ValueType::List(Box::new(parse_primitive_type_name(elem.trim())));
+        return ValueType::List(Box::new(parse_type_name(elem.trim())));
     }
     parse_primitive_type_name(name)
+}
+
+fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
+    fn visit_expr(expr: &Expression, out: &mut HashSet<String>) {
+        match expr {
+            Expression::RunTask { call_name, args } => {
+                out.insert(call_name.clone());
+                for arg in args {
+                    visit_expr(arg, out);
+                }
+            }
+            Expression::Call { args, .. } | Expression::ListLiteral(args) => {
+                for arg in args {
+                    visit_expr(arg, out);
+                }
+            }
+            Expression::BinaryOp { left, right, .. } => {
+                visit_expr(left, out);
+                if let Some(right) = right {
+                    visit_expr(right, out);
+                }
+            }
+            Expression::Index { base, index } => {
+                visit_expr(base, out);
+                visit_expr(index, out);
+            }
+            Expression::StructConstruction { fields } => {
+                for value in fields.values() {
+                    visit_expr(value, out);
+                }
+            }
+            Expression::VariableReference(_)
+            | Expression::MemberAccess { .. }
+            | Expression::WaitTask { .. }
+            | Expression::Stopping
+            | Expression::LiteralInt(_)
+            | Expression::LiteralFloat(_)
+            | Expression::LiteralBool(_)
+            | Expression::LiteralString(_) => {}
+        }
+    }
+
+    fn visit_block(block: &BlockStatement, out: &mut HashSet<String>) {
+        visit_statements(&block.statements, out);
+    }
+
+    fn visit_statements(statements: &[Statement], out: &mut HashSet<String>) {
+        for stmt in statements {
+            match stmt {
+                Statement::VarDecl { value, .. }
+                | Statement::Assignment { value, .. }
+                | Statement::FieldAssignment { value, .. }
+                | Statement::ListPush { value, .. } => visit_expr(value, out),
+                Statement::ReturnStatement { value, .. } => {
+                    if let Some(value) = value {
+                        visit_expr(value, out);
+                    }
+                }
+                Statement::ExpressionStatement { expr, .. } => visit_expr(expr, out),
+                Statement::FunctionDef { body, .. } => visit_block(body, out),
+                Statement::StructDecl { methods, .. } => {
+                    for method in methods {
+                        visit_block(&method.body, out);
+                    }
+                }
+                Statement::IfStatement {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    visit_expr(condition, out);
+                    visit_block(then_block, out);
+                    if let Some(block) = else_block {
+                        visit_block(block, out);
+                    }
+                }
+                Statement::ForLoop {
+                    initialization,
+                    condition,
+                    update,
+                    body,
+                    ..
+                } => {
+                    if let Some(expr) = initialization {
+                        visit_expr(expr, out);
+                    }
+                    if let Some(expr) = condition {
+                        visit_expr(expr, out);
+                    }
+                    if let Some(expr) = update {
+                        visit_expr(expr, out);
+                    }
+                    visit_block(body, out);
+                }
+                Statement::WhenBlock {
+                    when_expression,
+                    cases,
+                    else_block,
+                    ..
+                } => {
+                    visit_expr(when_expression, out);
+                    for (exprs, block) in cases {
+                        for expr in exprs {
+                            visit_expr(expr, out);
+                        }
+                        visit_block(block, out);
+                    }
+                    if let Some(block) = else_block {
+                        visit_block(block, out);
+                    }
+                }
+                Statement::WhileLoop {
+                    condition, body, ..
+                } => {
+                    visit_expr(condition, out);
+                    visit_block(body, out);
+                }
+                Statement::LoopStatement { body, .. }
+                | Statement::OnBlock { body, .. }
+                | Statement::PlaceIn { body, .. } => visit_block(body, out),
+                Statement::DangerAssignOnError { args, on_error, .. }
+                | Statement::DangerCallOnError { args, on_error, .. } => {
+                    for arg in args {
+                        visit_expr(arg, out);
+                    }
+                    visit_block(on_error, out);
+                }
+                Statement::ListPopOnError { on_error, .. } => visit_block(on_error, out),
+                Statement::MemoryDecl { on_error, .. } => {
+                    if let Some(block) = on_error {
+                        visit_block(block, out);
+                    }
+                }
+                Statement::BlockStatement { statements, .. }
+                | Statement::OnErrorBlock { statements, .. } => visit_statements(statements, out),
+                Statement::MemoryClear { .. }
+                | Statement::StopTask { .. }
+                | Statement::ReturnError { .. }
+                | Statement::IncDec { .. }
+                | Statement::BreakStatement { .. }
+                | Statement::ContinueStatement { .. }
+                | Statement::PassStatement { .. }
+                | Statement::LabelDecl { .. } => {}
+            }
+        }
+    }
+
+    let mut out = HashSet::new();
+    visit_statements(statements, &mut out);
+    out
 }
 
 fn builtin_constant_type(name: &str) -> Option<ValueType> {
@@ -620,6 +856,11 @@ fn can_assign(target: &ValueType, source: &ValueType) -> bool {
     match (target, source) {
         (ValueType::Float, ValueType::Int) => true,
         (ValueType::List(t), ValueType::List(s)) => **s == ValueType::Unknown || can_assign(t, s),
+        (ValueType::Task(None), ValueType::Task(None)) => true,
+        (ValueType::Task(Some(t)), ValueType::Task(Some(s))) => can_assign(t, s),
+        (ValueType::Channel(t), ValueType::Channel(s)) => {
+            **s == ValueType::Unknown || can_assign(t, s)
+        }
         _ => false,
     }
 }
@@ -663,6 +904,21 @@ fn validate_call_args(
 }
 
 fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -> ValueType {
+    if let Some(inner) = name.strip_prefix("Task(").and_then(|s| s.strip_suffix(')')) {
+        return ValueType::Task(Some(Box::new(parse_declared_type_name(
+            inner.trim(),
+            structs,
+        ))));
+    }
+    if name == "Task" {
+        return ValueType::Task(None);
+    }
+    if let Some(inner) = name
+        .strip_prefix("Channel(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return ValueType::Channel(Box::new(parse_declared_type_name(inner.trim(), structs)));
+    }
     if let Some(elem) = name.strip_suffix(" List") {
         let elem = elem.trim();
         let parsed_elem = parse_type_name(elem);
@@ -683,7 +939,43 @@ fn type_contains_memory(ty: &ValueType) -> bool {
     match ty {
         ValueType::Memory => true,
         ValueType::List(inner) => type_contains_memory(inner),
+        ValueType::Task(Some(inner)) | ValueType::Channel(inner) => type_contains_memory(inner),
         _ => false,
+    }
+}
+
+fn type_contains_task(ty: &ValueType) -> bool {
+    match ty {
+        ValueType::Task(_) => true,
+        ValueType::List(inner) | ValueType::Channel(inner) => type_contains_task(inner),
+        _ => false,
+    }
+}
+
+fn type_contains_channel(ty: &ValueType) -> bool {
+    match ty {
+        ValueType::Channel(_) => true,
+        ValueType::List(inner) => type_contains_channel(inner),
+        ValueType::Task(Some(inner)) => type_contains_channel(inner),
+        _ => false,
+    }
+}
+
+fn is_value_safe_channel_message(ty: &ValueType, structs: &HashMap<String, StructInfo>) -> bool {
+    if type_contains_memory(ty) || type_contains_task(ty) || type_contains_channel(ty) {
+        return false;
+    }
+    match ty {
+        ValueType::Struct(name) => structs
+            .get(name)
+            .map(|info| {
+                info.fields
+                    .values()
+                    .all(|field_ty| is_value_safe_channel_message(field_ty, structs))
+            })
+            .unwrap_or(false),
+        ValueType::List(inner) => is_value_safe_channel_message(inner, structs),
+        _ => true,
     }
 }
 
@@ -702,6 +994,50 @@ fn ensure_memory_type_allowed(
             SEM_MEMORY_CAPABILITY,
             format!(
                 "illegal Memory value usage: {} must not use Memory as a regular storable/returnable value.",
+                context
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_task_type_allowed(
+    stmt: &Statement,
+    ty: &ValueType,
+    context: &str,
+    allow_direct_task: bool,
+) -> Result<(), String> {
+    if matches!(ty, ValueType::Task(_)) && allow_direct_task {
+        return Ok(());
+    }
+    if type_contains_task(ty) {
+        return Err(err_at_code(
+            stmt,
+            SEM_TASK_CAPABILITY,
+            format!(
+                "illegal Task value usage: {} must not use Task as a regular storable/returnable value.",
+                context
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_channel_type_allowed(
+    stmt: &Statement,
+    ty: &ValueType,
+    context: &str,
+    allow_direct_channel: bool,
+) -> Result<(), String> {
+    if matches!(ty, ValueType::Channel(_)) && allow_direct_channel {
+        return Ok(());
+    }
+    if type_contains_channel(ty) {
+        return Err(err_at_code(
+            stmt,
+            SEM_CHANNEL_RULE,
+            format!(
+                "illegal Channel value usage: {} must not use Channel as a regular storable/returnable value.",
                 context
             ),
         ));
@@ -801,6 +1137,7 @@ fn analyze_statements(
     functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
     structs: &HashMap<String, StructInfo>,
+    task_context_functions: &HashSet<String>,
     fn_ctx: Option<FnContext>,
     in_loop: bool,
 ) -> Result<(), String> {
@@ -812,6 +1149,7 @@ fn analyze_statements(
             functions,
             labels,
             structs,
+            task_context_functions,
             fn_ctx.clone(),
             in_loop,
         )?;
@@ -827,6 +1165,7 @@ fn analyze_statement(
     functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
     structs: &HashMap<String, StructInfo>,
+    task_context_functions: &HashSet<String>,
     fn_ctx: Option<FnContext>,
     in_loop: bool,
 ) -> Result<(), String> {
@@ -872,6 +1211,7 @@ fn analyze_statement(
                     functions,
                     labels,
                     structs,
+                    task_context_functions,
                     fn_ctx,
                     in_loop,
                 )?;
@@ -914,7 +1254,31 @@ fn analyze_statement(
             )?;
             let final_ty = if let Some(tn) = declared_type {
                 let declared = parse_declared_type_name(tn, structs);
+                if let ValueType::Channel(elem_ty) = &declared
+                    && !is_value_safe_channel_message(elem_ty, structs)
+                {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_CHANNEL_RULE,
+                        format!(
+                            "Channel message type must be value-safe, got {:?}.",
+                            elem_ty
+                        ),
+                    ));
+                }
                 ensure_memory_type_allowed(stmt, &declared, "variable declaration type", false)?;
+                ensure_task_type_allowed(
+                    stmt,
+                    &declared,
+                    "variable declaration type",
+                    matches!(declared, ValueType::Task(_)),
+                )?;
+                ensure_channel_type_allowed(
+                    stmt,
+                    &declared,
+                    "variable declaration type",
+                    matches!(declared, ValueType::Channel(_)),
+                )?;
                 if !can_assign(&declared, &value_ty) {
                     return Err(err_at_code(
                         stmt,
@@ -930,6 +1294,18 @@ fn analyze_statement(
                 value_ty
             };
             ensure_memory_type_allowed(stmt, &final_ty, "variable declaration value", false)?;
+            ensure_task_type_allowed(
+                stmt,
+                &final_ty,
+                "variable declaration value",
+                matches!(final_ty, ValueType::Task(_)),
+            )?;
+            ensure_channel_type_allowed(
+                stmt,
+                &final_ty,
+                "variable declaration value",
+                matches!(final_ty, ValueType::Channel(_)),
+            )?;
             let source_memory = infer_expression_memory_provenance(
                 value,
                 &final_ty,
@@ -948,6 +1324,22 @@ fn analyze_statement(
             });
             scope.insert(name.clone(), final_ty);
             let final_ty = scope.get(name).cloned().unwrap_or(ValueType::Unknown);
+            if let ValueType::Task(result_type) = &final_ty {
+                memory_state.tasks.insert(
+                    name.clone(),
+                    TaskBinding {
+                        result_type: result_type.as_ref().map(|ty| (**ty).clone()),
+                        waited: false,
+                        stopped: false,
+                    },
+                );
+            }
+            if let ValueType::Channel(elem_ty) = &final_ty {
+                memory_state
+                    .channels
+                    .insert(name.clone(), (**elem_ty).clone());
+            }
+            record_task_effects_in_expr(stmt, value, scope, memory_state)?;
             assign_memory_provenance(memory_state, name, &final_ty, source_memory, structs);
             Ok(())
         }
@@ -968,6 +1360,16 @@ fn analyze_statement(
                     SEM_MEMORY_CAPABILITY,
                     format!(
                         "illegal Memory value usage: '{}' cannot be reassigned or copied as a regular value.",
+                        target
+                    ),
+                ));
+            }
+            if matches!(target_ty, ValueType::Task(_) | ValueType::Channel(_)) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_CAPABILITY,
+                    format!(
+                        "illegal Task/Channel value usage: '{}' cannot be reassigned or copied as a regular value.",
                         target
                     ),
                 ));
@@ -1005,6 +1407,7 @@ fn analyze_statement(
                 memory_state.variable_memory.get(target).map(String::as_str),
                 source_memory.as_deref(),
             )?;
+            record_task_effects_in_expr(stmt, value, scope, memory_state)?;
             assign_memory_provenance(memory_state, target, &target_ty, source_memory, structs);
             Ok(())
         }
@@ -1150,6 +1553,11 @@ fn analyze_statement(
                         },
                     );
                 }
+                if let ValueType::Channel(elem_ty) = &pty {
+                    fn_memory_state
+                        .channels
+                        .insert(p.name.clone(), (**elem_ty).clone());
+                }
             }
             let Some(sig) = functions.get(name) else {
                 return Err(sem_err(
@@ -1161,6 +1569,7 @@ fn analyze_statement(
                 is_danger: sig.is_danger,
                 return_type: sig.return_type.clone(),
                 self_struct: None,
+                is_task_context: task_context_functions.contains(name),
             };
             analyze_block(
                 body,
@@ -1169,6 +1578,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 Some(local_ctx),
                 false,
             )?;
@@ -1214,6 +1624,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx.clone(),
                 in_loop,
             )?;
@@ -1227,6 +1638,7 @@ fn analyze_statement(
                     functions,
                     labels,
                     structs,
+                    task_context_functions,
                     fn_ctx.clone(),
                     in_loop,
                 )?;
@@ -1308,6 +1720,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx,
                 true,
             )
@@ -1356,6 +1769,7 @@ fn analyze_statement(
                     functions,
                     labels,
                     structs,
+                    task_context_functions,
                     fn_ctx.clone(),
                     in_loop,
                 )?;
@@ -1370,6 +1784,7 @@ fn analyze_statement(
                     functions,
                     labels,
                     structs,
+                    task_context_functions,
                     fn_ctx.clone(),
                     in_loop,
                 )?;
@@ -1403,6 +1818,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx,
                 true,
             )
@@ -1417,6 +1833,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx,
                 true,
             )
@@ -1443,6 +1860,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx,
                 in_loop,
             )
@@ -1500,6 +1918,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx.clone(),
                 in_loop,
             )?;
@@ -1523,6 +1942,7 @@ fn analyze_statement(
                     functions,
                     labels,
                     structs,
+                    task_context_functions,
                     fn_ctx,
                     in_loop,
                 )?;
@@ -1593,9 +2013,41 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx,
                 in_loop,
             )
+        }
+        Statement::StopTask { task_name, .. } => {
+            let Some(task_ty) = scope.get(task_name).cloned() else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        task_name
+                    ),
+                ));
+            };
+            if !matches!(task_ty, ValueType::Task(_)) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    format!("stop expects Task handle, got {:?}.", task_ty),
+                ));
+            }
+            let Some(binding) = memory_state.tasks.get_mut(task_name) else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    format!(
+                        "task handle '{}' is not available in current scope.",
+                        task_name
+                    ),
+                ));
+            };
+            binding.stopped = true;
+            Ok(())
         }
         Statement::DangerAssignOnError {
             target,
@@ -1660,6 +2112,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx,
                 in_loop,
             )
@@ -1716,6 +2169,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx,
                 in_loop,
             )
@@ -1851,6 +2305,7 @@ fn analyze_statement(
                 functions,
                 labels,
                 structs,
+                task_context_functions,
                 fn_ctx,
                 in_loop,
             )
@@ -1907,6 +2362,22 @@ fn analyze_statement(
                                 .to_string(),
                         ));
                     }
+                    if matches!(actual, ValueType::Task(_)) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TASK_CAPABILITY,
+                            "illegal Task value usage: Task handles cannot be returned from functions."
+                                .to_string(),
+                        ));
+                    }
+                    if matches!(actual, ValueType::Channel(_)) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_CHANNEL_RULE,
+                            "illegal Channel value usage: Channel handles cannot be returned from functions."
+                                .to_string(),
+                        ));
+                    }
                     if let Some(memory_name) = source_memory
                         && !memory_is_external(memory_state, &memory_name)
                     {
@@ -1931,6 +2402,7 @@ fn analyze_statement(
                             ),
                         ));
                     }
+                    record_task_effects_in_expr(stmt, expr, scope, memory_state)?;
                 } else if !ctx.is_danger && ctx.return_type.is_some() {
                     return Err(err_at_code(
                         stmt,
@@ -1947,6 +2419,7 @@ fn analyze_statement(
                     structs,
                     fn_ctx.as_ref(),
                 )?;
+                record_task_effects_in_expr(stmt, expr, scope, memory_state)?;
             }
             Ok(())
         }
@@ -1959,6 +2432,7 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
+            record_task_effects_in_expr(stmt, expr, scope, memory_state)?;
             Ok(())
         }
         Statement::StructDecl { name, methods, .. } => {
@@ -1978,6 +2452,11 @@ fn analyze_statement(
                             },
                         );
                     }
+                    if let ValueType::Channel(elem_ty) = &pty {
+                        method_memory_state
+                            .channels
+                            .insert(p.name.clone(), (**elem_ty).clone());
+                    }
                 }
                 let method_ctx = FnContext {
                     is_danger: m.is_danger,
@@ -1987,6 +2466,7 @@ fn analyze_statement(
                         .map(parse_type_name)
                         .or(Some(ValueType::Int)),
                     self_struct: Some(name.clone()),
+                    is_task_context: false,
                 };
                 analyze_block(
                     &m.body,
@@ -1995,6 +2475,7 @@ fn analyze_statement(
                     functions,
                     labels,
                     structs,
+                    task_context_functions,
                     Some(method_ctx),
                     false,
                 )?;
@@ -2013,6 +2494,7 @@ fn analyze_block(
     functions: &HashMap<String, FunctionSig>,
     labels: &HashMap<String, Vec<String>>,
     structs: &HashMap<String, StructInfo>,
+    task_context_functions: &HashSet<String>,
     fn_ctx: Option<FnContext>,
     in_loop: bool,
 ) -> Result<(), String> {
@@ -2023,6 +2505,7 @@ fn analyze_block(
         functions,
         labels,
         structs,
+        task_context_functions,
         fn_ctx,
         in_loop,
     )
@@ -2034,6 +2517,90 @@ fn param_type_or_default(param: &FunctionParam) -> ValueType {
         .as_deref()
         .map(parse_type_name)
         .unwrap_or(ValueType::Int)
+}
+
+fn record_task_effects_in_expr(
+    stmt: &Statement,
+    expr: &Expression,
+    scope: &HashMap<String, ValueType>,
+    memory_state: &mut MemoryState,
+) -> Result<(), String> {
+    match expr {
+        Expression::WaitTask { task_name } => {
+            let Some(task_ty) = scope.get(task_name) else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_USE_BEFORE_DEF,
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        task_name
+                    ),
+                ));
+            };
+            if !matches!(task_ty, ValueType::Task(_)) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    format!("wait expects Task handle, got {:?}.", task_ty),
+                ));
+            }
+            let Some(binding) = memory_state.tasks.get_mut(task_name) else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    format!(
+                        "task handle '{}' is not available in current scope.",
+                        task_name
+                    ),
+                ));
+            };
+            if binding.waited {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    format!("task handle '{}' was already waited.", task_name),
+                ));
+            }
+            binding.waited = true;
+            Ok(())
+        }
+        Expression::RunTask { args, .. } | Expression::Call { args, .. } => {
+            for arg in args {
+                record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+            }
+            Ok(())
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            record_task_effects_in_expr(stmt, left, scope, memory_state)?;
+            if let Some(right) = right {
+                record_task_effects_in_expr(stmt, right, scope, memory_state)?;
+            }
+            Ok(())
+        }
+        Expression::Index { base, index } => {
+            record_task_effects_in_expr(stmt, base, scope, memory_state)?;
+            record_task_effects_in_expr(stmt, index, scope, memory_state)
+        }
+        Expression::ListLiteral(items) => {
+            for item in items {
+                record_task_effects_in_expr(stmt, item, scope, memory_state)?;
+            }
+            Ok(())
+        }
+        Expression::StructConstruction { fields } => {
+            for value in fields.values() {
+                record_task_effects_in_expr(stmt, value, scope, memory_state)?;
+            }
+            Ok(())
+        }
+        Expression::VariableReference(_)
+        | Expression::MemberAccess { .. }
+        | Expression::Stopping
+        | Expression::LiteralInt(_)
+        | Expression::LiteralFloat(_)
+        | Expression::LiteralBool(_)
+        | Expression::LiteralString(_) => Ok(()),
+    }
 }
 
 fn infer_expression_type(
@@ -2199,6 +2766,112 @@ fn infer_expression_type(
             }
         }
         Expression::Call { name, args } => {
+            if name == "channel" {
+                if args.len() != 1 {
+                    return Err(sem_err(
+                        SEM_CHANNEL_RULE,
+                        format!(
+                            "channel(N) expects one capacity argument, got {}.",
+                            args.len()
+                        ),
+                    ));
+                }
+                let capacity_ty = infer_expression_type(
+                    &args[0],
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx,
+                )?;
+                if capacity_ty != ValueType::Int {
+                    return Err(sem_err(
+                        SEM_CHANNEL_RULE,
+                        format!("channel(N) expects Int capacity, got {:?}.", capacity_ty),
+                    ));
+                }
+                return Ok(ValueType::Channel(Box::new(ValueType::Unknown)));
+            }
+            if let Some((base, method)) = name.split_once('.') {
+                if (method == "send" || method == "receive")
+                    && !memory_state.channels.contains_key(base)
+                {
+                    let receiver_ty = scope.get(base).cloned().unwrap_or(ValueType::Unknown);
+                    if !matches!(receiver_ty, ValueType::Unknown) {
+                        return Err(sem_err(
+                            SEM_CHANNEL_RULE,
+                            format!(
+                                "channel operation '{}.{}' expects Channel receiver, got {:?}.",
+                                base, method, receiver_ty
+                            ),
+                        ));
+                    }
+                }
+                if let Some(channel_elem_ty) = memory_state.channels.get(base).cloned() {
+                    return match method {
+                        "send" => {
+                            if args.len() != 1 {
+                                return Err(sem_err(
+                                    SEM_CHANNEL_RULE,
+                                    format!(
+                                        "send expects one message argument, got {}.",
+                                        args.len()
+                                    ),
+                                ));
+                            }
+                            let actual_ty = infer_expression_type(
+                                &args[0],
+                                scope,
+                                memory_state,
+                                functions,
+                                structs,
+                                fn_ctx,
+                            )?;
+                            if !can_assign(&channel_elem_ty, &actual_ty) {
+                                return Err(sem_err(
+                                    SEM_CHANNEL_RULE,
+                                    format!(
+                                        "channel send type mismatch: expected {:?}, got {:?}.",
+                                        channel_elem_ty, actual_ty
+                                    ),
+                                ));
+                            }
+                            if let Some(source_memory) = infer_expression_memory_provenance(
+                                &args[0],
+                                &actual_ty,
+                                scope,
+                                memory_state,
+                                functions,
+                                structs,
+                                fn_ctx,
+                            )? && !memory_is_external(memory_state, &source_memory)
+                            {
+                                return Err(sem_err(
+                                    SEM_CHANNEL_RULE,
+                                    format!(
+                                        "channel messages must be value-safe: cannot send region-owned value from local Memory '{}'.",
+                                        source_memory
+                                    ),
+                                ));
+                            }
+                            Ok(ValueType::Int)
+                        }
+                        "receive" => {
+                            if !args.is_empty() {
+                                return Err(sem_err(
+                                    SEM_CHANNEL_RULE,
+                                    format!("receive expects no arguments, got {}.", args.len()),
+                                ));
+                            }
+                            Ok(channel_elem_ty)
+                        }
+                        _ => Err(sem_err(
+                            SEM_CHANNEL_RULE,
+                            format!("unsupported Channel operation '{}.{}'.", base, method),
+                        )),
+                    };
+                }
+            }
             if let Some(builtin) = builtin_from_name(name) {
                 let expected_arity = builtin_arity(builtin);
                 if args.len() != expected_arity {
@@ -2728,6 +3401,72 @@ fn infer_expression_type(
             )?;
             Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown))
         }
+        Expression::RunTask { call_name, args } => {
+            let Some(sig) = functions.get(call_name) else {
+                return Err(sem_err(
+                    SEM_UNKNOWN_FUNCTION,
+                    format!("unknown function '{}' in run task expression.", call_name),
+                ));
+            };
+            validate_call_args(
+                call_name,
+                args,
+                sig,
+                scope,
+                memory_state,
+                functions,
+                structs,
+                fn_ctx,
+            )?;
+            let result_type = if sig.has_explicit_return {
+                sig.return_type.clone().map(Box::new)
+            } else {
+                None
+            };
+            Ok(ValueType::Task(result_type))
+        }
+        Expression::WaitTask { task_name } => {
+            let Some(task_ty) = scope.get(task_name).cloned() else {
+                return Err(sem_err(
+                    SEM_USE_BEFORE_DEF,
+                    format!(
+                        "use-before-definition: '{}' is not defined in current scope.",
+                        task_name
+                    ),
+                ));
+            };
+            if !matches!(task_ty, ValueType::Task(_)) {
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    format!("wait expects Task handle, got {:?}.", task_ty),
+                ));
+            }
+            let Some(binding) = memory_state.tasks.get(task_name) else {
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    format!(
+                        "task handle '{}' is not available in current scope.",
+                        task_name
+                    ),
+                ));
+            };
+            if binding.waited {
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    format!("task handle '{}' was already waited.", task_name),
+                ));
+            }
+            Ok(binding.result_type.clone().unwrap_or(ValueType::Unknown))
+        }
+        Expression::Stopping => {
+            if fn_ctx.map(|ctx| ctx.is_task_context) != Some(true) {
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    "stopping is only available inside a function launched with run.".to_string(),
+                ));
+            }
+            Ok(ValueType::Bool)
+        }
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {
                 let lt =
@@ -2843,6 +3582,10 @@ fn infer_expression_memory_provenance(
             }
             Ok(memory_state.active_memory.clone())
         }
+        Expression::WaitTask { task_name } => {
+            Ok(memory_state.variable_memory.get(task_name).cloned())
+        }
+        Expression::RunTask { .. } | Expression::Stopping => Ok(None),
         Expression::LiteralString(_)
         | Expression::ListLiteral(_)
         | Expression::StructConstruction { .. } => Ok(memory_state.active_memory.clone()),
@@ -2898,7 +3641,10 @@ fn contains_variable(expr: &Expression, name: &str) -> bool {
         Expression::StructConstruction { fields } => {
             fields.values().any(|v| contains_variable(v, name))
         }
-        Expression::Call { args, .. } => args.iter().any(|a| contains_variable(a, name)),
+        Expression::Call { args, .. } | Expression::RunTask { args, .. } => {
+            args.iter().any(|a| contains_variable(a, name))
+        }
+        Expression::WaitTask { task_name } => task_name == name,
         Expression::Index { base, index } => {
             contains_variable(base, name) || contains_variable(index, name)
         }

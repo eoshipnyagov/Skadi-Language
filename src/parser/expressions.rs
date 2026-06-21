@@ -117,6 +117,78 @@ impl<'a> ExprParser<'a> {
             });
         }
 
+        if tok.kind == TokenKind::Identifier && tok.lexeme == "stopping" {
+            self.idx += 1;
+            return Ok(Expression::Stopping);
+        }
+
+        if tok.kind == TokenKind::Identifier && tok.lexeme == "wait" {
+            self.idx += 1;
+            if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {
+                return Err(parse_err(
+                    "SC-PARSE-214",
+                    "wait expected task handle identifier.",
+                ));
+            }
+            let task_name = self.tokens[self.idx].lexeme.clone();
+            self.idx += 1;
+            return Ok(Expression::WaitTask { task_name });
+        }
+
+        if tok.kind == TokenKind::Identifier && tok.lexeme == "run" {
+            self.idx += 1;
+            if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {
+                return Err(parse_err(
+                    "SC-PARSE-215",
+                    "run expected function call target.",
+                ));
+            }
+            let call_name = self.tokens[self.idx].lexeme.clone();
+            self.idx += 1;
+            if self.idx >= self.end
+                || self.tokens[self.idx].kind != TokenKind::OpPunctuation
+                || self.tokens[self.idx].lexeme != "("
+            {
+                return Err(parse_err(
+                    "SC-PARSE-216",
+                    "run expected function call syntax: run worker(...).",
+                ));
+            }
+            self.idx += 1;
+            let mut args = Vec::new();
+            if self.idx < self.end
+                && self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                && self.tokens[self.idx].lexeme == ")"
+            {
+                self.idx += 1;
+                return Ok(Expression::RunTask { call_name, args });
+            }
+            loop {
+                let arg = self.parse_bp(0)?;
+                args.push(arg);
+                if self.idx >= self.end {
+                    return Err(parse_err("SC-PARSE-217", "expected ')' to close run call."));
+                }
+                if self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                    && self.tokens[self.idx].lexeme == ","
+                {
+                    self.idx += 1;
+                    continue;
+                }
+                if self.tokens[self.idx].kind == TokenKind::OpPunctuation
+                    && self.tokens[self.idx].lexeme == ")"
+                {
+                    self.idx += 1;
+                    break;
+                }
+                return Err(parse_err(
+                    "SC-PARSE-218",
+                    "expected ',' or ')' in run call.",
+                ));
+            }
+            return Ok(Expression::RunTask { call_name, args });
+        }
+
         if tok.kind == TokenKind::OpPunctuation && tok.lexeme == "(" {
             self.idx += 1;
             let expr = self.parse_bp(0)?;

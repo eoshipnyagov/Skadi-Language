@@ -544,7 +544,180 @@ fn statement_uses_memory_surface(stmt: &Statement) -> bool {
     }
 }
 
-pub fn ensure_codegen_supported(_program: &Program) -> Result<(), String> {
+fn expression_uses_task_surface(expr: &Expression) -> bool {
+    match expr {
+        Expression::RunTask { .. } | Expression::WaitTask { .. } | Expression::Stopping => true,
+        Expression::Call { name, args } => {
+            name == "channel"
+                || name.ends_with(".send")
+                || name.ends_with(".receive")
+                || args.iter().any(expression_uses_task_surface)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_task_surface(left)
+                || right
+                    .as_deref()
+                    .map(expression_uses_task_surface)
+                    .unwrap_or(false)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_task_surface(base) || expression_uses_task_surface(index)
+        }
+        Expression::ListLiteral(items) => items.iter().any(expression_uses_task_surface),
+        Expression::StructConstruction { fields } => fields
+            .values()
+            .any(|value| expression_uses_task_surface(value)),
+        Expression::VariableReference(_)
+        | Expression::MemberAccess { .. }
+        | Expression::LiteralInt(_)
+        | Expression::LiteralFloat(_)
+        | Expression::LiteralBool(_)
+        | Expression::LiteralString(_) => false,
+    }
+}
+
+fn statement_uses_task_surface(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::VarDecl {
+            declared_type,
+            value,
+            ..
+        } => {
+            declared_type
+                .as_deref()
+                .map(|ty| ty == "Task" || ty.starts_with("Task(") || ty.starts_with("Channel("))
+                .unwrap_or(false)
+                || expression_uses_task_surface(value)
+        }
+        Statement::StopTask { .. } => true,
+        Statement::Assignment { value, .. }
+        | Statement::FieldAssignment { value, .. }
+        | Statement::ListPush { value, .. } => expression_uses_task_surface(value),
+        Statement::ReturnStatement { value, .. } => value
+            .as_deref()
+            .map(expression_uses_task_surface)
+            .unwrap_or(false),
+        Statement::ExpressionStatement { expr, .. } => expression_uses_task_surface(expr),
+        Statement::FunctionDef { params, body, .. } => {
+            params.iter().any(|param| {
+                param
+                    .param_type
+                    .as_deref()
+                    .map(|ty| ty == "Task" || ty.starts_with("Task(") || ty.starts_with("Channel("))
+                    .unwrap_or(false)
+            }) || statement_list_uses_task_surface(&body.statements)
+        }
+        Statement::StructDecl {
+            fields, methods, ..
+        } => {
+            fields.iter().any(|field| {
+                field.field_type == "Task"
+                    || field.field_type.starts_with("Task(")
+                    || field.field_type.starts_with("Channel(")
+            }) || methods
+                .iter()
+                .any(|method| statement_list_uses_task_surface(&method.body.statements))
+        }
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expression_uses_task_surface(condition)
+                || statement_list_uses_task_surface(&then_block.statements)
+                || else_block
+                    .as_ref()
+                    .map(|block| statement_list_uses_task_surface(&block.statements))
+                    .unwrap_or(false)
+        }
+        Statement::ForLoop {
+            initialization,
+            condition,
+            update,
+            body,
+            ..
+        } => {
+            initialization
+                .as_deref()
+                .map(expression_uses_task_surface)
+                .unwrap_or(false)
+                || condition
+                    .as_deref()
+                    .map(expression_uses_task_surface)
+                    .unwrap_or(false)
+                || update
+                    .as_deref()
+                    .map(expression_uses_task_surface)
+                    .unwrap_or(false)
+                || statement_list_uses_task_surface(&body.statements)
+        }
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+            ..
+        } => {
+            expression_uses_task_surface(when_expression)
+                || cases.iter().any(|(exprs, block)| {
+                    exprs.iter().any(expression_uses_task_surface)
+                        || statement_list_uses_task_surface(&block.statements)
+                })
+                || else_block
+                    .as_ref()
+                    .map(|block| statement_list_uses_task_surface(&block.statements))
+                    .unwrap_or(false)
+        }
+        Statement::WhileLoop {
+            condition, body, ..
+        } => {
+            expression_uses_task_surface(condition)
+                || statement_list_uses_task_surface(&body.statements)
+        }
+        Statement::LoopStatement { body, .. } | Statement::OnBlock { body, .. } => {
+            statement_list_uses_task_surface(&body.statements)
+        }
+        Statement::PlaceIn { body, on_error, .. } => {
+            statement_list_uses_task_surface(&body.statements)
+                || on_error
+                    .as_ref()
+                    .map(|block| statement_list_uses_task_surface(&block.statements))
+                    .unwrap_or(false)
+        }
+        Statement::MemoryDecl { on_error, .. } => on_error
+            .as_ref()
+            .map(|block| statement_list_uses_task_surface(&block.statements))
+            .unwrap_or(false),
+        Statement::DangerAssignOnError { on_error, .. }
+        | Statement::DangerCallOnError { on_error, .. }
+        | Statement::ListPopOnError { on_error, .. } => {
+            statement_list_uses_task_surface(&on_error.statements)
+        }
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => {
+            statement_list_uses_task_surface(statements)
+        }
+        Statement::MemoryClear { .. }
+        | Statement::ReturnError { .. }
+        | Statement::IncDec { .. }
+        | Statement::BreakStatement { .. }
+        | Statement::ContinueStatement { .. }
+        | Statement::PassStatement { .. }
+        | Statement::LabelDecl { .. } => false,
+    }
+}
+
+fn statement_list_uses_task_surface(statements: &[Statement]) -> bool {
+    statements.iter().any(statement_uses_task_surface)
+}
+
+pub fn ensure_codegen_supported(program: &Program) -> Result<(), String> {
+    if statement_list_uses_task_surface(&program.statements) {
+        return Err(
+            "[SC-CG-301] task model frontend is implemented, but backend lowering is not available yet."
+                .to_string(),
+        );
+    }
     Ok(())
 }
 
@@ -1893,6 +2066,10 @@ fn emit_statement(
             out.push_str(memory_name);
             out.push_str(");\n");
         }
+        Statement::StopTask { .. } => {
+            out.push_str(&pad);
+            out.push_str("/* task backend not implemented */\n");
+        }
         Statement::ReturnStatement { value, .. } => {
             if let Some(place_ctx) = place_ctx {
                 out.push_str(&pad);
@@ -2534,6 +2711,9 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", map_function_name(name), rendered.join(", "))
+        }
+        Expression::RunTask { .. } | Expression::WaitTask { .. } | Expression::Stopping => {
+            "0".to_string()
         }
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {
