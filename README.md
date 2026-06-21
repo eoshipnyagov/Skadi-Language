@@ -10,6 +10,8 @@ Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
 
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
 
+The current stable base is the `v1.1` toolchain surface. Active development is now focused on the `v1.2` experimental systems layer: Memory MVP and Task/Channel frontend contracts.
+
 The long-term design direction is broader:
 
 ```text
@@ -35,6 +37,8 @@ The repository includes:
 - full-screen `skadi-cli tui`,
 - formatter,
 - math/core support for `v1.1`,
+- experimental Memory MVP work for `v1.2`,
+- experimental Task/Channel frontend work for `v1.2`,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,
@@ -505,6 +509,8 @@ The repository already includes:
 - full-screen `skadi-cli tui`,
 - formatter,
 - math/core support for `v1.1`,
+- experimental Memory MVP work for `v1.2`,
+- experimental Task/Channel frontend work for `v1.2`,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,

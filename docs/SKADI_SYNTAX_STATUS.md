@@ -1,13 +1,14 @@
 # Статус синтаксиса Skadi
 
-Дата: 2026-06-05  
+Дата: 2026-06-21  
 Назначение: единый точный срез того, какой синтаксис действительно работает в этом репозитории сейчас.
 
 ## Уровни статуса
 
 - `Stable` - реализовано, покрыто тестами, ожидается как рабочая часть языка.
 - `Partial` - реализовано с явными ограничениями или переходным поведением.
-- `Planned` - не входит в рабочую поверхность `v1.1` в этом репозитории.
+- `Experimental` - реализуется как текущий `v1.2` track, но ещё не является stable runtime surface.
+- `Planned` - не входит в текущую рабочую поверхность этого репозитория.
 
 ## Базовые конструкции
 
@@ -124,20 +125,20 @@
 
 - `on interrupt ... { ... }` - `Partial`
   - parse-level поддержка уже есть;
-  - семантика выполнения ещё не считается завершённой частью `v1.1`.
-- memory model MVP surface - `Partial`
+  - семантика выполнения ещё не считается завершённой stable частью языка.
+- memory model MVP surface - `Experimental / Partial`
   - frontend принимает `Memory name = memory(size)`, `place in memory { ... } on error { ... }` и `memory.clear()`;
   - semantic layer проверяет базовые escape / use-after-clear правила только для dynamic payload (`Text`, `List`, и struct-значений с такими полями);
   - `Memory` считается capability/resource handle, а не обычным storable value type;
   - C backend уже lower'ит strict MVP surface в fixed-capacity region runtime и доводит её до `Skadi -> C -> native`;
   - `allow grow`, `allow drop`, `memory.child`, `memory.static` остаются design-level future surface.
-- task/channel frontend MVP - `Partial`
+- task/channel frontend MVP - `Experimental / Partial`
   - parser принимает `Task`, `Task(T)`, `run worker(...)`, `wait task`, `stop task`, `stopping`, `Channel(T)`, `channel(N)`, `channel.send(value)` и `channel.receive()`;
   - semantic layer проверяет task handle lifecycle, запрет `Task` как обычного value-type, task-context для `stopping` и value-safe channel messages;
   - игнорирование результата `run worker()` остаётся warning;
   - C backend намеренно останавливается на `SC-CG-301`, потому что runtime/backend concurrency ещё не реализованы.
 - formatter coverage - `Partial`
-  - ориентирован на текущий рабочий слой `v1.1`;
+  - ориентирован на текущий рабочий слой `v1.1` и экспериментальные формы `v1.2`, где это безопасно;
   - уже пригоден для повседневной работы, но продолжает развиваться вместе с синтаксисом.
 
 ## Сознательно отложенное

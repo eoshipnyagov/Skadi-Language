@@ -1,6 +1,6 @@
 # Обзор проекта Skadi
 
-Дата обновления: 2026-06-05
+Дата обновления: 2026-06-21
 
 ## 1. Что это за репозиторий
 
@@ -23,6 +23,8 @@
 - полноэкранный `skadi-cli tui` как полноценный интерактивный путь работы;
 - formatter для текущего слоя `v1.1`;
 - math/core срез `v1.1`;
+- strict Memory MVP как experimental `v1.2` systems layer;
+- Task/Channel frontend MVP как experimental `v1.2` syntax/semantic layer;
 - showcase-программы и набор регрессионных тестов;
 - HTML-сайт документации на базе `MkDocs` с каркасом RU/EN.
 
@@ -95,16 +97,25 @@ workflow [docs-pages.yml](.github/workflows/docs-pages.yml), который со
 - работа через TUI;
 - showcase-программы как ориентир по стилю и реальным сценариям.
 
-## 8. Что пока не стоит считать завершённым продуктовым слоем
+## 8. Что считать текущей рабочей линией `v1.2`
+
+`v1.2` развивается поверх stable base `v1.1`.
+
+- Memory MVP уже проходит parser/semantic/codegen/runtime путь для strict fixed-capacity surface.
+- Task/Channel MVP уже проходит parser/semantic/formatter/highlighting путь, но backend/runtime concurrency ещё gated через `SC-CG-301`.
+
+Подробная рамка находится в [Плане v1.2](docs/SKADI_V1_2_PLAN_RU.md).
+
+## 9. Что пока не стоит считать завершённым продуктовым слоем
 
 - imports / modules;
-- memory model implementation;
-- task/concurrency implementation;
+- расширенные memory policies: `allow grow`, `allow drop`, `memory.child`, `memory.static`;
+- task/concurrency runtime/backend implementation;
 - visual core;
 - systems additions;
 - законченная семантика выполнения для `on interrupt`.
 
-## 9. Навигация по документам
+## 10. Навигация по документам
 
 - [Пользовательские документы](docs/SKADI_DOCS_USER_RU.md) - пользовательская документация
 - [Внутренние документы разработки](docs/SKADI_DOCS_INTERNAL_RU.md) - внутренняя документация разработки

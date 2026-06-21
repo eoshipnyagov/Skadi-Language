@@ -24,6 +24,7 @@ ROUTE_MAP = [
     ("internal/diagnostics-style", "DIAGNOSTICS_STYLE.md"),
     ("internal/implementation-plan", "docs/SKADI_IMPLEMENTATION_PLAN_RU.md"),
     ("internal/v1-1-plan", "SKADI_V1_1_PLAN_RU.md"),
+    ("internal/v1-2-plan", "SKADI_V1_2_PLAN_RU.md"),
     ("internal/style-principles", "SKADI_STYLE_PRINCIPLES.md"),
     ("internal/v1-non-goals", "SKADI_V1_NON_GOALS_RU.md"),
     ("internal/style-guide-v1", "SKADI_STYLE_GUIDE_V1.md"),
@@ -119,7 +120,10 @@ def make_user_index_ru() -> str:
     return """# Пользовательские документы
 
 Этот раздел предназначен для тех, кто пишет программы на Skadi и работает с
-`skadi-cli` и `skadi tui`.
+`skadi-cli` и `skadi-cli tui`.
+
+Стабильная пользовательская база соответствует `v1.1`; текущая разработка
+`v1.2` добавляет experimental systems tracks поверх неё.
 
 ## Основные страницы
 
@@ -136,7 +140,10 @@ def make_user_index_en() -> str:
     return """# User Docs
 
 This section is for people writing programs in Skadi and using `skadi-cli` and
-`skadi tui`.
+`skadi-cli tui`.
+
+The stable user-facing base corresponds to `v1.1`; current `v1.2` development
+adds experimental systems tracks on top of it.
 
 ## Main pages
 
@@ -153,13 +160,14 @@ def make_internal_index_ru() -> str:
     return """# Внутренние документы разработки
 
 Этот раздел предназначен для разработки языка, компилятора, диагностики,
-контрактов и будущих архитектурных треков.
+контрактов, текущих experimental tracks и будущих архитектурных направлений.
 
 ## Основные группы
 
 - текущее состояние компилятора;
 - контракты `v1`;
 - планы и блокеры;
+- текущие experimental tracks `v1.2`;
 - будущие языковые треки;
 - устройство сайта документации и локализации.
 """
@@ -168,14 +176,15 @@ def make_internal_index_ru() -> str:
 def make_internal_index_en() -> str:
     return """# Internal Development Docs
 
-This section is for language, compiler, diagnostics, contract, and future-track
-development work.
+This section is for language, compiler, diagnostics, contracts, current
+experimental tracks, and future-track development work.
 
 ## Main groups
 
 - current compiler state;
 - `v1` contracts;
 - plans and blockers;
+- current `v1.2` experimental tracks;
 - future language tracks;
 - documentation site and localization setup.
 """

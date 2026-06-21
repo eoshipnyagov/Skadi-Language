@@ -59,6 +59,7 @@ plugins:
             Что не поддерживается в v1: v1 Non-Goals
             План реализации: Implementation Plan
             План v1.1: v1.1 Plan
+            План v1.2: v1.2 Plan
             Стилевые принципы: Style Principles
             Каноническая матрица синтаксиса: Canonical Syntax Matrix
             Контракт Text v1: Text v1 Contract
@@ -67,7 +68,7 @@ plugins:
             Блокеры v1: v1 Blockers
             Сайт документации и i18n: Docs Site and i18n
             Memory: Memory
-            РџСЂРёРјРµСЂС‹ Рё Р°РЅС‚РёРїСЂРёРјРµСЂС‹: Examples and Negative Cases
+            Примеры и антипримеры: Examples and Negative Cases
             Task / Concurrency: Task / Concurrency
             Visual Core: Visual Core
             Systems Additions: Systems Additions
@@ -124,13 +125,14 @@ nav:
       - Планы и блокеры:
           - План реализации: internal/implementation-plan.md
           - План v1.1: internal/v1-1-plan.md
+          - План v1.2: internal/v1-2-plan.md
           - Блокеры v1: internal/v1-blockers.md
           - Backlog math/vector: internal/math-vector-backlog.md
       - Будущие треки:
           - Memory:
               - Draft: internal/memory-model-draft.md
               - MVP Contract: internal/memory-model-mvp.md
-              - РџСЂРёРјРµСЂС‹ Рё Р°РЅС‚РёРїСЂРёРјРµСЂС‹: internal/memory-model-examples.md
+              - Примеры и антипримеры: internal/memory-model-examples.md
           - Task / Concurrency:
               - Draft: internal/task-model-draft.md
               - MVP Contract: internal/task-model-mvp.md

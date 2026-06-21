@@ -17,8 +17,8 @@
 Skadi source -> lexer -> parser -> semantic -> C codegen -> C compiler
 ```
 
-Для `v1.1` основная цель - стабильный и тестируемый `Skadi -> C` pipeline,
-а не финальный native backend.
+Stable base `v1.1` даёт тестируемый `Skadi -> C` pipeline, а текущая рабочая
+линия `v1.2` добавляет experimental systems tracks поверх этой базы.
 
 ## 2. Топ-уровневые конструкции
 
@@ -478,11 +478,11 @@ on interrupt shutdown {
 }
 ```
 
-Но полноценная семантика выполнения этого трека пока не считается завершённой в `v1.1`.
+Но полноценная семантика выполнения этого трека пока не считается завершённой stable частью языка.
 
 ## 18.1 Experimental memory model MVP
 
-Этот слой пока не является stable частью `v1.1`, но frontend уже понимает его syntax surface.
+Этот слой является experimental частью текущей линии `v1.2`.
 
 Если нужен self-contained набор текущих memory-примеров и антипримеров без скрытого контекста, см. [Memory examples](../internal/memory-model-examples.md).
 
@@ -570,9 +570,9 @@ new Event next_event = events.receive()
 
 Это важная часть текущего контракта проекта.
 
-## 20. Что пока не считать завершённой стабильной частью `v1.1`
+## 20. Что пока не считать завершённой stable частью
 
-Не стоит пока закладываться на это как на законченный слой `v1.1`:
+Не стоит пока закладываться на это как на законченный stable/runtime слой:
 
 - модульную систему / imports;
 - runtime/backend поддержку task/channel model;
