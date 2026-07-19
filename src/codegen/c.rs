@@ -18,6 +18,7 @@ struct PlaceContext {
 #[derive(Default)]
 struct CodegenState {
     next_label_id: usize,
+    function_returns: HashMap<String, String>,
 }
 
 impl CodegenState {
@@ -38,7 +39,7 @@ enum ExprKind {
     Unknown,
 }
 
-const LIST_TYPE_MAP: [(&str, &str, &str); 19] = [
+const LIST_TYPE_MAP: [(&str, &str, &str); 20] = [
     ("i8", "int8_t", "i8"),
     ("i16", "int16_t", "i16"),
     ("i32", "int32_t", "i32"),
@@ -50,6 +51,7 @@ const LIST_TYPE_MAP: [(&str, &str, &str); 19] = [
     ("f32", "float", "f32"),
     ("f64", "double", "f64"),
     ("bool", "bool", "bool"),
+    ("char", "char", "char"),
     ("Text", "char*", "text"),
     ("Time", "int64_t", "time"),
     ("Duration", "int64_t", "duration"),
@@ -909,6 +911,7 @@ fn expression_uses_task_surface(expr: &Expression) -> bool {
         | Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
+        | Expression::LiteralChar(_)
         | Expression::LiteralString(_)
         | Expression::LiteralDuration { .. }
         | Expression::LiteralByteSize { .. }
@@ -1766,7 +1769,21 @@ fn emit_task_entry_prototypes(program: &Program, entries: &HashSet<String>, out:
 
 pub fn transpile_program_to_c(program: &Program) -> String {
     let mut out = String::new();
-    let mut codegen_state = CodegenState::default();
+    let mut codegen_state = CodegenState {
+        function_returns: program
+            .statements
+            .iter()
+            .filter_map(|stmt| match stmt {
+                Statement::FunctionDef {
+                    name,
+                    returns: Some(return_type),
+                    ..
+                } => Some((name.clone(), return_type.clone())),
+                _ => None,
+            })
+            .collect(),
+        ..CodegenState::default()
+    };
     let struct_names = collect_struct_names(program);
     let (needs_fs_list, needs_fs_is_dir, needs_fs_join) = program_uses_fs_runtime(program);
     let needs_list_runtime = program_uses_list_runtime(program) || needs_fs_list;
@@ -2733,6 +2750,38 @@ fn emit_owned_channel_cleanup(out: &mut String, pad: &str, declared: &HashMap<St
     }
 }
 
+fn infer_scalar_declaration_type(
+    value: &Expression,
+    declared: &HashMap<String, String>,
+    state: &CodegenState,
+) -> Option<String> {
+    match value {
+        Expression::LiteralDuration { .. } => return Some("Duration".to_string()),
+        Expression::LiteralByteSize { .. } => return Some("ByteSize".to_string()),
+        Expression::LiteralAngle { .. } => return Some("Angle".to_string()),
+        Expression::VariableReference(name) => {
+            if let Some(declared_type) = declared.get(name) {
+                return Some(normalize_type_token(declared_type));
+            }
+        }
+        Expression::Call { name, .. } => {
+            if let Some(return_type) = state.function_returns.get(name) {
+                return Some(normalize_type_token(return_type));
+            }
+        }
+        _ => {}
+    }
+
+    match expr_kind(value, declared) {
+        ExprKind::Int => Some("Int".to_string()),
+        ExprKind::Float => Some("Float".to_string()),
+        ExprKind::Bool => Some("Bool".to_string()),
+        ExprKind::Char => Some("Char".to_string()),
+        ExprKind::Text => Some("Text".to_string()),
+        ExprKind::Unknown => None,
+    }
+}
+
 fn emit_statement(
     stmt: &Statement,
     out: &mut String,
@@ -3440,6 +3489,9 @@ fn emit_statement(
             declared_type,
             ..
         } => {
+            let effective_type = declared_type
+                .clone()
+                .or_else(|| infer_scalar_declaration_type(value, declared, state));
             if let Some(channel_element) = declared_type.as_deref().and_then(channel_elem_from_decl)
                 && let Expression::Call {
                     name: call_name,
@@ -3610,7 +3662,7 @@ fn emit_statement(
                 declared.insert(name.clone(), dt.to_string());
                 return;
             }
-            out.push_str(&map_skadi_type_to_c(declared_type.as_deref()));
+            out.push_str(&map_skadi_type_to_c(effective_type.as_deref()));
             out.push(' ');
             out.push_str(name);
             out.push_str(" = ");
@@ -3618,7 +3670,7 @@ fn emit_statement(
             out.push_str(";\n");
             declared.insert(
                 name.clone(),
-                declared_type.clone().unwrap_or_else(|| "Int".to_string()),
+                effective_type.unwrap_or_else(|| "Int".to_string()),
             );
         }
         Statement::BlockStatement { statements, .. }
@@ -3752,6 +3804,7 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
         Expression::LiteralInt(_) => ExprKind::Int,
         Expression::LiteralFloat(_) => ExprKind::Float,
         Expression::LiteralBool(_) => ExprKind::Bool,
+        Expression::LiteralChar(_) => ExprKind::Char,
         Expression::LiteralString(_) => ExprKind::Text,
         Expression::LiteralDuration { .. } => ExprKind::Int,
         Expression::LiteralByteSize { .. } => ExprKind::Int,
@@ -3784,7 +3837,24 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
         {
             ExprKind::Float
         }
-        Expression::Index { base, .. } if is_text_expr(base, declared) => ExprKind::Char,
+        Expression::Index { base, .. } => {
+            if let Expression::VariableReference(name) = base.as_ref()
+                && let Some(element) = declared.get(name).and_then(|ty| list_elem_from_decl(ty))
+            {
+                return match normalize_type_token(element).as_str() {
+                    "Float" | "f32" | "f64" | "Angle" => ExprKind::Float,
+                    "bool" | "Bool" => ExprKind::Bool,
+                    "char" | "Char" => ExprKind::Char,
+                    "Text" | "Path" => ExprKind::Text,
+                    _ => ExprKind::Int,
+                };
+            }
+            if is_text_expr(base, declared) {
+                ExprKind::Char
+            } else {
+                ExprKind::Unknown
+            }
+        }
         Expression::BinaryOp { op, left, right } => {
             if matches!(
                 op.as_str(),
@@ -3853,6 +3923,15 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 "false".to_string()
             }
         }
+        Expression::LiteralChar(value) => match value {
+            '\n' => "'\\n'".to_string(),
+            '\r' => "'\\r'".to_string(),
+            '\t' => "'\\t'".to_string(),
+            '\0' => "'\\0'".to_string(),
+            '\\' => "'\\\\'".to_string(),
+            '\'' => "'\\''".to_string(),
+            value => format!("'{value}'"),
+        },
         Expression::LiteralString(s) => s.clone(),
         Expression::LiteralDuration { nanoseconds, .. } => nanoseconds.to_string(),
         Expression::LiteralByteSize { bytes, .. } => bytes.to_string(),

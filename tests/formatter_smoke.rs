@@ -15,7 +15,7 @@ return sum
 "#;
 
     let formatted = format_source(source).expect("format should succeed");
-    let expected = r#"fn add(Int a, b) Int {
+    let expected = r#"fn add(Int a, b) returns Int {
     new sum = a + b * 2
     if sum > 10 {
         output("big")

@@ -62,7 +62,6 @@ def main() -> int:
             r"\bnew\b[^\n]*\bon error\b"
         ),
         "symbolic function return arrow": re.compile(r"\bfn\b[^\n{]*->"),
-        "unsupported compound assignment": re.compile(r"^\s*[A-Za-z_]\w*\s*[+*/-]=", re.M),
         "non-danger I/O call with on error": re.compile(
             r"\b(?:read|write|input|output|fs\.list|fs\.join|fs\.is_dir)\s*\([^\n]*\)\s+on error\b"
         ),

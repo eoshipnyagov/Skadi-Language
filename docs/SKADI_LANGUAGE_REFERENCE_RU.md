@@ -42,6 +42,12 @@ new x = 10
 new title = "Skadi"
 ```
 
+Вывод типа без аннотации поддерживается для скалярных значений: чисел, `Bool`,
+`Char`, `Text`, `Time`, `Duration`, `ByteSize` и `Angle`. Составные значения
+(`List`, структуры, `Vec2/Vec3/Vec4`, Task и Channel) требуют явного типа:
+это фиксирует layout и ownership-контракт до codegen. При его отсутствии semantic
+выдаёт `SC-SEM-020`.
+
 ### С явным типом
 
 ```skadi
@@ -56,7 +62,11 @@ new i32 List xs = [1, 2, 3]
 
 ```skadi
 count = count + 1
+count += 1
 ```
+
+`+=`, `-=`, `*=`, `/=` используют те же type rules, что и соответствующая
+явная операция. Formatter канонизирует их в `count = count + 1`.
 
 ### Инкремент / декремент
 
@@ -102,6 +112,7 @@ count--
 - integer literals
 - float literals
 - `true` / `false`
+- ASCII character literals и escapes: `'a'`, `'\n'`, `'\t'`, `'\''`, `'\\'`, `'\0'`
 - string literals
 - list literals
 - struct literals
@@ -114,6 +125,7 @@ count--
 new Int a = 10
 new Float b = 2.5
 new Bool ok = true
+new Char marker = 'a'
 new Text t = "hello"
 new i32 List xs = [1, 2, 3]
 new Point p = {x = 10, y = 20}
@@ -127,8 +139,10 @@ new Text status = "ok"
 new Result r = {value, status}
 ```
 
-`Char` поддерживается как тип результата, в частности для `text[index]`, но
-отдельный character literal вида `'a'` пока не является stable expression-формой.
+`Char` использует однобайтовое C representation. Литералы должны содержать один
+ASCII character или поддержанный escape; Unicode character literals пока
+отклоняются с `SC-PARSE-221`. `text[index]` также возвращает `Char` по текущей
+byte-oriented Text semantics.
 `ByteSize` является самостоятельным nominal-типом; его literals и связь с
 `Memory` описаны в разделе 18.4.
 
@@ -282,7 +296,10 @@ for (i = 0; i < 10; i++) {
 }
 ```
 
-Поддерживается, но не является каноническим стилем.
+Parser и formatter сохраняют эту форму только для чтения и миграции старых
+исходников. Semantic-анализ останавливает сборку с `SC-SEM-040`, потому что
+backend `v1.2` её не исполняет. Для рабочего кода используйте
+`iterate collection as item` или `for item in collection`.
 
 ### `when / is / else`
 
@@ -518,7 +535,7 @@ output(bounded)
 
 ## 18. `on interrupt`
 
-Синтаксис уже принимается:
+Синтаксис сохраняется на parse/format уровне:
 
 ```skadi
 on interrupt shutdown {
@@ -526,7 +543,9 @@ on interrupt shutdown {
 }
 ```
 
-Но полноценная семантика выполнения этого трека пока не считается завершённой stable частью языка.
+Semantic pass намеренно отклоняет эту форму с `SC-SEM-040`: без platform runtime
+блок не должен молча исчезать из generated C. Полный interrupt contract остаётся
+future work.
 
 ## 18.1 Experimental memory model MVP
 

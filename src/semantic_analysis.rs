@@ -581,16 +581,11 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                             warn_type_style(rt, loc.line, loc.column, user_types, out);
                         }
                     }
-                    if let Some(rt) = returns.as_deref()
-                        && !*uses_returns_keyword
-                    {
-                        let parsed = parse_primitive_type_name(rt);
-                        if parsed != ValueType::Unknown {
-                            out.push(format!(
-                                "style warning at line {}, col {}: prefer explicit 'returns <type>' in function declaration.",
-                                loc.line, loc.column
-                            ));
-                        }
+                    if returns.is_some() && !*uses_returns_keyword {
+                        out.push(format!(
+                            "style warning at line {}, col {}: prefer explicit 'returns <type>' in function declaration.",
+                            loc.line, loc.column
+                        ));
                     }
                     visit_statements(&body.statements, user_types, out);
                 }
@@ -808,6 +803,7 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
             | Expression::LiteralInt(_)
             | Expression::LiteralFloat(_)
             | Expression::LiteralBool(_)
+            | Expression::LiteralChar(_)
             | Expression::LiteralString(_)
             | Expression::LiteralDuration { .. }
             | Expression::LiteralByteSize { .. }
@@ -1571,6 +1567,29 @@ fn analyze_statement(
             } else {
                 value_ty
             };
+            if declared_type.is_none()
+                && matches!(
+                    final_ty,
+                    ValueType::List(_)
+                        | ValueType::Struct(_)
+                        | ValueType::Vec2
+                        | ValueType::Vec3
+                        | ValueType::Vec4
+                        | ValueType::Memory
+                        | ValueType::Task(_)
+                        | ValueType::Channel(_)
+                        | ValueType::Unknown
+                )
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "explicit type required for composite declaration '{}': inferred {:?}. use 'new <Type> {} = ...'.",
+                        name, final_ty, name
+                    ),
+                ));
+            }
             ensure_memory_type_allowed(stmt, &final_ty, "variable declaration value", false)?;
             ensure_task_type_allowed(
                 stmt,
@@ -1884,23 +1903,10 @@ fn analyze_statement(
             name,
             params,
             body,
-            returns,
-            uses_returns_keyword,
+            returns: _,
+            uses_returns_keyword: _,
             ..
         } => {
-            if let Some(rt) = returns.as_deref()
-                && !*uses_returns_keyword
-                && matches!(parse_declared_type_name(rt, structs), ValueType::Struct(_))
-            {
-                return Err(err_at_code(
-                    stmt,
-                    SEM_RETURN_RULE,
-                    format!(
-                        "struct return type '{}' requires explicit 'returns <type>' in function declaration.",
-                        rt
-                    ),
-                ));
-            }
             let mut fn_scope = scope.clone();
             let mut fn_memory_state = MemoryState::default();
             for p in params {
@@ -2011,9 +2017,18 @@ fn analyze_statement(
             initialization,
             condition,
             update,
+            style,
             body,
             ..
         } => {
+            if *style == ForLoopStyle::LegacyCStyle {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    "unsupported context: legacy 'for (init; condition; update)' is parse/format compatibility syntax only in v1.2; use 'iterate collection as item' or 'for item in collection'."
+                        .to_string(),
+                ));
+            }
             let mut loop_scope = scope.clone();
             let mut loop_memory_state = memory_state.clone();
             if let Some(init) = initialization {
@@ -2355,7 +2370,7 @@ fn analyze_statement(
             binding.is_cleared = true;
             Ok(())
         }
-        Statement::OnBlock { trigger, body, .. } => {
+        Statement::OnBlock { trigger, .. } => {
             if trigger == "error" {
                 return Err(
                     err_at_code(
@@ -2366,19 +2381,19 @@ fn analyze_statement(
                     ),
                 );
             }
-            let mut local_scope = scope.clone();
-            let mut local_memory_state = memory_state.clone();
-            analyze_block(
-                body,
-                &mut local_scope,
-                &mut local_memory_state,
-                functions,
-                labels,
-                structs,
-                task_context_functions,
-                fn_ctx,
-                in_loop,
-            )
+            if trigger == "interrupt" {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    "unsupported context: 'on interrupt ... { ... }' is reserved for a future platform runtime and cannot be compiled in v1.2."
+                        .to_string(),
+                ));
+            }
+            Err(err_at_code(
+                stmt,
+                SEM_INVALID_CONTEXT,
+                format!("unsupported on-block trigger '{}'.", trigger),
+            ))
         }
         Statement::StopTask { task_name, .. } => {
             let Some(task_ty) = scope.get(task_name).cloned() else {
@@ -3008,6 +3023,7 @@ fn record_task_effects_in_expr(
         | Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
+        | Expression::LiteralChar(_)
         | Expression::LiteralString(_)
         | Expression::LiteralDuration { .. }
         | Expression::LiteralByteSize { .. }
@@ -3103,6 +3119,7 @@ fn apply_task_flow_expression(
         Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
+        | Expression::LiteralChar(_)
         | Expression::LiteralString(_)
         | Expression::LiteralDuration { .. }
         | Expression::LiteralByteSize { .. }
@@ -3548,6 +3565,7 @@ fn infer_expression_type(
         Expression::LiteralInt(_) => Ok(ValueType::Int),
         Expression::LiteralFloat(_) => Ok(ValueType::Float),
         Expression::LiteralBool(_) => Ok(ValueType::Bool),
+        Expression::LiteralChar(_) => Ok(ValueType::Char),
         Expression::LiteralString(_) => Ok(ValueType::Text),
         Expression::LiteralDuration { .. } => Ok(ValueType::Duration),
         Expression::LiteralByteSize { .. } => Ok(ValueType::ByteSize),
@@ -4973,6 +4991,7 @@ fn infer_expression_memory_provenance(
         Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
+        | Expression::LiteralChar(_)
         | Expression::LiteralDuration { .. }
         | Expression::LiteralByteSize { .. }
         | Expression::LiteralAngle { .. } => Ok(None),

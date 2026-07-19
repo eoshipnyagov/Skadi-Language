@@ -21,7 +21,7 @@ Skadi -> lexer -> parser -> semantic -> C codegen -> host C compiler -> binary
 - scalar и fixed-width types;
 - `new`, assignment, `i++`, `i--`;
 - arithmetic, comparison, logical operators и `^ -> pow`;
-- `if/else`, `while`, `loop`, `for in`, `iterate as`, legacy C-style `for`;
+- `if/else`, `while`, `loop`, `for in`, `iterate as`;
 - `when/is/else`, `break`, `continue`, `pass`;
 - `label ErrorCode`, `return error`, `on error`;
 - struct declarations, literals, fields, `my.field` и methods;
@@ -156,7 +156,7 @@ roadmap, а не скрытым обещанием desktop C backend.
 - shared mutable state primitives;
 - Visual Core / Canvas runtime;
 - `allow grow/drop`, child/static Memory;
-- generic units algebra, `Timer`, vector/matrix layer;
+- generic units algebra, `Timer`, matrices, SIMD lowering, swizzles и расширенная vector algebra;
 - module aliases, re-exports и module-name imports.
 
 ## Инварианты generated C

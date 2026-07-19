@@ -3,8 +3,8 @@
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
 use crate::ast_nodes::{
-    BlockStatement, ForLoopStyle, FunctionParam, LegacyForParts, Location, ScopeManager, Statement,
-    StructField, StructMethod,
+    BlockStatement, Expression, ForLoopStyle, FunctionParam, LegacyForParts, Location,
+    ScopeManager, Statement, StructField, StructMethod,
 };
 use crate::common_types::{Token, TokenKind};
 
@@ -935,6 +935,7 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
         return Err(parse_err("SC-PARSE-131", "expected assignment operator."));
     }
     let target_name = tokens[start_index].lexeme.clone();
+    let assignment_op = tokens[start_index + 1].lexeme.clone();
     let mut cursor = start_index + 2;
     while cursor < tokens.len() {
         if tokens[cursor].kind() == TokenKind::NewLine || tokens[cursor].lexeme == "}" {
@@ -942,7 +943,17 @@ pub fn parse_assignment_statement(tokens: &[Token], start_index: usize) -> Parse
         }
         cursor += 1;
     }
-    let value = parse_expression_range(tokens, start_index + 2, cursor)?;
+    let mut value = parse_expression_range(tokens, start_index + 2, cursor)?;
+    if assignment_op != "=" {
+        let op = assignment_op
+            .strip_suffix('=')
+            .ok_or_else(|| parse_err("SC-PARSE-131", "invalid assignment operator."))?;
+        value = Expression::BinaryOp {
+            op: op.to_string(),
+            left: Box::new(Expression::VariableReference(target_name.clone())),
+            right: Some(Box::new(value)),
+        };
+    }
     Ok((
         Statement::Assignment {
             target: target_name,
@@ -974,7 +985,10 @@ pub fn parse_task_or_channel_declaration(
             "Task/Channel declaration expected identifier name.",
         ));
     }
-    if name_index + 1 >= tokens.len() || tokens[name_index + 1].kind() != TokenKind::OpAssignment {
+    if name_index + 1 >= tokens.len()
+        || tokens[name_index + 1].kind() != TokenKind::OpAssignment
+        || tokens[name_index + 1].lexeme != "="
+    {
         return Err(parse_err(
             "SC-PARSE-177",
             "Task/Channel declaration expected '=' after name.",
@@ -1196,6 +1210,7 @@ pub fn parse_identifier_led_statement(
         if start_index + 7 <= on_idx
             && tokens[start_index].kind() == TokenKind::Identifier
             && tokens[start_index + 1].kind() == TokenKind::OpAssignment
+            && tokens[start_index + 1].lexeme == "="
             && tokens[start_index + 2].kind() == TokenKind::Identifier
             && tokens[start_index + 3].lexeme == "."
             && tokens[start_index + 4].kind() == TokenKind::Identifier
@@ -1219,6 +1234,7 @@ pub fn parse_identifier_led_statement(
         if start_index + 2 < on_idx
             && tokens[start_index].kind() == TokenKind::Identifier
             && tokens[start_index + 1].kind() == TokenKind::OpAssignment
+            && tokens[start_index + 1].lexeme == "="
         {
             let target = tokens[start_index].lexeme.clone();
             let (call_name, args) = parse_call_expression(tokens, start_index + 2, on_idx)?;
@@ -1260,7 +1276,21 @@ pub fn parse_identifier_led_statement(
     {
         let object = tokens[start_index].lexeme.clone();
         let field = tokens[start_index + 2].lexeme.clone();
-        let value = parse_expression_range(tokens, start_index + 4, line_end)?;
+        let mut value = parse_expression_range(tokens, start_index + 4, line_end)?;
+        if tokens[start_index + 3].lexeme != "=" {
+            let op = tokens[start_index + 3]
+                .lexeme
+                .strip_suffix('=')
+                .ok_or_else(|| parse_err("SC-PARSE-131", "invalid assignment operator."))?;
+            value = Expression::BinaryOp {
+                op: op.to_string(),
+                left: Box::new(Expression::MemberAccess {
+                    base: object.clone(),
+                    field: field.clone(),
+                }),
+                right: Some(Box::new(value)),
+            };
+        }
         return Ok((
             Statement::FieldAssignment {
                 object,
@@ -1317,6 +1347,7 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
         && idx + type_consumed + 1 < tokens.len()
         && tokens[idx + type_consumed].kind() == TokenKind::Identifier
         && tokens[idx + type_consumed + 1].kind() == TokenKind::OpAssignment
+        && tokens[idx + type_consumed + 1].lexeme == "="
     {
         declared_type = Some(type_name);
         idx += type_consumed;
@@ -1327,6 +1358,7 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
         && tokens[idx + type_consumed].lexeme == "List"
         && tokens[idx + type_consumed + 1].kind() == TokenKind::Identifier
         && tokens[idx + type_consumed + 2].kind() == TokenKind::OpAssignment
+        && tokens[idx + type_consumed + 2].lexeme == "="
     {
         declared_type = Some(format!("{} List", elem_type));
         idx += type_consumed + 1;
@@ -1338,7 +1370,10 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
             "variable declaration expected identifier after 'new'.",
         ));
     }
-    if idx + 1 >= tokens.len() || tokens[idx + 1].kind() != TokenKind::OpAssignment {
+    if idx + 1 >= tokens.len()
+        || tokens[idx + 1].kind() != TokenKind::OpAssignment
+        || tokens[idx + 1].lexeme != "="
+    {
         return Err(parse_err(
             "SC-PARSE-140",
             "variable declaration expected '=' after identifier.",
@@ -1415,7 +1450,9 @@ pub fn parse_memory_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             "Memory declaration expected identifier name.",
         ));
     }
-    if tokens[start_index + 2].kind() != TokenKind::OpAssignment {
+    if tokens[start_index + 2].kind() != TokenKind::OpAssignment
+        || tokens[start_index + 2].lexeme != "="
+    {
         return Err(parse_err(
             "SC-PARSE-162",
             "Memory declaration expected '=' after name.",

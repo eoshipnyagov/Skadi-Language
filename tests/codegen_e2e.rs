@@ -795,6 +795,32 @@ output(safe_zero.x)
 }
 
 #[test]
+fn e2e_char_literals_build_and_run() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping Char e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Char letter = 'a'
+new Char List letters = [letter, '\n']
+output(letter)
+output(letters[0])
+"#;
+    let c = compile_showcase_to_c(src);
+    let run = compile_c_and_execute(compiler, &c, "Skadi_e2e_char", &[], &[], None);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let lines = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, ["a", "a"]);
+}
+
+#[test]
 fn e2e_power_operator_lowers_to_math_runtime() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");

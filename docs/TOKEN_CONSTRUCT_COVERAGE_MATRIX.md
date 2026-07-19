@@ -20,15 +20,16 @@ Legend:
 | `when` / `is` / `else` | Y | Y | Y | Y | Y | includes marker/invariant and e2e scenarios |
 | `for ... in ...` | Y | Y | Y | P | P | style-supported; lowering tied to list runtime shape |
 | `iterate ... as ...` | P (`iterate` as identifier lexeme) | Y | Y | P | P | parser alias path covered |
+| legacy `for (init; cond; update)` | P | Y | Y (negative) | N | Y (negative) | parse/format compatibility only; explicit `SC-SEM-040` |
 | `while` | Y | Y | Y | Y | Y | covered broadly |
 | `loop` | Y | Y | Y | Y | P | e2e less dense than while/for |
 | `return` | Y | Y | Y | Y | Y | includes empty return in danger fn |
 | `return error` | Y | Y | Y | Y | Y | requires `label ErrorCode` |
 | `returns` | Y | Y | Y | Y | Y | canonical typed return syntax |
-| `new` | Y | Y | Y | Y | Y | typed/untyped paths covered |
+| `new` | Y | Y | Y | Y | Y | scalar inference covered; composites require explicit type (`SC-SEM-020`) |
 | `my` | Y | Y | P | P | P | struct method subset covered |
 | `on error` | P (`on` token + parse pattern) | Y | Y | Y | Y | danger/list-pop contracts covered |
-| `on interrupt` | P (`on` + `interrupt`) | Y | P | N | N | parse/semantic placeholder only |
+| `on interrupt` | P (`on` + `interrupt`) | Y | Y (negative) | N | Y (negative) | explicit `SC-SEM-040`; no silent codegen |
 | `fixed` / `const` | Y | N | N | N | N | reserved/tokenized, statement parser rejects the form |
 | `hide` | Y | Y | Y | P | P | hidden-field access checks implemented; broader struct-lowering depth is ongoing |
 | `local` | Y | Y | Y | P | P | local visibility enforced in import pipeline via symbol isolation |
@@ -58,13 +59,16 @@ Legend:
 | `Angle` | P (type identifier) | Y | Y | Y | Y | experimental nominal f64-radian value type |
 | `90deg` / `0.25rad` | P (number + adjacent unit) | Y | Y | Y | Y | integer/fractional finite literals |
 | Angle math integration | P (builtin identifiers) | Y | Y | Y | Y | `sin/cos/atan2`, conversions and scalar operations |
+| `Vec2` / `Vec3` / `Vec4` | P (type identifiers) | Y | Y | Y | Y | bounded f64 vector MVP |
+| Vector math integration | P (builtin identifiers) | Y | Y | Y | Y | dot/length/normalize/distance and Vec3 cross |
+| ASCII Char literal `'a'` / escapes | Y | Y | Y | Y | Y | invalid/Unicode forms use `SC-PARSE-221` |
 
 ## 2. Operator / Form Matrix
 
 | Construct | Lexer | Parser | Semantic | Codegen | E2E | Notes |
 |---|---|---|---|---|---|---|
 | Assignment `=` | Y | Y | Y | Y | Y | base path |
-| Compound assign `+= -= *= /=` | Y | P | N | N | N | tokenized but not a supported semantic/codegen contract |
+| Compound assign `+= -= *= /=` | Y | Y | Y | Y | Y | desugared to ordinary typed binary assignment; formatter expands it |
 | Comparison `== != > < >= <=` | Y | Y | Y | Y | Y | includes text compare lowering |
 | Arithmetic `+ - * / % ^` | Y | Y | Y | Y | Y | broad coverage |
 | Indexing `xs[i]`, `t[i]` | Y | Y | Y | Y | Y | fail-soft contract tested |
@@ -89,6 +93,7 @@ Legend:
 - ByteSize frontend/runtime: `tests/byte_size_model.rs`, `benchmarks/bench_14_byte_size_budget.skd`
 - Angle frontend/runtime: `tests/angle_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_15_angle_navigation.skd`
 - Vector frontend/runtime: `tests/vector_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_16_vector_navigation.skd`
+- Transition surfaces and Char literals: `tests/transition_surfaces.rs`, `tests/codegen_e2e.rs`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
 
 ## 4. Synchronization rules

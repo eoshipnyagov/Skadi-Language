@@ -135,7 +135,7 @@ impl Formatter {
                 self.out.push_str(&self.render_params(params));
                 self.out.push(')');
                 if let Some(returns) = returns {
-                    self.out.push(' ');
+                    self.out.push_str(" returns ");
                     self.out.push_str(returns);
                 }
                 self.out.push(' ');
@@ -515,6 +515,15 @@ impl Formatter {
             Expression::LiteralInt(value) => value.to_string(),
             Expression::LiteralFloat(value) => self.render_float(*value),
             Expression::LiteralBool(value) => value.to_string(),
+            Expression::LiteralChar(value) => match value {
+                '\n' => "'\\n'".to_string(),
+                '\r' => "'\\r'".to_string(),
+                '\t' => "'\\t'".to_string(),
+                '\0' => "'\\0'".to_string(),
+                '\\' => "'\\\\'".to_string(),
+                '\'' => "'\\''".to_string(),
+                value => format!("'{value}'"),
+            },
             Expression::LiteralString(value) => value.clone(),
             Expression::LiteralDuration {
                 magnitude, unit, ..

@@ -12,15 +12,18 @@
 
 ## Базовые конструкции
 
-- `new x = expr` - `Stable`
+- `new x = scalar_expr` - `Stable`
+  - C-тип выводится для scalar values, включая `Text`, `Duration`, `ByteSize` и `Angle`;
+  - `List`, структуры, векторы, Task, Channel и неизвестный composite type требуют явной аннотации (`SC-SEM-020`).
 - `new Type x = expr` - `Stable`
 - `new ElemType List x = [...]` - `Stable`
 - `x = expr` - `Stable`
 - `x.field = expr` - `Stable`
 - `i++` / `i--` - `Stable`
-- `+=`, `-=`, `*=`, `/=` - `Reserved / Not implemented`
-  - lexer распознаёт operator token, но semantic/codegen contract не поддерживается;
-  - используйте явную форму `x = x + value`.
+- `+=`, `-=`, `*=`, `/=` - `Stable input / canonicalized`
+  - statement parser безопасно раскрывает форму через соответствующую binary operation;
+  - semantic использует обычные type rules, formatter пишет явную форму `x = x + value`;
+  - compound operator нельзя использовать вместо `=` в declaration initializer.
 - `return expr` - `Stable`
 - `return` - `Stable`
 - `return error Code` - `Stable`
@@ -38,8 +41,9 @@
 - типизированные параметры - `Stable`
 - канонический типизированный возврат `fn name(...) returns Type` - `Stable`
 - legacy-возврат `fn name(...) Type` - `Partial`
-  - scalar-формы пока принимаются с предупреждением;
-  - возврат структуры требует явного `returns`.
+  - scalar, specialized и struct-формы принимаются только для совместимости с предупреждением;
+  - formatter всегда переводит их в `fn name(...) returns Type`;
+  - новый код должен использовать `returns`.
 - вызовы функций внутри выражений - `Stable`
 - проверка количества и типов аргументов - `Stable`
 
@@ -61,8 +65,10 @@
 - `for item in collection` - `Stable`
 - `iterate collection as item` - `Stable`
   - предпочтительная витринная форма записи
-- legacy `for (init; cond; update)` - `Stable`
-  - поддерживается для совместимости, но не считается предпочтительным стилем
+- legacy `for (init; cond; update)` - `Partial`
+  - parser и formatter сохраняют форму для чтения старых исходников;
+  - semantic выдаёт `SC-SEM-040`: backend не исполняет эту форму;
+  - используйте `iterate collection as item` или `for item in collection`.
 - `when / is / else` - `Stable`
 
 ## Структуры и методы
@@ -121,8 +127,9 @@
 - `Float` - `Stable`
 - `Bool` / `bool` - `Stable`
 - `Char` / `char` - `Stable`
-  - значения доступны, например, через индексирование `Text`;
-  - отдельный character literal `'a'` пока не является поддержанной stable expression-формой.
+  - значения доступны через индексирование `Text` и ASCII literals;
+  - поддержаны escapes `'\n'`, `'\r'`, `'\t'`, `'\0'`, `'\''`, `'\\'`;
+  - Unicode, empty и multi-character literals отклоняются с `SC-PARSE-221`.
 - `Text` - `Stable`
 - `Path` - `Stable`
 - контейнеры `List` - `Stable`
@@ -150,8 +157,9 @@
 ## Частично реализованное / переходное
 
 - `on interrupt ... { ... }` - `Partial`
-  - parse-level поддержка уже есть;
-  - семантика выполнения ещё не считается завершённой stable частью языка.
+  - parse/format-level поддержка сохранена для future contract;
+  - semantic всегда выдаёт `SC-SEM-040`, поэтому форма не может молча попасть в codegen;
+  - runtime binding остаётся planned.
 - time/duration systems MVP - `Experimental / Runtime MVP`
   - nominal types `Time` и `Duration` проходят parser/semantic/C codegen;
   - integer literals `ms`, `s`, `min` проверяются на overflow;

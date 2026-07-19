@@ -102,7 +102,7 @@ new Text part = slice(t, 3, 7)
 }
 
 #[test]
-fn conformance_on_interrupt_and_struct_parse_semantic() {
+fn conformance_on_interrupt_is_explicitly_rejected() {
     let src = r#"
 struct Sensor {
     u8 address
@@ -111,7 +111,9 @@ on interrupt timer0 {
     new Int ticks = 1
 }
 "#;
-    pipeline_ok(src);
+    let err = semantic_err(src);
+    assert!(err.contains("SC-SEM-040"), "{err}");
+    assert!(err.contains("on interrupt"), "{err}");
 }
 
 #[test]

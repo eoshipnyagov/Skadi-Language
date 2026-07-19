@@ -261,7 +261,7 @@ fn format_rewrites_project_entry() {
     let rewritten = fs::read_to_string(&entry).expect("formatted file should be readable");
     assert_eq!(
         rewritten,
-        "fn add(Int a, b) Int {\n    new sum = a + b\n    return sum\n}\n"
+        "fn add(Int a, b) returns Int {\n    new sum = a + b\n    return sum\n}\n"
     );
 
     let _ = fs::remove_dir_all(temp);
@@ -277,7 +277,7 @@ fn format_check_passes_for_canonical_file() {
     let entry = temp.join("src").join("main.skd");
     fs::write(
         &entry,
-        "fn add(Int a, b) Int {\n    new sum = a + b\n    return sum\n}\n",
+        "fn add(Int a, b) returns Int {\n    new sum = a + b\n    return sum\n}\n",
     )
     .expect("entry should be writable");
 

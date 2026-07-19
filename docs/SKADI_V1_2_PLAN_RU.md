@@ -399,16 +399,19 @@ operator overloading не входят в первый vector slice. Реали�
 `Angle` может использоваться в связанных helper APIs, но не расширяет сам
 vector slice до матриц или transform framework.
 
-### Milestone 12: переходные поверхности
+### Milestone 12: переходные поверхности - frontend pass выполнен
 
-После завершения ByteSize, Angle и Vector MVP нужно закрыть формы, которые сейчас выглядят
+После завершения ByteSize, Angle и Vector MVP закрыты формы, которые выглядели
 частично реализованными:
 
-- принять отдельное решение по `on interrupt`: runtime contract либо явное
-  исключение из принимаемой поверхности;
-- завершить formatter coverage для всего поддержанного синтаксиса;
-- определить судьбу legacy typed-return syntax без `returns`;
-- сверить остаточные `Partial/Planned` пометки с diagnostics и tests;
+- `on interrupt` остаётся parse/format future form, но получает обязательный `SC-SEM-040`;
+- compound assignments десахарируются без потери левого операнда;
+- formatter канонизирует typed returns через `returns` и compound assignments через явную форму;
+- legacy typed-return syntax принимается с warning для compatibility;
+- legacy C-style `for` остаётся parse/format compatibility-формой и получает обязательный `SC-SEM-040` вместо тихой потери в codegen;
+- `Char` literals получили ASCII/escape contract и `SC-PARSE-221`;
+- scalar `new name = expr` получает корректный inferred C type, а composite declaration без явного типа останавливается через `SC-SEM-020`;
+- остаточные `Partial/Planned` пометки сверены с diagnostics и tests;
 - не превращать module aliases, indexing `on error` и расширенный concurrency API
   в неявные обязательства этой линии.
 

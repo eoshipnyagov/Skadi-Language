@@ -245,6 +245,7 @@ pub enum Expression {
     LiteralInt(i64),   // Simple integer literal
     LiteralFloat(f32), // Floating point literal
     LiteralBool(bool),
+    LiteralChar(char),
     LiteralString(String),
     LiteralDuration {
         nanoseconds: i64,

@@ -438,7 +438,7 @@ impl<'a> ExprParser<'a> {
                 }
             }
             TokenKind::TypeString => Ok(Expression::LiteralString(tok.lexeme.clone())),
-            TokenKind::TypeChar => Ok(Expression::VariableReference(tok.lexeme.clone())),
+            TokenKind::TypeChar => parse_char_literal(tok),
             _ => Err(parse_err(
                 "SC-PARSE-205",
                 format!(
@@ -448,6 +448,44 @@ impl<'a> ExprParser<'a> {
             )),
         }
     }
+}
+
+fn parse_char_literal(token: &Token) -> Result<Expression, String> {
+    let Some(inner) = token
+        .lexeme
+        .strip_prefix('\'')
+        .and_then(|value| value.strip_suffix('\''))
+    else {
+        return Err(parse_err("SC-PARSE-221", "unterminated Char literal."));
+    };
+    let value = match inner {
+        "\\n" => '\n',
+        "\\r" => '\r',
+        "\\t" => '\t',
+        "\\0" => '\0',
+        "\\\\" => '\\',
+        "\\'" => '\'',
+        _ => {
+            let mut chars = inner.chars();
+            let Some(value) = chars.next() else {
+                return Err(parse_err("SC-PARSE-221", "Char literal cannot be empty."));
+            };
+            if chars.next().is_some() || inner.starts_with('\\') {
+                return Err(parse_err(
+                    "SC-PARSE-221",
+                    "Char literal must contain exactly one character or a supported escape.",
+                ));
+            }
+            value
+        }
+    };
+    if !value.is_ascii() {
+        return Err(parse_err(
+            "SC-PARSE-221",
+            "Char literal must be ASCII in the current C runtime.",
+        ));
+    }
+    Ok(Expression::LiteralChar(value))
 }
 
 fn parse_byte_size_literal(

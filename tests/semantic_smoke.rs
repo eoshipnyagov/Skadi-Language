@@ -75,7 +75,7 @@ on error {
 }
 
 #[test]
-fn semantic_allows_on_interrupt_block() {
+fn semantic_rejects_on_interrupt_without_runtime_binding() {
     let src = r#"
 on interrupt timer0 {
     new x = 1
@@ -83,7 +83,12 @@ on interrupt timer0 {
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    semantic_analyze(&program).expect("semantic analysis should pass");
+    let err = semantic_analyze(&program).expect_err("on interrupt must fail before codegen");
+    assert!(err.contains("SC-SEM-040"), "{err}");
+    assert!(
+        err.contains("reserved for a future platform runtime"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -658,7 +663,7 @@ new Bool result = not value
 }
 
 #[test]
-fn semantic_allows_struct_literal_field_punning_for_defined_vars() {
+fn semantic_requires_explicit_type_for_struct_literal_field_punning() {
     let source = r#"
 new Int value = 10
 new Int status = 1
@@ -666,11 +671,12 @@ new result = {value, status}
 "#;
     let tokens = v01::lexer::lex(source).expect("lexing should succeed");
     let program = v01::parser::parse_program(&tokens).expect("parsing should succeed");
-    let result = v01::semantic_analysis::semantic_analyze(&program);
+    let err = v01::semantic_analysis::semantic_analyze(&program)
+        .expect_err("untyped struct literal must not reach codegen");
+    assert!(err.contains("SC-SEM-020"), "{err}");
     assert!(
-        result.is_ok(),
-        "expected semantic success, got: {:?}",
-        result
+        err.contains("explicit type required for composite declaration 'result'"),
+        "{err}"
     );
 }
 
@@ -836,7 +842,7 @@ fn add(Int a, Int b) Int {
 }
 
 #[test]
-fn semantic_rejects_struct_return_without_returns_keyword() {
+fn legacy_struct_return_is_accepted_with_style_warning() {
     let src = r#"
 struct Point {
     Int x
@@ -847,9 +853,14 @@ fn make(Int x) Point {
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("SC-SEM-050"));
-    assert!(err.contains("requires explicit 'returns <type>'"));
+    semantic_analyze(&program).expect("legacy struct return remains compatible");
+    let warnings = semantic_style_warnings(&program);
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning.contains("prefer explicit 'returns <type>'")),
+        "{warnings:?}"
+    );
 }
 
 #[test]

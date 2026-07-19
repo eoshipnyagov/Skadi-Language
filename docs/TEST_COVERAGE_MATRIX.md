@@ -129,8 +129,14 @@
 - политика runtime для out-of-range indexing
   - зафиксирована для `v1` как fail-soft (`List` index -> `0`, `Text` index -> `'\0'`)
   - codegen contract tests проверяют форму вспомогательных runtime helpers
-- runtime semantics для `on interrupt` / `on event`
-  - parse-level coverage уже есть, runtime binding остаётся TODO
+- transition surfaces
+  - `on interrupt` сохраняет parser/formatter coverage, но имеет обязательный negative semantic gate `SC-SEM-040`
+  - compound assignments проверяются от parser desugaring до C lowering
+  - legacy typed returns принимаются с warning и formatter переводит их в `returns`
+  - legacy C-style `for` сохраняет parser/formatter coverage, но имеет обязательный negative semantic gate `SC-SEM-040`
+  - ASCII `Char` literals/escapes, invalid forms, typed List и native execution покрыты
+  - untyped scalar declarations получают корректный C type; composite declarations без типа отклоняются с `SC-SEM-020`
+  - platform runtime binding для interrupts/events остаётся TODO
 - task/channel backend/runtime
   - void и `Task(T)` run/wait, `stop`, `stopping` и bounded Channel реализованы через Win32/pthread backend
   - `close`, timeout, cancellation, `select`, task groups и embedded APIs остаются TODO
