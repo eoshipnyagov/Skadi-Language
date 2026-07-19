@@ -32,16 +32,16 @@
 
 Пользовательские документы:
 
-- [Пользовательские документы](docs/SKADI_DOCS_USER_RU.md)
+- [Пользовательские документы](SKADI_DOCS_USER_RU.md)
 
 Внутренние документы разработки языка и компилятора:
 
-- [Внутренние документы разработки](docs/SKADI_DOCS_INTERNAL_RU.md)
+- [Внутренние документы разработки](SKADI_DOCS_INTERNAL_RU.md)
 
 Если нужен быстрый маршрут без выбора:
 
-- начать с [пользовательских документов](docs/SKADI_DOCS_USER_RU.md), если цель писать программы на Skadi;
-- начать с [внутренних документов](docs/SKADI_DOCS_INTERNAL_RU.md), если цель развивать язык, компилятор или runtime-контракты.
+- начать с [пользовательских документов](SKADI_DOCS_USER_RU.md), если цель писать программы на Skadi;
+- начать с [внутренних документов](SKADI_DOCS_INTERNAL_RU.md), если цель развивать язык, компилятор или runtime-контракты.
 
 ## 4. Ключевые точки входа в код
 
@@ -104,13 +104,15 @@ workflow [docs-pages.yml](.github/workflows/docs-pages.yml), который со
 - Memory MVP уже проходит parser/semantic/codegen/runtime путь для strict fixed-capacity surface.
 - Task/Channel MVP проходит parser/semantic/codegen/runtime путь: native `run/wait`,
   cooperative `stop/stopping` и bounded blocking Channel работают на Win32/pthread.
-  Слой остаётся experimental до успешной проверки dedicated TSan и
-  GCC/Clang/MinGW/MSVC jobs в release CI.
+- Time/Duration MVP проходит parser/semantic/codegen/runtime путь: nominal-типы,
+  literals `ms/s/min` и monotonic Win32/POSIX runtime исполняются end-to-end.
+- Dedicated TSan и GCC/Clang/MinGW/MSVC jobs в remote CI проходят; systems API
+  остаётся experimental из-за незамороженных контрактов, а не отсутствия backend.
 
 Пользовательский контракт и практические шаблоны собраны в
 [руководстве по многопоточности](concurrency.md).
 
-Подробная рамка находится в [Плане v1.2](docs/SKADI_V1_2_PLAN_RU.md).
+Подробная рамка находится в [Плане v1.2](SKADI_V1_2_PLAN_RU.md).
 
 ## 9. Что пока не стоит считать завершённым продуктовым слоем
 
@@ -123,5 +125,5 @@ workflow [docs-pages.yml](.github/workflows/docs-pages.yml), который со
 
 ## 10. Навигация по документам
 
-- [Пользовательские документы](docs/SKADI_DOCS_USER_RU.md) - пользовательская документация
-- [Внутренние документы разработки](docs/SKADI_DOCS_INTERNAL_RU.md) - внутренняя документация разработки
+- [Пользовательские документы](SKADI_DOCS_USER_RU.md) - пользовательская документация
+- [Внутренние документы разработки](SKADI_DOCS_INTERNAL_RU.md) - внутренняя документация разработки

@@ -35,8 +35,10 @@ Owner: Skadi core
 ## 4. Error behavior (v1)
 
 - Empty `pop()` is a recoverable runtime error (danger flow).
-- Out-of-bounds indexing is a recoverable runtime error (danger flow).
-- Runtime growth failure is a recoverable runtime error (danger flow).
+- Out-of-bounds indexing follows the frozen fail-soft `v1` contract and returns
+  the element type's default value; it does not enter `on error`.
+- Runtime allocation/growth failure is a runtime failure, not a recoverable
+  `danger` result in the current API.
 
 Exact `ErrorCode` naming is finalized in runtime/codegen phase.
 
@@ -60,7 +62,8 @@ new i32 first = xs[0]
 xs[1] = 10
 new Int n = len(xs)
 xs.push(99)
-new i32 last = xs.pop() on error {
+new i32 last = 0
+last = xs.pop() on error {
     last = 0
 }
 ```

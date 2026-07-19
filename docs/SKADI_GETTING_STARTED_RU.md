@@ -27,7 +27,7 @@ Skadi source -> lexer -> parser -> semantic -> C codegen -> C compiler -> binary
 
 ### Новый проект
 
-В рабочей директории репозитория:
+В выбранной рабочей директории:
 
 ```powershell
 skadi-cli new hello_skadi
@@ -208,7 +208,8 @@ danger fn safe_div(Int a, Int b) returns Int {
 Если вызывается `danger fn`, можно повесить обработчик:
 
 ```skadi
-new Int value = safe_div(10, 2) on error {
+new Int value = 0
+value = safe_div(10, 2) on error {
     output("division failed")
     return
 }
@@ -340,7 +341,8 @@ xs.push(4)
 ### `pop() on error`
 
 ```skadi
-new i32 value = xs.pop() on error {
+new i32 value = 0
+value = xs.pop() on error {
     output("empty list")
     return
 }

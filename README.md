@@ -105,19 +105,21 @@ label ErrorCode {
 ```
 
 ```skadi
-new Int value = safe_div(10, divisor) on error {
+new Int divisor = 2
+new Int value = 0
+value = safe_div(10, divisor) on error {
     output("division failed")
-    return 0
+    value = 0
 }
 ```
 
 ```skadi
-fn sum_positive(List(Int) xs) returns Int {
+fn sum_positive(Int List xs) returns Int {
     new Int total = 0
 
     iterate xs as x {
         if x > 0 {
-            total += x
+            total = total + x
         }
     }
 
@@ -125,7 +127,8 @@ fn sum_positive(List(Int) xs) returns Int {
 }
 ```
 
-The exact syntax is still evolving. The important part is the direction: readable, explicit, low-noise systems code.
+Experimental systems syntax is still evolving, but examples in this README use
+the current canonical compiler surface.
 
 ## Tiny Syntax Contrast
 
@@ -133,12 +136,12 @@ The exact syntax is still evolving. The important part is the direction: readabl
 <summary>Skadi</summary>
 
 ```skadi
-fn sum_positive(List(Int) xs) returns Int {
+fn sum_positive(Int List xs) returns Int {
     new Int total = 0
 
     iterate xs as x {
         if x > 0 {
-            total += x
+            total = total + x
         }
     }
 

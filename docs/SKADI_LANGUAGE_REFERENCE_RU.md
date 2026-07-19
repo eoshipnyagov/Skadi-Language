@@ -105,6 +105,7 @@ count--
 - string literals
 - list literals
 - struct literals
+- duration literals `ms`, `s`, `min` (`v1.2`, experimental)
 
 Примеры:
 
@@ -124,6 +125,11 @@ new Int value = 7
 new Text status = "ok"
 new Result r = {value, status}
 ```
+
+`Char` поддерживается как тип результата, в частности для `text[index]`, но
+отдельный character literal вида `'a'` пока не является stable expression-формой.
+Размеры `b/kb/mb/gb` в текущем Memory MVP принимаются только внутри
+`memory(...)`; самостоятельный nominal `ByteSize` относится к следующему срезу.
 
 ## 6. Выражения
 
@@ -308,7 +314,8 @@ pass
 ### С присваиванием
 
 ```skadi
-new Int value = safe_div(10, 2) on error {
+new Int value = 0
+value = safe_div(10, 2) on error {
     output("failed")
     return
 }
@@ -427,42 +434,39 @@ new Char c = t[0]
 
 ### Core collection / text
 
-- `len(x)`
-- `contains(text, needle)`
-- `find(text, needle)`
-- `slice(text, start, end)`
-- `concat(a, b)`
+| Вызов | Аргументы | Результат |
+|---|---|---|
+| `len(x)` | `Text` или `List` | `Int` |
+| `contains(text, needle)` | `Text, Text` | `Bool` |
+| `find(text, needle)` | `Text, Text` | `Int` (`-1`, если не найдено) |
+| `slice(text, start, end)` | `Text, Int, Int` | `Text` |
+| `concat(a, b)` | `Text, Text` | `Text` |
 
 ### Filesystem
 
-- `fs.list(path)`
-- `fs.is_dir(path)`
-- `fs.join(a, b)`
+| Вызов | Аргументы | Результат |
+|---|---|---|
+| `fs.list(path)` | `Text/Path` | `Text/Path List` |
+| `fs.is_dir(path)` | `Text/Path` | `Bool` |
+| `fs.join(a, b)` | `Text/Path, Text/Path` | `Text/Path` |
 
 ### I/O
 
-- `args()`
-- `output(value)`
-- `input(prompt)`
-- `read(path)`
-- `write(path, text)`
+| Вызов | Аргументы | Результат |
+|---|---|---|
+| `args()` | без аргументов | `Text List` |
+| `output(value)` | `Int/Float/Bool/Char/Text` | `Int` |
+| `input(prompt)` | `Text` | `Text` |
+| `read(path)` | `Text/Path` | `Text` |
+| `write(path, text)` | `Text/Path, Text` | `Int` |
 
 ### Math
 
-- `abs(x)`
-- `min(a, b)`
-- `max(a, b)`
-- `clamp(x, lo, hi)`
-- `floor(x)`
-- `ceil(x)`
-- `round(x)`
-- `sin(x)`
-- `cos(x)`
-- `atan2(y, x)`
-- `sqrt(x)`
-- `root(x, n)`
-- `deg_to_rad(x)`
-- `rad_to_deg(x)`
+- `abs`, `min`, `max`, `clamp` принимают numeric arguments и сохраняют `Int`,
+  если все аргументы целочисленные; иначе возвращают `Float`;
+- `floor`, `ceil`, `round`, `sin`, `cos`, `sqrt`, `deg_to_rad`, `rad_to_deg`
+  принимают один numeric argument и возвращают `Float`;
+- `atan2(y, x)` и `root(x, n)` принимают два numeric arguments и возвращают `Float`.
 
 ### Math constants
 

@@ -1,6 +1,7 @@
 # Math/Vector Core: реализованная база и backlog 1.x
 
-Статус: базовый math slice реализован в `v1.1`; расширение и vector layer остаются backlog
+Статус: базовый math slice реализован в `v1.1`; Angle и Vector MVP выбраны
+следующими math-oriented milestones после ByteSize
 
 Дата: 2026-07-19
 Контекст: направление gamedev/embedded после стабилизации текущего systems layer.
@@ -162,7 +163,11 @@
 - `sin`, `cos`, `atan2`, `sqrt`, `root`, `deg_to_rad`, `rad_to_deg`;
 - numeric semantic checks, `math.h` lowering и e2e/showcase coverage.
 
-Остальные пункты этого документа являются backlog. Следующий math-oriented
-slice не следует начинать одновременно с `Time/Duration`: сначала нужен общий
-контракт nominal specialized types и их операторов. `Vec2/Vec3/Vec4` разумно
-брать после него отдельным milestone.
+Остальные пункты этого документа являются backlog. `Time/Duration` уже дали первый
+рабочий контракт nominal specialized types; следующим таким срезом выбран
+`ByteSize`. После него в текущий спринт входят отдельные bounded milestones
+`Angle` и `Vec2/Vec3/Vec4`.
+
+Первый Vector MVP не включает матрицы, SIMD-specific lowering, generic vectors,
+swizzling и пользовательский operator overloading. Дополнительные math functions,
+random API и Matrix2D остаются самостоятельными последующими срезами.

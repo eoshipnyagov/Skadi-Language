@@ -66,7 +66,8 @@
   - исторический close-out scope/visibility и CI-гейтов `v1.1`.
 
 - [План v1.2](v1-2-plan.md)
-  - текущая рабочая линия после `v1.1`: Memory MVP и Task/Channel runtime track.
+  - текущая рабочая линия после `v1.1`: Memory, Task/Channel, Time/Duration и
+    следующие specialized-type slices.
 
 - [Блокеры v1](v1-blockers.md)
   - блокеры и несогласованности.
@@ -90,6 +91,11 @@
 - [Task Draft](task-model-draft.md)
 - [Task MVP Contract](task-model-mvp.md)
 - [Task Runtime MVP Design](task-runtime-mvp-design.md)
+
+### Time / Duration
+
+- [Пользовательский runtime-контракт](../user/time-duration.md)
+- [Systems Additions MVP Contract](systems-additions-mvp.md)
 
 ## 5. Future tracks
 

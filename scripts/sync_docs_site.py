@@ -131,7 +131,8 @@ def make_user_index_ru() -> str:
 `skadi-cli` и `skadi-cli tui`.
 
 Стабильная пользовательская база соответствует `v1.1`; текущая разработка
-`v1.2` добавляет experimental systems tracks поверх неё.
+`v1.2` добавляет исполняемые experimental Memory, Task/Channel и Time/Duration
+tracks поверх неё.
 
 ## Основные страницы
 

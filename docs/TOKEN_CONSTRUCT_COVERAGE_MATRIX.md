@@ -29,11 +29,11 @@ Legend:
 | `my` | Y | Y | P | P | P | struct method subset covered |
 | `on error` | P (`on` token + parse pattern) | Y | Y | Y | Y | danger/list-pop contracts covered |
 | `on interrupt` | P (`on` + `interrupt`) | Y | P | N | N | parse/semantic placeholder only |
-| `fixed` / `const` | Y | P | P | N | N | tokenized; non-core execution path |
+| `fixed` / `const` | Y | N | N | N | N | reserved/tokenized, statement parser rejects the form |
 | `hide` | Y | Y | Y | P | P | hidden-field access checks implemented; broader struct-lowering depth is ongoing |
 | `local` | Y | Y | Y | P | P | local visibility enforced in import pipeline via symbol isolation |
-| `direct` | Y | P | N | N | N | deferred semantics |
-| `allow drop` | P (`allow` tokenized) | P | N | N | N | chunk-memory design deferred |
+| `direct` | Y | N | N | N | N | reserved/tokenized; deferred semantics |
+| `allow drop` | P (`allow` tokenized) | N | N | N | N | chunk-memory design deferred |
 | `import "./... .skd"` | N (resolved in CLI pipeline pre-lex) | N (pre-merged) | N (pre-merged) | N (pre-merged) | Y | covered in `tools/skadi-cli` tests |
 | `import module_name` / alias | N | N | N | N | Y (negative) | deterministic diagnostic `[SC-MOD-001]` |
 | import public symbol collision | N | N | N | N | Y (negative) | deterministic diagnostics `[SC-MOD-002]` |
@@ -58,7 +58,7 @@ Legend:
 | Construct | Lexer | Parser | Semantic | Codegen | E2E | Notes |
 |---|---|---|---|---|---|---|
 | Assignment `=` | Y | Y | Y | Y | Y | base path |
-| Compound assign `+= -= *= /=` | Y | P | P | P | N | partial parser/codegen usage |
+| Compound assign `+= -= *= /=` | Y | P | N | N | N | tokenized but not a supported semantic/codegen contract |
 | Comparison `== != > < >= <=` | Y | Y | Y | Y | Y | includes text compare lowering |
 | Arithmetic `+ - * / % ^` | Y | Y | Y | Y | Y | broad coverage |
 | Indexing `xs[i]`, `t[i]` | Y | Y | Y | Y | Y | fail-soft contract tested |

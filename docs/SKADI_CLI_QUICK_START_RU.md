@@ -26,7 +26,7 @@
 
 ## 3. Проверка окружения
 
-В рабочей директории репозитория запустите:
+В рабочей директории запустите:
 
 ```powershell
 skadi-cli doctor
@@ -48,7 +48,7 @@ skadi-cli doctor
 Пример:
 
 ```powershell
-cargo run --manifest-path skadi-cli/Cargo.toml -- build --target host --cc gcc
+cargo run --manifest-path tools/skadi-cli/Cargo.toml -- build --target host --cc gcc
 ```
 
 ## 5. Новый проект

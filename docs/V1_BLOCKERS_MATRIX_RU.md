@@ -3,6 +3,9 @@
 Дата: 2026-05-25  
 Назначение: зафиксировать обязательные решения до стабильного `v1`-релиза транспилятора `Skadi -> C`.
 
+Статус документа: исторический close-out. Все P0 ниже закрыты для контракта `v1`;
+актуальная работа ведётся в плане `v1.2`.
+
 ## P0 (блокирует релиз v1)
 
 1. Контракт ошибок для выхода за границы (`List`/`Text`) — ЗАКРЫТО ДЛЯ V1
@@ -10,18 +13,19 @@
 - `on error` для индексации в `v1` не вводим.
 - Примечание roadmap: возможность перехода к `danger`-контракту рассматривается в `v2+`.
 
-2. Финализация контракта `on error`
-- Сейчас: работает для `danger fn` и `List.pop()`.
-- Нужно зафиксировать:
+2. Финализация контракта `on error` — ЗАКРЫТО ДЛЯ V1
+- Работает для `danger fn` и `List.pop()`.
+- Зафиксировано:
 
   - где `on error` разрешен в v1;
   - какие коды ошибок обязательны (`ErrorCode` policy);
   - поведение для встроенных операций (индексация, I/O, fs).
-- Критерий готовности:
+- Подтверждение:
 
   - таблица "операция -> может вернуть ошибку -> код";
   - реализация и conformance тесты.
- - Статус: частично закрыто (разрешенные/запрещенные зоны зафиксированы в `ON_ERROR_V1_MATRIX_RU.md`).
+  - разрешённые/запрещённые зоны зафиксированы в `ON_ERROR_V1_MATRIX_RU.md`;
+  - semantic/conformance tests закрепляют `danger fn`, builtin и `List.pop()` формы.
 
 3. Формальный контракт `Text` (байты vs символы)
 - Сейчас: операции byte-oriented UTF-8.
@@ -73,11 +77,11 @@
 - Статус: закрыто и продолжает расширяться вместе с языком.
 - Поддерживаемая матрица включает 13 showcase-программ, Memory, Task/Channel и Time/Duration scenarios.
 
-## Ближайший план закрытия P0
+## Close-out P0
 
-1. Составить таблицу `on error` для v1 builtins/операций и реализовать недостающее.
-2. Добавить секцию ownership memory contract для C runtime helper-ов.
-3. Дополнить edge/conformance тесты по утвержденным контрактам.
+- `on error` matrix зафиксирована;
+- ownership memory contract для C runtime helper-ов документирован;
+- edge/conformance и sanitizer tests входят в текущие gates.
 
 
 ## V1 Reliability Addendum (2026-05-26)
@@ -90,7 +94,8 @@
   - runtime hooks for `List/Text/fs/io`,
   - statement-only `i++/i--` lowering.
 - Added negative compile e2e guard for known semantic/codegen mismatch shape (`output(concat(...))`).
-- CI gate split includes dedicated `codegen-e2e` stage; sanitizer run remains optional with explicit skip logs.
+- На момент addendum sanitizer run был optional; текущий `v1.2` CI заменил это
+  обязательным dedicated TSan job для Task/Channel runtime.
 
 ## V1.1 Scope/Visibility Close-out (2026-07-19)
 

@@ -1,8 +1,8 @@
 # Skadi v1.2 Plan (RU)
 
 Дата: 2026-07-19
-Статус: release hardening завершён; Memory и Task/Channel runtime slices
-исполняемы и остаются experimental API текущей линии `v1.2`.
+Статус: release hardening завершён; Memory, Task/Channel и Time/Duration runtime
+slices исполняемы и остаются experimental API текущей линии `v1.2`.
 
 ## 1. Идентичность релиза
 
@@ -13,6 +13,7 @@
 ```text
 Memory        где живут данные
 Task/Channel  как течёт работа и сообщения
+Time/Duration как выражаются интервалы и monotonic-время
 ```
 
 Главная цель `v1.2` - не объявить все системные слои stable, а довести их до честного, тестируемого и хорошо документированного состояния.
@@ -317,17 +318,103 @@ macOS. Обнаруженные platform-specific расхождения исп�
 - fractional literals, `Timer`, timed channel/task operations и embedded backend
   не входят в этот slice.
 
-## 7. Следующий bounded language choice
+## 7. Порядок завершения текущей линии
 
-Фундамент `Time/Duration` теперь реализован. Следующий шаг - сначала стабилизировать
-его на remote compiler matrix, а затем выбрать один отдельный nominal slice:
+Remote compiler matrix для `Time/Duration` зелёная. Дальнейшая работа в текущей
+линии идёт в следующем порядке и не расширяется release-packaging задачами.
 
-1. `ByteSize` и общие memory-size literals поверх уже существующих `b/kb/mb/gb`;
-2. `Angle` с `deg/rad` и связью с math core;
-3. только после этого - vector types как отдельный более широкий milestone.
+### Milestone 8: документационная сверка
+
+Цель: ещё раз сопоставить пользовательские и внутренние документы с фактическими
+parser, semantic, formatter, codegen, CLI и TUI contracts.
+
+Обязательный результат:
+
+- устранены устаревшие пути, версии, статусы и противоречивые release-формулировки;
+- language reference и syntax status покрывают все реализованные конструкции;
+- примеры кода проходят текущий formatter/check flow;
+- RU/EN HTML-навигация и generated site собираются в strict mode;
+- historical/future документы не выглядят как обещание текущего runtime.
+
+### Milestone 9: ByteSize MVP
+
+Цель: выделить размеры памяти из контекстных числовых литералов в отдельный
+nominal type и связать его с существующим Memory MVP.
+
+Планируемый bounded slice:
+
+- `ByteSize` и integer literals `b`, `kb`, `mb`, `gb`;
+- overflow-checked parser representation;
+- запрет неявного смешивания с `Int/Float`;
+- явно зафиксированная арифметика и сравнения;
+- `memory(ByteSize)` без расширения allocator policy;
+- formatter, highlighting, diagnostics, codegen и native e2e;
+- отдельный небольшой showcase и RU/EN пользовательская документация.
+
+До реализации нужно зафиксировать signed/unsigned representation, множители
+единиц и допустимость отрицательных/нулевых значений. `allow grow`, `allow drop`,
+`memory.child` и `memory.static` не входят в этот milestone.
+
+### Milestone 10: Angle MVP
+
+Цель: убрать неоднозначность между градусами, радианами и обычными `Float`, не
+создавая общего framework физической размерности.
+
+Планируемый bounded slice:
+
+- nominal `Angle` и literals `deg`, `rad`;
+- overflow/finite-value policy и явно выбранное внутреннее представление;
+- сравнения, сложение/вычитание углов и ограниченные scalar operations;
+- явные conversions между градусами и радианами;
+- интеграция с `sin`, `cos`, `atan2` без параллельного двусмысленного API;
+- formatter, highlighting, diagnostics, C lowering, e2e и небольшой showcase;
+- RU/EN пользовательская документация.
+
+До реализации нужно решить, принимают ли существующие `sin/cos` только `Angle`
+или сохраняют numeric compatibility на переходный период. Общая dimensional
+algebra, angular velocity и implicit `Float <-> Angle` conversions не входят в MVP.
+
+### Milestone 11: Vector MVP
+
+Цель: добавить первый ограниченный math value layer после серии проверенных
+nominal-type slices.
+
+Планируемый bounded slice:
+
+- `Vec2`, `Vec3`, `Vec4` с одним явно выбранным scalar representation;
+- создание, доступ к компонентам и value semantics;
+- векторные `+`/`-` и умножение/деление на scalar;
+- `dot`, `length`, `length_sq`, `normalize`, `distance`, `distance_sq`;
+- `cross` только для `Vec3`;
+- semantic negative coverage, C lowering, e2e и showcase.
+
+Матрицы, SIMD-specific lowering, generic vectors, swizzling и пользовательский
+operator overloading не входят в первый vector slice. Реализованный перед ним
+`Angle` может использоваться в связанных helper APIs, но не расширяет сам
+vector slice до матриц или transform framework.
+
+### Milestone 12: переходные поверхности
+
+После ByteSize, Angle и Vector MVP нужно закрыть формы, которые сейчас выглядят
+частично реализованными:
+
+- принять отдельное решение по `on interrupt`: runtime contract либо явное
+  исключение из принимаемой поверхности;
+- завершить formatter coverage для всего поддержанного синтаксиса;
+- определить судьбу legacy typed-return syntax без `returns`;
+- сверить остаточные `Partial/Planned` пометки с diagnostics и tests;
+- не превращать module aliases, indexing `on error` и расширенный concurrency API
+  в неявные обязательства этой линии.
+
+### Следующая release-линия
+
+Installer/uninstaller, release binaries, package/version identity, changelog,
+GitHub Releases и формальный release tag переносятся в следующую версию. Там же
+отдельно планируются distribution smoke tests через установленный `skadi-cli`, а
+не через запуск workspace с Cargo.
 
 `Timer`, wall-clock/calendar API, общая dimensional algebra и operator overloading
-не должны автоматически входить в следующий slice.
+не должны автоматически входить в текущую линию.
 
 Полный future contract: [Systems Additions MVP](systems-additions-mvp.md).
 

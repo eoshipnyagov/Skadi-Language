@@ -18,11 +18,17 @@
 - `x = expr` - `Stable`
 - `x.field = expr` - `Stable`
 - `i++` / `i--` - `Stable`
+- `+=`, `-=`, `*=`, `/=` - `Reserved / Not implemented`
+  - lexer распознаёт operator token, но semantic/codegen contract не поддерживается;
+  - используйте явную форму `x = x + value`.
 - `return expr` - `Stable`
 - `return` - `Stable`
 - `return error Code` - `Stable`
 - `pass` - `Stable`
 - выражение как statement, включая builtin-вызовы вроде `output("hello")` - `Stable`
+- `fixed` / `const`, `direct`, `allow drop` - `Reserved / Not implemented`
+  - lexer распознаёт эти слова, но текущий statement parser намеренно не принимает формы;
+  - они не должны использоваться в пользовательском коде.
 
 ## Функции
 
@@ -115,6 +121,8 @@
 - `Float` - `Stable`
 - `Bool` / `bool` - `Stable`
 - `Char` / `char` - `Stable`
+  - значения доступны, например, через индексирование `Text`;
+  - отдельный character literal `'a'` пока не является поддержанной stable expression-формой.
 - `Text` - `Stable`
 - `Path` - `Stable`
 - контейнеры `List` - `Stable`

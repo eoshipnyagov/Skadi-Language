@@ -5,8 +5,8 @@
 Стабильная пользовательская база сейчас соответствует `v1.1`: CLI/TUI,
 formatter, diagnostics, math core, I/O и showcase workflow. Текущая разработка
 `v1.2` добавляет experimental systems tracks; они описаны в справочнике языка и
-статусе синтаксиса. Strict Memory и Task/Channel уже имеют исполняемый runtime
-MVP, но пока не объявлены stable API.
+статусе синтаксиса. Strict Memory, Task/Channel и Time/Duration уже имеют
+исполняемый runtime MVP, но пока не объявлены stable API.
 
 Эти материалы теперь можно поддерживать не только как Markdown-файлы, но и как
 HTML-сайт документации.

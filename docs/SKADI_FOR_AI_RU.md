@@ -19,7 +19,8 @@
 Skadi в этом репозитории сейчас:
 
 - компилируется по цепочке `Skadi -> C -> native exe`;
-- имеет ограниченную, но хорошо тестируемую поверхность `v1/v1.1`;
+- имеет хорошо тестируемую stable поверхность `v1.1` и исполняемые experimental
+  Memory, Task/Channel и Time/Duration slices `v1.2`;
 - предпочитает канонический и предсказуемый синтаксис;
 - не любит “догадки по аналогии” с Rust, Python, Go, TypeScript или Kotlin;
 - требует использовать только реально поддержанные конструкции и builtins.
@@ -45,7 +46,7 @@ Skadi в этом репозитории сейчас:
 - не придумывайте новые ключевые слова;
 - не придумывайте новые builtins;
 - не придумывайте generics, match-expression, exceptions, traits, classes,
-  modules, imports, lambdas, async/await и macro-system;
+  module-name imports, import aliases, lambdas, async/await и macro-system;
 - не предполагайте существование GC, borrow-checker или exception runtime;
 - не используйте синтаксис, если вы не видели его в документации или тестах.
 
@@ -93,6 +94,11 @@ for item in items {
 - `List`, `Text`, `Path`, числа, `Bool`, `Char`;
 - builtins для `Text`, `List`, `fs.*`, `args`, `input/output/read/write`;
 - math core из `v1.1`.
+- относительные imports `import "./file.skd"`, `local`, `hide` и `module.symbol`;
+
+Experimental `Memory`, `Task/Channel` и `Time/Duration` используйте только когда
+задача прямо требует systems surface и контракт сверяется с соответствующим
+разделом справочника.
 
 Если задача укладывается в этот набор, почти всегда лучше оставаться внутри него.
 
@@ -105,7 +111,8 @@ for item in items {
 - писать `enum` вместо `label`;
 - использовать `Result<T, E>`, `Option<T>`, `Some/None`, `Ok/Err`;
 - возвращать ошибки через несуществующий exception-style flow;
-- использовать `import`, `package`, `namespace`, `module`;
+- использовать module-name import, alias, `package` или `namespace` вместо
+  поддержанного `import "./relative/path.skd"`;
 - писать `[]Type`, `Vec<T>`, `Array<T>` вместо `Type List`;
 - придумывать методы и builtins вроде `text.trim()`, `path.exists()`,
   `list.map()`, `list.filter()`, `print()`, `panic()`;
@@ -129,14 +136,17 @@ new i32 List xs = [1, 2, 3]
 ### Функции
 
 ```skadi
-fn add(Int a, Int b) -> Int {
+fn add(Int a, Int b) returns Int {
     return a + b
 }
 ```
 
 ```skadi
-danger fn load_text(Path path) -> Text {
-    return read(path)
+danger fn require_positive(Int value) returns Int {
+    if value < 0 {
+        return error InvalidValue
+    }
+    return value
 }
 ```
 
@@ -146,12 +156,13 @@ danger fn load_text(Path path) -> Text {
 label ErrorCode {
     Ok,
     NotFound,
-    InvalidData
+    InvalidValue
 }
 
-new Text content = read(path) on error {
-    output("read failed")
-    return error NotFound
+new Int content = 0
+content = require_positive(-1) on error {
+    output("invalid value")
+    content = 0
 }
 ```
 
@@ -306,7 +317,7 @@ syntax-canonical-matrix и showcase-программы.
 Ты пишешь код на Skadi для текущего репозитория.
 Работай только в рамках реально поддержанного подмножества языка.
 Не используй синтаксис из Rust, Python, Go, TypeScript, Kotlin или C#.
-Не придумывай generics, imports, classes, enums, exceptions, lambdas или async.
+Не придумывай generics, module-name imports, classes, enums, exceptions, lambdas или async.
 Для объявления переменных используй new.
 Для канонического стиля предпочитай Bool/Char и iterate ... as ....
 Для ошибок используй только существующий danger/on error/ErrorCode flow.
