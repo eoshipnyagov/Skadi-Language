@@ -338,7 +338,7 @@ fn build_scene() returns Scene {
 #[test]
 fn backend_supports_memory_model_after_semantic_success() {
     let src = r#"
-fn warmup(Memory arena) Int {
+fn warmup(Memory arena) returns Int {
     place in arena {
         new Text msg = "hello"
         output(msg)
@@ -352,5 +352,8 @@ fn warmup(Memory arena) Int {
     let generated = transpile_program_to_c(&program);
     assert!(generated.contains("#define SK_THREAD_LOCAL"));
     assert!(generated.contains("static SK_THREAD_LOCAL SkMemoryRegion *sk_active_region"));
+    assert!(generated.contains("} SkMemoryAlignment;"));
+    assert!(generated.contains("sizeof(SkMemoryAlignment)"));
+    assert!(!generated.contains("max_align_t"));
     assert!(!generated.contains("static SkMemoryRegion *sk_active_region"));
 }

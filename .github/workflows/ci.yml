@@ -184,8 +184,9 @@ jobs:
           cargo run --manifest-path "$env:GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- check
           $output = cargo run --manifest-path "$env:GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- run --target host --cc ${{ matrix.cc }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($output -notmatch "7" -or $output -notmatch "systems matrix ok") {
-              throw "Unexpected systems project output: $output"
+          $outputText = $output -join [Environment]::NewLine
+          if ($outputText -notmatch "7" -or $outputText -notmatch "systems matrix ok") {
+            throw "Unexpected systems project output:`n$outputText"
           }
 
   core-tests:

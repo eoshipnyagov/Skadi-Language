@@ -122,10 +122,16 @@ fn emit_memory_runtime(out: &mut String) {
     out.push_str("    size_t offset;\n");
     out.push_str("    bool failed;\n");
     out.push_str("} SkMemoryRegion;\n\n");
+    out.push_str("typedef union {\n");
+    out.push_str("    long double long_double_value;\n");
+    out.push_str("    void *pointer_value;\n");
+    out.push_str("    int64_t integer_value;\n");
+    out.push_str("} SkMemoryAlignment;\n\n");
     out.push_str("typedef struct SkAllocHeader {\n");
     out.push_str("    uint32_t magic;\n");
     out.push_str("    SkMemoryRegion *owner_region;\n");
     out.push_str("    size_t size;\n");
+    out.push_str("    SkMemoryAlignment alignment;\n");
     out.push_str("} SkAllocHeader;\n\n");
     out.push_str("#define SK_ALLOC_MAGIC 0x534B4144u\n\n");
     out.push_str("static SK_THREAD_LOCAL SkMemoryRegion *sk_active_region = NULL;\n\n");
@@ -175,7 +181,9 @@ fn emit_memory_runtime(out: &mut String) {
     out.push_str("static void* sk_alloc_bytes_in(SkMemoryRegion *region, size_t size) {\n");
     out.push_str("    size_t total = sizeof(SkAllocHeader) + size;\n");
     out.push_str("    if (region) {\n");
-    out.push_str("        size_t start = sk_mem_align_up(region->offset, sizeof(max_align_t));\n");
+    out.push_str(
+        "        size_t start = sk_mem_align_up(region->offset, sizeof(SkMemoryAlignment));\n",
+    );
     out.push_str("        if (!region->buffer || start + total > region->capacity) {\n");
     out.push_str("            region->failed = true;\n");
     out.push_str("            return NULL;\n");
