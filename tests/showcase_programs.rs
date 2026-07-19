@@ -1,12 +1,14 @@
 use v01::codegen::transpile_program_to_c;
 use v01::lexer::lex;
 use v01::parser::parse_program;
-use v01::semantic_analysis::semantic_analyze;
+use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
 
 fn compile_pipeline(src: &str) -> String {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
+    let warnings = semantic_style_warnings(&program);
+    assert!(warnings.is_empty(), "showcase style warnings: {warnings:?}");
     transpile_program_to_c(&program)
 }
 
@@ -156,4 +158,14 @@ fn showcase_systems_pipeline_compiles() {
     assert!(c.contains("static SK_THREAD_LOCAL SkTask *sk_current_task"));
     assert!(c.contains("sk_channel_create(1, sizeof(Reading))"));
     assert!(c.contains("sk_mem_set_active(report_memory)"));
+}
+
+#[test]
+fn showcase_time_budget_compiles() {
+    let src = include_str!("../benchmarks/bench_13_time_budget.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("int64_t measure_step(int64_t work_budget)"));
+    assert!(c.contains("sk_time_sleep(work_budget)"));
+    assert!(c.contains("sk_time_elapsed(started_at)"));
+    assert!(c.contains("sk_task_start(&measurement_task"));
 }

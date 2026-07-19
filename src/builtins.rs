@@ -27,6 +27,10 @@ pub enum Builtin {
     Root,
     DegToRad,
     RadToDeg,
+    Now,
+    Elapsed,
+    Sleep,
+    Delay,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +39,7 @@ pub enum BuiltinCategory {
     CoreFilesystem,
     CoreIo,
     Math,
+    SystemsTime,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -234,6 +239,34 @@ const BUILTIN_SPECS: &[BuiltinSpec] = &[
         name: "rad_to_deg",
         arity: 1,
         category: BuiltinCategory::Math,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Now,
+        name: "now",
+        arity: 0,
+        category: BuiltinCategory::SystemsTime,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Elapsed,
+        name: "elapsed",
+        arity: 1,
+        category: BuiltinCategory::SystemsTime,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Sleep,
+        name: "sleep",
+        arity: 1,
+        category: BuiltinCategory::SystemsTime,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Delay,
+        name: "delay",
+        arity: 1,
+        category: BuiltinCategory::SystemsTime,
         enabled: true,
     },
 ];

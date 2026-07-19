@@ -6,7 +6,7 @@
 //   --show-files  show files too (overrides --dirs-only)
 //   --depth-1..5  limit recursion depth
 
-fn walk(Text path, bool dirs_only, Int max_depth, Int current_depth) {
+fn walk(Text path, Bool dirs_only, Int max_depth, Int current_depth) {
     new Text dir_line = concat("[D] ", path)
     output(dir_line)
 
@@ -27,8 +27,8 @@ fn walk(Text path, bool dirs_only, Int max_depth, Int current_depth) {
 }
 
 new Text List cli_args = args()
-new bool dirs_only = false
-new bool show_files = false
+new Bool dirs_only = false
+new Bool show_files = false
 new Int max_depth = -1
 new Int i = 0
 while i < len(cli_args) {

@@ -516,6 +516,9 @@ impl Formatter {
             Expression::LiteralFloat(value) => self.render_float(*value),
             Expression::LiteralBool(value) => value.to_string(),
             Expression::LiteralString(value) => value.clone(),
+            Expression::LiteralDuration {
+                magnitude, unit, ..
+            } => format!("{magnitude}{unit}"),
             Expression::ListLiteral(items) => format!(
                 "[{}]",
                 items

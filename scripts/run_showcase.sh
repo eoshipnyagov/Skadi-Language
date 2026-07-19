@@ -17,6 +17,9 @@ BENCHES=(
   "bench_08_path_list_helpers|benchmarks/bench_08_path_list_helpers.skd|benchmarks/showcase-data/tree_fixture|"
   "bench_09_math_navigation|benchmarks/bench_09_math_navigation.skd|.|"
   "bench_10_v1_1_toolbox|benchmarks/bench_10_v1_1_toolbox.skd|.|"
+  "bench_11_task_channel_pipeline|benchmarks/bench_11_task_channel_pipeline.skd|.|"
+  "bench_12_systems_pipeline|benchmarks/bench_12_systems_pipeline.skd|.|"
+  "bench_13_time_budget|benchmarks/bench_13_time_budget.skd|.|"
 )
 
 build_bench() {

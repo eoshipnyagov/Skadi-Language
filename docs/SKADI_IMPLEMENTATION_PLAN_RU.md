@@ -240,6 +240,7 @@ Reference:
 - Win32 и pthread backend, многопоточные stress/e2e и обязательный TSan gate в Linux CI;
 - относительные path-imports, `local`/`hide`, direct-import-only visibility и `module.symbol`;
 - каноническое ключевое слово `returns` для типизированных функций.
+- nominal `Time/Duration`, unit literals и monotonic Win32/POSIX runtime.
 
 Открытые задачи и границы текущего этапа ведутся в `docs/SKADI_V1_2_PLAN_RU.md`.
 

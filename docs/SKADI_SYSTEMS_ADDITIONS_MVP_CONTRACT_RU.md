@@ -1,8 +1,8 @@
 # Skadi Systems Additions MVP Contract (RU)
 
 Дата: 2026-07-19
-Статус: future implementation reference; Memory и Task/Channel уже вынесены в
-experimental `v1.2`, следующий кандидат - `Time/Duration`.
+Статус: living implementation reference; Memory, Task/Channel и первый
+Time/Duration slice реализованы как experimental `v1.2` runtime MVP.
 Назначение: зафиксировать ближайший practical-first контракт для набора системных дополнений к Skadi, которые логично развивают оси `Memory`, `Task/Channel`, `Canvas`.
 
 Связанный design-документ:
@@ -66,6 +66,10 @@ project-level policy hooks
 Это важнее и безопаснее, чем сразу браться за весь широкий стек идей.
 
 ## 5. Time / Duration contract
+
+Реализационный статус: первый bounded slice выполнен. Поддерживаются nominal
+`Time/Duration`, integer `ms/s/min`, monotonic `now/elapsed` и blocking
+`sleep/delay` на Win32/POSIX. Расширения этого раздела остаются future work.
 
 Если этот слой пойдёт в реализацию, минимальный контракт должен быть таким:
 

@@ -530,6 +530,20 @@ output(bounded)
 Stable base `v1.1` не требует этих возможностей, но текущая ветка разработки уже
 позволяет проверять и запускать их на Windows и POSIX host.
 
+### `Time` и `Duration`
+
+```skadi
+new Time started_at = now()
+sleep(5ms)
+new Duration measured = elapsed(started_at)
+new Bool completed = measured >= 5ms
+output(completed)
+```
+
+`Time` является точкой monotonic clock, а `Duration` - отдельным nominal-типом.
+Поддерживаются целые literals `ms`, `s`, `min`; обычный `Int` не преобразуется в
+`Duration` неявно. Полный контракт: [Время и длительности](time-duration.md).
+
 ### `Memory`
 
 ```skadi
@@ -645,6 +659,7 @@ Showcase-программы:
 - `benchmarks/bench_10_v1_1_toolbox.skd`
 - `benchmarks/bench_11_task_channel_pipeline.skd`
 - `benchmarks/bench_12_systems_pipeline.skd`
+- `benchmarks/bench_13_time_budget.skd`
 
 Описание: [Showcase-программы](showcases.md)
 
@@ -661,5 +676,6 @@ Showcase-программы:
 - [Короткие примеры](language-examples.md) - небольшие рецепты по отдельным конструкциям
 - [Справочник CLI/TUI](cli-reference.md) - команды CLI и TUI
 - [Многопоточность](concurrency.md) - Task/Channel, lifecycle и платформы
+- [Время и длительности](time-duration.md) - `Time`, `Duration`, unit literals и runtime
 - [Статус синтаксиса](syntax-status.md) - точный срез текущего синтаксиса
 - [Покрытие тестами](../internal/test-coverage.md) - что реально покрыто тестами

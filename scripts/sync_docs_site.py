@@ -16,6 +16,7 @@ ROUTE_MAP = [
     ("user/cli-reference", "SKADI_CLI_REFERENCE_RU.md"),
     ("user/language-reference", "SKADI_LANGUAGE_REFERENCE_RU.md"),
     ("user/language-examples", "SKADI_LANGUAGE_EXAMPLES_RU.md"),
+    ("user/time-duration", "SKADI_TIME_DURATION_RU.md"),
     ("user/concurrency", "SKADI_CONCURRENCY_GUIDE_RU.md"),
     ("user/syntax-status", "SKADI_SYNTAX_STATUS.md"),
     ("user/ai-guide", "SKADI_FOR_AI_RU.md"),
@@ -139,6 +140,7 @@ def make_user_index_ru() -> str:
 - [Справочник CLI/TUI](cli-reference.md)
 - [Справочник языка](language-reference.md)
 - [Короткие примеры](language-examples.md)
+- [Время и длительности](time-duration.md)
 - [Многопоточность](concurrency.md)
 - [Статус синтаксиса](syntax-status.md)
 - [Showcase-программы](showcases.md)
@@ -161,6 +163,7 @@ adds experimental systems tracks on top of it.
 - [CLI/TUI Reference](cli-reference.en.md)
 - [Language Reference](language-reference.en.md)
 - [Short Language Examples](language-examples.en.md)
+- [Time and Duration](time-duration.en.md)
 - [Concurrency](concurrency.en.md)
 - [Syntax Status](syntax-status.en.md)
 - [Showcase Programs](showcases.en.md)

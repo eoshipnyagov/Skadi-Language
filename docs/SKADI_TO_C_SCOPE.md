@@ -1,88 +1,136 @@
-# Границы компиляции Skadi -> C (`v1`)
+# Границы компиляции Skadi -> C
 
 ## Статус
 
-Активный ближайший backend target.  
-Дата: 2026-05-21
+Дата сверки: 2026-07-19
 
-## Цель
+Stable base `v1.1` и experimental systems slices `v1.2` проходят общий pipeline:
 
-Генерировать читаемый и детерминированный C-код для `Skadi Core v1`, чтобы на
-этом этапе не реализовывать с нуля полный backend/runtime.
+```text
+Skadi -> lexer -> parser -> semantic -> C codegen -> host C compiler -> binary
+```
 
-## Что входит в `v1` и уже реализовано
+Эта страница описывает фактический backend, а не будущую спецификацию языка.
 
-- верхнеуровневые объявления функций (`fn`, `danger fn`)
-- объявления переменных через `new`:
+## Core lowering
 
-  - `new name = expr`
-  - `new Type name = expr`
-- присваивания (`name = expr`) для уже объявленных переменных
-- арифметические, сравнительные и логические выражения, которые поддерживает parser
-- `if / else`, `while`, `loop`
-- `return`
-- `for item in collection` (переходное понижение)
-- базовое соответствие типов Skadi -> C:
+Текущий C backend поддерживает:
 
-  - `Int`/`i64` -> `int64_t`
-  - `Float`/`f64` -> `double`
-  - `bool` -> `bool`
+- top-level statements и функции `fn` / `danger fn`;
+- typed params и canonical `returns`;
+- scalar и fixed-width types;
+- `new`, assignment, `i++`, `i--`;
+- arithmetic, comparison, logical operators и `^ -> pow`;
+- `if/else`, `while`, `loop`, `for in`, `iterate as`, legacy C-style `for`;
+- `when/is/else`, `break`, `continue`, `pass`;
+- `label ErrorCode`, `return error`, `on error`;
+- struct declarations, literals, fields, `my.field` и methods;
+- `local`/`hide` после CLI module preprocessing;
+- relative path imports и `module.symbol` после CLI merge pipeline.
 
-## Переходные соответствия
+## Type mapping
 
-- `loop { ... }` -> `while (1) { ... }`
-- `for item in collection { ... }` -> временный C-style цикл, пока окончательно не зафиксирована runtime-модель списка
-- неподдержанные конструкции отражаются в C как явные комментарии `TODO(v1)`
+| Skadi | C |
+|---|---|
+| `Int`, `i64` | `int64_t` |
+| `i8/i16/i32` | `int8_t/int16_t/int32_t` |
+| `u8/u16/u32/u64` | `uint8_t/uint16_t/uint32_t/uint64_t` |
+| `Float`, `f64` | `double` |
+| `f32` | `float` |
+| `Bool` | `bool` |
+| `Char` | `char` |
+| `Text`, `Path` | managed `char*` runtime representation |
+| `Time`, `Duration` | nominal Skadi types lowered to `int64_t` nanoseconds |
+| user struct | generated C `typedef struct` |
 
-## Приоритетный план
+Nominal semantic rules сохраняются до codegen: совпадающее C representation не
+разрешает неявно смешивать `Time/Duration` с `Int`.
 
-### 1. Сигнатуры функций и типизация
+## Collections, text and I/O
 
-- разбор и валидация типизированных параметров (`fn add(Int a, Int b)`)
-- разбор и валидация типизированного возврата (`fn add(...) returns Int`)
-- генерация соответствующих C-сигнатур
+Runtime helpers реализуют:
 
-### 2. Минимально жизнеспособный слой проверки типов
+- typed mutable `List` families, iteration, index, `push`, `pop`;
+- `Text` length/index/search/slice/concat;
+- `Path` как path-oriented text representation;
+- `args`, `input`, `output`, `read`, `write`;
+- `fs.list`, `fs.join`, `fs.is_dir`;
+- deterministic cleanup для generated list/text owners.
 
-- проверка совместимости присваивания для базовых scalar types
-- явное правило для смешанной арифметики (`Int + Float`)
-- стратегия явных cast в AST/codegen там, где это нужно
+Текущий index contract остаётся fail-soft и описан в language reference.
 
-### 3. Понижение `danger` / `on error`
+## Math runtime
 
-- представление результата danger-вызова в C как пары `status/value`
-- понижение `x = danger_call(...) on error { ... }`
-- понижение bare `danger_call(...) on error { ... }`
+Math core понижается через `math.h` и generated helper expressions:
 
-### 4. Полнота control flow
+- `PI`, `TAU`, `E`, `EPSILON`;
+- `abs`, `min`, `max`, `clamp`;
+- `floor`, `ceil`, `round`;
+- `sin`, `cos`, `atan2`, `sqrt`, `root`;
+- `deg_to_rad`, `rad_to_deg`;
+- оператор степени `^` через `pow`.
 
-- нормальное понижение `when/is/else` (if-chain или switch там, где это подходит)
-- каноничное понижение else-if в AST/codegen пути
+## Memory runtime (`v1.2`, experimental)
 
-### 5. Runtime-ориентированный синтаксис (после MVP)
+- `Memory name = memory(size)` создаёт fixed-capacity region;
+- `place in` переключает thread-local active region;
+- trailing `on error` обрабатывает overflow;
+- `clear` сбрасывает region;
+- semantic pass проверяет capability, escape и use-after-clear rules;
+- runtime одинаково используется обычным кодом и native tasks без global race.
 
-- `run/wait/delay`
-- семантика `Link(T)` и `send/receive/signal`
-- runtime-модель для `on interrupt` / `on event`
+`allow grow`, `allow drop`, child/static allocators не lower'ятся как supported API.
 
-## Отложено / пока не реализовано
+## Task/Channel runtime (`v1.2`, experimental)
 
-- полное понижение `returns struct { ... }`
-- семантика `direct` params
-- enforcement видимости `local fn`
-- доступ к полям структуры (`my.field`) и понижение методов
-- imports и разрешение module path
-- memory-model features (`allow drop`, chunk budgeting)
-- test DSL (`test`, `check`)
+- `Task`, `Task(T)`, `run`, `wait`, `stop`, `stopping`;
+- Win32 threads и pthread backend;
+- typed argument/result contexts и generated trampolines;
+- cooperative stop и обязательный join;
+- bounded blocking `Channel(T)`;
+- typed value-safe `send/receive` wrappers;
+- mutex/condition-variable backpressure runtime;
+- deterministic channel cleanup после task lifecycle.
 
-## Принципы выходного C-кода
+CLI добавляет platform link flags, включая `-pthread` на POSIX.
 
-- сгенерированный C должен быть стабильным (`same input -> same output`)
-- сгенерированный C должен оставаться читаемым для отладки
-- неподдержанные конструкции должны быть представлены явными `TODO` в C output
+## Time runtime (`v1.2`, experimental)
 
-## Валидация
+- `Time` и `Duration` lower'ятся в signed `i64` nanoseconds;
+- literals `ms`, `s`, `min` вычисляются и overflow-check'ятся до C codegen;
+- `now` использует `QueryPerformanceCounter` или `clock_gettime(CLOCK_MONOTONIC)`;
+- `elapsed` возвращает monotonic duration;
+- `sleep`/`delay` используют `Sleep` или retry вокруг `nanosleep`;
+- runtime failure имеет код `SC-RT-320`.
 
-- smoke tests проверяют генерацию основных структур
-- parser и semantic должны проходить до стадии генерации C
-- e2e-тесты собирают сгенерированный C через `clang/gcc/cc`, когда это возможно
+## Platform scope
+
+Release matrix проверяет generated C на:
+
+- Windows MinGW и MSVC;
+- Linux GCC и Clang;
+- macOS host compiler;
+- GCC ThreadSanitizer для concurrency runtime.
+
+ESP32/FreeRTOS, AVR и другие embedded runtimes пока являются отдельным target
+roadmap, а не скрытым обещанием desktop C backend.
+
+## Не реализовано в backend
+
+- полноценный `on interrupt` runtime;
+- wall-clock/calendar/timezone API;
+- task groups, `select`, channel close/timeout/cancellation;
+- shared mutable state primitives;
+- Visual Core / Canvas runtime;
+- `allow grow/drop`, child/static Memory;
+- generic units algebra, `Timer`, `ByteSize`, `Angle`, vector/matrix layer;
+- module aliases, re-exports и module-name imports.
+
+## Инварианты generated C
+
+- одинаковый AST должен давать детерминированный C output;
+- unsupported surface отклоняется semantic/codegen diagnostic, а не молча
+  превращается в другое поведение;
+- generated C должен оставаться пригодным для диагностики и sanitizer runs;
+- shape tests закрепляют важные runtime hooks, native e2e собирает и запускает
+  representative programs.

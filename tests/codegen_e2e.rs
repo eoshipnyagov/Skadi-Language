@@ -760,6 +760,37 @@ output(squared)
 }
 
 #[test]
+fn e2e_time_duration_runtime_is_monotonic() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Time started_at = now()
+sleep(5ms)
+new Duration first_elapsed = elapsed(started_at)
+new Time checkpoint = now()
+delay(1ms)
+new Duration second_elapsed = now() - checkpoint
+new Bool first_ok = first_elapsed >= 1ms
+new Bool second_ok = second_elapsed >= 1ms
+output(first_ok and second_ok)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+
+    let run = compile_c_and_execute(compiler, &c, "Skadi_e2e_time_duration", &[], &[], None);
+    assert!(
+        run.status.success(),
+        "time runtime failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "true");
+}
+
+#[test]
 fn e2e_v1_1_toolbox_showcase_builds_and_runs() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");

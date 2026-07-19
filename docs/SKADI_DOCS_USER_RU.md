@@ -41,6 +41,9 @@ HTML-сайт документации.
 - [Короткие примеры](language-examples.md)
   - небольшие рецепты по операторам, ошибкам, структурам, модулям, I/O, math и systems surface.
 
+- [Время и длительности](time-duration.md)
+  - `Time`, `Duration`, unit literals, monotonic runtime и допустимая арифметика.
+
 - [Справочник CLI/TUI](cli-reference.md)
   - справочник по командам `skadi-cli` и возможностям `skadi-cli tui`.
 

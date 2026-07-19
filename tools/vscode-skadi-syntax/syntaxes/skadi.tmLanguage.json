@@ -4,6 +4,7 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#duration-literals" },
     { "include": "#memory-size-literals" },
     { "include": "#numbers" },
     { "include": "#typed-declarations" },
@@ -59,6 +60,14 @@
         {
           "name": "constant.numeric.memory-size.skd",
           "match": "\\b\\d+(?:b|kb|mb|gb)\\b"
+        }
+      ]
+    },
+    "duration-literals": {
+      "patterns": [
+        {
+          "name": "constant.numeric.duration.skd",
+          "match": "\\b\\d+(?:ms|s|min)\\b"
         }
       ]
     },
@@ -283,7 +292,7 @@
       "patterns": [
         {
           "name": "storage.type.skd",
-          "match": "\\b(Int|Float|Bool|Char|Byte|bool|char|Text|String|Path|Time|Memory|Task|Channel|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List|Canvas|Window|Point|Size)\\b"
+          "match": "\\b(Int|Float|Bool|Char|Byte|bool|char|Text|String|Path|Time|Duration|Memory|Task|Channel|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List|Canvas|Window|Point|Size)\\b"
         }
       ]
     },
@@ -303,7 +312,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.skd",
-          "match": "\\b(output|print|input|read|write|len|contains|find|slice|concat|args|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\\b(?=\\s*\\()"
+          "match": "\\b(output|print|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\\b(?=\\s*\\()"
         },
         {
           "name": "meta.namespace.fs.skd",

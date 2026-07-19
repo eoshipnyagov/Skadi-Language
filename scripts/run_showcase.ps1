@@ -20,7 +20,10 @@ $benches = @(
     @{ name = "bench_07_struct_list"; file = "benchmarks/bench_07_struct_list.skd"; args = @() },
     @{ name = "bench_08_path_list_helpers"; file = "benchmarks/bench_08_path_list_helpers.skd"; args = @(); cwd = "benchmarks/showcase-data/tree_fixture" },
     @{ name = "bench_09_math_navigation"; file = "benchmarks/bench_09_math_navigation.skd"; args = @() },
-    @{ name = "bench_10_v1_1_toolbox"; file = "benchmarks/bench_10_v1_1_toolbox.skd"; args = @() }
+    @{ name = "bench_10_v1_1_toolbox"; file = "benchmarks/bench_10_v1_1_toolbox.skd"; args = @() },
+    @{ name = "bench_11_task_channel_pipeline"; file = "benchmarks/bench_11_task_channel_pipeline.skd"; args = @() },
+    @{ name = "bench_12_systems_pipeline"; file = "benchmarks/bench_12_systems_pipeline.skd"; args = @() },
+    @{ name = "bench_13_time_budget"; file = "benchmarks/bench_13_time_budget.skd"; args = @() }
 )
 
 function Invoke-Step {

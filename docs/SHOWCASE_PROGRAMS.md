@@ -1,6 +1,6 @@
 # Showcase-программы Skadi
 
-В этом разделе собраны 12 небольших showcase-программ.
+В этом разделе собраны 13 небольших showcase-программ.
 
 Их цель:
 
@@ -24,6 +24,7 @@
   <li><code>bench_10_v1_1_toolbox.skd</code><ul><li>Сборный showcase для ключевых обновлений <code>v1.1</code>.</li><li>Покрытие: <code>danger fn</code>, <code>on error</code>, <code>label ErrorCode</code>, <code>struct</code>, методы, <code>List</code>, <code>iterate ... as ...</code>, <code>when</code>, math core и cleanup generated C.</li></ul></li>
   <li><code>bench_11_task_channel_pipeline.skd</code><ul><li>Исполняемый showcase concurrency slice <code>v1.2</code>.</li><li>Покрытие: <code>Task</code>, <code>Task(Float)</code>, bounded <code>Channel(Reading)</code>, capacity-1 backpressure, struct messages, blocking <code>send/receive</code> и обязательный <code>wait</code>.</li></ul></li>
   <li><code>bench_12_systems_pipeline.skd</code><ul><li>Совместный systems showcase <code>v1.2</code>.</li><li>Покрытие: fixed-capacity <code>Memory</code>, <code>place in</code>, Task/Channel pipeline, thread-local runtime contexts и безопасная граница между region-owned данными и сообщениями.</li></ul></li>
+  <li><code>bench_13_time_budget.skd</code><ul><li>Измерение небольшого time budget в <code>v1.2</code>.</li><li>Покрытие: <code>Time</code>, <code>Duration</code>, literals <code>ms/s</code>, <code>now</code>, <code>elapsed</code>, <code>sleep</code> и передача <code>Duration</code> через <code>Task(Duration)</code>.</li></ul></li>
 </ol>
 
 ## Репозиторные входные данные
@@ -72,6 +73,7 @@ Pop-Location
 .\bench_10_v1_1_toolbox.exe
 .\bench_11_task_channel_pipeline.exe
 .\bench_12_systems_pipeline.exe
+.\bench_13_time_budget.exe
 ```
 
 Или через вспомогательные скрипты:

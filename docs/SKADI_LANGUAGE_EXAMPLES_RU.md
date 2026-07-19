@@ -155,6 +155,20 @@ new Float safe_heading = clamp(heading, 0.0, 360.0)
 
 Math core и константы `PI`, `TAU`, `E`, `EPSILON` входят в stable base `v1.1`.
 
+## Время и длительности (`v1.2`, experimental)
+
+```skadi
+new Duration budget = 5ms
+new Time started_at = now()
+sleep(budget)
+new Duration measured = elapsed(started_at)
+new Bool completed = measured >= budget
+```
+
+`Time` использует monotonic clock. `Duration` не смешивается с `Int` неявно;
+поддерживаются целые literals `ms`, `s`, `min`. Полный контракт описан на
+странице [Время и длительности](time-duration.md).
+
 ## Memory (`v1.2`, experimental)
 
 ```skadi

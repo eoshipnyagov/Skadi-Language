@@ -48,6 +48,10 @@ Legend:
 | `wait` / `stop` / `stopping` | Y | Y | Y | Y | Y | path-sensitive lifecycle and cooperative stop covered |
 | `Channel(T)` / `channel(N)` | Y | Y | Y | Y | Y | bounded blocking FIFO runtime |
 | `send` / `receive` | Y | Y | Y | Y | Y | value-safe payload and backpressure covered |
+| `Time` / `Duration` | P (type identifiers) | Y | Y | Y | Y | experimental nominal value types |
+| `5ms` / `2s` / `3min` | P (number + adjacent unit) | Y | Y | Y | Y | integer and overflow-checked literals |
+| `now` / `elapsed` | P (identifiers) | Y | Y | Y | Y | monotonic clock runtime |
+| `sleep` / `delay` | P (identifiers) | Y | Y | Y | Y | blocking host runtime |
 
 ## 2. Operator / Form Matrix
 
@@ -75,6 +79,7 @@ Legend:
 - Task/Channel frontend/runtime/TSan: `tests/task_model_frontend.rs`, `tests/task_model_runtime.rs`, `tests/task_model_sanitizer.rs`
 - Compile-checked small examples: `tests/language_programs.rs`, `examples/language/`
 - Showcase systems coverage: `tests/showcase_programs.rs`, `benchmarks/bench_11_task_channel_pipeline.skd`, `benchmarks/bench_12_systems_pipeline.skd`
+- Time/Duration frontend/runtime: `tests/time_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_13_time_budget.skd`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
 
 ## 4. Synchronization rules

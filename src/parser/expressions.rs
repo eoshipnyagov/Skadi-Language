@@ -302,6 +302,42 @@ impl<'a> ExprParser<'a> {
             return Ok(Expression::StructConstruction { fields });
         }
 
+        if matches!(tok.kind, TokenKind::TypeInt | TokenKind::TypeFloat) && self.idx + 1 < self.end
+        {
+            let unit = &self.tokens[self.idx + 1];
+            let is_adjacent =
+                unit.line == tok.line && unit.col == tok.col + unit.lexeme.chars().count() as u32;
+            if unit.kind == TokenKind::Identifier
+                && is_adjacent
+                && matches!(unit.lexeme.as_str(), "ms" | "s" | "min")
+            {
+                if tok.kind == TokenKind::TypeFloat {
+                    return Err(parse_err(
+                        "SC-PARSE-216",
+                        "duration literal requires an integer magnitude in the current MVP.",
+                    ));
+                }
+                let magnitude = tok.lexeme.parse::<i64>().map_err(|_| {
+                    parse_err("SC-PARSE-216", "invalid duration literal magnitude.")
+                })?;
+                let multiplier = match unit.lexeme.as_str() {
+                    "ms" => 1_000_000_i64,
+                    "s" => 1_000_000_000_i64,
+                    "min" => 60_000_000_000_i64,
+                    _ => unreachable!(),
+                };
+                let nanoseconds = magnitude.checked_mul(multiplier).ok_or_else(|| {
+                    parse_err("SC-PARSE-216", "duration literal exceeds i64 nanoseconds.")
+                })?;
+                self.idx += 2;
+                return Ok(Expression::LiteralDuration {
+                    nanoseconds,
+                    magnitude,
+                    unit: unit.lexeme.clone(),
+                });
+            }
+        }
+
         self.idx += 1;
         match tok.kind {
             TokenKind::TypeInt => {

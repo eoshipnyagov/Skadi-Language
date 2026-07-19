@@ -13,6 +13,8 @@ enum ValueType {
     Bool,
     Char,
     Text,
+    Time,
+    Duration,
     Memory,
     Task(Option<Box<ValueType>>),
     Channel(Box<ValueType>),
@@ -413,6 +415,8 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 | "Memory"
                 | "Text"
                 | "Path"
+                | "Time"
+                | "Duration"
                 | "List"
                 | "Vec2"
                 | "Vec3"
@@ -731,6 +735,8 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "char" | "Char" => ValueType::Char,
         "Memory" => ValueType::Memory,
         "Text" | "Path" => ValueType::Text,
+        "Time" => ValueType::Time,
+        "Duration" => ValueType::Duration,
         _ => ValueType::Unknown,
     }
 }
@@ -790,7 +796,8 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
             | Expression::LiteralInt(_)
             | Expression::LiteralFloat(_)
             | Expression::LiteralBool(_)
-            | Expression::LiteralString(_) => {}
+            | Expression::LiteralString(_)
+            | Expression::LiteralDuration { .. } => {}
         }
     }
 
@@ -1112,9 +1119,13 @@ fn is_task_safe_boundary_type(
     allow_channel: bool,
 ) -> bool {
     match ty {
-        ValueType::Int | ValueType::Float | ValueType::Bool | ValueType::Char | ValueType::Text => {
-            true
-        }
+        ValueType::Int
+        | ValueType::Float
+        | ValueType::Bool
+        | ValueType::Char
+        | ValueType::Text
+        | ValueType::Time
+        | ValueType::Duration => true,
         ValueType::Struct(name) => structs
             .get(name)
             .map(|info| {
@@ -2819,7 +2830,8 @@ fn record_task_effects_in_expr(
         | Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
-        | Expression::LiteralString(_) => Ok(()),
+        | Expression::LiteralString(_)
+        | Expression::LiteralDuration { .. } => Ok(()),
     }
 }
 
@@ -2912,6 +2924,7 @@ fn apply_task_flow_expression(
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
         | Expression::LiteralString(_)
+        | Expression::LiteralDuration { .. }
         | Expression::VariableReference(_)
         | Expression::MemberAccess { .. }
         | Expression::Stopping => Ok(()),
@@ -3354,6 +3367,7 @@ fn infer_expression_type(
         Expression::LiteralFloat(_) => Ok(ValueType::Float),
         Expression::LiteralBool(_) => Ok(ValueType::Bool),
         Expression::LiteralString(_) => Ok(ValueType::Text),
+        Expression::LiteralDuration { .. } => Ok(ValueType::Duration),
         Expression::ListLiteral(items) => {
             if items.is_empty() {
                 return Ok(ValueType::List(Box::new(ValueType::Unknown)));
@@ -3919,6 +3933,41 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Int)
                     }
+                    Builtin::Now => Ok(ValueType::Time),
+                    Builtin::Elapsed => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if ty != ValueType::Time {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin 'elapsed' expects (Time), got ({:?}).", ty),
+                            ));
+                        }
+                        Ok(ValueType::Duration)
+                    }
+                    Builtin::Sleep | Builtin::Delay => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if ty != ValueType::Duration {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin '{}' expects (Duration), got ({:?}).", name, ty),
+                            ));
+                        }
+                        Ok(ValueType::Int)
+                    }
                     Builtin::Abs => {
                         let ty = infer_expression_type(
                             &args[0],
@@ -4332,6 +4381,36 @@ fn infer_expression_type(
             } else {
                 ValueType::Unknown
             };
+            if matches!(lt, ValueType::Time | ValueType::Duration)
+                || matches!(rt, ValueType::Time | ValueType::Duration)
+            {
+                let result = match (op.as_str(), &lt, &rt) {
+                    ("+", ValueType::Duration, ValueType::Duration) => Some(ValueType::Duration),
+                    ("+", ValueType::Time, ValueType::Duration)
+                    | ("+", ValueType::Duration, ValueType::Time) => Some(ValueType::Time),
+                    ("-", ValueType::Duration, ValueType::Duration)
+                    | ("-", ValueType::Time, ValueType::Time) => Some(ValueType::Duration),
+                    ("-", ValueType::Time, ValueType::Duration) => Some(ValueType::Time),
+                    (
+                        "==" | "!=" | "<" | ">" | "<=" | ">=",
+                        ValueType::Duration,
+                        ValueType::Duration,
+                    )
+                    | ("==" | "!=" | "<" | ">" | "<=" | ">=", ValueType::Time, ValueType::Time) => {
+                        Some(ValueType::Bool)
+                    }
+                    _ => None,
+                };
+                return result.ok_or_else(|| {
+                    sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "operator '{}' is not defined for {:?} and {:?}.",
+                            op, lt, rt
+                        ),
+                    )
+                });
+            }
             match op.as_str() {
                 "+" | "-" | "*" | "/" | "div" | "mod" | "^" => {
                     if (lt == ValueType::Int || lt == ValueType::Float)
@@ -4426,9 +4505,10 @@ fn infer_expression_memory_provenance(
         | Expression::ListLiteral(_)
         | Expression::StructConstruction { .. } => Ok(memory_state.active_memory.clone()),
         Expression::BinaryOp { .. } => Ok(None),
-        Expression::LiteralInt(_) | Expression::LiteralFloat(_) | Expression::LiteralBool(_) => {
-            Ok(None)
-        }
+        Expression::LiteralInt(_)
+        | Expression::LiteralFloat(_)
+        | Expression::LiteralBool(_)
+        | Expression::LiteralDuration { .. } => Ok(None),
     }
 }
 

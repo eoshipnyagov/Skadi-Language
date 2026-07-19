@@ -10,7 +10,7 @@ Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
 
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
 
-The current stable base is the `v1.1` toolchain surface. Active development is now focused on the `v1.2` experimental systems layer: executable Memory and Task/Channel runtime MVPs.
+The current stable base is the `v1.1` toolchain surface. Active development is now focused on the `v1.2` experimental systems layer: executable Memory, Task/Channel, and Time/Duration runtime MVPs.
 
 The long-term design direction is broader:
 
@@ -339,11 +339,11 @@ The same drawing logic should eventually be able to target:
 
 ### 4. Time and Units
 
-**Status: design direction / future versions.**
+**Status: experimental `Time/Duration` runtime MVP; broader units remain future work.**
 
-Skadi should avoid hiding meaning inside bare numbers.
+The implemented time slice avoids hiding meaning inside bare numbers.
 
-Possible future syntax:
+Current and future unit syntax:
 
 ```skadi
 delay(500ms)
@@ -353,6 +353,10 @@ Memory log_memory = memory(32kb)
 
 canvas.rotate(30deg)
 ```
+
+`Time`, `Duration`, `ms`, `s`, `min`, `now`, `elapsed`, `sleep`, and `delay` are
+implemented. Memory-size syntax is implemented for `Memory`; angle and broader
+physical units remain design direction.
 
 The goal is to reduce mistakes like:
 
@@ -474,6 +478,7 @@ User-facing docs:
 - [CLI Reference](docs/SKADI_CLI_REFERENCE_RU.md)
 - [Language Reference](docs/SKADI_LANGUAGE_REFERENCE_RU.md)
 - [Short language examples](docs/SKADI_LANGUAGE_EXAMPLES_RU.md)
+- [Time and Duration](docs/SKADI_TIME_DURATION_RU.md)
 - [Showcase programs](docs/SHOWCASE_PROGRAMS.md)
 
 Internal docs:
@@ -518,6 +523,7 @@ The repository already includes:
 - relative path imports, `local`/`hide`, and qualified `module.symbol` access,
 - experimental Memory MVP work for `v1.2`,
 - experimental native Task/Channel runtime for `v1.2`,
+- experimental nominal Time/Duration runtime for `v1.2`,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,

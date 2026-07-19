@@ -38,7 +38,7 @@ enum ExprKind {
     Unknown,
 }
 
-const LIST_TYPE_MAP: [(&str, &str, &str); 12] = [
+const LIST_TYPE_MAP: [(&str, &str, &str); 14] = [
     ("i8", "int8_t", "i8"),
     ("i16", "int16_t", "i16"),
     ("i32", "int32_t", "i32"),
@@ -51,6 +51,8 @@ const LIST_TYPE_MAP: [(&str, &str, &str); 12] = [
     ("f64", "double", "f64"),
     ("bool", "bool", "bool"),
     ("Text", "char*", "text"),
+    ("Time", "int64_t", "time"),
+    ("Duration", "int64_t", "duration"),
 ];
 
 fn list_elem_from_decl(t: &str) -> Option<&str> {
@@ -490,6 +492,49 @@ fn emit_math_runtime(out: &mut String) {
     out.push_str("#ifndef M_E\n#define M_E 2.71828182845904523536\n#endif\n\n");
 }
 
+fn emit_time_runtime(out: &mut String) {
+    out.push_str("static void sk_time_panic(const char *message) {\n");
+    out.push_str("    fprintf(stderr, \"Skadi time runtime error [SC-RT-320]: %s\\n\", message ? message : \"unknown\");\n");
+    out.push_str("    abort();\n");
+    out.push_str("}\n\n");
+    out.push_str("static int64_t sk_time_now(void) {\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    LARGE_INTEGER frequency;\n");
+    out.push_str("    LARGE_INTEGER counter;\n");
+    out.push_str("    if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0) sk_time_panic(\"monotonic clock frequency query failed\");\n");
+    out.push_str("    if (!QueryPerformanceCounter(&counter)) sk_time_panic(\"monotonic clock query failed\");\n");
+    out.push_str("    return (int64_t)(((long double)counter.QuadPart * 1000000000.0L) / (long double)frequency.QuadPart);\n");
+    out.push_str("#else\n");
+    out.push_str("    struct timespec value;\n");
+    out.push_str("    if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) sk_time_panic(\"monotonic clock query failed\");\n");
+    out.push_str("    return ((int64_t)value.tv_sec * 1000000000LL) + (int64_t)value.tv_nsec;\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
+    out.push_str("static int64_t sk_time_elapsed(int64_t started_at) {\n");
+    out.push_str("    int64_t finished_at = sk_time_now();\n");
+    out.push_str("    return finished_at >= started_at ? finished_at - started_at : 0;\n");
+    out.push_str("}\n\n");
+    out.push_str("static int64_t sk_time_sleep(int64_t duration_ns) {\n");
+    out.push_str("    if (duration_ns <= 0) return 0;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    uint64_t remaining_ms = ((uint64_t)duration_ns + 999999ULL) / 1000000ULL;\n");
+    out.push_str("    while (remaining_ms > 0) {\n");
+    out.push_str("        DWORD chunk = remaining_ms > 0xFFFFFFFEULL ? 0xFFFFFFFEUL : (DWORD)remaining_ms;\n");
+    out.push_str("        Sleep(chunk);\n");
+    out.push_str("        remaining_ms -= chunk;\n");
+    out.push_str("    }\n");
+    out.push_str("#else\n");
+    out.push_str("    struct timespec request;\n");
+    out.push_str("    request.tv_sec = (time_t)(duration_ns / 1000000000LL);\n");
+    out.push_str("    request.tv_nsec = (long)(duration_ns % 1000000000LL);\n");
+    out.push_str("    while (nanosleep(&request, &request) != 0) {\n");
+    out.push_str("        if (errno != EINTR) sk_time_panic(\"sleep failed\");\n");
+    out.push_str("    }\n");
+    out.push_str("#endif\n");
+    out.push_str("    return 0;\n");
+    out.push_str("}\n\n");
+}
+
 fn map_function_name(name: &str) -> &str {
     if name == "main" {
         "skadi_user_main"
@@ -600,7 +645,8 @@ fn expression_uses_task_surface(expr: &Expression) -> bool {
         | Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
-        | Expression::LiteralString(_) => false,
+        | Expression::LiteralString(_)
+        | Expression::LiteralDuration { .. } => false,
     }
 }
 
@@ -1344,9 +1390,9 @@ fn emit_channel_typed_wrapper(out: &mut String, skadi_type: &str) {
 }
 
 fn emit_channel_typed_wrappers(out: &mut String, struct_names: &[String]) {
-    const BUILTIN_CHANNEL_TYPES: [&str; 18] = [
+    const BUILTIN_CHANNEL_TYPES: [&str; 20] = [
         "i8", "i16", "i32", "i64", "Int", "u8", "u16", "u32", "u64", "f32", "f64", "Float", "bool",
-        "Bool", "char", "Char", "Text", "Path",
+        "Bool", "char", "Char", "Text", "Path", "Time", "Duration",
     ];
     for skadi_type in BUILTIN_CHANNEL_TYPES {
         emit_channel_typed_wrapper(out, skadi_type);
@@ -1458,6 +1504,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
     let needs_math_runtime = program_uses_math_runtime(program);
+    let needs_time_runtime = program_uses_time_runtime(program);
     let needs_task_runtime = statement_list_uses_task_surface(&program.statements);
     let needs_channel_runtime = statement_list_uses_deferred_task_surface(&program.statements);
     let task_entries = collect_task_entries(program);
@@ -1476,6 +1523,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         || needs_memory_runtime
         || needs_task_runtime
         || needs_channel_runtime
+        || needs_time_runtime
     {
         out.push_str("#include <stddef.h>\n");
         out.push_str("#include <stdlib.h>\n");
@@ -1496,12 +1544,21 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         out.push_str("#include <math.h>\n\n");
         emit_math_runtime(&mut out);
     }
-    if needs_task_runtime || needs_channel_runtime {
+    if needs_task_runtime || needs_channel_runtime || needs_time_runtime {
         out.push_str("#if defined(_WIN32)\n");
         out.push_str("#include <windows.h>\n");
         out.push_str("#else\n");
-        out.push_str("#include <pthread.h>\n");
+        if needs_task_runtime || needs_channel_runtime {
+            out.push_str("#include <pthread.h>\n");
+        }
+        if needs_time_runtime {
+            out.push_str("#include <errno.h>\n");
+            out.push_str("#include <time.h>\n");
+        }
         out.push_str("#endif\n\n");
+    }
+    if needs_time_runtime {
+        emit_time_runtime(&mut out);
     }
     if needs_memory_runtime || needs_task_runtime {
         emit_thread_local_support(&mut out);
@@ -1669,8 +1726,9 @@ fn emit_default_return_tail(
                 out.push_str("_new();\n");
             }
             other => {
+                let c_type = map_skadi_type_to_c(Some(other));
                 out.push_str("return (");
-                out.push_str(other);
+                out.push_str(&c_type);
                 out.push_str("){0};\n");
             }
         }
@@ -3300,7 +3358,7 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "i8" => "int8_t".to_string(),
         "i16" => "int16_t".to_string(),
         "i32" => "int32_t".to_string(),
-        "Int" | "i64" => "int64_t".to_string(),
+        "Int" | "i64" | "Time" | "Duration" => "int64_t".to_string(),
         "u8" => "uint8_t".to_string(),
         "u16" => "uint16_t".to_string(),
         "u32" => "uint32_t".to_string(),
@@ -3427,6 +3485,7 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
         Expression::LiteralFloat(_) => ExprKind::Float,
         Expression::LiteralBool(_) => ExprKind::Bool,
         Expression::LiteralString(_) => ExprKind::Text,
+        Expression::LiteralDuration { .. } => ExprKind::Int,
         Expression::VariableReference(name) => match declared.get(name).map(String::as_str) {
             Some("Float" | "f32" | "f64") => ExprKind::Float,
             Some("bool" | "Bool") => ExprKind::Bool,
@@ -3438,7 +3497,9 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
         },
         Expression::Call { name, .. } => match name.as_str() {
             "contains" | "fs.is_dir" => ExprKind::Bool,
-            "find" | "len" | "write" | "output" => ExprKind::Int,
+            "find" | "len" | "write" | "output" | "now" | "elapsed" | "sleep" | "delay" => {
+                ExprKind::Int
+            }
             "input" | "read" | "slice" | "concat" | "fs.join" => ExprKind::Text,
             "abs" | "min" | "max" | "clamp" | "floor" | "ceil" | "round" | "sin" | "cos"
             | "atan2" | "sqrt" | "root" | "deg_to_rad" | "rad_to_deg" => ExprKind::Float,
@@ -3481,6 +3542,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             }
         }
         Expression::LiteralString(s) => s.clone(),
+        Expression::LiteralDuration { nanoseconds, .. } => nanoseconds.to_string(),
         Expression::VariableReference(name) => match name.as_str() {
             "PI" => "M_PI".to_string(),
             "TAU" => "(2.0 * M_PI)".to_string(),
@@ -3608,6 +3670,17 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                         let path = emit_expr(&args[0], declared);
                         let data = emit_expr(&args[1], declared);
                         return format!("sk_write_file({}, {})", path, data);
+                    }
+                    Builtin::Now if args.is_empty() => {
+                        return "sk_time_now()".to_string();
+                    }
+                    Builtin::Elapsed if args.len() == 1 => {
+                        let started_at = emit_expr(&args[0], declared);
+                        return format!("sk_time_elapsed({})", started_at);
+                    }
+                    Builtin::Sleep | Builtin::Delay if args.len() == 1 => {
+                        let duration = emit_expr(&args[0], declared);
+                        return format!("sk_time_sleep({})", duration);
                     }
                     Builtin::Abs if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
@@ -3900,4 +3973,116 @@ fn stmt_uses_math(stmt: &Statement) -> bool {
 
 fn program_uses_math_runtime(program: &Program) -> bool {
     program.statements.iter().any(stmt_uses_math)
+}
+
+fn expression_uses_time_call(expr: &Expression) -> bool {
+    match expr {
+        Expression::Call { name, args } => {
+            matches!(name.as_str(), "now" | "elapsed" | "sleep" | "delay")
+                || args.iter().any(expression_uses_time_call)
+        }
+        Expression::RunTask { args, .. } => args.iter().any(expression_uses_time_call),
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_time_call(left)
+                || right
+                    .as_ref()
+                    .map(|value| expression_uses_time_call(value))
+                    .unwrap_or(false)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_time_call(base) || expression_uses_time_call(index)
+        }
+        Expression::ListLiteral(items) => items.iter().any(expression_uses_time_call),
+        Expression::StructConstruction { fields } => fields
+            .values()
+            .any(|value| expression_uses_time_call(value)),
+        _ => false,
+    }
+}
+
+fn stmt_uses_time(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::VarDecl { value, .. }
+        | Statement::Assignment { value, .. }
+        | Statement::ExpressionStatement { expr: value, .. }
+        | Statement::FieldAssignment { value, .. }
+        | Statement::ListPush { value, .. } => expression_uses_time_call(value),
+        Statement::ReturnStatement { value, .. } => value
+            .as_ref()
+            .map(|expression| expression_uses_time_call(expression))
+            .unwrap_or(false),
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expression_uses_time_call(condition)
+                || then_block.statements.iter().any(stmt_uses_time)
+                || else_block
+                    .as_ref()
+                    .map(|block| block.statements.iter().any(stmt_uses_time))
+                    .unwrap_or(false)
+        }
+        Statement::WhileLoop {
+            condition, body, ..
+        } => expression_uses_time_call(condition) || body.statements.iter().any(stmt_uses_time),
+        Statement::LoopStatement { body, .. } => body.statements.iter().any(stmt_uses_time),
+        Statement::ForLoop {
+            initialization,
+            condition,
+            update,
+            body,
+            ..
+        } => {
+            initialization
+                .as_ref()
+                .map(|expression| expression_uses_time_call(expression))
+                .unwrap_or(false)
+                || condition
+                    .as_ref()
+                    .map(|expression| expression_uses_time_call(expression))
+                    .unwrap_or(false)
+                || update
+                    .as_ref()
+                    .map(|expression| expression_uses_time_call(expression))
+                    .unwrap_or(false)
+                || body.statements.iter().any(stmt_uses_time)
+        }
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+            ..
+        } => {
+            expression_uses_time_call(when_expression)
+                || cases.iter().any(|(expressions, block)| {
+                    expressions.iter().any(expression_uses_time_call)
+                        || block.statements.iter().any(stmt_uses_time)
+                })
+                || else_block
+                    .as_ref()
+                    .map(|block| block.statements.iter().any(stmt_uses_time))
+                    .unwrap_or(false)
+        }
+        Statement::DangerAssignOnError { args, on_error, .. }
+        | Statement::DangerCallOnError { args, on_error, .. } => {
+            args.iter().any(expression_uses_time_call)
+                || on_error.statements.iter().any(stmt_uses_time)
+        }
+        Statement::ListPopOnError { on_error, .. } => {
+            on_error.statements.iter().any(stmt_uses_time)
+        }
+        Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_time),
+        Statement::StructDecl { methods, .. } => methods
+            .iter()
+            .any(|method| method.body.statements.iter().any(stmt_uses_time)),
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => statements.iter().any(stmt_uses_time),
+        _ => false,
+    }
+}
+
+fn program_uses_time_runtime(program: &Program) -> bool {
+    program.statements.iter().any(stmt_uses_time)
 }

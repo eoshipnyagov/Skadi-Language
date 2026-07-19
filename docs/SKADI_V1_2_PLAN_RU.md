@@ -294,23 +294,40 @@ Remote GitHub Actions matrix зелёная на Windows MinGW/MSVC, Linux GCC/C
 macOS. Обнаруженные platform-specific расхождения исправлены в implementation,
 без отключения sanitizer или ослабления test gates.
 
-## 7. Следующий bounded language slice
+### Milestone 7: Time/Duration runtime MVP - functional slice выполнен
 
-После release hardening следующую работу лучше не начинать с широкого Visual Core
-или полного units framework. Наиболее связный кандидат - фундамент
-специализированных системных типов:
+Цель: проверить фундамент nominal specialized types на маленьком системном API.
 
-1. `Duration` как nominal builtin type;
-2. `Time` как отдельный timestamp/clock value type;
-3. literals `ms`, `s`, `min` без неявного смешивания с обычными числами;
-4. минимальные операции `now()`, `elapsed(Time)`, `sleep(Duration)` и
-   `delay(Duration)` после фиксации platform contract;
-5. parser, semantic, C lowering, diagnostics и e2e для одного маленького среза.
+Реализовано:
 
-До implementation нужно отдельно зафиксировать representation, переполнение,
-единицу хранения, допустимую арифметику и разницу monotonic/wall-clock времени.
-Обобщённая dimensional algebra, `Timer`, `Hz`, `ByteSize`, `Angle`, vector types и
-operator overloading не должны случайно войти в первый slice.
+- nominal `Time` и `Duration` без неявного смешивания с `Int/Float`;
+- overflow-checked integer literals `ms`, `s`, `min`;
+- явная арифметика `Time/Duration` и сравнения одинаковых типов;
+- `now`, `elapsed`, `sleep`, `delay`;
+- signed `i64` nanoseconds и monotonic Win32/POSIX C runtime;
+- value-safe integration со struct, List, `Task(T)` и `Channel(T)`;
+- parser/semantic/formatter/codegen/native e2e coverage;
+- `bench_13_time_budget.skd` в showcase build/smoke flow;
+- отдельное RU/EN пользовательское руководство.
+
+Границы:
+
+- API остаётся experimental;
+- `Time` не является wall-clock или Unix timestamp;
+- fractional literals, `Timer`, timed channel/task operations и embedded backend
+  не входят в этот slice.
+
+## 7. Следующий bounded language choice
+
+Фундамент `Time/Duration` теперь реализован. Следующий шаг - сначала стабилизировать
+его на remote compiler matrix, а затем выбрать один отдельный nominal slice:
+
+1. `ByteSize` и общие memory-size literals поверх уже существующих `b/kb/mb/gb`;
+2. `Angle` с `deg/rad` и связью с math core;
+3. только после этого - vector types как отдельный более широкий milestone.
+
+`Timer`, wall-clock/calendar API, общая dimensional algebra и operator overloading
+не должны автоматически входить в следующий slice.
 
 Полный future contract: [Systems Additions MVP](systems-additions-mvp.md).
 

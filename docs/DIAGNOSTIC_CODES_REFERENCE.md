@@ -33,8 +33,9 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-PARSE-161..162` `local` prefix declaration contract errors
 
 ### Expression parser ranges
-- `SC-PARSE-201..212` expression grammar errors
+- `SC-PARSE-201..216` expression grammar errors
   - grouped expr / call args / list literal / index / struct literal issues
+  - `SC-PARSE-216` invalid, fractional or overflowing Duration literal
 
 ## 3. Semantic Codes (`SC-SEM-*`)
 
@@ -49,7 +50,19 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-SEM-040` invalid semantic context
 - `SC-SEM-050` return-path/return-form rule
 - `SC-SEM-051` `ErrorCode` contract rule
+- `SC-SEM-060` Memory usage and placement rule
+- `SC-SEM-061` Memory lifetime and escape rule
+- `SC-SEM-062` Memory capability/storage rule
+- `SC-SEM-070` Task lifecycle and context rule
+- `SC-SEM-071` Task capability/boundary rule
+- `SC-SEM-080` Channel ownership/message rule
 - `SC-SEM-900` internal semantic consistency error
+
+### Runtime codes
+
+- `SC-RT-301..304` Task allocation/start/join/stop synchronization failures
+- `SC-RT-311..313` Channel allocation/capacity/synchronization failures
+- `SC-RT-320` monotonic clock or blocking sleep runtime failure
 
 ## 4. Module / CLI Pipeline Codes
 

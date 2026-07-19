@@ -246,6 +246,11 @@ pub enum Expression {
     LiteralFloat(f32), // Floating point literal
     LiteralBool(bool),
     LiteralString(String),
+    LiteralDuration {
+        nanoseconds: i64,
+        magnitude: i64,
+        unit: String,
+    },
     ListLiteral(Vec<Expression>),
     Index {
         base: Box<Expression>,

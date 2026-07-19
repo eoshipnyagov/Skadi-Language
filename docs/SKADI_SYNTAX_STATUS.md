@@ -144,6 +144,14 @@
 - `on interrupt ... { ... }` - `Partial`
   - parse-level поддержка уже есть;
   - семантика выполнения ещё не считается завершённой stable частью языка.
+- time/duration systems MVP - `Experimental / Runtime MVP`
+  - nominal types `Time` и `Duration` проходят parser/semantic/C codegen;
+  - integer literals `ms`, `s`, `min` проверяются на overflow;
+  - `now`, `elapsed`, `sleep`, `delay` работают через Win32/POSIX monotonic runtime;
+  - разрешена только явная time/duration арифметика без смешивания с `Int/Float`;
+  - `Time` и `Duration` value-safe для struct/List/Task/Channel;
+  - wall-clock, `Timer`, fractional literals и embedded backend отложены;
+  - полный контракт: [Время и длительности](time-duration.md).
 - memory model MVP surface - `Experimental / Partial`
   - frontend принимает `Memory name = memory(size)`, `place in memory { ... } on error { ... }` и `memory.clear()`;
   - semantic layer проверяет базовые escape / use-after-clear правила только для dynamic payload (`Text`, `List`, и struct-значений с такими полями);
