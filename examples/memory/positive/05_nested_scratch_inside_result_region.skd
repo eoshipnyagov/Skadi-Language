@@ -4,7 +4,7 @@ struct LoadedSnippet {
     Text content
 }
 
-fn load_with_preview(Memory assets_memory, Memory scratch_memory, Path path) LoadedSnippet {
+fn load_with_preview(Memory assets_memory, Memory scratch_memory, Path path) returns LoadedSnippet {
     place in assets_memory {
         place in scratch_memory {
             new Text preview_text = read(path)

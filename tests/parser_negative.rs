@@ -99,3 +99,10 @@ new Int x = i++
     assert!(err.contains("[SC-PARSE-213]"));
     assert!(err.contains("unexpected trailing token in expression"));
 }
+
+#[test]
+fn parser_rejects_local_for_non_declaration_statement() {
+    let src = "local new Int x = 1\n";
+    let err = parse_err(src);
+    assert!(err.contains("SC-PARSE-162"));
+}

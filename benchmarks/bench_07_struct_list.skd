@@ -5,7 +5,7 @@ struct Sensor {
     Int id
     Int value
 
-    fn is_hot(Int threshold) Bool {
+    fn is_hot(Int threshold) returns Bool {
         if my.value >= threshold {
             return true
         } else {

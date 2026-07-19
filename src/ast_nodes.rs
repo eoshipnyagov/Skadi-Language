@@ -41,6 +41,7 @@ pub struct FunctionParam {
 pub struct StructField {
     pub field_type: String,
     pub name: String,
+    pub is_hidden: bool,
 }
 
 #[derive(Debug)]
@@ -49,6 +50,7 @@ pub struct StructMethod {
     pub params: Vec<FunctionParam>,
     pub body: Box<BlockStatement>,
     pub returns: Option<String>,
+    pub uses_returns_keyword: bool,
     pub is_danger: bool,
 }
 
@@ -102,7 +104,9 @@ pub enum Statement {
         params: Vec<FunctionParam>,
         body: Box<BlockStatement>,
         returns: Option<String>, // Type of return
+        uses_returns_keyword: bool,
         is_danger: bool,
+        is_local: bool,
         loc: Location,
     },
     IfStatement {
@@ -147,12 +151,14 @@ pub enum Statement {
     LabelDecl {
         name: String,
         variants: Vec<String>,
+        is_local: bool,
         loc: Location,
     },
     StructDecl {
         name: String,
         fields: Vec<StructField>,
         methods: Vec<StructMethod>,
+        is_local: bool,
         loc: Location,
     },
     OnBlock {

@@ -356,14 +356,17 @@ x = xs.pop() on error {
 #[test]
 fn parses_typed_function_signature() {
     let src = r#"
-fn add(Int a, Int b) Int {
+fn add(Int a, Int b) returns Int {
     return a + b
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let Statement::FunctionDef {
-        params, returns, ..
+        params,
+        returns,
+        uses_returns_keyword,
+        ..
     } = &program.statements[0]
     else {
         panic!("expected FunctionDef");
@@ -374,6 +377,7 @@ fn add(Int a, Int b) Int {
     assert_eq!(params[1].param_type.as_deref(), Some("Int"));
     assert_eq!(params[1].name, "b");
     assert_eq!(returns.as_deref(), Some("Int"));
+    assert!(*uses_returns_keyword);
 }
 
 #[test]
@@ -417,6 +421,24 @@ danger fn parse_value(Int x) Int {
         panic!("expected FunctionDef");
     };
     assert!(matches!(body.statements[0], Statement::ReturnError { .. }));
+}
+
+#[test]
+fn parses_return_error_with_qualified_variant() {
+    let src = r#"
+danger fn parse_value(Int x) Int {
+    return error core.ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::FunctionDef { body, .. } = &program.statements[0] else {
+        panic!("expected FunctionDef");
+    };
+    let Statement::ReturnError { code, .. } = &body.statements[0] else {
+        panic!("expected ReturnError");
+    };
+    assert_eq!(code, "core.ZeroDivision");
 }
 
 #[test]
@@ -592,4 +614,81 @@ loop {
         body.statements[2],
         Statement::BreakStatement { .. }
     ));
+}
+
+#[test]
+fn parses_local_prefixed_declarations() {
+    let src = r#"
+local fn helper(Int x) Int {
+    return x
+}
+
+local label Status {
+    Ok
+    Error
+}
+
+local struct S {
+    Int value
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    assert_eq!(program.statements.len(), 3);
+    assert!(matches!(
+        program.statements[0],
+        Statement::FunctionDef { is_local: true, .. }
+    ));
+    assert!(matches!(
+        program.statements[1],
+        Statement::LabelDecl { is_local: true, .. }
+    ));
+    assert!(matches!(
+        program.statements[2],
+        Statement::StructDecl { is_local: true, .. }
+    ));
+}
+
+#[test]
+fn parses_hidden_struct_fields() {
+    let src = r#"
+struct Secret {
+    hide Int token, level
+    Int open
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::StructDecl { fields, .. } = &program.statements[0] else {
+        panic!("expected StructDecl");
+    };
+    assert_eq!(fields.len(), 3);
+    assert!(fields[0].is_hidden);
+    assert!(fields[1].is_hidden);
+    assert!(!fields[2].is_hidden);
+}
+
+#[test]
+fn parses_qualified_type_references_in_declarations_and_signatures() {
+    let src = r#"
+fn make(util.Point p) util.Point {
+    return p
+}
+
+new util.Point v = make({x = 1})
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let Statement::FunctionDef {
+        params, returns, ..
+    } = &program.statements[0]
+    else {
+        panic!("expected FunctionDef");
+    };
+    assert_eq!(params[0].param_type.as_deref(), Some("util.Point"));
+    assert_eq!(returns.as_deref(), Some("util.Point"));
+    let Statement::VarDecl { declared_type, .. } = &program.statements[1] else {
+        panic!("expected VarDecl");
+    };
+    assert_eq!(declared_type.as_deref(), Some("util.Point"));
 }

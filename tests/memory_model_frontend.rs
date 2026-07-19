@@ -318,7 +318,7 @@ struct Scene {
     Text raw
 }
 
-fn build_scene() Scene {
+fn build_scene() returns Scene {
     new Text raw = "hello"
     new Scene scene = {raw = raw}
     return scene

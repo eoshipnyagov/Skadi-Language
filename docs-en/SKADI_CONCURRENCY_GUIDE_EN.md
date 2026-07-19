@@ -10,7 +10,7 @@ currently mapped to a separate native thread.
 ## Quick example
 
 ```skadi
-fn calculate(Int value) Int {
+fn calculate(Int value) returns Int {
     return value * value
 }
 
@@ -40,7 +40,7 @@ wait save_task
 A result-bearing task has type `Task(T)`:
 
 ```skadi
-fn load_status() Text {
+fn load_status() returns Text {
     return "ready"
 }
 

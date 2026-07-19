@@ -57,9 +57,13 @@ plugins:
             Границы Skadi -> C: Skadi -> C Scope
             Покрытие тестами: Test Coverage
             Стиль диагностики: Diagnostics Style
+            Справочник кодов диагностики: Diagnostic Codes Reference
+            Матрица токенов и конструкций: Token and Construct Matrix
+            Scope и видимость v1.1: v1.1 Scope and Visibility
             Что не поддерживается в v1: v1 Non-Goals
             План реализации: Implementation Plan
             План v1.1: v1.1 Plan
+            Закрытие roadmap v1.1: v1.1 Roadmap Close-out
             План v1.2: v1.2 Plan
             Стилевые принципы: Style Principles
             Каноническая матрица синтаксиса: Canonical Syntax Matrix
@@ -113,6 +117,9 @@ nav:
           - Границы Skadi -> C: internal/to-c-scope.md
           - Покрытие тестами: internal/test-coverage.md
           - Стиль диагностики: internal/diagnostics-style.md
+          - Справочник кодов диагностики: internal/diagnostic-codes.md
+          - Матрица токенов и конструкций: internal/token-construct-coverage.md
+          - Scope и видимость v1.1: internal/scope-visibility.md
           - Сайт документации и i18n: internal/docs-site-and-i18n.md
       - Контракты и стиль v1:
           - Стилевые принципы: internal/style-principles.md
@@ -128,6 +135,7 @@ nav:
       - Планы и блокеры:
           - План реализации: internal/implementation-plan.md
           - План v1.1: internal/v1-1-plan.md
+          - Закрытие roadmap v1.1: internal/v1-1-roadmap.md
           - План v1.2: internal/v1-2-plan.md
           - Блокеры v1: internal/v1-blockers.md
           - Backlog math/vector: internal/math-vector-backlog.md

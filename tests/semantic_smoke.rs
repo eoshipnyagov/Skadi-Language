@@ -35,6 +35,22 @@ fn semantic_fails_for_redeclaration_in_same_scope() {
 }
 
 #[test]
+fn semantic_fails_for_shadowing_from_outer_scope() {
+    let src = r#"
+new Int a = 1
+if a == 1 {
+    new Int a = 2
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-010"));
+    assert!(err.contains("redeclaration"));
+    assert!(err.contains("a"));
+}
+
+#[test]
 fn semantic_fails_for_self_reference_on_initialization() {
     let src = "new x = x + 1\n";
     let tokens = lex(src).expect("lex should succeed");
@@ -138,6 +154,23 @@ label ErrorCode {
 
 danger fn parse_value(bool x) Int {
     return error ZeroDivision
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_allows_qualified_return_error_variant() {
+    let src = r#"
+label ErrorCode {
+    Ok
+    ZeroDivision
+}
+
+danger fn parse_value(bool x) Int {
+    return error core.ZeroDivision
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
@@ -761,6 +794,41 @@ new char ch = 'a'
 }
 
 #[test]
+fn style_warning_for_legacy_non_void_return_without_returns_keyword() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+    let warnings = semantic_style_warnings(&program);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("prefer explicit 'returns <type>'"))
+    );
+}
+
+#[test]
+fn semantic_rejects_struct_return_without_returns_keyword() {
+    let src = r#"
+struct Point {
+    Int x
+}
+fn make(Int x) Point {
+    return {x = x}
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-050"));
+    assert!(err.contains("requires explicit 'returns <type>'"));
+}
+
+#[test]
 fn semantic_rejects_on_error_for_read_builtin() {
     let src = r#"
 new Text body = ""
@@ -922,4 +990,70 @@ danger fn parse_value(bool x) Int {
     assert!(err.starts_with("Semantic error:"));
     assert!(err.contains("[SC-SEM-051]"));
     assert!(err.contains("label ErrorCode must start with 'Ok' variant."));
+}
+
+#[test]
+fn semantic_rejects_direct_access_to_hidden_field() {
+    let src = r#"
+struct Secret {
+    hide Int token
+    fn set(Int x) Int {
+        my.token = x
+        return my.token
+    }
+}
+new Secret s = {token = 1}
+new Int x = s.token
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
+    assert!(err.contains("SC-SEM-040"));
+    assert!(err.contains("is hidden"));
+}
+
+#[test]
+fn semantic_allows_hidden_field_access_via_own_method() {
+    let src = r#"
+struct Secret {
+    hide Int token
+    fn set(Int x) Int {
+        my.token = x
+        return my.token
+    }
+}
+new Secret s = {token = 1}
+new Int y = s.set(2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_allows_qualified_module_style_function_call() {
+    let src = r#"
+fn add(Int a, Int b) Int {
+    return a + b
+}
+new Int x = util.add(1, 2)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_allows_qualified_struct_type_reference() {
+    let src = r#"
+struct Point {
+    Int x
+}
+
+new util.Point p = {x = 1}
+new Int y = p.x
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic analysis should pass");
 }

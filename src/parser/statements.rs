@@ -18,6 +18,22 @@ fn parse_err(code: &str, message: impl AsRef<str>) -> String {
     format!("[{}] {}", code, message.as_ref())
 }
 
+fn parse_qualified_identifier(tokens: &[Token], start: usize) -> Option<(String, usize)> {
+    if start >= tokens.len() || tokens[start].kind() != TokenKind::Identifier {
+        return None;
+    }
+    if start + 2 < tokens.len()
+        && tokens[start + 1].lexeme == "."
+        && tokens[start + 2].kind() == TokenKind::Identifier
+    {
+        return Some((
+            format!("{}.{}", tokens[start].lexeme, tokens[start + 2].lexeme),
+            3,
+        ));
+    }
+    Some((tokens[start].lexeme.clone(), 1))
+}
+
 fn parse_expression_list(
     tokens: &[Token],
     start: usize,
@@ -128,15 +144,15 @@ fn parse_type_name_at(tokens: &[Token], start: usize) -> Option<(String, usize)>
     if let Some(parsed) = parse_parenthesized_type_name(tokens, start) {
         return Some(parsed);
     }
-    if start + 1 < tokens.len()
-        && tokens[start].kind() == TokenKind::Identifier
-        && tokens[start + 1].kind() == TokenKind::Identifier
-        && tokens[start + 1].lexeme == "List"
-    {
-        return Some((format!("{} List", tokens[start].lexeme), start + 2));
-    }
-    if start < tokens.len() && tokens[start].kind() == TokenKind::Identifier {
-        return Some((tokens[start].lexeme.clone(), start + 1));
+    if let Some((qualified, consumed)) = parse_qualified_identifier(tokens, start) {
+        let next = start + consumed;
+        if next < tokens.len()
+            && tokens[next].kind() == TokenKind::Identifier
+            && tokens[next].lexeme == "List"
+        {
+            return Some((format!("{qualified} List"), next + 1));
+        }
+        return Some((qualified, next));
     }
     None
 }
@@ -209,6 +225,14 @@ pub fn parse_function_declaration(
     tokens: &[Token],
     start_index: usize,
     _scope: &ScopeManager,
+) -> ParseResult<Statement> {
+    parse_function_declaration_inner(tokens, start_index, false)
+}
+
+fn parse_function_declaration_inner(
+    tokens: &[Token],
+    start_index: usize,
+    is_local: bool,
 ) -> ParseResult<Statement> {
     let mut current_index = start_index;
     let loc = Location {
@@ -302,7 +326,20 @@ pub fn parse_function_declaration(
     }
 
     let mut returns = None;
-    if let Some((return_type, next_index)) = parse_type_name_at(tokens, current_index)
+    let mut uses_returns_keyword = false;
+    if current_index < tokens.len() && tokens[current_index].lexeme == "returns" {
+        uses_returns_keyword = true;
+        current_index += 1;
+        if let Some((return_type, next_index)) = parse_type_name_at(tokens, current_index) {
+            returns = Some(return_type);
+            current_index = next_index;
+        } else {
+            return Err(parse_err(
+                "SC-PARSE-163",
+                "expected return type after 'returns'.",
+            ));
+        }
+    } else if let Some((return_type, next_index)) = parse_type_name_at(tokens, current_index)
         && next_index < tokens.len()
         && tokens[next_index].lexeme == "{"
     {
@@ -333,11 +370,38 @@ pub fn parse_function_declaration(
         }
         .into(),
         returns,
+        uses_returns_keyword,
         is_danger,
+        is_local,
         loc,
     };
 
     Ok((stmt, current_index - start_index))
+}
+
+pub fn parse_local_prefixed_declaration(
+    tokens: &[Token],
+    start_index: usize,
+    _scope: &ScopeManager,
+) -> ParseResult<Statement> {
+    if start_index + 1 >= tokens.len() {
+        return Err(parse_err(
+            "SC-PARSE-161",
+            "local must prefix fn/struct/label.",
+        ));
+    }
+    match tokens[start_index + 1].kind() {
+        TokenKind::KeywordFn => parse_function_declaration_inner(tokens, start_index + 1, true)
+            .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        TokenKind::KeywordStruct => parse_struct_declaration_inner(tokens, start_index + 1, true)
+            .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        TokenKind::KeywordLabel => parse_label_declaration_inner(tokens, start_index + 1, true)
+            .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        _ => Err(parse_err(
+            "SC-PARSE-162",
+            "local may prefix only fn/struct/label declarations.",
+        )),
+    }
 }
 
 pub fn parse_for_loop(
@@ -779,6 +843,22 @@ pub fn parse_return_statement(tokens: &[Token], start_index: usize) -> ParseResu
         && tokens[expr_start].lexeme == "error"
         && tokens[expr_start + 1].kind() == TokenKind::Identifier
     {
+        if expr_start + 3 < tokens.len()
+            && tokens[expr_start + 2].lexeme == "."
+            && tokens[expr_start + 3].kind() == TokenKind::Identifier
+        {
+            return Ok((
+                Statement::ReturnError {
+                    code: format!(
+                        "{}.{}",
+                        tokens[expr_start + 1].lexeme,
+                        tokens[expr_start + 3].lexeme
+                    ),
+                    loc,
+                },
+                5,
+            ));
+        }
         return Ok((
             Statement::ReturnError {
                 code: tokens[expr_start + 1].lexeme.clone(),
@@ -1233,23 +1313,23 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
     // new x = 1
     // new Int x = 1
     // new i32 List xs = [1, 2, 3]
-    if idx + 2 < tokens.len()
-        && tokens[idx].kind() == TokenKind::Identifier
-        && tokens[idx + 1].kind() == TokenKind::Identifier
-        && tokens[idx + 2].kind() == TokenKind::OpAssignment
+    if let Some((type_name, type_consumed)) = parse_qualified_identifier(tokens, idx)
+        && idx + type_consumed + 1 < tokens.len()
+        && tokens[idx + type_consumed].kind() == TokenKind::Identifier
+        && tokens[idx + type_consumed + 1].kind() == TokenKind::OpAssignment
     {
-        declared_type = Some(tokens[idx].lexeme.clone());
-        idx += 1;
+        declared_type = Some(type_name);
+        idx += type_consumed;
     }
-    if idx + 3 < tokens.len()
-        && tokens[idx].kind() == TokenKind::Identifier
-        && tokens[idx + 1].kind() == TokenKind::Identifier
-        && tokens[idx + 1].lexeme == "List"
-        && tokens[idx + 2].kind() == TokenKind::Identifier
-        && tokens[idx + 3].kind() == TokenKind::OpAssignment
+    if let Some((elem_type, type_consumed)) = parse_qualified_identifier(tokens, idx)
+        && idx + type_consumed + 2 < tokens.len()
+        && tokens[idx + type_consumed].kind() == TokenKind::Identifier
+        && tokens[idx + type_consumed].lexeme == "List"
+        && tokens[idx + type_consumed + 1].kind() == TokenKind::Identifier
+        && tokens[idx + type_consumed + 2].kind() == TokenKind::OpAssignment
     {
-        declared_type = Some(format!("{} List", tokens[idx].lexeme));
-        idx += 2;
+        declared_type = Some(format!("{} List", elem_type));
+        idx += type_consumed + 1;
     }
 
     if idx >= tokens.len() || tokens[idx].kind() != TokenKind::Identifier {
@@ -1485,6 +1565,14 @@ pub fn parse_place_in_statement(tokens: &[Token], start_index: usize) -> ParseRe
 }
 
 pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    parse_label_declaration_inner(tokens, start_index, false)
+}
+
+fn parse_label_declaration_inner(
+    tokens: &[Token],
+    start_index: usize,
+    is_local: bool,
+) -> ParseResult<Statement> {
     let loc = Location {
         line: tokens[start_index].line,
         column: tokens[start_index].col,
@@ -1515,6 +1603,7 @@ pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseRes
         Statement::LabelDecl {
             name: tokens[start_index + 1].lexeme.clone(),
             variants,
+            is_local,
             loc,
         },
         close + 1 - start_index,
@@ -1522,6 +1611,14 @@ pub fn parse_label_declaration(tokens: &[Token], start_index: usize) -> ParseRes
 }
 
 pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    parse_struct_declaration_inner(tokens, start_index, false)
+}
+
+fn parse_struct_declaration_inner(
+    tokens: &[Token],
+    start_index: usize,
+    is_local: bool,
+) -> ParseResult<Statement> {
     let loc = Location {
         line: tokens[start_index].line,
         column: tokens[start_index].col,
@@ -1551,9 +1648,12 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             cursor += 1;
             continue;
         }
-        if tokens[cursor].kind() == TokenKind::Identifier && tokens[cursor].lexeme == "hide" {
+        let mut field_hidden = false;
+        if tokens[cursor].kind() == TokenKind::KeywordHide
+            || (tokens[cursor].kind() == TokenKind::Identifier && tokens[cursor].lexeme == "hide")
+        {
+            field_hidden = true;
             cursor += 1;
-            continue;
         }
         let method_start = if tokens[cursor].kind() == TokenKind::Identifier
             && tokens[cursor].lexeme == "danger"
@@ -1574,32 +1674,17 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             cursor = ms + consumed;
             continue;
         }
-        if cursor + 2 < close
-            && tokens[cursor].kind() == TokenKind::Identifier
-            && tokens[cursor + 1].kind() == TokenKind::Identifier
-            && tokens[cursor + 1].lexeme == "List"
-            && tokens[cursor + 2].kind() == TokenKind::Identifier
+        if let Some((field_type, name_index)) = parse_type_name_at(tokens, cursor)
+            && name_index < close
+            && tokens[name_index].kind() == TokenKind::Identifier
         {
-            let field_type = format!("{} List", tokens[cursor].lexeme);
-            let first_name = tokens[cursor + 2].lexeme.clone();
-            fields.push(StructField {
-                field_type,
-                name: first_name,
-            });
-            cursor += 3;
-            continue;
-        }
-        if cursor + 1 < close
-            && tokens[cursor].kind() == TokenKind::Identifier
-            && tokens[cursor + 1].kind() == TokenKind::Identifier
-        {
-            let field_type = tokens[cursor].lexeme.clone();
-            let first_name = tokens[cursor + 1].lexeme.clone();
+            let first_name = tokens[name_index].lexeme.clone();
             fields.push(StructField {
                 field_type: field_type.clone(),
                 name: first_name,
+                is_hidden: field_hidden,
             });
-            cursor += 2;
+            cursor = name_index + 1;
             while cursor + 1 < close
                 && tokens[cursor].lexeme == ","
                 && tokens[cursor + 1].kind() == TokenKind::Identifier
@@ -1607,6 +1692,7 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
                 fields.push(StructField {
                     field_type: field_type.clone(),
                     name: tokens[cursor + 1].lexeme.clone(),
+                    is_hidden: field_hidden,
                 });
                 cursor += 2;
             }
@@ -1619,6 +1705,7 @@ pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             name: tokens[start_index + 1].lexeme.clone(),
             fields,
             methods,
+            is_local,
             loc,
         },
         close + 1 - start_index,
@@ -1659,15 +1746,15 @@ fn parse_struct_method(
             current_index += 1;
             continue;
         }
-        if current_index + 1 < end
-            && tokens[current_index].kind() == TokenKind::Identifier
-            && tokens[current_index + 1].kind() == TokenKind::Identifier
+        if let Some((param_type, name_index)) = parse_type_name_at(tokens, current_index)
+            && name_index < end
+            && tokens[name_index].kind() == TokenKind::Identifier
         {
             params.push(FunctionParam {
-                param_type: Some(tokens[current_index].lexeme.clone()),
-                name: tokens[current_index + 1].lexeme.clone(),
+                param_type: Some(param_type),
+                name: tokens[name_index].lexeme.clone(),
             });
-            current_index += 2;
+            current_index = name_index + 1;
             continue;
         }
         if tokens[current_index].kind() == TokenKind::Identifier {
@@ -1686,21 +1773,25 @@ fn parse_struct_method(
     }
     current_index += 1;
     let mut returns = None;
-    if current_index + 2 < end
-        && tokens[current_index].kind() == TokenKind::Identifier
-        && tokens[current_index + 1].kind() == TokenKind::Identifier
-        && tokens[current_index + 1].lexeme == "List"
-        && tokens[current_index + 2].lexeme == "{"
-    {
-        returns = Some(format!("{} List", tokens[current_index].lexeme));
-        current_index += 2;
-    } else if current_index < end
-        && tokens[current_index].kind() == TokenKind::Identifier
-        && current_index + 1 < end
-        && tokens[current_index + 1].lexeme == "{"
-    {
-        returns = Some(tokens[current_index].lexeme.clone());
+    let mut uses_returns_keyword = false;
+    if current_index < end && tokens[current_index].lexeme == "returns" {
+        uses_returns_keyword = true;
         current_index += 1;
+        if let Some((return_type, next_index)) = parse_type_name_at(tokens, current_index) {
+            returns = Some(return_type);
+            current_index = next_index;
+        } else {
+            return Err(parse_err(
+                "SC-PARSE-163",
+                "expected return type after 'returns'.",
+            ));
+        }
+    } else if let Some((return_type, next_index)) = parse_type_name_at(tokens, current_index)
+        && next_index < end
+        && tokens[next_index].lexeme == "{"
+    {
+        returns = Some(return_type);
+        current_index = next_index;
     }
     if current_index >= end || tokens[current_index].lexeme != "{" {
         return Err(parse_err(
@@ -1719,6 +1810,7 @@ fn parse_struct_method(
                 statements: body_stmts,
             }),
             returns,
+            uses_returns_keyword,
             is_danger,
         },
         consumed,

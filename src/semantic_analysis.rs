@@ -62,6 +62,7 @@ struct MemoryState {
 #[derive(Clone, Debug)]
 struct StructInfo {
     fields: HashMap<String, ValueType>,
+    hidden_fields: std::collections::HashSet<String>,
     methods: HashMap<String, FunctionSig>,
 }
 
@@ -149,6 +150,8 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             is_danger,
             returns,
             params,
+            uses_returns_keyword: _,
+            is_local,
             ..
         } = stmt
         {
@@ -176,6 +179,20 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                     )?;
                 }
             }
+            if !*is_local
+                && (functions.contains_key(name)
+                    || labels.contains_key(name)
+                    || structs.contains_key(name))
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_REDECLARATION,
+                    format!(
+                        "top-level symbol collision for '{}'. use distinct names or qualification.",
+                        name
+                    ),
+                ));
+            }
             functions.insert(
                 name.clone(),
                 FunctionSig {
@@ -189,23 +206,62 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 },
             );
         }
-        if let Statement::LabelDecl { name, variants, .. } = stmt {
+        if let Statement::LabelDecl {
+            name,
+            variants,
+            is_local,
+            ..
+        } = stmt
+        {
+            if !*is_local
+                && (functions.contains_key(name)
+                    || labels.contains_key(name)
+                    || structs.contains_key(name))
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_REDECLARATION,
+                    format!(
+                        "top-level symbol collision for '{}'. use distinct names or qualification.",
+                        name
+                    ),
+                ));
+            }
             labels.insert(name.clone(), variants.clone());
         }
         if let Statement::StructDecl {
             name,
             fields,
             methods,
+            is_local,
             ..
         } = stmt
         {
+            if !*is_local
+                && (functions.contains_key(name)
+                    || labels.contains_key(name)
+                    || structs.contains_key(name))
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_REDECLARATION,
+                    format!(
+                        "top-level symbol collision for '{}'. use distinct names or qualification.",
+                        name
+                    ),
+                ));
+            }
             let mut fmap = HashMap::new();
+            let mut hidden = std::collections::HashSet::new();
             for f in fields {
                 let field_ty = parse_type_name(&f.field_type);
                 ensure_memory_type_allowed(stmt, &field_ty, "struct field type", false)?;
                 ensure_task_type_allowed(stmt, &field_ty, "struct field type", false)?;
                 ensure_channel_type_allowed(stmt, &field_ty, "struct field type", false)?;
                 fmap.insert(f.name.clone(), field_ty);
+                if f.is_hidden {
+                    hidden.insert(f.name.clone());
+                }
             }
             let mut mmap = HashMap::new();
             for m in methods {
@@ -266,6 +322,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 name.clone(),
                 StructInfo {
                     fields: fmap,
+                    hidden_fields: hidden,
                     methods: mmap,
                 },
             );
@@ -493,6 +550,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 Statement::FunctionDef {
                     params,
                     returns,
+                    uses_returns_keyword,
                     body,
                     loc,
                     ..
@@ -510,6 +568,17 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                             warn_type_style(elem.trim(), loc.line, loc.column, user_types, out);
                         } else {
                             warn_type_style(rt, loc.line, loc.column, user_types, out);
+                        }
+                    }
+                    if let Some(rt) = returns.as_deref()
+                        && !*uses_returns_keyword
+                    {
+                        let parsed = parse_primitive_type_name(rt);
+                        if parsed != ValueType::Unknown {
+                            out.push(format!(
+                                "style warning at line {}, col {}: prefer explicit 'returns <type>' in function declaration.",
+                                loc.line, loc.column
+                            ));
                         }
                     }
                     visit_statements(&body.statements, user_types, out);
@@ -926,7 +995,38 @@ fn validate_call_args(
     Ok(())
 }
 
+fn resolve_function_name<'a>(
+    raw_name: &'a str,
+    scope: &HashMap<String, ValueType>,
+    functions: &HashMap<String, FunctionSig>,
+) -> Option<&'a str> {
+    if functions.contains_key(raw_name) {
+        return Some(raw_name);
+    }
+    if let Some((base, short)) = raw_name.split_once('.') {
+        if base == "my" || scope.contains_key(base) {
+            return None;
+        }
+        if functions.contains_key(short) {
+            return Some(short);
+        }
+    }
+    None
+}
+
 fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -> ValueType {
+    let resolve_struct_name = |raw: &str| -> Option<String> {
+        if structs.contains_key(raw) {
+            return Some(raw.to_string());
+        }
+        if let Some((_, short)) = raw.split_once('.')
+            && structs.contains_key(short)
+        {
+            return Some(short.to_string());
+        }
+        None
+    };
+
     if let Some(inner) = name.strip_prefix("Task(").and_then(|s| s.strip_suffix(')')) {
         return ValueType::Task(Some(Box::new(parse_declared_type_name(
             inner.trim(),
@@ -945,14 +1045,18 @@ fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -
     if let Some(elem) = name.strip_suffix(" List") {
         let elem = elem.trim();
         let parsed_elem = parse_type_name(elem);
-        if parsed_elem == ValueType::Unknown && structs.contains_key(elem) {
-            return ValueType::List(Box::new(ValueType::Struct(elem.to_string())));
+        if parsed_elem == ValueType::Unknown
+            && let Some(resolved_struct) = resolve_struct_name(elem)
+        {
+            return ValueType::List(Box::new(ValueType::Struct(resolved_struct)));
         }
         return ValueType::List(Box::new(parsed_elem));
     }
     let parsed = parse_type_name(name);
-    if parsed == ValueType::Unknown && structs.contains_key(name) {
-        ValueType::Struct(name.to_string())
+    if parsed == ValueType::Unknown
+        && let Some(resolved_struct) = resolve_struct_name(name)
+    {
+        ValueType::Struct(resolved_struct)
     } else {
         parsed
     }
@@ -1559,6 +1663,16 @@ fn analyze_statement(
                     format!("unknown field '{}.{}'.", owner, field),
                 ));
             };
+            if info.hidden_fields.contains(field) && object != "my" {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "field '{}.{}' is hidden; access it via methods of '{}'.",
+                        owner, field, owner
+                    ),
+                ));
+            }
             let value_ty = infer_expression_type(
                 value,
                 scope,
@@ -1600,8 +1714,26 @@ fn analyze_statement(
             Ok(())
         }
         Statement::FunctionDef {
-            name, params, body, ..
+            name,
+            params,
+            body,
+            returns,
+            uses_returns_keyword,
+            ..
         } => {
+            if let Some(rt) = returns.as_deref()
+                && !*uses_returns_keyword
+                && matches!(parse_declared_type_name(rt, structs), ValueType::Struct(_))
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_RETURN_RULE,
+                    format!(
+                        "struct return type '{}' requires explicit 'returns <type>' in function declaration.",
+                        rt
+                    ),
+                ));
+            }
             let mut fn_scope = scope.clone();
             let mut fn_memory_state = MemoryState::default();
             for p in params {
@@ -2143,13 +2275,16 @@ fn analyze_statement(
                     ),
                 ));
             }
-            let Some(sig) = functions.get(call_name) else {
+            let Some(resolved_name) = resolve_function_name(call_name, scope, functions) else {
                 return Err(err_at_code(
                     stmt,
                     SEM_UNKNOWN_FUNCTION,
                     format!("unknown function '{}' in on error call.", call_name),
                 ));
             };
+            let sig = functions
+                .get(resolved_name)
+                .expect("resolved function must exist");
             if !sig.is_danger {
                 return Err(err_at_code(
                     stmt,
@@ -2171,7 +2306,7 @@ fn analyze_statement(
                 ));
             }
             validate_call_args(
-                call_name,
+                resolved_name,
                 args,
                 sig,
                 scope,
@@ -2210,13 +2345,16 @@ fn analyze_statement(
                     ),
                 ));
             }
-            let Some(sig) = functions.get(call_name) else {
+            let Some(resolved_name) = resolve_function_name(call_name, scope, functions) else {
                 return Err(err_at_code(
                     stmt,
                     SEM_UNKNOWN_FUNCTION,
                     format!("unknown function '{}' in on error call.", call_name),
                 ));
             };
+            let sig = functions
+                .get(resolved_name)
+                .expect("resolved function must exist");
             if !sig.is_danger {
                 return Err(err_at_code(
                     stmt,
@@ -2228,7 +2366,7 @@ fn analyze_statement(
                 ));
             }
             validate_call_args(
-                call_name,
+                resolved_name,
                 args,
                 sig,
                 scope,
@@ -2402,7 +2540,8 @@ fn analyze_statement(
                     "return error requires label ErrorCode declaration.".to_string(),
                 ));
             };
-            if !error_codes.iter().any(|v| v == code) {
+            let variant = code.split('.').next_back().unwrap_or(code.as_str());
+            if !error_codes.iter().any(|v| v == variant) {
                 return Err(err_at_code(
                     stmt,
                     SEM_ERRORCODE_RULE,
@@ -3340,6 +3479,15 @@ fn infer_expression_type(
                         format!("unknown field '{}.{}'.", owner, field),
                     ));
                 };
+                if info.hidden_fields.contains(field) && base != "my" {
+                    return Err(sem_err(
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "field '{}.{}' is hidden; access it via methods of '{}'.",
+                            owner, field, owner
+                        ),
+                    ));
+                }
                 Ok(ft.clone())
             } else {
                 Ok(ValueType::Unknown)
@@ -3893,10 +4041,21 @@ fn infer_expression_type(
                 };
             }
             if let Some((base, method)) = name.split_once('.') {
-                let owner_ty = if base == "my" {
-                    if let Some(ctx) = fn_ctx {
-                        if let Some(self_name) = ctx.self_struct.as_ref() {
-                            ValueType::Struct(self_name.clone())
+                // Distinguish struct method calls (`obj.method`) from qualified function
+                // calls (`module.symbol`). For now module-qualified calls resolve to
+                // plain function names during semantic/codegen fallback.
+                let base_is_receiver = base == "my" || scope.contains_key(base);
+                if base_is_receiver {
+                    let owner_ty = if base == "my" {
+                        if let Some(ctx) = fn_ctx {
+                            if let Some(self_name) = ctx.self_struct.as_ref() {
+                                ValueType::Struct(self_name.clone())
+                            } else {
+                                return Err(sem_err(
+                                    SEM_INVALID_CONTEXT,
+                                    "my is only allowed inside struct methods.".to_string(),
+                                ));
+                            }
                         } else {
                             return Err(sem_err(
                                 SEM_INVALID_CONTEXT,
@@ -3904,96 +4063,117 @@ fn infer_expression_type(
                             ));
                         }
                     } else {
+                        if let Some(memory_name) = memory_state.variable_memory.get(base)
+                            && memory_state
+                                .memories
+                                .get(memory_name)
+                                .map(|binding| binding.is_cleared)
+                                .unwrap_or(false)
+                        {
+                            return Err(sem_err(
+                                SEM_MEMORY_LIFETIME,
+                                format!(
+                                    "use-after-clear: '{}' refers to memory '{}' that was cleared.",
+                                    base, memory_name
+                                ),
+                            ));
+                        }
+                        scope.get(base).cloned().ok_or_else(|| {
+                            sem_err(
+                                SEM_USE_BEFORE_DEF,
+                                format!(
+                                    "use-before-definition: '{}' is not defined in current scope.",
+                                    base
+                                ),
+                            )
+                        })?
+                    };
+                    let ValueType::Struct(owner) = owner_ty else {
                         return Err(sem_err(
-                            SEM_INVALID_CONTEXT,
-                            "my is only allowed inside struct methods.".to_string(),
+                            SEM_TYPE_MISMATCH,
+                            format!("method call requires struct receiver, got {:?}.", owner_ty),
                         ));
-                    }
-                } else {
-                    if let Some(memory_name) = memory_state.variable_memory.get(base)
-                        && memory_state
-                            .memories
-                            .get(memory_name)
-                            .map(|binding| binding.is_cleared)
-                            .unwrap_or(false)
-                    {
+                    };
+                    let Some(info) = structs.get(&owner) else {
                         return Err(sem_err(
-                            SEM_MEMORY_LIFETIME,
+                            SEM_TYPE_MISMATCH,
+                            format!("unknown struct type '{}'.", owner),
+                        ));
+                    };
+                    let Some(sig) = info.methods.get(method) else {
+                        return Err(sem_err(
+                            SEM_UNKNOWN_FUNCTION,
+                            format!("unknown method '{}.{}'.", owner, method),
+                        ));
+                    };
+                    if args.len() != sig.param_types.len() {
+                        return Err(sem_err(
+                            SEM_ARG_COUNT,
                             format!(
-                                "use-after-clear: '{}' refers to memory '{}' that was cleared.",
-                                base, memory_name
+                                "argument count mismatch for '{}.{}': expected {}, got {}.",
+                                owner,
+                                method,
+                                sig.param_types.len(),
+                                args.len()
                             ),
                         ));
                     }
-                    scope.get(base).cloned().ok_or_else(|| {
-                        sem_err(
-                            SEM_USE_BEFORE_DEF,
-                            format!(
-                                "use-before-definition: '{}' is not defined in current scope.",
-                                base
-                            ),
-                        )
-                    })?
-                };
-                let ValueType::Struct(owner) = owner_ty else {
-                    return Err(sem_err(
-                        SEM_TYPE_MISMATCH,
-                        format!("method call requires struct receiver, got {:?}.", owner_ty),
-                    ));
-                };
-                let Some(info) = structs.get(&owner) else {
-                    return Err(sem_err(
-                        SEM_TYPE_MISMATCH,
-                        format!("unknown struct type '{}'.", owner),
-                    ));
-                };
-                let Some(sig) = info.methods.get(method) else {
-                    return Err(sem_err(
-                        SEM_UNKNOWN_FUNCTION,
-                        format!("unknown method '{}.{}'.", owner, method),
-                    ));
-                };
-                if args.len() != sig.param_types.len() {
-                    return Err(sem_err(
-                        SEM_ARG_COUNT,
-                        format!(
-                            "argument count mismatch for '{}.{}': expected {}, got {}.",
-                            owner,
-                            method,
-                            sig.param_types.len(),
-                            args.len()
-                        ),
-                    ));
+                    for (arg, expected_ty) in args.iter().zip(sig.param_types.iter()) {
+                        let actual_ty = infer_expression_type(
+                            arg,
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if !can_assign(expected_ty, &actual_ty) {
+                            return Err(sem_err(
+                                SEM_ARG_TYPE,
+                                format!(
+                                    "argument type mismatch for '{}.{}': expected {:?}, got {:?}.",
+                                    owner, method, expected_ty, actual_ty
+                                ),
+                            ));
+                        }
+                    }
+                    return Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown));
                 }
-                for (arg, expected_ty) in args.iter().zip(sig.param_types.iter()) {
-                    let actual_ty = infer_expression_type(
-                        arg,
+
+                // `base` isn't a local receiver: treat dotted name as module qualification.
+                let qualified = format!("{}.{}", base, method);
+                if let Some(resolved_name) = resolve_function_name(&qualified, scope, functions) {
+                    let sig = functions
+                        .get(resolved_name)
+                        .expect("resolved function must exist");
+                    validate_call_args(
+                        resolved_name,
+                        args,
+                        sig,
                         scope,
                         memory_state,
                         functions,
                         structs,
                         fn_ctx,
                     )?;
-                    if !can_assign(expected_ty, &actual_ty) {
-                        return Err(sem_err(
-                            SEM_ARG_TYPE,
-                            format!(
-                                "argument type mismatch for '{}.{}': expected {:?}, got {:?}.",
-                                owner, method, expected_ty, actual_ty
-                            ),
-                        ));
-                    }
+                    return Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown));
                 }
-                return Ok(sig.return_type.clone().unwrap_or(ValueType::Unknown));
+                return Err(sem_err(
+                    SEM_UNKNOWN_FUNCTION,
+                    format!("unknown function '{}' in expression call.", name),
+                ));
             }
-            let Some(sig) = functions.get(name) else {
+            let Some(resolved_name) = resolve_function_name(name, scope, functions) else {
                 return Err(sem_err(
                     SEM_UNKNOWN_FUNCTION,
                     format!("unknown function '{}' in expression call.", name),
                 ));
             };
+            let sig = functions
+                .get(resolved_name)
+                .expect("resolved function must exist");
             validate_call_args(
-                name,
+                resolved_name,
                 args,
                 sig,
                 scope,

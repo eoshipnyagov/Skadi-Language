@@ -7,7 +7,7 @@ struct AlertCounters {
     Int todo_lines
 }
 
-fn find_line_end(Text full_text, Int start_index) Int {
+fn find_line_end(Text full_text, Int start_index) returns Int {
     new Text tail_text = slice(full_text, start_index, len(full_text))
     new Int relative_newline = find(tail_text, "\n")
     if relative_newline == -1 {
@@ -17,7 +17,7 @@ fn find_line_end(Text full_text, Int start_index) Int {
     return start_index + relative_newline
 }
 
-fn next_line_start(Text full_text, Int line_end) Int {
+fn next_line_start(Text full_text, Int line_end) returns Int {
     if line_end >= len(full_text) {
         return len(full_text)
     }
@@ -25,19 +25,19 @@ fn next_line_start(Text full_text, Int line_end) Int {
     return line_end + 1
 }
 
-fn is_error_line(Text line_text) Bool {
+fn is_error_line(Text line_text) returns Bool {
     return contains(line_text, "ERROR")      
 }
 
-fn is_warning_line(Text line_text) Bool {
+fn is_warning_line(Text line_text) returns Bool {
     return contains(line_text, "WARN")
 }
 
-fn is_todo_line(Text line_text) Bool {
+fn is_todo_line(Text line_text) returns Bool {
     return contains(line_text, "TODO")
 }
 
-fn is_alert_line(Text line_text) Bool {
+fn is_alert_line(Text line_text) returns Bool {
     if is_error_line(line_text) {
         return true
     }
@@ -49,7 +49,7 @@ fn is_alert_line(Text line_text) Bool {
     return is_todo_line(line_text)
 }
 
-fn preview_log(Path log_path) Int {
+fn preview_log(Path log_path) returns Int {
     Memory scratch_memory = memory(16kb) on error {
         return 1
     }
@@ -67,14 +67,14 @@ fn preview_log(Path log_path) Int {
     return 0
 }
 
-fn load_log_text(Memory assets_memory, Path log_path) Text {
+fn load_log_text(Memory assets_memory, Path log_path) returns Text {
     place in assets_memory {
         new Text log_text = read(log_path)
         return log_text
     }
 }
 
-fn collect_alert_lines(Memory assets_memory, Text log_text) Text List {
+fn collect_alert_lines(Memory assets_memory, Text log_text) returns Text List {
     place in assets_memory {
         new Text List alert_lines = []
         new Int start_index = 0
@@ -95,7 +95,7 @@ fn collect_alert_lines(Memory assets_memory, Text log_text) Text List {
     }
 }
 
-fn count_alerts(Text log_text) AlertCounters {
+fn count_alerts(Text log_text) returns AlertCounters {
     new Int total_line_count = 0
     new Int error_line_count = 0
     new Int warning_line_count = 0

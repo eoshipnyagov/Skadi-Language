@@ -37,6 +37,9 @@ jobs:
         shell: pwsh
         run: echo "C:\msys64\ucrt64\bin" >> $env:GITHUB_PATH
 
+      - name: Root tests (non-e2e)
+        run: cargo test -q -- --skip e2e_
+
       - name: Build all showcase programs through native backend path
         run: cargo test -q --test showcase_builds
 
@@ -161,7 +164,7 @@ jobs:
               readings.send(item)
           }
 
-          fn consume(Channel(Reading) readings) Int {
+          fn consume(Channel(Reading) readings) returns Int {
               new Reading item = readings.receive()
               return item.id
           }

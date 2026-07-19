@@ -85,7 +85,7 @@
 
 ## Этап 4 — Интеграция и фикстуры
 
-Статус: planned
+Статус: завершён
 
 Задачи:
 
@@ -224,6 +224,20 @@ Reference:
 
 - `docs/SKADI_V1_1_PLAN_RU.md`
 
+## Этап 9 — Экспериментальный трек `v1.2`
+
+Статус: в работе
+
+Реализовано и закреплено тестами:
+
+- Memory MVP: region runtime, `place in`, `clear`, базовые escape- и lifecycle-проверки;
+- Task/Channel runtime MVP: `run`, `wait`, `stop`, `stopping`, bounded FIFO и передача результатов;
+- Win32 и pthread backend, многопоточные stress/e2e и обязательный TSan gate в Linux CI;
+- относительные path-imports, `local`/`hide`, direct-import-only visibility и `module.symbol`;
+- каноническое ключевое слово `returns` для типизированных функций.
+
+Открытые задачи и границы текущего этапа ведутся в `docs/SKADI_V1_2_PLAN_RU.md`.
+
 ## Реестр рисков
 
 1. Contract drift между lexer token kinds и parser expectations.  
@@ -242,5 +256,5 @@ Reference:
 
 - каждая новая grammar feature должна иметь хотя бы один positive и один negative test;
 - предпочитать небольшие коммиты по phase tasks;
-- держать `docs/legacy/Skadi_design.txt` как normative grammar reference;
+- использовать `docs/SKADI_SYNTAX_STATUS.md` и пользовательский справочник языка как источник текущего синтаксического контракта;
 - синтаксические решения держать синхронизированными с `docs/SKADI_STYLE_PRINCIPLES.md`.

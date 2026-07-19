@@ -53,7 +53,7 @@ fn process() {
 Если значение возвращается из функции, оно не уничтожается вместе с локальным scope функции.
 
 ```scadi
-fn make_numbers() Int List {
+fn make_numbers() returns Int List {
     new Int List numbers = []
     return numbers
 }
@@ -179,7 +179,7 @@ struct LoadedText {
     Text content
 }
 
-fn load_text(Memory assets_memory, Path path) LoadedText {
+fn load_text(Memory assets_memory, Path path) returns LoadedText {
     place in assets_memory {
         new Text file_text = read(path)
         new LoadedText result = {content = file_text}
@@ -195,7 +195,7 @@ struct LoadedText {
     Text content
 }
 
-fn load_text(Path path) LoadedText {
+fn load_text(Path path) returns LoadedText {
     Memory scratch_memory = memory(4mb)
 
     place in scratch_memory {

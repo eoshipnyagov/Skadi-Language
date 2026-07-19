@@ -1,6 +1,6 @@
 # Статус синтаксиса Skadi
 
-Дата: 2026-06-21  
+Дата: 2026-07-19
 Назначение: единый точный срез того, какой синтаксис действительно работает в этом репозитории сейчас.
 
 ## Уровни статуса
@@ -28,8 +28,12 @@
 
 - `fn name(...) { ... }` - `Stable`
 - `danger fn name(...) { ... }` - `Stable`
+- `local fn name(...) { ... }` - `Stable`
 - типизированные параметры - `Stable`
-- типизированный возврат - `Stable`
+- канонический типизированный возврат `fn name(...) returns Type` - `Stable`
+- legacy-возврат `fn name(...) Type` - `Partial`
+  - scalar-формы пока принимаются с предупреждением;
+  - возврат структуры требует явного `returns`.
 - вызовы функций внутри выражений - `Stable`
 - проверка количества и типов аргументов - `Stable`
 
@@ -58,7 +62,10 @@
 ## Структуры и методы
 
 - `struct Name { ... }` - `Stable`
+- `local struct Name { ... }` и `local label Name { ... }` - `Stable`
 - поля структуры - `Stable`
+- скрытые поля `hide Type field` - `Stable`
+  - доступны только методам той же структуры;
 - методы внутри структуры - `Stable`
 - `my.field` внутри методов - `Stable`
 - доступ `obj.field` - `Stable`
@@ -66,6 +73,17 @@
 - struct literals `{field = value, ...}` - `Stable`
 - field punning `{value, status}` - `Stable`
 - списки структур и вызовы методов на итерируемых элементах - `Stable`
+
+## Импорты, модули и видимость
+
+- path-import `import "./relative/path.skd"` - `Stable`
+- циклические и отсутствующие импорты диагностируются как `SC-MOD-001` - `Stable`
+- публичные `fn`, `struct` и `label` импортируются только напрямую - `Stable`
+- `local fn/struct/label` не экспортируются из файла - `Stable`
+- коллизии публичных символов диагностируются как `SC-MOD-002` - `Stable`
+- нарушение direct-import-only видимости диагностируется как `SC-MOD-003` - `Stable`
+- квалификация `module.symbol`, где `module` - имя файла без `.skd`, работает для функций, типов структур и вариантов `ErrorCode` - `Stable`
+- `import module_name` и `import "./x.skd" as alias` - `Planned`
 
 ## Builtins: Text / List / Filesystem / I/O
 
@@ -151,7 +169,7 @@
 
 ## Сознательно отложенное
 
-- imports / modules
+- module-name imports и aliases поверх стабильного path-import контракта
 - visual core / canvas
 - systems additions track
 - более строгая модель ошибок индексации

@@ -10,7 +10,7 @@ fn collect(Channel(Reading) readings) {
     readings.send(outdoor)
 }
 
-fn calculate_delta(Channel(Reading) readings) Float {
+fn calculate_delta(Channel(Reading) readings) returns Float {
     new Reading first = readings.receive()
     new Reading second = readings.receive()
     return abs(first.value - second.value)

@@ -302,7 +302,7 @@ struct LoadedText {
     Text content
 }
 
-fn load_text(Memory assets_memory, Path path) LoadedText {
+fn load_text(Memory assets_memory, Path path) returns LoadedText {
     place in assets_memory {
         new Text file_text = read(path)
         new LoadedText result = {content = file_text}
@@ -392,7 +392,7 @@ struct ConfigText {
     Bool fallback_used
 }
 
-fn load_config(Memory assets_memory, Path path) ConfigText {
+fn load_config(Memory assets_memory, Path path) returns ConfigText {
     place in assets_memory {
         new Text raw_text = read(path)
         new ConfigText config_result = {content = raw_text, fallback_used = false}
@@ -426,7 +426,7 @@ struct LoadedSnippet {
     Text content
 }
 
-fn load_with_preview(Memory assets_memory, Memory scratch_memory, Path path) LoadedSnippet {
+fn load_with_preview(Memory assets_memory, Memory scratch_memory, Path path) returns LoadedSnippet {
     place in assets_memory {
         place in scratch_memory {
             new Text preview_text = read(path)

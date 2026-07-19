@@ -114,7 +114,7 @@ workflow [docs-pages.yml](.github/workflows/docs-pages.yml), который со
 
 ## 9. Что пока не стоит считать завершённым продуктовым слоем
 
-- imports / modules;
+- module-name imports, aliases и re-exports поверх стабильных path-imports;
 - расширенные memory policies: `allow grow`, `allow drop`, `memory.child`, `memory.static`;
 - расширенный concurrency surface: `close`, cancellation, timeout, `select`, task groups;
 - visual core;

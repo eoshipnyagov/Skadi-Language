@@ -4,7 +4,7 @@ struct LoadedText {
     Text content
 }
 
-fn load_text(Memory assets_memory, Path path) LoadedText {
+fn load_text(Memory assets_memory, Path path) returns LoadedText {
     place in assets_memory {
         new Text content = read(path)
         new LoadedText result = {content}

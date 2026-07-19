@@ -12,7 +12,7 @@ fn produce(Channel(Reading) readings) {
     readings.send(third)
 }
 
-fn average_three(Channel(Reading) readings) Float {
+fn average_three(Channel(Reading) readings) returns Float {
     new Reading first = readings.receive()
     new Reading second = readings.receive()
     new Reading third = readings.receive()

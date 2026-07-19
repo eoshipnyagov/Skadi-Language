@@ -87,7 +87,7 @@ fn process() {
 Если значение явно возвращается из функции, оно не уничтожается вместе с локальным scope.
 
 ```scadi
-fn make_numbers() Int List {
+fn make_numbers() returns Int List {
     new Int List numbers = []
 
     numbers.push(1)
@@ -126,7 +126,7 @@ struct LevelData {
     Text source
 }
 
-fn load_level(Path path) LevelData {
+fn load_level(Path path) returns LevelData {
     new Text file_text = read(path)
     new LevelData result = {source = file_text}
     return result
@@ -196,7 +196,7 @@ place in отвечает за место размещения.
 Простой случай:
 
 ```scadi
-fn make_list() Int List {
+fn make_list() returns Int List {
     new Int List values = []
     return values
 }
@@ -209,7 +209,7 @@ struct LoadedText {
     Text content
 }
 
-fn load_text(Memory assets_memory, Path path) LoadedText {
+fn load_text(Memory assets_memory, Path path) returns LoadedText {
     place in assets_memory {
         new Text file_text = read(path)
         new LoadedText result = {content = file_text}
@@ -469,7 +469,7 @@ struct LoadedText {
     Text content
 }
 
-fn bad() LoadedText {
+fn bad() returns LoadedText {
     Memory temp_memory = memory(4mb)
 
     place in temp_memory {
@@ -507,7 +507,7 @@ struct LoadedText {
     Text content
 }
 
-fn load_text(Memory assets_memory, Path path) LoadedText {
+fn load_text(Memory assets_memory, Path path) returns LoadedText {
     place in assets_memory {
         new Text file_text = read(path)
         new LoadedText result = {content = file_text}
@@ -523,7 +523,7 @@ struct LoadedText {
     Text content
 }
 
-fn load_text(Path path) LoadedText {
+fn load_text(Path path) returns LoadedText {
     Memory temp_memory = memory(4mb)
 
     place in temp_memory {
@@ -588,7 +588,7 @@ struct LevelLoadResult {
     LoadStatus status
 }
 
-fn load_level(Memory level_memory, Path path) LevelLoadResult {
+fn load_level(Memory level_memory, Path path) returns LevelLoadResult {
     new file = fs.read(path) on error {
         return {level = Level.empty(), status = LoadStatus.FileError}
     }

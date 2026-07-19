@@ -1,6 +1,6 @@
 // Negative memory example 07: local region payload cannot be stored into a longer-lived owner.
 
-fn retain_text() Int {
+fn retain_text() returns Int {
     Memory scratch_memory = memory(64kb)
     new Text retained_text = ""
 

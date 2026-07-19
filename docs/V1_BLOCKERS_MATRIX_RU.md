@@ -65,10 +65,13 @@
 - Дальше: спроектировать плавный переход к stream API.
 
 2. Диагностики и коды ошибок
-- Довести до консистентного покрытия всех ключевых semantic/runtime ошибок.
+- Статус: закрыто для frontend/toolchain-контракта.
+- Стабильные семейства `SC-LEX`, `SC-PARSE`, `SC-SEM`, `SC-MOD` и `SC-CGEN`
+  зафиксированы в справочнике кодов и regression-тестах.
 
 3. Расширение e2e-наборов "витринных" программ
-- Поддерживать 8-10 небольших программ, покрывающих ключевые конструкции.
+- Статус: закрыто и продолжает расширяться вместе с языком.
+- Поддерживаемая матрица включает 12 showcase-программ, Memory и Task/Channel scenarios.
 
 ## Ближайший план закрытия P0
 
@@ -88,3 +91,12 @@
   - statement-only `i++/i--` lowering.
 - Added negative compile e2e guard for known semantic/codegen mismatch shape (`output(concat(...))`).
 - CI gate split includes dedicated `codegen-e2e` stage; sanitizer run remains optional with explicit skip logs.
+
+## V1.1 Scope/Visibility Close-out (2026-07-19)
+
+- запрет shadowing, `local fn/struct/label` и `hide` реализованы и покрыты тестами;
+- относительный path-import, direct-import-only видимость и детерминированные коллизии
+  закреплены кодами `SC-MOD-001..003`;
+- `module.symbol` покрыт для функций, типов структур и вариантов `ErrorCode`;
+- канонический типизированный возврат использует `returns`;
+- module-name imports и aliases оставлены явным post-v1.1 backlog, а не скрытым блокером.

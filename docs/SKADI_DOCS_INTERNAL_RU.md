@@ -31,6 +31,15 @@
 - [Стиль диагностики](diagnostics-style.md)
   - стиль, форма и code ranges диагностических сообщений.
 
+- [Справочник кодов диагностики](diagnostic-codes.md)
+  - актуальные семейства `SC-LEX`, `SC-PARSE`, `SC-SEM`, `SC-MOD` и `SC-CGEN`.
+
+- [Матрица токенов и конструкций](token-construct-coverage.md)
+  - трассировка конструкций через lexer, parser, semantic, codegen и e2e.
+
+- [Scope и видимость v1.1](scope-visibility.md)
+  - контракт `local`, `hide`, direct imports и квалифицированных имён.
+
 - `CLI_USAGE.md`
   - служебная заметка про пользовательские входы и низкоуровневый driver.
 
@@ -52,6 +61,9 @@
 
 - [План v1.1](v1-1-plan.md)
   - stable/productization план `v1.1`.
+
+- [Закрытие roadmap v1.1](v1-1-roadmap.md)
+  - исторический close-out scope/visibility и CI-гейтов `v1.1`.
 
 - [План v1.2](v1-2-plan.md)
   - текущая рабочая линия после `v1.1`: Memory MVP и Task/Channel runtime track.

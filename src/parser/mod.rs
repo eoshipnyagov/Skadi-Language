@@ -14,6 +14,9 @@ fn parse_statement_at(
     let start_token = &tokens[current_token_index];
 
     let parse_result = match start_token.kind() {
+        TokenKind::KeywordLocal => {
+            statements::parse_local_prefixed_declaration(tokens, current_token_index, parser_scope)
+        }
         TokenKind::KeywordFn => {
             statements::parse_function_declaration(tokens, current_token_index, parser_scope)
         }

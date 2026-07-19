@@ -6,7 +6,7 @@ label ErrorCode {
     InvalidScale
 }
 
-danger fn parse_scale(Text raw_text) Float {
+danger fn parse_scale(Text raw_text) returns Float {
     if contains(raw_text, "bad") {
         return error InvalidScale
     } else {
@@ -19,12 +19,12 @@ struct DeviceState {
     Text name
     Float reading
 
-    fn rename(Text suffix_text) Text {
+    fn rename(Text suffix_text) returns Text {
         my.name = concat(my.name, suffix_text)
         return my.name
     }
 
-    fn is_hot(Float threshold_value) Bool {
+    fn is_hot(Float threshold_value) returns Bool {
         if my.reading >= threshold_value {
             return true
         } else {
@@ -33,7 +33,7 @@ struct DeviceState {
     }
 }
 
-fn preview_log(Path log_path) Int {
+fn preview_log(Path log_path) returns Int {
     Memory scratch_memory = memory(16kb) on error {
         return 1
     }
@@ -60,7 +60,7 @@ fn background_scan(Channel(Text) alerts) {
     }
 }
 
-fn parse_header() Text {
+fn parse_header() returns Text {
     return "header"
 }
 

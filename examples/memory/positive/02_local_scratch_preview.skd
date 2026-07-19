@@ -1,6 +1,6 @@
 // Memory example 02: local scratch Memory for temporary data that does not escape.
 
-fn preview_file(Path path) Int {
+fn preview_file(Path path) returns Int {
     Memory scratch_memory = memory(64kb) on error {
         return 1
     }

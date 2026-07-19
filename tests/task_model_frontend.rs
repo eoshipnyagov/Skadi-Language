@@ -102,7 +102,7 @@ struct Event {
     Text name
 }
 
-fn load_event() Event {
+fn load_event() returns Event {
     return {id = 1, name = "ready"}
 }
 

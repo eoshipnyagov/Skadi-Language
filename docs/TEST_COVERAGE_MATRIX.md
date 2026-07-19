@@ -1,6 +1,6 @@
 # Матрица тестового покрытия (`Skadi v1`)
 
-Дата: 2026-05-25  
+Дата: 2026-07-19
 Ответственный слой: Skadi core
 
 Этот файл фиксирует покрытие тестами для элементов языка в текущем Rust-прототипе.
@@ -13,8 +13,8 @@
   - `tests/parser_smoke.rs`
   - включает: `new`, typed `new`, `if/else`, `while`, `for in`, `iterate ... as ...`,
     объявления функций, `danger fn`, `return`, `return error`, `when/is/else`, `label`,
-    форму `struct`, `on interrupt`, list literals, `push/pop-on-error`, indexing, calls,
-    `break/continue/pass`
+    форму `struct`, `local fn/struct/label`, `hide`, канонический `returns`, qualified names,
+    `on interrupt`, list literals, `push/pop-on-error`, indexing, calls и `break/continue/pass`
 - semantic validation
   - `tests/semantic_smoke.rs`
   - включает: type mismatch, scope/redeclaration, use-before-def, arity/types calls,
@@ -23,6 +23,8 @@
     негативные проверки `on error` на не-danger builtins (`read/write/fs.list`),
     стилевые предупреждения (`iterate`, `Bool/Char`)
   - включает loop-context rules для `break/continue`
+  - включает scope/visibility rules: запрет shadowing, локальные объявления, скрытые поля,
+    qualified function/struct/ErrorCode references
 - shape-проверки codegen
   - `tests/codegen_smoke.rs`
   - включает понижение control flow, `when`, runtime-вызовы для list/text,
@@ -30,6 +32,11 @@
 - интеграционные pipeline-тесты
   - `tests/language_programs.rs`
   - end-to-end через `lex -> parse -> semantic -> C generation` для многофичевых программ
+- multi-file/import pipeline
+  - `tools/skadi-cli/src/pipeline.rs` проверяет относительные path-imports, отсутствующие файлы и циклы
+  - закреплены `SC-MOD-001`, `SC-MOD-002` и `SC-MOD-003`
+  - покрыты direct-import-only visibility, public-symbol collisions, `local` isolation и
+    `module.symbol` для функций, структур и вариантов `ErrorCode`
 - e2e-тесты с C-компилятором
   - `tests/codegen_e2e.rs`
   - C output собирается, а binaries запускаются на representative programs
@@ -98,6 +105,9 @@
 - task/channel backend/runtime
   - void и `Task(T)` run/wait, `stop`, `stopping` и bounded Channel реализованы через Win32/pthread backend
   - `close`, timeout, cancellation, `select`, task groups и embedded APIs остаются TODO
+- module ergonomics
+  - относительный path-import и правила видимости покрыты полноценно
+  - module-name imports и aliases остаются TODO
 
 ## 3. Политика для новых фич
 

@@ -7,3 +7,4 @@ edition = "2024"
 v01 = { path = "../.." }
 crossterm = "0.28"
 ratatui = "0.28"
+regex = "1"

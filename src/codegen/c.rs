@@ -2987,9 +2987,10 @@ fn emit_statement(
                 out.push_str(");\n");
             }
             emit_owned_channel_cleanup(out, &pad, declared);
+            let variant = code.rsplit('.').next().unwrap_or(code.as_str());
             out.push_str(&pad);
             out.push_str("return ErrorCode_");
-            out.push_str(code);
+            out.push_str(variant);
             out.push_str(";\n");
         }
         Statement::WhenBlock {
@@ -3278,14 +3279,16 @@ fn emit_statement(
 }
 
 fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
-    if skadi_type.and_then(channel_elem_from_decl).is_some() {
+    let normalized_owned = normalize_type_token(skadi_type.unwrap_or("Int"));
+    let normalized = normalized_owned.as_str();
+    if channel_elem_from_decl(normalized).is_some() {
         return "SkChannel*".to_string();
     }
-    if let Some(list_elem) = skadi_type.and_then(list_elem_from_decl) {
+    if let Some(list_elem) = list_elem_from_decl(normalized) {
         let suffix = list_meta_dynamic(list_elem).1;
         return format!("SkadiList_{}", suffix);
     }
-    match skadi_type.unwrap_or("Int") {
+    match normalized {
         "i8" => "int8_t".to_string(),
         "i16" => "int16_t".to_string(),
         "i32" => "int32_t".to_string(),
@@ -3331,9 +3334,25 @@ fn emit_return_expr(
     declared: &HashMap<String, String>,
 ) -> String {
     if let (Some(ret_ty), Expression::StructConstruction { fields }) = (return_type, expr) {
-        return emit_struct_literal(fields, Some(ret_ty), declared);
+        return emit_struct_literal(fields, Some(&normalize_type_token(ret_ty)), declared);
     }
     emit_expr(expr, declared)
+}
+
+fn normalize_type_token(raw: &str) -> String {
+    if let Some(inner) = raw.strip_prefix("Task(").and_then(|s| s.strip_suffix(')')) {
+        return format!("Task({})", normalize_type_token(inner.trim()));
+    }
+    if let Some(inner) = raw
+        .strip_prefix("Channel(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return format!("Channel({})", normalize_type_token(inner.trim()));
+    }
+    if let Some(elem) = raw.strip_suffix(" List") {
+        return format!("{} List", normalize_type_token(elem.trim()));
+    }
+    raw.rsplit('.').next().unwrap_or(raw).to_string()
 }
 
 fn emit_struct_literal(
@@ -3344,7 +3363,9 @@ fn emit_struct_literal(
     let mut keys: Vec<&String> = fields.keys().collect();
     keys.sort();
     let mut body = String::new();
-    let prefix = type_name.map(|t| format!("({})", t)).unwrap_or_default();
+    let prefix = type_name
+        .map(|t| format!("({})", normalize_type_token(t)))
+        .unwrap_or_default();
     body.push_str(&prefix);
     body.push('{');
     for (i, k) in keys.iter().enumerate() {
@@ -3653,8 +3674,9 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             }
             if let Some((obj, method)) = name.split_once(".")
                 && let Some(obj_ty) = declared.get(obj)
+                && let obj_ty_norm = normalize_type_token(obj_ty)
                 && !matches!(
-                    obj_ty.as_str(),
+                    obj_ty_norm.as_str(),
                     "Int"
                         | "i8"
                         | "i16"
@@ -3674,7 +3696,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                         | "Text"
                         | "Path"
                 )
-                && !obj_ty.ends_with(" List")
+                && !obj_ty_norm.ends_with(" List")
             {
                 let mut rendered: Vec<String> = Vec::new();
                 if obj == "my" {
@@ -3683,7 +3705,13 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     rendered.push(format!("&{}", obj));
                 }
                 rendered.extend(args.iter().map(|a| emit_expr(a, declared)));
-                return format!("{}_{}({})", obj_ty, method, rendered.join(", "));
+                return format!("{}_{}({})", obj_ty_norm, method, rendered.join(", "));
+            }
+            if let Some((base, method)) = name.split_once(".")
+                && !declared.contains_key(base)
+            {
+                let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
+                return format!("{}({})", method, rendered.join(", "));
             }
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", map_function_name(name), rendered.join(", "))

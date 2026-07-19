@@ -105,7 +105,7 @@ fn calculate(Int base) Int {
     return base + 7
 }
 
-fn load_reading(Int sensor_id) Reading {
+fn load_reading(Int sensor_id) returns Reading {
     return {sensor_id = sensor_id, value = 21.5}
 }
 

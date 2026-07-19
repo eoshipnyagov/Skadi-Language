@@ -1,9 +1,8 @@
 // Memory example 03: List payload returned from external Memory.
 
-fn collect_batch(Memory frame_memory) Int List {
+fn collect_batch(Memory frame_memory) returns Int List {
     place in frame_memory {
         new Int List reading_values = [10, 20, 30]
         return reading_values
     }
 }
-   

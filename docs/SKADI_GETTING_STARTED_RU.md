@@ -173,7 +173,7 @@ i--
 ### Обычная функция
 
 ```skadi
-fn add(Int a, Int b) Int {
+fn add(Int a, Int b) returns Int {
     return a + b
 }
 
@@ -188,7 +188,7 @@ label ErrorCode {
     ZeroDivision
 }
 
-danger fn safe_div(Int a, Int b) Int {
+danger fn safe_div(Int a, Int b) returns Int {
     if b == 0 {
         return error ZeroDivision
     }
@@ -425,7 +425,7 @@ struct Account {
     Int balance
     Text owner
 
-    fn deposit(Int amount) Int {
+    fn deposit(Int amount) returns Int {
         my.balance = my.balance + amount
         return my.balance
     }
@@ -453,6 +453,39 @@ new Int value = 7
 new Text status = "ok"
 new Result r = {value, status}
 ```
+
+### Видимость
+
+Объявления публичны по умолчанию. Для локальных символов и скрытых полей есть
+`local` и `hide`:
+
+```skadi
+local struct Session {
+    hide Text token
+    Text name
+}
+
+local fn normalize(Text value) returns Text {
+    return value
+}
+```
+
+`hide`-поле доступно методам своей структуры, но не внешнему коду. Shadowing
+локальных имён запрещён.
+
+## 14.1 Несколько файлов
+
+Импорт указывается относительным путём от текущего `.skd`-файла:
+
+```skadi
+import "./math_utils.skd"
+
+new Int value = math_utils.add(2, 3)
+```
+
+Имя перед точкой берётся из имени файла без `.skd`. Публичные символы прямого
+импорта также доступны без квалификации. Транзитивные импорты не видны, а
+module-name imports и aliases пока не реализованы.
 
 ## 15. Математика `v1.1`
 

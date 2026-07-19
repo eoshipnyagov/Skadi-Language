@@ -1,4 +1,4 @@
-fn calculate(Int value) Int {
+fn calculate(Int value) returns Int {
     return value + 1
 }
 

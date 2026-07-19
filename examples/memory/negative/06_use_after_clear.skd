@@ -1,6 +1,6 @@
 // Negative memory example 06: obvious use-after-clear must be rejected.
 
-fn render_frame(Memory frame_memory) Int {
+fn render_frame(Memory frame_memory) returns Int {
     new Text frame_text = ""
 
     place in frame_memory {

@@ -37,6 +37,7 @@ The repository includes:
 - full-screen `skadi-cli tui`,
 - formatter,
 - math/core support for `v1.1`,
+- relative path imports, `local`/`hide`, and qualified `module.symbol` access,
 - experimental Memory MVP work for `v1.2`,
 - experimental native Task/Channel runtime for `v1.2`,
 - showcase programs,
@@ -81,7 +82,7 @@ Skadi is trying to keep the useful parts of systems-level programming while maki
 Skadi prefers words when they carry meaning better than symbols.
 
 ```skadi
-danger fn safe_div(Int a, Int b) Int {
+danger fn safe_div(Int a, Int b) returns Int {
     if b == 0 {
         return error ZeroDivision
     }
@@ -111,7 +112,7 @@ new Int value = safe_div(10, divisor) on error {
 ```
 
 ```skadi
-fn sum_positive(List(Int) xs) Int {
+fn sum_positive(List(Int) xs) returns Int {
     new Int total = 0
 
     iterate xs as x {
@@ -132,7 +133,7 @@ The exact syntax is still evolving. The important part is the direction: readabl
 <summary>Skadi</summary>
 
 ```skadi
-fn sum_positive(List(Int) xs) Int {
+fn sum_positive(List(Int) xs) returns Int {
     new Int total = 0
 
     iterate xs as x {
@@ -222,9 +223,9 @@ They are not a claim that every feature below is implemented today.
 
 ### 1. Memory
 
-**Status: design direction / future versions.**
+**Status: experimental `v1.2` frontend and native runtime MVP.**
 
-Skadi is planned to make memory an explicit architectural resource.
+Skadi makes memory an explicit architectural resource in the current experimental track.
 
 The intended model is not "manual `malloc/free` everywhere" and not "hide everything behind a garbage collector".
 
@@ -236,7 +237,7 @@ long-lived data should have a visible owner
 groups of data should be clearable together
 ```
 
-Possible future syntax:
+Current MVP syntax:
 
 ```skadi
 Memory frame_memory = memory(16mb)
@@ -244,12 +245,12 @@ Memory frame_memory = memory(16mb)
 loop {
     frame_memory.clear()
 
-    place in frame_memory on error {
-        output("frame memory overflow")
-        continue
-    } {
+    place in frame_memory {
         update_world(world)
         draw_world(canvas, world)
+    } on error {
+        output("frame memory overflow")
+        continue
     }
 
     window.present()
@@ -513,6 +514,7 @@ The repository already includes:
 - full-screen `skadi-cli tui`,
 - formatter,
 - math/core support for `v1.1`,
+- relative path imports, `local`/`hide`, and qualified `module.symbol` access,
 - experimental Memory MVP work for `v1.2`,
 - experimental native Task/Channel runtime for `v1.2`,
 - showcase programs,

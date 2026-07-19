@@ -4,7 +4,7 @@ struct LoadedText {
     Text content
 }
 
-fn load_text(Path path) LoadedText {
+fn load_text(Path path) returns LoadedText {
     Memory scratch_memory = memory(64kb)
 
     place in scratch_memory {

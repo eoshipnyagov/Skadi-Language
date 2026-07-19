@@ -6,7 +6,7 @@ label ErrorCode {
     DivideByZero
 }
 
-danger fn safe_speed(Float distance, Float seconds) Float {
+danger fn safe_speed(Float distance, Float seconds) returns Float {
     if seconds <= 0.0 {
         return error DivideByZero
     } else {
@@ -19,11 +19,11 @@ struct Waypoint {
     Float x
     Float y
 
-    fn distance_from_origin() Float {
+    fn distance_from_origin() returns Float {
         return sqrt(my.x * my.x + my.y * my.y)
     }
 
-    fn bearing_deg() Float {
+    fn bearing_deg() returns Float {
         return rad_to_deg(atan2(my.y, my.x))
     }
 }
