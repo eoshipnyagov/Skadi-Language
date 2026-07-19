@@ -648,10 +648,9 @@ fn parse_structured_diagnostic(input: &str) -> Option<DiagnosticSummary> {
         ("Parse".to_string(), x, false)
     } else if let Some(x) = trimmed.strip_prefix("Lex error at ") {
         ("Lex".to_string(), x, false)
-    } else if let Some(x) = trimmed.strip_prefix("Style warning at ") {
-        ("Style".to_string(), x, true)
     } else {
-        return None;
+        let x = trimmed.strip_prefix("Style warning at ")?;
+        ("Style".to_string(), x, true)
     };
 
     let line = extract_after(rest, "line ").and_then(extract_leading_number);

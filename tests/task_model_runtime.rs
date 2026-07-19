@@ -1,11 +1,14 @@
 use std::fs;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use v01::codegen::{ensure_codegen_supported, transpile_program_to_c};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::semantic_analyze;
+
+static NEXT_TEMP_ARTIFACT: AtomicU64 = AtomicU64::new(0);
 
 fn find_c_compiler() -> Option<&'static str> {
     let candidates: &[&str] = if cfg!(windows) {
@@ -24,10 +27,12 @@ fn compile_and_run(compiler: &str, c_source: &str) -> std::process::Output {
         .duration_since(UNIX_EPOCH)
         .expect("time")
         .as_nanos();
+    let sequence = NEXT_TEMP_ARTIFACT.fetch_add(1, Ordering::Relaxed);
+    let artifact_id = format!("{}_{stamp}_{sequence}", std::process::id());
     let mut c_path = std::env::temp_dir();
-    c_path.push(format!("skadi_task_runtime_{stamp}.c"));
+    c_path.push(format!("skadi_task_runtime_{artifact_id}.c"));
     let mut exe_path = std::env::temp_dir();
-    exe_path.push(format!("skadi_task_runtime_{stamp}"));
+    exe_path.push(format!("skadi_task_runtime_{artifact_id}"));
     if cfg!(windows) {
         exe_path.set_extension("exe");
     }
@@ -309,7 +314,7 @@ fn produce_numbers(Channel(Int) values, Int count) {
     }
 }
 
-fn sum_numbers(Channel(Int) values, Int count) Int {
+fn sum_numbers(Channel(Int) values, Int count) returns Int {
     new Int total = 0
     new Int index = 0
     while index < count {

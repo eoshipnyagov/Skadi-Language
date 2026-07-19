@@ -1578,11 +1578,7 @@ fn analyze_statement(
             assign_memory_provenance(memory_state, target, &target_ty, source_memory, structs);
             Ok(())
         }
-        Statement::IncDec {
-            target,
-            is_increment: _,
-            ..
-        } => {
+        Statement::IncDec { target, .. } => {
             let Some(target_ty) = scope.get(target).cloned() else {
                 return Err(err_at_code(
                     stmt,
