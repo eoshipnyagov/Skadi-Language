@@ -75,8 +75,8 @@
 
 3. Расширение e2e-наборов "витринных" программ
 - Статус: закрыто и продолжает расширяться вместе с языком.
-- Поддерживаемая матрица включает 14 showcase-программ, Memory, Task/Channel,
-  Time/Duration и ByteSize scenarios.
+- Поддерживаемая матрица включает 15 showcase-программ, Memory, Task/Channel,
+  Time/Duration, ByteSize и Angle scenarios.
 
 ## Close-out P0
 

@@ -145,7 +145,7 @@ fn new_check_and_optional_build_run_smoke() {
         assert!(run.status.success(), "run failed: {}", stderr_text(&run));
         let run_out = stdout_text(&run);
         assert!(run_out.contains("build ok [host]:"));
-        assert!(run_out.contains("Hello from Skadi v1.1"));
+        assert!(run_out.contains("Hello from Skadi"));
     }
 
     let _ = fs::remove_dir_all(temp);

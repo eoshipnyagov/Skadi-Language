@@ -85,6 +85,11 @@ const SHOWCASE_CASES: &[ShowcaseCase] = &[
         source: "benchmarks/bench_14_byte_size_budget.skd",
         extra_flags: &[],
     },
+    ShowcaseCase {
+        name: "bench_15_angle_navigation",
+        source: "benchmarks/bench_15_angle_navigation.skd",
+        extra_flags: &["-lm"],
+    },
 ];
 
 fn find_c_compiler() -> Option<&'static str> {

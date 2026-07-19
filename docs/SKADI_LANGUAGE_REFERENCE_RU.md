@@ -465,9 +465,12 @@ new Char c = t[0]
 
 - `abs`, `min`, `max`, `clamp` принимают numeric arguments и сохраняют `Int`,
   если все аргументы целочисленные; иначе возвращают `Float`;
-- `floor`, `ceil`, `round`, `sin`, `cos`, `sqrt`, `deg_to_rad`, `rad_to_deg`
-  принимают один numeric argument и возвращают `Float`;
-- `atan2(y, x)` и `root(x, n)` принимают два numeric arguments и возвращают `Float`.
+- `floor`, `ceil`, `round`, `sqrt` принимают один numeric argument и возвращают `Float`;
+- `sin(Angle)` и `cos(Angle)` возвращают `Float`; numeric raw radians временно
+  принимаются только для совместимости с `v1.1`;
+- `deg_to_rad(Int/Float)` и `atan2(y, x)` возвращают nominal `Angle`;
+- `rad_to_deg(Angle)` возвращает `Float`;
+- `root(x, n)` принимает два numeric arguments и возвращает `Float`.
 
 ### Math constants
 
@@ -503,12 +506,12 @@ iterate entries as entry {
 ## 17. Math examples
 
 ```skadi
-new Float heading_deg = 45.0
-new Float heading_rad = deg_to_rad(heading_deg)
-new Float dx = cos(heading_rad)
-new Float dy = sin(heading_rad)
+new Angle heading = 45deg
+new Float dx = cos(heading)
+new Float dy = sin(heading)
 new Float distance = sqrt((dx * dx) + (dy * dy))
-new Float restored_deg = rad_to_deg(atan2(dy, dx))
+new Angle restored = atan2(dy, dx)
+new Float restored_deg = rad_to_deg(restored)
 new Float bounded = clamp(restored_deg, 0.0, 90.0)
 output(bounded)
 ```
@@ -665,6 +668,31 @@ Memory scratch_memory = memory(capacity)
 - старое `memory(8 mb)` принимается только как compatibility-вход и форматируется как `memory(8mb)`.
 
 Подробный контракт: [Размеры памяти](byte-size.md).
+
+## 18.5 Experimental `Angle` MVP
+
+```skadi
+new Angle heading = 45deg
+new Angle correction = 0.25rad
+new Angle target = heading + (correction * 0.5)
+new Float x = cos(target)
+new Float y = sin(target)
+new Angle measured = atan2(y, x)
+new Float measured_degrees = rad_to_deg(measured)
+```
+
+Текущий контракт:
+
+- `Angle` является nominal value-safe type с внутренним `f64` radians;
+- literals `deg` и `rad` принимают целую или дробную слитную запись;
+- literal должен давать finite `f64`;
+- поддерживаются сложение/вычитание углов, сравнения, unary minus и ограниченные scalar `*`/`/`;
+- `Angle / Angle` возвращает `Float`;
+- неявного `Float <-> Angle` нет;
+- `deg_to_rad` и `atan2` создают `Angle`, `rad_to_deg` явно извлекает градусы;
+- `sin/cos(Float)` временно остаются compatibility-формой для raw radians.
+
+Подробный контракт: [Углы](angle.md).
 
 ## 19. Диагностика
 

@@ -168,6 +168,14 @@
   - `ByteSize` value-safe для struct/List/Task/Channel;
   - allocator policies, fractional units и dimensional algebra отложены;
   - полный контракт: [Размеры памяти](byte-size.md).
+- angle math MVP - `Experimental / Runtime MVP`
+  - nominal `Angle` хранится как `f64` radians;
+  - integer/fractional literals `deg` и `rad` проверяются на finite value;
+  - angle arithmetic, comparisons, limited scalar operations и value-safe boundaries реализованы;
+  - `deg_to_rad` и `atan2` возвращают `Angle`, `rad_to_deg` принимает `Angle`;
+  - `sin/cos` принимают `Angle`, сохраняя numeric raw-radians compatibility для `v1.1`;
+  - dimensional algebra, normalization и fixed-point embedded representation отложены;
+  - полный контракт: [Углы](angle.md).
 - memory model MVP surface - `Experimental / Partial`
   - frontend принимает `Memory name = memory(size)`, `place in memory { ... } on error { ... }` и `memory.clear()`;
   - semantic layer проверяет базовые escape / use-after-clear правила только для dynamic payload (`Text`, `List`, и struct-значений с такими полями);

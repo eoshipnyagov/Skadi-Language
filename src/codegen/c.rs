@@ -38,7 +38,7 @@ enum ExprKind {
     Unknown,
 }
 
-const LIST_TYPE_MAP: [(&str, &str, &str); 15] = [
+const LIST_TYPE_MAP: [(&str, &str, &str); 16] = [
     ("i8", "int8_t", "i8"),
     ("i16", "int16_t", "i16"),
     ("i32", "int32_t", "i32"),
@@ -54,6 +54,7 @@ const LIST_TYPE_MAP: [(&str, &str, &str); 15] = [
     ("Time", "int64_t", "time"),
     ("Duration", "int64_t", "duration"),
     ("ByteSize", "int64_t", "bytesize"),
+    ("Angle", "double", "angle"),
 ];
 
 fn list_elem_from_decl(t: &str) -> Option<&str> {
@@ -648,7 +649,8 @@ fn expression_uses_task_surface(expr: &Expression) -> bool {
         | Expression::LiteralBool(_)
         | Expression::LiteralString(_)
         | Expression::LiteralDuration { .. }
-        | Expression::LiteralByteSize { .. } => false,
+        | Expression::LiteralByteSize { .. }
+        | Expression::LiteralAngle { .. } => false,
     }
 }
 
@@ -1392,9 +1394,9 @@ fn emit_channel_typed_wrapper(out: &mut String, skadi_type: &str) {
 }
 
 fn emit_channel_typed_wrappers(out: &mut String, struct_names: &[String]) {
-    const BUILTIN_CHANNEL_TYPES: [&str; 21] = [
+    const BUILTIN_CHANNEL_TYPES: [&str; 22] = [
         "i8", "i16", "i32", "i64", "Int", "u8", "u16", "u32", "u64", "f32", "f64", "Float", "bool",
-        "Bool", "char", "Char", "Text", "Path", "Time", "Duration", "ByteSize",
+        "Bool", "char", "Char", "Text", "Path", "Time", "Duration", "ByteSize", "Angle",
     ];
     for skadi_type in BUILTIN_CHANNEL_TYPES {
         emit_channel_typed_wrapper(out, skadi_type);
@@ -3375,6 +3377,7 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "u64" => "uint64_t".to_string(),
         "f32" => "float".to_string(),
         "Float" | "f64" => "double".to_string(),
+        "Angle" => "double".to_string(),
         "bool" | "Bool" => "bool".to_string(),
         "char" | "Char" => "char".to_string(),
         "Memory" => "SkMemoryRegion*".to_string(),
@@ -3476,8 +3479,9 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
         Expression::LiteralString(_) => ExprKind::Text,
         Expression::LiteralDuration { .. } => ExprKind::Int,
         Expression::LiteralByteSize { .. } => ExprKind::Int,
+        Expression::LiteralAngle { .. } => ExprKind::Float,
         Expression::VariableReference(name) => match declared.get(name).map(String::as_str) {
-            Some("Float" | "f32" | "f64") => ExprKind::Float,
+            Some("Float" | "f32" | "f64" | "Angle") => ExprKind::Float,
             Some("bool" | "Bool") => ExprKind::Bool,
             Some("char" | "Char") => ExprKind::Char,
             Some("Text" | "Path") => ExprKind::Text,
@@ -3534,6 +3538,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::LiteralString(s) => s.clone(),
         Expression::LiteralDuration { nanoseconds, .. } => nanoseconds.to_string(),
         Expression::LiteralByteSize { bytes, .. } => bytes.to_string(),
+        Expression::LiteralAngle { radians, .. } => format!("{radians:.17}"),
         Expression::VariableReference(name) => match name.as_str() {
             "PI" => "M_PI".to_string(),
             "TAU" => "(2.0 * M_PI)".to_string(),

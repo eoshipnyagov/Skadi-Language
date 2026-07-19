@@ -86,8 +86,8 @@ entry = "src/main.skd"
 new Text greeting = concat("Hello", " from Skadi")
 output(greeting)
 
-new Float quarter_turn = deg_to_rad(90)
-output(quarter_turn)
+new Angle quarter_turn = 90deg
+output(rad_to_deg(quarter_turn))
 ```
 
 Проверка и запуск:
@@ -518,11 +518,11 @@ module-name imports и aliases пока не реализованы.
 Пример:
 
 ```skadi
-new Float heading_deg = 45.0
-new Float heading_rad = deg_to_rad(heading_deg)
-new Float dx = cos(heading_rad)
-new Float dy = sin(heading_rad)
-new Float restored_deg = rad_to_deg(atan2(dy, dx))
+new Angle heading = 45deg
+new Float dx = cos(heading)
+new Float dy = sin(heading)
+new Angle restored = atan2(dy, dx)
+new Float restored_deg = rad_to_deg(restored)
 new Float bounded = clamp(restored_deg, 0.0, 90.0)
 output(bounded)
 ```
@@ -531,6 +531,21 @@ output(bounded)
 
 Stable base `v1.1` не требует этих возможностей, но текущая ветка разработки уже
 позволяет проверять и запускать их на Windows и POSIX host.
+
+### `Angle`
+
+```skadi
+new Angle heading = 45deg
+new Angle correction = 0.25rad
+new Angle target = heading + correction
+new Float x = cos(target)
+new Float y = sin(target)
+new Float measured_degrees = rad_to_deg(atan2(y, x))
+```
+
+`Angle` - nominal `f64`-тип с внутренним представлением в radians. Литералы
+`deg/rad` пишутся слитно; `deg_to_rad` и `atan2` возвращают `Angle`, а
+`rad_to_deg` явно возвращает числовые градусы. Полный контракт: [Углы](angle.md).
 
 ### `Time` и `Duration`
 
@@ -676,6 +691,7 @@ Showcase-программы:
 - `benchmarks/bench_12_systems_pipeline.skd`
 - `benchmarks/bench_13_time_budget.skd`
 - `benchmarks/bench_14_byte_size_budget.skd`
+- `benchmarks/bench_15_angle_navigation.skd`
 
 Описание: [Showcase-программы](showcases.md)
 
@@ -694,5 +710,6 @@ Showcase-программы:
 - [Многопоточность](concurrency.md) - Task/Channel, lifecycle и платформы
 - [Время и длительности](time-duration.md) - `Time`, `Duration`, unit literals и runtime
 - [Размеры памяти](byte-size.md) - `ByteSize`, бинарные unit literals и `memory(ByteSize)`
+- [Углы](angle.md) - `Angle`, literals `deg/rad` и trigonometry contract
 - [Статус синтаксиса](syntax-status.md) - точный срез текущего синтаксиса
 - [Покрытие тестами](../internal/test-coverage.md) - что реально покрыто тестами

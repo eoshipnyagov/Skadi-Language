@@ -522,6 +522,9 @@ impl Formatter {
             Expression::LiteralByteSize {
                 magnitude, unit, ..
             } => format!("{magnitude}{unit}"),
+            Expression::LiteralAngle {
+                magnitude, unit, ..
+            } => format!("{magnitude}{unit}"),
             Expression::ListLiteral(items) => format!(
                 "[{}]",
                 items

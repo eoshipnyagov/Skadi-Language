@@ -1,8 +1,9 @@
 # Skadi v1.2 Plan (RU)
 
 Дата: 2026-07-19
-Статус: release hardening завершён; Memory, Task/Channel и Time/Duration runtime
-slices исполняемы и остаются experimental API текущей линии `v1.2`.
+Статус: release hardening завершён; Memory, Task/Channel, Time/Duration,
+ByteSize и Angle slices исполняемы и остаются experimental API текущей линии
+`v1.2`.
 
 ## 1. Идентичность релиза
 
@@ -356,12 +357,12 @@ nominal type и связать его с существующим Memory MVP.
 `allow grow`, `allow drop`, `memory.child` и `memory.static` не входят в этот
 milestone.
 
-### Milestone 10: Angle MVP
+### Milestone 10: Angle MVP - functional slice выполнен
 
 Цель: убрать неоднозначность между градусами, радианами и обычными `Float`, не
 создавая общего framework физической размерности.
 
-Планируемый bounded slice:
+Реализовано:
 
 - nominal `Angle` и literals `deg`, `rad`;
 - overflow/finite-value policy и явно выбранное внутреннее представление;
@@ -371,9 +372,10 @@ milestone.
 - formatter, highlighting, diagnostics, C lowering, e2e и небольшой showcase;
 - RU/EN пользовательская документация.
 
-До реализации нужно решить, принимают ли существующие `sin/cos` только `Angle`
-или сохраняют numeric compatibility на переходный период. Общая dimensional
-algebra, angular velocity и implicit `Float <-> Angle` conversions не входят в MVP.
+Контракт зафиксирован: `f64` radians, finite integer/fractional literals,
+nominal arithmetic и временная numeric-radians compatibility только для
+`sin/cos`. Общая dimensional algebra, angular velocity и implicit
+`Float <-> Angle` conversions не входят в MVP.
 
 ### Milestone 11: Vector MVP
 

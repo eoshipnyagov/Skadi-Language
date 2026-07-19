@@ -16,6 +16,7 @@ enum ValueType {
     Time,
     Duration,
     ByteSize,
+    Angle,
     Memory,
     Task(Option<Box<ValueType>>),
     Channel(Box<ValueType>),
@@ -419,6 +420,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 | "Time"
                 | "Duration"
                 | "ByteSize"
+                | "Angle"
                 | "List"
                 | "Vec2"
                 | "Vec3"
@@ -740,6 +742,7 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "Time" => ValueType::Time,
         "Duration" => ValueType::Duration,
         "ByteSize" => ValueType::ByteSize,
+        "Angle" => ValueType::Angle,
         _ => ValueType::Unknown,
     }
 }
@@ -801,7 +804,8 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
             | Expression::LiteralBool(_)
             | Expression::LiteralString(_)
             | Expression::LiteralDuration { .. }
-            | Expression::LiteralByteSize { .. } => {}
+            | Expression::LiteralByteSize { .. }
+            | Expression::LiteralAngle { .. } => {}
         }
     }
 
@@ -1130,7 +1134,8 @@ fn is_task_safe_boundary_type(
         | ValueType::Text
         | ValueType::Time
         | ValueType::Duration
-        | ValueType::ByteSize => true,
+        | ValueType::ByteSize
+        | ValueType::Angle => true,
         ValueType::Struct(name) => structs
             .get(name)
             .map(|info| {
@@ -2848,7 +2853,8 @@ fn record_task_effects_in_expr(
         | Expression::LiteralBool(_)
         | Expression::LiteralString(_)
         | Expression::LiteralDuration { .. }
-        | Expression::LiteralByteSize { .. } => Ok(()),
+        | Expression::LiteralByteSize { .. }
+        | Expression::LiteralAngle { .. } => Ok(()),
     }
 }
 
@@ -2943,6 +2949,7 @@ fn apply_task_flow_expression(
         | Expression::LiteralString(_)
         | Expression::LiteralDuration { .. }
         | Expression::LiteralByteSize { .. }
+        | Expression::LiteralAngle { .. }
         | Expression::VariableReference(_)
         | Expression::MemberAccess { .. }
         | Expression::Stopping => Ok(()),
@@ -3387,6 +3394,7 @@ fn infer_expression_type(
         Expression::LiteralString(_) => Ok(ValueType::Text),
         Expression::LiteralDuration { .. } => Ok(ValueType::Duration),
         Expression::LiteralByteSize { .. } => Ok(ValueType::ByteSize),
+        Expression::LiteralAngle { .. } => Ok(ValueType::Angle),
         Expression::ListLiteral(items) => {
             if items.is_empty() {
                 return Ok(ValueType::List(Box::new(ValueType::Unknown)));
@@ -4047,14 +4055,7 @@ fn infer_expression_type(
                         ensure_numeric_args(name, &[x.clone(), lo.clone(), hi.clone()])?;
                         Ok(numeric_result_type(&[x, lo, hi], true))
                     }
-                    Builtin::Floor
-                    | Builtin::Ceil
-                    | Builtin::Round
-                    | Builtin::Sin
-                    | Builtin::Cos
-                    | Builtin::Sqrt
-                    | Builtin::DegToRad
-                    | Builtin::RadToDeg => {
+                    Builtin::Floor | Builtin::Ceil | Builtin::Round | Builtin::Sqrt => {
                         let ty = infer_expression_type(
                             &args[0],
                             scope,
@@ -4074,7 +4075,92 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Float)
                     }
-                    Builtin::Atan2 | Builtin::Root => {
+                    Builtin::Sin | Builtin::Cos => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if ty != ValueType::Angle && !is_numeric_type(&ty) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects Angle or legacy numeric radians, got {:?}.",
+                                    name, ty
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Float)
+                    }
+                    Builtin::DegToRad => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if !is_numeric_type(&ty) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects numeric degrees, got {:?}.",
+                                    name, ty
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Angle)
+                    }
+                    Builtin::RadToDeg => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if ty != ValueType::Angle {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin '{}' expects Angle, got {:?}.", name, ty),
+                            ));
+                        }
+                        Ok(ValueType::Float)
+                    }
+                    Builtin::Atan2 => {
+                        let a = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        let b = infer_expression_type(
+                            &args[1],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if !is_numeric_type(&a) || !is_numeric_type(&b) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects numeric arguments, got ({:?}, {:?}).",
+                                    name, a, b
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Angle)
+                    }
+                    Builtin::Root => {
                         let a = infer_expression_type(
                             &args[0],
                             scope,
@@ -4373,9 +4459,16 @@ fn infer_expression_type(
         }
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {
-                let lt =
-                    infer_expression_type(left, scope, memory_state, functions, structs, fn_ctx)?;
-                if lt == ValueType::Int || lt == ValueType::Float {
+                let operand = right.as_deref().unwrap_or(left);
+                let lt = infer_expression_type(
+                    operand,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx,
+                )?;
+                if lt == ValueType::Int || lt == ValueType::Float || lt == ValueType::Angle {
                     return Ok(lt);
                 }
                 return Err(sem_err(
@@ -4384,8 +4477,15 @@ fn infer_expression_type(
                 ));
             }
             if op == "not" {
-                let lt =
-                    infer_expression_type(left, scope, memory_state, functions, structs, fn_ctx)?;
+                let operand = right.as_deref().unwrap_or(left);
+                let lt = infer_expression_type(
+                    operand,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx,
+                )?;
                 if lt == ValueType::Bool || lt == ValueType::Int {
                     return Ok(ValueType::Bool);
                 }
@@ -4440,6 +4540,29 @@ fn infer_expression_type(
                         ValueType::ByteSize,
                         ValueType::ByteSize,
                     ) => Some(ValueType::Bool),
+                    _ => None,
+                };
+                return result.ok_or_else(|| {
+                    sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "operator '{}' is not defined for {:?} and {:?}.",
+                            op, lt, rt
+                        ),
+                    )
+                });
+            }
+            if lt == ValueType::Angle || rt == ValueType::Angle {
+                let scalar = |ty: &ValueType| matches!(ty, ValueType::Int | ValueType::Float);
+                let result = match (op.as_str(), &lt, &rt) {
+                    ("+" | "-", ValueType::Angle, ValueType::Angle) => Some(ValueType::Angle),
+                    ("*", ValueType::Angle, ty) if scalar(ty) => Some(ValueType::Angle),
+                    ("*", ty, ValueType::Angle) if scalar(ty) => Some(ValueType::Angle),
+                    ("/", ValueType::Angle, ty) if scalar(ty) => Some(ValueType::Angle),
+                    ("/", ValueType::Angle, ValueType::Angle) => Some(ValueType::Float),
+                    ("==" | "!=" | "<" | ">" | "<=" | ">=", ValueType::Angle, ValueType::Angle) => {
+                        Some(ValueType::Bool)
+                    }
                     _ => None,
                 };
                 return result.ok_or_else(|| {
@@ -4550,7 +4673,8 @@ fn infer_expression_memory_provenance(
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
         | Expression::LiteralDuration { .. }
-        | Expression::LiteralByteSize { .. } => Ok(None),
+        | Expression::LiteralByteSize { .. }
+        | Expression::LiteralAngle { .. } => Ok(None),
     }
 }
 

@@ -114,11 +114,12 @@ fallback_scale = parse_scale("bad input") on error {
     fallback_scale = -1.0
 }
 
-new Float heading_rad = deg_to_rad(90.0)
-new Float dx = cos(heading_rad)
-new Float dy = sin(heading_rad)
+new Angle heading = 90deg
+new Float dx = cos(heading)
+new Float dy = sin(heading)
 new Float distance = sqrt((dx * dx) + (dy * dy))
-new Float restored_deg = rad_to_deg(atan2(dy, dx))
+new Angle restored = atan2(dy, dx)
+new Float restored_deg = rad_to_deg(restored)
 new Float normalized = clamp(restored_deg, 0.0, 360.0)
 new Float root_value = root(81.0, 2.0)
 new Float low_value = floor(min(distance, root_value))

@@ -115,7 +115,7 @@ fn showcase_math_navigation_compiles() {
     let src = include_str!("../benchmarks/bench_09_math_navigation.skd");
     let c = compile_pipeline(src);
     assert!(c.contains("#include <math.h>"));
-    assert!(c.contains("double heading_rad = ((heading_deg * M_PI) / 180.0);"));
+    assert!(c.contains("double heading = 0.78539816339744828;"));
     assert!(c.contains("cos("));
     assert!(c.contains("sin("));
     assert!(c.contains("atan2("));
@@ -178,4 +178,15 @@ fn showcase_byte_size_budget_compiles() {
     assert!(c.contains("SkadiList_bytesize checkpoints"));
     assert!(c.contains("int64_t buffer_memory_capacity = capacity"));
     assert!(c.contains("buffer_memory_capacity <= 0 || !sk_mem_region_init"));
+}
+
+#[test]
+fn showcase_angle_navigation_compiles() {
+    let src = include_str!("../benchmarks/bench_15_angle_navigation.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("double steer(double heading, double correction, double influence)"));
+    assert!(c.contains("SkadiList_angle checkpoints"));
+    assert!(c.contains("double measured = atan2(y, x)"));
+    assert!(c.contains("cos(target)"));
+    assert!(c.contains("sin(target)"));
 }

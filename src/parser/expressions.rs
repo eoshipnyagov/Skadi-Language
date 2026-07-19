@@ -344,6 +344,14 @@ impl<'a> ExprParser<'a> {
                 self.idx += 2;
                 return Ok(expression);
             }
+            if unit.kind == TokenKind::Identifier
+                && is_adjacent
+                && matches!(unit.lexeme.as_str(), "deg" | "rad")
+            {
+                let expression = parse_angle_literal(tok, unit)?;
+                self.idx += 2;
+                return Ok(expression);
+            }
         }
 
         self.idx += 1;
@@ -474,6 +482,31 @@ fn parse_byte_size_literal(
     Ok(Expression::LiteralByteSize {
         bytes,
         magnitude,
+        unit: unit_token.lexeme.clone(),
+    })
+}
+
+fn parse_angle_literal(magnitude_token: &Token, unit_token: &Token) -> Result<Expression, String> {
+    let magnitude = magnitude_token
+        .lexeme
+        .parse::<f64>()
+        .map_err(|_| parse_err("SC-PARSE-220", "invalid Angle literal magnitude."))?;
+    let radians = match unit_token.lexeme.as_str() {
+        "deg" => magnitude * std::f64::consts::PI / 180.0,
+        "rad" => magnitude,
+        _ => {
+            return Err(parse_err("SC-PARSE-220", "unsupported Angle literal unit."));
+        }
+    };
+    if !radians.is_finite() {
+        return Err(parse_err(
+            "SC-PARSE-220",
+            "Angle literal must produce a finite f64 value.",
+        ));
+    }
+    Ok(Expression::LiteralAngle {
+        radians,
+        magnitude: magnitude_token.lexeme.clone(),
         unit: unit_token.lexeme.clone(),
     })
 }

@@ -6,6 +6,7 @@
     { "include": "#strings" },
     { "include": "#duration-literals" },
     { "include": "#memory-size-literals" },
+    { "include": "#angle-literals" },
     { "include": "#numbers" },
     { "include": "#typed-declarations" },
     { "include": "#function-signature" },
@@ -68,6 +69,14 @@
         {
           "name": "constant.numeric.duration.skd",
           "match": "\\b\\d+(?:ms|s|min)\\b"
+        }
+      ]
+    },
+    "angle-literals": {
+      "patterns": [
+        {
+          "name": "constant.numeric.angle.skd",
+          "match": "\\b\\d+(?:\\.\\d+)?(?:deg|rad)\\b"
         }
       ]
     },
@@ -292,7 +301,7 @@
       "patterns": [
         {
           "name": "storage.type.skd",
-          "match": "\\b(Int|Float|Bool|Char|Byte|bool|char|Text|String|Path|Time|Duration|ByteSize|Memory|Task|Channel|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List|Canvas|Window|Point|Size)\\b"
+          "match": "\\b(Int|Float|Bool|Char|Byte|bool|char|Text|String|Path|Time|Duration|ByteSize|Angle|Memory|Task|Channel|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Link|List|Canvas|Window|Point|Size)\\b"
         }
       ]
     },

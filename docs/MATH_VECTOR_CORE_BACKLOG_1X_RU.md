@@ -1,7 +1,7 @@
 # Math/Vector Core: реализованная база и backlog 1.x
 
-Статус: базовый math slice реализован в `v1.1`; Angle и Vector MVP выбраны
-следующими math-oriented milestones после ByteSize
+Статус: базовый math slice реализован в `v1.1`; Angle MVP реализован в `v1.2`,
+следующим math-oriented milestone выбран Vector MVP
 
 Дата: 2026-07-19
 Контекст: направление gamedev/embedded после стабилизации текущего systems layer.
@@ -68,6 +68,9 @@
 ## 3. Тригонометрия и углы
 
 `Stable`: `sin`, `cos`, `atan2`, `deg_to_rad`, `rad_to_deg`.
+
+`Experimental v1.2`: nominal `Angle`, literals `deg/rad`, angle arithmetic и
+value-safe container/concurrency boundaries.
 
 `Backlog`: `tan`, `asin`, `acos`, `atan`, `normalize_angle`.
 
@@ -163,10 +166,9 @@
 - `sin`, `cos`, `atan2`, `sqrt`, `root`, `deg_to_rad`, `rad_to_deg`;
 - numeric semantic checks, `math.h` lowering и e2e/showcase coverage.
 
-Остальные пункты этого документа являются backlog. `Time/Duration` уже дали первый
-рабочий контракт nominal specialized types; следующим таким срезом выбран
-`ByteSize`. После него в текущий спринт входят отдельные bounded milestones
-`Angle` и `Vec2/Vec3/Vec4`.
+Остальные пункты этого документа являются backlog. `Time/Duration`, `ByteSize` и
+`Angle` уже дали рабочие контракты nominal specialized types. В текущем спринте
+остаётся bounded milestone `Vec2/Vec3/Vec4`.
 
 Первый Vector MVP не включает матрицы, SIMD-specific lowering, generic vectors,
 swizzling и пользовательский operator overloading. Дополнительные math functions,

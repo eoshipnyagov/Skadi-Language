@@ -605,7 +605,7 @@ fn semantic_allows_math_constants_and_calls() {
 new Float pi = PI
 new Float tau = TAU
 new Float eps = EPSILON
-new Float angle = deg_to_rad(90)
+new Angle angle = deg_to_rad(90)
 new Float x = cos(angle)
 new Float y = sin(angle)
 new Float r = sqrt((x * x) + (y * y))
@@ -630,7 +630,31 @@ new Float x = sin(t)
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("SC-SEM-020"));
-    assert!(err.contains("builtin 'sin' expects numeric argument"));
+    assert!(err.contains("builtin 'sin' expects Angle or legacy numeric radians"));
+}
+
+#[test]
+fn semantic_checks_the_actual_unary_operand_type() {
+    let minus = r#"
+new Text value = "wrong"
+new Float result = -value
+"#;
+    let tokens = lex(minus).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("unary minus on Text must fail");
+    assert!(err.contains("unary '-' requires numeric operand"), "{err}");
+
+    let not = r#"
+new Text value = "wrong"
+new Bool result = not value
+"#;
+    let tokens = lex(not).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("unary not on Text must fail");
+    assert!(
+        err.contains("unary 'not' requires bool/int operand"),
+        "{err}"
+    );
 }
 
 #[test]

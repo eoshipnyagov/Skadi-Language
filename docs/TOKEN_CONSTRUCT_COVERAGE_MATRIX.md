@@ -55,6 +55,9 @@ Legend:
 | `ByteSize` | P (type identifier) | Y | Y | Y | Y | experimental nominal byte-count type |
 | `64b` / `4kb` / `8mb` / `1gb` | P (number + adjacent unit) | Y | Y | Y | Y | binary, integer and overflow-checked literals |
 | `memory(ByteSize)` | Y | Y | Y | Y | Y | expression capacity with non-positive runtime guard |
+| `Angle` | P (type identifier) | Y | Y | Y | Y | experimental nominal f64-radian value type |
+| `90deg` / `0.25rad` | P (number + adjacent unit) | Y | Y | Y | Y | integer/fractional finite literals |
+| Angle math integration | P (builtin identifiers) | Y | Y | Y | Y | `sin/cos/atan2`, conversions and scalar operations |
 
 ## 2. Operator / Form Matrix
 
@@ -84,6 +87,7 @@ Legend:
 - Showcase systems coverage: `tests/showcase_programs.rs`, `benchmarks/bench_11_task_channel_pipeline.skd`, `benchmarks/bench_12_systems_pipeline.skd`
 - Time/Duration frontend/runtime: `tests/time_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_13_time_budget.skd`
 - ByteSize frontend/runtime: `tests/byte_size_model.rs`, `benchmarks/bench_14_byte_size_budget.skd`
+- Angle frontend/runtime: `tests/angle_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_15_angle_navigation.skd`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
 
 ## 4. Synchronization rules

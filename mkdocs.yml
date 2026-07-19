@@ -48,6 +48,7 @@ plugins:
             Короткие примеры: Short Examples
             Время и длительности: Time and Duration
             Размеры памяти: Byte Sizes
+            Углы: Angles
             Многопоточность: Concurrency
             Статус синтаксиса: Syntax Status
             Skadi для AI и vibe coding: Skadi for AI and vibe coding
@@ -112,6 +113,7 @@ nav:
       - Короткие примеры: user/language-examples.md
       - Время и длительности: user/time-duration.md
       - Размеры памяти: user/byte-size.md
+      - Углы: user/angle.md
       - Многопоточность: user/concurrency.md
       - Статус синтаксиса: user/syntax-status.md
       - Skadi для AI и vibe coding: user/ai-guide.md

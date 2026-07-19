@@ -145,15 +145,18 @@ new Int written = write("output.txt", body)
 ## Математика и углы
 
 ```skadi
-new Float angle = deg_to_rad(45.0)
+new Angle angle = 45deg
 new Float x = cos(angle)
 new Float y = sin(angle)
 new Float length = sqrt((x * x) + (y * y))
-new Float heading = rad_to_deg(atan2(y, x))
-new Float safe_heading = clamp(heading, 0.0, 360.0)
+new Angle measured = atan2(y, x)
+new Float heading_degrees = rad_to_deg(measured)
+new Float safe_heading = clamp(heading_degrees, 0.0, 360.0)
 ```
 
 Math core и константы `PI`, `TAU`, `E`, `EPSILON` входят в stable base `v1.1`.
+Nominal `Angle` и literals `deg/rad` относятся к experimental `v1.2`; полный
+контракт описан на странице [Углы](angle.md).
 
 ## Время и длительности (`v1.2`, experimental)
 

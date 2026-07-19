@@ -66,8 +66,8 @@
   - исторический close-out scope/visibility и CI-гейтов `v1.1`.
 
 - [План v1.2](v1-2-plan.md)
-  - текущая рабочая линия после `v1.1`: Memory, Task/Channel, Time/Duration и
-    следующие specialized-type slices.
+  - текущая рабочая линия после `v1.1`: Memory, Task/Channel, Time/Duration,
+    ByteSize, Angle и следующие specialized-type slices.
 
 - [Блокеры v1](v1-blockers.md)
   - блокеры и несогласованности.

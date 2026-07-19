@@ -179,11 +179,11 @@ build/run, doctor, project bootstrap, config editor и help. Долгие action
 - strict fixed-capacity Memory MVP;
 - native Task/Channel MVP на Win32/pthread;
 - nominal Time/Duration и monotonic runtime;
-- реализованные bounded milestones: Time/Duration и ByteSize;
-- следующие bounded milestones: Angle и Vec2/Vec3/Vec4.
+- реализованные bounded milestones: Time/Duration, ByteSize и Angle;
+- следующий bounded milestone: Vec2/Vec3/Vec4.
 
 Experimental означает незамороженный API, а не frontend-only scaffold: текущие
-Memory, Task/Channel и Time/Duration slices исполняются end-to-end.
+Memory, Task/Channel, Time/Duration, ByteSize и Angle slices исполняются end-to-end.
 
 ## 6. Test architecture
 

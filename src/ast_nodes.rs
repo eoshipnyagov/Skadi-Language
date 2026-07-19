@@ -256,6 +256,11 @@ pub enum Expression {
         magnitude: i64,
         unit: String,
     },
+    LiteralAngle {
+        radians: f64,
+        magnitude: String,
+        unit: String,
+    },
     ListLiteral(Vec<Expression>),
     Index {
         base: Box<Expression>,

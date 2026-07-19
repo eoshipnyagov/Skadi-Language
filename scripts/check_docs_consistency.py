@@ -90,6 +90,7 @@ def main() -> int:
         "Time",
         "Duration",
         "ByteSize",
+        "Angle",
         "place in",
         "stopping",
         "iterate",

@@ -10,7 +10,9 @@ Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
 
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
 
-The current stable base is the `v1.1` toolchain surface. Active development is now focused on the `v1.2` experimental systems layer: executable Memory, Task/Channel, and Time/Duration runtime MVPs.
+The current stable base is the `v1.1` toolchain surface. Active development is
+focused on the `v1.2` experimental systems/math layer: executable Memory,
+Task/Channel, Time/Duration, ByteSize, and Angle MVPs.
 
 The long-term design direction is broader:
 
@@ -342,7 +344,7 @@ The same drawing logic should eventually be able to target:
 
 ### 4. Time and Units
 
-**Status: experimental `Time/Duration` and `ByteSize` runtime MVPs; broader units remain future work.**
+**Status: experimental `Time/Duration`, `ByteSize`, and `Angle` runtime MVPs; broader units remain future work.**
 
 The implemented time slice avoids hiding meaning inside bare numbers.
 
@@ -355,12 +357,14 @@ sleep(10min)
 new ByteSize log_capacity = 32kb
 Memory log_memory = memory(log_capacity)
 
-canvas.rotate(30deg)
+new Angle heading = 30deg
+new Float direction_x = cos(heading)
 ```
 
 `Time`, `Duration`, `ms`, `s`, `min`, `now`, `elapsed`, `sleep`, and `delay` are
 implemented. `ByteSize` is implemented as a nominal byte-count type with
-`b/kb/mb/gb` literals and `memory(ByteSize)` integration. Angle and broader
+`b/kb/mb/gb` literals and `memory(ByteSize)` integration. `Angle` adds
+`deg/rad` literals, nominal arithmetic, and trigonometry integration. Broader
 physical units remain design direction.
 
 The goal is to reduce mistakes like:
@@ -485,6 +489,7 @@ User-facing docs:
 - [Short language examples](docs/SKADI_LANGUAGE_EXAMPLES_RU.md)
 - [Time and Duration](docs/SKADI_TIME_DURATION_RU.md)
 - [Byte Sizes](docs/SKADI_BYTE_SIZE_RU.md)
+- [Angles](docs/SKADI_ANGLE_RU.md)
 - [Showcase programs](docs/SHOWCASE_PROGRAMS.md)
 
 Internal docs:
@@ -531,6 +536,7 @@ The repository already includes:
 - experimental native Task/Channel runtime for `v1.2`,
 - experimental nominal Time/Duration runtime for `v1.2`,
 - experimental nominal ByteSize and dynamic Memory capacity for `v1.2`,
+- experimental nominal Angle and `deg/rad` math integration for `v1.2`,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,

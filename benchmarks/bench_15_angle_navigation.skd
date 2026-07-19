@@ -1,0 +1,18 @@
+fn steer(Angle heading, Angle correction, Float influence) returns Angle {
+    return heading + (correction * influence)
+}
+
+new Angle heading = 30deg
+new Angle correction = 0.25rad
+new Angle target = steer(heading, correction, 0.5)
+new Float x = cos(target)
+new Float y = sin(target)
+new Angle measured = atan2(y, x)
+new Float measured_degrees = rad_to_deg(measured)
+new Angle List checkpoints = [heading, target, measured]
+new Bool stable = abs(rad_to_deg(target) - measured_degrees) < 0.001
+
+output("Angle navigation ready")
+output(measured_degrees)
+output(len(checkpoints))
+output(stable)

@@ -21,6 +21,7 @@ BENCHES=(
   "bench_12_systems_pipeline|benchmarks/bench_12_systems_pipeline.skd|.|"
   "bench_13_time_budget|benchmarks/bench_13_time_budget.skd|.|"
   "bench_14_byte_size_budget|benchmarks/bench_14_byte_size_budget.skd|.|"
+  "bench_15_angle_navigation|benchmarks/bench_15_angle_navigation.skd|.|"
 )
 
 build_bench() {

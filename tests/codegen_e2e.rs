@@ -711,15 +711,15 @@ fn e2e_math_core_builds_and_runs() {
         return;
     };
     let src = r#"
-new Float heading_deg = 45.0
-new Float heading_rad = deg_to_rad(heading_deg)
-new Float dx = cos(heading_rad)
-new Float dy = sin(heading_rad)
+new Angle heading = 45deg
+new Float dx = cos(heading)
+new Float dy = sin(heading)
 new Float distance = sqrt((dx * dx) + (dy * dy))
 new Float snapped = round(distance)
-new Float restored_deg = rad_to_deg(atan2(dy, dx))
+new Angle restored = atan2(dy, dx)
+new Float restored_deg = rad_to_deg(restored)
 new Float bounded = clamp(restored_deg, 0.0, 90.0)
-output(heading_rad)
+output(restored_deg)
 output(snapped)
 output(bounded)
 "#;
@@ -728,6 +728,36 @@ output(bounded)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     compile_c_and_run(compiler, &c, "Skadi_e2e_math_core", &["-lm"]);
+}
+
+#[test]
+fn e2e_angle_literals_and_trigonometry_build_and_run() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping Angle e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Angle heading = 90deg
+new Angle half = heading / 2
+new Angle divisor = 36deg
+new Float dx = cos(half)
+new Float dy = sin(half)
+new Angle measured = atan2(dy, dx)
+output(rad_to_deg(measured))
+output(heading / divisor)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    let run = compile_c_and_execute(compiler, &c, "Skadi_e2e_angle", &["-lm"], &[], None);
+    assert!(run.status.success());
+    let values = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(|line| line.parse::<f64>().expect("numeric Angle output"))
+        .collect::<Vec<_>>();
+    assert!((values[0] - 45.0).abs() < 1e-6, "{:?}", values);
+    assert!((values[1] - 2.5).abs() < 1e-6, "{:?}", values);
 }
 
 #[test]

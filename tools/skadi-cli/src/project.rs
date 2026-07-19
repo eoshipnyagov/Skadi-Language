@@ -15,7 +15,7 @@ pub struct ManifestConfig {
     pub entry: String,
 }
 
-const TEMPLATE_MAIN: &str = "new Text greeting = concat(\"Hello\", \" from Skadi v1.1\")\noutput(greeting)\nnew Float quarter_turn = deg_to_rad(90)\noutput(quarter_turn)\n";
+const TEMPLATE_MAIN: &str = "new Text greeting = concat(\"Hello\", \" from Skadi\")\noutput(greeting)\nnew Angle quarter_turn = 90deg\noutput(rad_to_deg(quarter_turn))\n";
 
 pub fn load_project_at(root: &Path) -> Result<ProjectConfig, String> {
     let manifest = load_manifest_config_at(root)?;

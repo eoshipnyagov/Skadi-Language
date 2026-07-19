@@ -42,10 +42,11 @@ Skadi -> lexer -> parser -> semantic -> C codegen -> host C compiler -> binary
 | `Text`, `Path` | managed `char*` runtime representation |
 | `Time`, `Duration` | nominal Skadi types lowered to `int64_t` nanoseconds |
 | `ByteSize` | nominal Skadi type lowered to signed `int64_t` bytes |
+| `Angle` | nominal Skadi type lowered to `double` radians |
 | user struct | generated C `typedef struct` |
 
 Nominal semantic rules сохраняются до codegen: совпадающее C representation не
-разрешает неявно смешивать `Time/Duration/ByteSize` с `Int`.
+разрешает неявно смешивать `Time/Duration/ByteSize/Angle` с numeric types.
 
 ## Collections, text and I/O
 
@@ -114,6 +115,15 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
 - non-positive capacity отклоняется до преобразования signed значения к `size_t`;
 - structs, Lists, Task и Channel используют value-safe `int64_t` representation.
 
+## Angle runtime (`v1.2`, experimental)
+
+- `deg/rad` literals вычисляются и finite-check'ятся до C codegen;
+- `Angle` lower'ится в `double` radians;
+- angle arithmetic lower'ится в обычные C double expressions после semantic checks;
+- `sin/cos/atan2` используют `math.h` напрямую;
+- `deg_to_rad` и `rad_to_deg` lower'ятся в явные expressions с `M_PI`;
+- Lists, Task и Channel используют value-safe `double` representation.
+
 ## Platform scope
 
 Release matrix проверяет generated C на:
@@ -134,7 +144,7 @@ roadmap, а не скрытым обещанием desktop C backend.
 - shared mutable state primitives;
 - Visual Core / Canvas runtime;
 - `allow grow/drop`, child/static Memory;
-- generic units algebra, `Timer`, `Angle`, vector/matrix layer;
+- generic units algebra, `Timer`, vector/matrix layer;
 - module aliases, re-exports и module-name imports.
 
 ## Инварианты generated C

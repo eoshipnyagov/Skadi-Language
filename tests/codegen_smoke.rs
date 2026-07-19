@@ -605,10 +605,10 @@ fn codegen_emits_math_constants_and_helpers() {
 new Float pi = PI
 new Float tau = TAU
 new Float eps = EPSILON
-new Float angle = deg_to_rad(90)
+new Angle angle = deg_to_rad(90)
 new Float x = cos(angle)
 new Float y = sin(angle)
-new Float a = atan2(y, x)
+new Angle a = atan2(y, x)
 new Float n = sqrt(9)
 new Float r = root(27, 3)
 new Float lo = min(1, 2)
