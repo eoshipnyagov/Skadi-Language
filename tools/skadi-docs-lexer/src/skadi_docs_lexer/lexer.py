@@ -110,7 +110,7 @@ class SkadiLexer(RegexLexer):
             (words(("true", "false", "null", "PI", "TAU", "E", "EPSILON"), suffix=r"\b"), Name.Constant),
             (r"\bfs\.(list|read|write|is_dir|join)\b", Name.Builtin.Pseudo),
             (
-                r"\b(output|print|input|read|write|len|find|slice|concat|args|now|elapsed|delay|sleep|memory|channel|send|receive|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\b(?=\s*\()",
+                r"\b(output|print|input|read|write|len|find|slice|concat|args|now|elapsed|delay|sleep|memory|channel|send|receive|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg|dot|length|length_sq|normalize|distance|distance_sq|cross)\b(?=\s*\()",
                 Name.Builtin,
             ),
             (r"\bmy\b", Name.Variable.Instance),

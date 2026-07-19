@@ -38,7 +38,7 @@ enum ExprKind {
     Unknown,
 }
 
-const LIST_TYPE_MAP: [(&str, &str, &str); 16] = [
+const LIST_TYPE_MAP: [(&str, &str, &str); 19] = [
     ("i8", "int8_t", "i8"),
     ("i16", "int16_t", "i16"),
     ("i32", "int32_t", "i32"),
@@ -55,6 +55,9 @@ const LIST_TYPE_MAP: [(&str, &str, &str); 16] = [
     ("Duration", "int64_t", "duration"),
     ("ByteSize", "int64_t", "bytesize"),
     ("Angle", "double", "angle"),
+    ("Vec2", "Vec2", "vec2"),
+    ("Vec3", "Vec3", "vec3"),
+    ("Vec4", "Vec4", "vec4"),
 ];
 
 fn list_elem_from_decl(t: &str) -> Option<&str> {
@@ -109,6 +112,195 @@ fn collect_struct_names(program: &Program) -> Vec<String> {
             _ => None,
         })
         .collect()
+}
+
+fn type_uses_vector(raw: &str) -> bool {
+    let normalized = normalize_type_token(raw);
+    if matches!(normalized.as_str(), "Vec2" | "Vec3" | "Vec4") {
+        return true;
+    }
+    normalized
+        .strip_suffix(" List")
+        .map(type_uses_vector)
+        .or_else(|| {
+            normalized
+                .strip_prefix("Task(")
+                .and_then(|value| value.strip_suffix(')'))
+                .map(type_uses_vector)
+        })
+        .or_else(|| {
+            normalized
+                .strip_prefix("Channel(")
+                .and_then(|value| value.strip_suffix(')'))
+                .map(type_uses_vector)
+        })
+        .unwrap_or(false)
+}
+
+fn expression_uses_vector(expr: &Expression) -> bool {
+    match expr {
+        Expression::Call { name, args } => {
+            matches!(
+                name.as_str(),
+                "dot" | "length" | "length_sq" | "normalize" | "distance" | "distance_sq" | "cross"
+            ) || args.iter().any(expression_uses_vector)
+        }
+        Expression::RunTask { args, .. } | Expression::ListLiteral(args) => {
+            args.iter().any(expression_uses_vector)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_vector(base) || expression_uses_vector(index)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_vector(left)
+                || right
+                    .as_deref()
+                    .map(expression_uses_vector)
+                    .unwrap_or(false)
+        }
+        Expression::StructConstruction { fields } => {
+            fields.values().any(|value| expression_uses_vector(value))
+        }
+        _ => false,
+    }
+}
+
+fn statements_use_vector(statements: &[Statement]) -> bool {
+    let block_uses_vector = |block: &BlockStatement| statements_use_vector(&block.statements);
+    statements.iter().any(|statement| match statement {
+        Statement::VarDecl {
+            value,
+            declared_type,
+            ..
+        } => {
+            declared_type
+                .as_deref()
+                .map(type_uses_vector)
+                .unwrap_or(false)
+                || expression_uses_vector(value)
+        }
+        Statement::MemoryDecl { size, on_error, .. } => {
+            expression_uses_vector(size)
+                || on_error.as_deref().map(&block_uses_vector).unwrap_or(false)
+        }
+        Statement::Assignment { value, .. }
+        | Statement::FieldAssignment { value, .. }
+        | Statement::ListPush { value, .. }
+        | Statement::ExpressionStatement { expr: value, .. } => expression_uses_vector(value),
+        Statement::FunctionDef {
+            params,
+            returns,
+            body,
+            ..
+        } => {
+            params.iter().any(|param| {
+                param
+                    .param_type
+                    .as_deref()
+                    .map(type_uses_vector)
+                    .unwrap_or(false)
+            }) || returns.as_deref().map(type_uses_vector).unwrap_or(false)
+                || block_uses_vector(body)
+        }
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expression_uses_vector(condition)
+                || block_uses_vector(then_block)
+                || else_block
+                    .as_deref()
+                    .map(&block_uses_vector)
+                    .unwrap_or(false)
+        }
+        Statement::ForLoop {
+            initialization,
+            condition,
+            update,
+            body,
+            ..
+        } => {
+            initialization
+                .as_deref()
+                .map(expression_uses_vector)
+                .unwrap_or(false)
+                || condition
+                    .as_deref()
+                    .map(expression_uses_vector)
+                    .unwrap_or(false)
+                || update
+                    .as_deref()
+                    .map(expression_uses_vector)
+                    .unwrap_or(false)
+                || block_uses_vector(body)
+        }
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+            ..
+        } => {
+            expression_uses_vector(when_expression)
+                || cases.iter().any(|(values, body)| {
+                    values.iter().any(expression_uses_vector) || block_uses_vector(body)
+                })
+                || else_block
+                    .as_deref()
+                    .map(&block_uses_vector)
+                    .unwrap_or(false)
+        }
+        Statement::WhileLoop {
+            condition, body, ..
+        } => expression_uses_vector(condition) || block_uses_vector(body),
+        Statement::LoopStatement { body, .. } | Statement::OnBlock { body, .. } => {
+            block_uses_vector(body)
+        }
+        Statement::StructDecl {
+            fields, methods, ..
+        } => {
+            fields
+                .iter()
+                .any(|field| type_uses_vector(&field.field_type))
+                || methods.iter().any(|method| {
+                    method.params.iter().any(|param| {
+                        param
+                            .param_type
+                            .as_deref()
+                            .map(type_uses_vector)
+                            .unwrap_or(false)
+                    }) || method
+                        .returns
+                        .as_deref()
+                        .map(type_uses_vector)
+                        .unwrap_or(false)
+                        || block_uses_vector(&method.body)
+                })
+        }
+        Statement::DangerAssignOnError { args, on_error, .. }
+        | Statement::DangerCallOnError { args, on_error, .. } => {
+            args.iter().any(expression_uses_vector) || block_uses_vector(on_error)
+        }
+        Statement::ListPopOnError { on_error, .. } => block_uses_vector(on_error),
+        Statement::PlaceIn { body, on_error, .. } => {
+            block_uses_vector(body) || on_error.as_deref().map(&block_uses_vector).unwrap_or(false)
+        }
+        Statement::ReturnStatement { value, .. } => value
+            .as_deref()
+            .map(expression_uses_vector)
+            .unwrap_or(false),
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => statements_use_vector(statements),
+        Statement::IncDec { .. }
+        | Statement::BreakStatement { .. }
+        | Statement::ContinueStatement { .. }
+        | Statement::PassStatement { .. }
+        | Statement::LabelDecl { .. }
+        | Statement::MemoryClear { .. }
+        | Statement::StopTask { .. }
+        | Statement::ReturnError { .. } => false,
+    })
 }
 
 fn emit_thread_local_support(out: &mut String) {
@@ -315,9 +507,10 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
         "static {} sk_list_{}_get(const SkadiList_{} *xs, int64_t idx) {{\n",
         c_ty, suffix, suffix
     ));
-    let fallback = if LIST_TYPE_MAP
-        .iter()
-        .any(|(_, mapped_ty, _)| *mapped_ty == c_ty)
+    let fallback = if !matches!(c_ty, "Vec2" | "Vec3" | "Vec4")
+        && LIST_TYPE_MAP
+            .iter()
+            .any(|(_, mapped_ty, _)| *mapped_ty == c_ty)
     {
         "0".to_string()
     } else {
@@ -331,9 +524,12 @@ fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
     out.push_str("}\n\n");
 }
 
-fn emit_list_runtime(out: &mut String, struct_names: &[String]) {
+fn emit_list_runtime(out: &mut String, struct_names: &[String], include_vectors: bool) {
     let mut emitted_suffixes: HashSet<String> = HashSet::new();
     for (_, c_ty, suffix) in LIST_TYPE_MAP {
+        if !include_vectors && matches!(c_ty, "Vec2" | "Vec3" | "Vec4") {
+            continue;
+        }
         if emitted_suffixes.insert(suffix.to_string()) {
             emit_list_helpers_for(out, c_ty, suffix);
         }
@@ -492,6 +688,72 @@ fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
 fn emit_math_runtime(out: &mut String) {
     out.push_str("#ifndef M_PI\n#define M_PI 3.14159265358979323846\n#endif\n");
     out.push_str("#ifndef M_E\n#define M_E 2.71828182845904523536\n#endif\n\n");
+}
+
+fn emit_vector_declarations(out: &mut String) {
+    out.push_str("typedef struct { double x; double y; } Vec2;\n");
+    out.push_str("typedef struct { double x; double y; double z; } Vec3;\n");
+    out.push_str("typedef struct { double x; double y; double z; double w; } Vec4;\n\n");
+}
+
+fn emit_vector_runtime(out: &mut String, include_length_helpers: bool) {
+    for (name, suffix, fields) in [
+        ("Vec2", "vec2", &["x", "y"][..]),
+        ("Vec3", "vec3", &["x", "y", "z"][..]),
+        ("Vec4", "vec4", &["x", "y", "z", "w"][..]),
+    ] {
+        for (operation, symbol) in [("add", "+"), ("sub", "-")] {
+            out.push_str(&format!(
+                "static {name} sk_{suffix}_{operation}({name} a, {name} b) {{ return ({name}){{"
+            ));
+            for (index, field) in fields.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(&format!(".{field} = a.{field} {symbol} b.{field}"));
+            }
+            out.push_str("}; }\n");
+        }
+        for (operation, symbol) in [("scale", "*"), ("div", "/")] {
+            out.push_str(&format!("static {name} sk_{suffix}_{operation}({name} value, double scalar) {{ return ({name}){{"));
+            for (index, field) in fields.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(&format!(".{field} = value.{field} {symbol} scalar"));
+            }
+            out.push_str("}; }\n");
+        }
+        out.push_str(&format!(
+            "static {name} sk_{suffix}_neg({name} value) {{ return ({name}){{"
+        ));
+        for (index, field) in fields.iter().enumerate() {
+            if index > 0 {
+                out.push_str(", ");
+            }
+            out.push_str(&format!(".{field} = -value.{field}"));
+        }
+        out.push_str("}; }\n");
+        out.push_str(&format!(
+            "static double sk_{suffix}_dot({name} a, {name} b) {{ return "
+        ));
+        for (index, field) in fields.iter().enumerate() {
+            if index > 0 {
+                out.push_str(" + ");
+            }
+            out.push_str(&format!("a.{field} * b.{field}"));
+        }
+        out.push_str("; }\n");
+        out.push_str(&format!("static double sk_{suffix}_length_sq({name} value) {{ return sk_{suffix}_dot(value, value); }}\n"));
+        out.push_str(&format!("static double sk_{suffix}_distance_sq({name} a, {name} b) {{ return sk_{suffix}_length_sq(sk_{suffix}_sub(a, b)); }}\n"));
+        if include_length_helpers {
+            out.push_str(&format!("static double sk_{suffix}_length({name} value) {{ return sqrt(sk_{suffix}_length_sq(value)); }}\n"));
+            out.push_str(&format!("static {name} sk_{suffix}_normalize({name} value) {{ double magnitude = sk_{suffix}_length(value); return magnitude > 0.0 ? sk_{suffix}_div(value, magnitude) : ({name}){{0}}; }}\n"));
+            out.push_str(&format!("static double sk_{suffix}_distance({name} a, {name} b) {{ return sk_{suffix}_length(sk_{suffix}_sub(a, b)); }}\n"));
+        }
+        out.push('\n');
+    }
+    out.push_str("static Vec3 sk_vec3_cross(Vec3 a, Vec3 b) { return (Vec3){.x = a.y * b.z - a.z * b.y, .y = a.z * b.x - a.x * b.z, .z = a.x * b.y - a.y * b.x}; }\n\n");
 }
 
 fn emit_time_runtime(out: &mut String) {
@@ -1393,12 +1655,16 @@ fn emit_channel_typed_wrapper(out: &mut String, skadi_type: &str) {
     out.push_str("}\n\n");
 }
 
-fn emit_channel_typed_wrappers(out: &mut String, struct_names: &[String]) {
-    const BUILTIN_CHANNEL_TYPES: [&str; 22] = [
+fn emit_channel_typed_wrappers(out: &mut String, struct_names: &[String], include_vectors: bool) {
+    const BUILTIN_CHANNEL_TYPES: [&str; 25] = [
         "i8", "i16", "i32", "i64", "Int", "u8", "u16", "u32", "u64", "f32", "f64", "Float", "bool",
-        "Bool", "char", "Char", "Text", "Path", "Time", "Duration", "ByteSize", "Angle",
+        "Bool", "char", "Char", "Text", "Path", "Time", "Duration", "ByteSize", "Angle", "Vec2",
+        "Vec3", "Vec4",
     ];
     for skadi_type in BUILTIN_CHANNEL_TYPES {
+        if !include_vectors && matches!(skadi_type, "Vec2" | "Vec3" | "Vec4") {
+            continue;
+        }
         emit_channel_typed_wrapper(out, skadi_type);
     }
     for struct_name in struct_names {
@@ -1508,6 +1774,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
     let needs_math_runtime = program_uses_math_runtime(program);
+    let needs_vector_runtime = statements_use_vector(&program.statements);
     let needs_time_runtime = program_uses_time_runtime(program);
     let needs_task_runtime = statement_list_uses_task_surface(&program.statements);
     let needs_channel_runtime = statement_list_uses_deferred_task_surface(&program.statements);
@@ -1561,6 +1828,10 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         }
         out.push_str("#endif\n\n");
     }
+    if needs_vector_runtime {
+        emit_vector_declarations(&mut out);
+        emit_vector_runtime(&mut out, needs_math_runtime);
+    }
     if needs_time_runtime {
         emit_time_runtime(&mut out);
     }
@@ -1582,7 +1853,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
     emit_struct_declarations(program, &mut out);
     if needs_list_runtime {
-        emit_list_runtime(&mut out, &struct_names);
+        emit_list_runtime(&mut out, &struct_names, needs_vector_runtime);
     }
     if needs_text_runtime {
         emit_text_runtime(&mut out);
@@ -1595,7 +1866,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
     emit_error_code_enum(program, &mut out);
     if needs_channel_runtime {
-        emit_channel_typed_wrappers(&mut out, &struct_names);
+        emit_channel_typed_wrappers(&mut out, &struct_names, needs_vector_runtime);
     }
 
     if needs_task_runtime {
@@ -2524,7 +2795,11 @@ fn emit_statement(
             declared.insert(name.clone(), "Memory".to_string());
         }
         Statement::Assignment { target, value, .. } => {
-            let expr = emit_expr(value, declared);
+            let expr = if let Expression::StructConstruction { fields } = value.as_ref() {
+                emit_struct_literal(fields, declared.get(target).map(String::as_str), declared)
+            } else {
+                emit_expr(value, declared)
+            };
             out.push_str(&pad);
             out.push_str(target);
             out.push_str(" = ");
@@ -3378,6 +3653,7 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "f32" => "float".to_string(),
         "Float" | "f64" => "double".to_string(),
         "Angle" => "double".to_string(),
+        "Vec2" | "Vec3" | "Vec4" => normalized.to_string(),
         "bool" | "Bool" => "bool".to_string(),
         "char" | "Char" => "char".to_string(),
         "Memory" => "SkMemoryRegion*".to_string(),
@@ -3496,9 +3772,18 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
             }
             "input" | "read" | "slice" | "concat" | "fs.join" => ExprKind::Text,
             "abs" | "min" | "max" | "clamp" | "floor" | "ceil" | "round" | "sin" | "cos"
-            | "atan2" | "sqrt" | "root" | "deg_to_rad" | "rad_to_deg" => ExprKind::Float,
+            | "atan2" | "sqrt" | "root" | "deg_to_rad" | "rad_to_deg" | "dot" | "length"
+            | "length_sq" | "distance" | "distance_sq" => ExprKind::Float,
             _ => ExprKind::Unknown,
         },
+        Expression::MemberAccess { base, .. }
+            if declared
+                .get(base)
+                .map(|ty| matches!(normalize_type_token(ty).as_str(), "Vec2" | "Vec3" | "Vec4"))
+                .unwrap_or(false) =>
+        {
+            ExprKind::Float
+        }
         Expression::Index { base, .. } if is_text_expr(base, declared) => ExprKind::Char,
         Expression::BinaryOp { op, left, right } => {
             if matches!(
@@ -3521,6 +3806,39 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
             }
         }
         _ => ExprKind::Unknown,
+    }
+}
+
+fn vector_expr_type(expr: &Expression, declared: &HashMap<String, String>) -> Option<&'static str> {
+    let from_type_name = |ty: &str| match normalize_type_token(ty).as_str() {
+        "Vec2" => Some("vec2"),
+        "Vec3" => Some("vec3"),
+        "Vec4" => Some("vec4"),
+        _ => None,
+    };
+    match expr {
+        Expression::VariableReference(name) => declared.get(name).and_then(|ty| from_type_name(ty)),
+        Expression::Index { base, .. } => {
+            let Expression::VariableReference(name) = base.as_ref() else {
+                return None;
+            };
+            declared
+                .get(name)
+                .and_then(|ty| list_elem_from_decl(ty))
+                .and_then(from_type_name)
+        }
+        Expression::Call { name, args } if name == "normalize" => {
+            args.first().and_then(|arg| vector_expr_type(arg, declared))
+        }
+        Expression::Call { name, .. } if name == "cross" => Some("vec3"),
+        Expression::BinaryOp { left, right, .. } => {
+            vector_expr_type(left, declared).or_else(|| {
+                right
+                    .as_deref()
+                    .and_then(|value| vector_expr_type(value, declared))
+            })
+        }
+        _ => None,
     }
 }
 
@@ -3746,6 +4064,36 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                         let a = emit_expr(&args[0], declared);
                         return format!("(({} * 180.0) / M_PI)", a);
                     }
+                    Builtin::Dot | Builtin::Distance | Builtin::DistanceSq if args.len() == 2 => {
+                        if let Some(vector) = vector_expr_type(&args[0], declared) {
+                            let a = emit_expr(&args[0], declared);
+                            let b = emit_expr(&args[1], declared);
+                            let operation = match builtin {
+                                Builtin::Dot => "dot",
+                                Builtin::Distance => "distance",
+                                Builtin::DistanceSq => "distance_sq",
+                                _ => unreachable!(),
+                            };
+                            return format!("sk_{vector}_{operation}({a}, {b})");
+                        }
+                    }
+                    Builtin::Length | Builtin::LengthSq | Builtin::Normalize if args.len() == 1 => {
+                        if let Some(vector) = vector_expr_type(&args[0], declared) {
+                            let value = emit_expr(&args[0], declared);
+                            let operation = match builtin {
+                                Builtin::Length => "length",
+                                Builtin::LengthSq => "length_sq",
+                                Builtin::Normalize => "normalize",
+                                _ => unreachable!(),
+                            };
+                            return format!("sk_{vector}_{operation}({value})");
+                        }
+                    }
+                    Builtin::Cross if args.len() == 2 => {
+                        let a = emit_expr(&args[0], declared);
+                        let b = emit_expr(&args[1], declared);
+                        return format!("sk_vec3_cross({a}, {b})");
+                    }
                     _ => {}
                 }
             }
@@ -3797,6 +4145,10 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::RunTask { .. } | Expression::WaitTask { .. } => "0".to_string(),
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {
+                let operand = right.as_deref().unwrap_or(left);
+                if let Some(vector) = vector_expr_type(operand, declared) {
+                    return format!("sk_{vector}_neg({})", emit_expr(operand, declared));
+                }
                 if let Some(r) = right {
                     return format!("(-{})", emit_expr(r, declared));
                 }
@@ -3811,6 +4163,18 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             let l = emit_expr(left, declared);
             if let Some(r) = right {
                 let rr = emit_expr(r, declared);
+                let left_vector = vector_expr_type(left, declared);
+                let right_vector = vector_expr_type(r, declared);
+                if let Some(vector) = left_vector.or(right_vector) {
+                    return match (op.as_str(), left_vector, right_vector) {
+                        ("+", Some(_), Some(_)) => format!("sk_{vector}_add({l}, {rr})"),
+                        ("-", Some(_), Some(_)) => format!("sk_{vector}_sub({l}, {rr})"),
+                        ("*", Some(_), None) => format!("sk_{vector}_scale({l}, {rr})"),
+                        ("*", None, Some(_)) => format!("sk_{vector}_scale({rr}, {l})"),
+                        ("/", Some(_), None) => format!("sk_{vector}_div({l}, {rr})"),
+                        _ => format!("({l} /* unsupported vector operator {op} */ {rr})"),
+                    };
+                }
                 if (op == "==" || op == "!=")
                     && is_text_expr(left, declared)
                     && is_text_expr(r, declared)
@@ -3863,6 +4227,13 @@ fn expression_uses_math_call(expr: &Expression) -> bool {
                     | "root"
                     | "deg_to_rad"
                     | "rad_to_deg"
+                    | "dot"
+                    | "length"
+                    | "length_sq"
+                    | "normalize"
+                    | "distance"
+                    | "distance_sq"
+                    | "cross"
             ) || args.iter().any(expression_uses_math_call)
         }
         Expression::BinaryOp { op, left, right } => {

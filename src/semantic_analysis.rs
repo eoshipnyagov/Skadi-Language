@@ -17,6 +17,9 @@ enum ValueType {
     Duration,
     ByteSize,
     Angle,
+    Vec2,
+    Vec3,
+    Vec4,
     Memory,
     Task(Option<Box<ValueType>>),
     Channel(Box<ValueType>),
@@ -743,6 +746,9 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "Duration" => ValueType::Duration,
         "ByteSize" => ValueType::ByteSize,
         "Angle" => ValueType::Angle,
+        "Vec2" => ValueType::Vec2,
+        "Vec3" => ValueType::Vec3,
+        "Vec4" => ValueType::Vec4,
         _ => ValueType::Unknown,
     }
 }
@@ -929,6 +935,83 @@ fn builtin_constant_type(name: &str) -> Option<ValueType> {
 
 fn is_numeric_type(ty: &ValueType) -> bool {
     matches!(ty, ValueType::Int | ValueType::Float)
+}
+
+fn vector_dimension(ty: &ValueType) -> Option<usize> {
+    match ty {
+        ValueType::Vec2 => Some(2),
+        ValueType::Vec3 => Some(3),
+        ValueType::Vec4 => Some(4),
+        _ => None,
+    }
+}
+
+fn validate_expression_for_target(
+    target: &ValueType,
+    expr: &Expression,
+    scope: &HashMap<String, ValueType>,
+    memory_state: &MemoryState,
+    functions: &HashMap<String, FunctionSig>,
+    structs: &HashMap<String, StructInfo>,
+    fn_ctx: Option<&FnContext>,
+) -> Result<(), String> {
+    if let Some(dimension) = vector_dimension(target) {
+        if let Expression::StructConstruction { fields } = expr {
+            let expected = ["x", "y", "z", "w"];
+            let expected = &expected[..dimension];
+            let mut actual: Vec<&str> = fields.keys().map(String::as_str).collect();
+            actual.sort_unstable();
+            let mut expected_sorted = expected.to_vec();
+            expected_sorted.sort_unstable();
+            if actual != expected_sorted {
+                return Err(sem_err(
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "{:?} construction requires exactly fields {}, got {}.",
+                        target,
+                        expected.join(", "),
+                        if actual.is_empty() {
+                            "none".to_string()
+                        } else {
+                            actual.join(", ")
+                        }
+                    ),
+                ));
+            }
+            for field in expected {
+                let value_ty = infer_expression_type(
+                    fields.get(*field).expect("validated vector field"),
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx,
+                )?;
+                if !is_numeric_type(&value_ty) {
+                    return Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "{:?} field '{}' expects Int or Float, got {:?}.",
+                            target, field, value_ty
+                        ),
+                    ));
+                }
+            }
+        }
+    } else if let (ValueType::List(element), Expression::ListLiteral(items)) = (target, expr) {
+        for item in items {
+            validate_expression_for_target(
+                element,
+                item,
+                scope,
+                memory_state,
+                functions,
+                structs,
+                fn_ctx,
+            )?;
+        }
+    }
+    Ok(())
 }
 
 fn ensure_numeric_args(name: &str, arg_tys: &[ValueType]) -> Result<(), String> {
@@ -1135,7 +1218,10 @@ fn is_task_safe_boundary_type(
         | ValueType::Time
         | ValueType::Duration
         | ValueType::ByteSize
-        | ValueType::Angle => true,
+        | ValueType::Angle
+        | ValueType::Vec2
+        | ValueType::Vec3
+        | ValueType::Vec4 => true,
         ValueType::Struct(name) => structs
             .get(name)
             .map(|info| {
@@ -1437,6 +1523,15 @@ fn analyze_statement(
             )?;
             let final_ty = if let Some(tn) = declared_type {
                 let declared = parse_declared_type_name(tn, structs);
+                validate_expression_for_target(
+                    &declared,
+                    value,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
                 if let ValueType::Channel(elem_ty) = &declared
                     && !is_value_safe_channel_message(elem_ty, structs)
                 {
@@ -1581,6 +1676,15 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
+            validate_expression_for_target(
+                &target_ty,
+                value,
+                scope,
+                memory_state,
+                functions,
+                structs,
+                fn_ctx.as_ref(),
+            )?;
             if !can_assign(&target_ty, &value_ty) {
                 return Err(err_at_code(
                     stmt,
@@ -1667,6 +1771,41 @@ fn analyze_statement(
                     ),
                 ));
             };
+            if vector_dimension(&owner_ty).is_some() {
+                let valid_field = match &owner_ty {
+                    ValueType::Vec2 => matches!(field.as_str(), "x" | "y"),
+                    ValueType::Vec3 => matches!(field.as_str(), "x" | "y" | "z"),
+                    ValueType::Vec4 => matches!(field.as_str(), "x" | "y" | "z" | "w"),
+                    _ => false,
+                };
+                if !valid_field {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!("unknown vector field '{:?}.{}'.", owner_ty, field),
+                    ));
+                }
+                let value_ty = infer_expression_type(
+                    value,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
+                if !is_numeric_type(&value_ty) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "vector field assignment '{}.{}' expects Int or Float, got {:?}.",
+                            object, field, value_ty
+                        ),
+                    ));
+                }
+                record_task_effects_in_expr(stmt, value, scope, memory_state)?;
+                return Ok(());
+            }
             let ValueType::Struct(owner) = owner_ty else {
                 return Err(err_at_code(
                     stmt,
@@ -2440,6 +2579,15 @@ fn analyze_statement(
             )?;
             match list_ty {
                 ValueType::List(elem_ty) => {
+                    validate_expression_for_target(
+                        &elem_ty,
+                        value,
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
                     if !can_assign(&elem_ty, &value_ty) {
                         return Err(err_at_code(
                             stmt,
@@ -2634,17 +2782,26 @@ fn analyze_statement(
                             ),
                         ));
                     }
-                    if let Some(expected) = ctx.return_type.as_ref()
-                        && !can_assign(expected, &actual)
-                    {
-                        return Err(err_at_code(
-                            stmt,
-                            SEM_TYPE_MISMATCH,
-                            format!(
-                                "type mismatch in return: cannot return {:?} where {:?} expected.",
-                                actual, expected
-                            ),
-                        ));
+                    if let Some(expected) = ctx.return_type.as_ref() {
+                        validate_expression_for_target(
+                            expected,
+                            expr,
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx.as_ref(),
+                        )?;
+                        if !can_assign(expected, &actual) {
+                            return Err(err_at_code(
+                                stmt,
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "type mismatch in return: cannot return {:?} where {:?} expected.",
+                                    actual, expected
+                                ),
+                            ));
+                        }
                     }
                     record_task_effects_in_expr(stmt, expr, scope, memory_state)?;
                 } else if !ctx.is_danger && ctx.return_type.is_some() {
@@ -3495,6 +3652,21 @@ fn infer_expression_type(
                 })?
             };
             if let Expression::MemberAccess { field, .. } = expr {
+                if vector_dimension(&owner_ty).is_some() {
+                    let valid_field = match &owner_ty {
+                        ValueType::Vec2 => matches!(field.as_str(), "x" | "y"),
+                        ValueType::Vec3 => matches!(field.as_str(), "x" | "y" | "z"),
+                        ValueType::Vec4 => matches!(field.as_str(), "x" | "y" | "z" | "w"),
+                        _ => false,
+                    };
+                    if valid_field {
+                        return Ok(ValueType::Float);
+                    }
+                    return Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!("unknown vector field '{:?}.{}'.", owner_ty, field),
+                    ));
+                }
                 let ValueType::Struct(owner) = owner_ty else {
                     return Err(sem_err(
                         SEM_TYPE_MISMATCH,
@@ -4188,6 +4360,102 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Float)
                     }
+                    Builtin::Dot | Builtin::Distance | Builtin::DistanceSq => {
+                        let a = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        let b = infer_expression_type(
+                            &args[1],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if vector_dimension(&a).is_none() || a != b {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects two vectors of the same dimension, got ({:?}, {:?}).",
+                                    name, a, b
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Float)
+                    }
+                    Builtin::Length | Builtin::LengthSq => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if vector_dimension(&ty).is_none() {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects Vec2, Vec3, or Vec4, got {:?}.",
+                                    name, ty
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Float)
+                    }
+                    Builtin::Normalize => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if vector_dimension(&ty).is_none() {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin 'normalize' expects Vec2, Vec3, or Vec4, got {:?}.",
+                                    ty
+                                ),
+                            ));
+                        }
+                        Ok(ty)
+                    }
+                    Builtin::Cross => {
+                        let a = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        let b = infer_expression_type(
+                            &args[1],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if a != ValueType::Vec3 || b != ValueType::Vec3 {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin 'cross' expects (Vec3, Vec3), got ({:?}, {:?}).",
+                                    a, b
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Vec3)
+                    }
                 };
             }
             if let Some((base, method)) = name.split_once('.') {
@@ -4468,7 +4736,11 @@ fn infer_expression_type(
                     structs,
                     fn_ctx,
                 )?;
-                if lt == ValueType::Int || lt == ValueType::Float || lt == ValueType::Angle {
+                if lt == ValueType::Int
+                    || lt == ValueType::Float
+                    || lt == ValueType::Angle
+                    || vector_dimension(&lt).is_some()
+                {
                     return Ok(lt);
                 }
                 return Err(sem_err(
@@ -4562,6 +4834,35 @@ fn infer_expression_type(
                     ("/", ValueType::Angle, ValueType::Angle) => Some(ValueType::Float),
                     ("==" | "!=" | "<" | ">" | "<=" | ">=", ValueType::Angle, ValueType::Angle) => {
                         Some(ValueType::Bool)
+                    }
+                    _ => None,
+                };
+                return result.ok_or_else(|| {
+                    sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "operator '{}' is not defined for {:?} and {:?}.",
+                            op, lt, rt
+                        ),
+                    )
+                });
+            }
+            if vector_dimension(&lt).is_some() || vector_dimension(&rt).is_some() {
+                let scalar = |ty: &ValueType| matches!(ty, ValueType::Int | ValueType::Float);
+                let result = match (op.as_str(), &lt, &rt) {
+                    ("+" | "-", left, right)
+                        if vector_dimension(left).is_some() && left == right =>
+                    {
+                        Some(left.clone())
+                    }
+                    ("*", vector, value) if vector_dimension(vector).is_some() && scalar(value) => {
+                        Some(vector.clone())
+                    }
+                    ("*", value, vector) if scalar(value) && vector_dimension(vector).is_some() => {
+                        Some(vector.clone())
+                    }
+                    ("/", vector, value) if vector_dimension(vector).is_some() && scalar(value) => {
+                        Some(vector.clone())
                     }
                     _ => None,
                 };

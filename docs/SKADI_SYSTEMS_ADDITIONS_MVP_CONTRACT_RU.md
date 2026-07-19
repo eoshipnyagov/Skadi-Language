@@ -2,7 +2,7 @@
 
 Дата: 2026-07-19
 Статус: living implementation reference; Memory, Task/Channel, Time/Duration,
-ByteSize и Angle slices реализованы как experimental `v1.2` runtime MVP.
+ByteSize, Angle и Vector slices реализованы как experimental `v1.2` runtime MVP.
 Назначение: зафиксировать ближайший practical-first контракт для набора системных дополнений к Skadi, которые логично развивают оси `Memory`, `Task/Channel`, `Canvas`.
 
 Связанный design-документ:

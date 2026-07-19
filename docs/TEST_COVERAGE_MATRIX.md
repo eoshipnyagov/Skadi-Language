@@ -65,8 +65,8 @@
   - codegen shape checks для `math.h`, constants, trigonometry, `root`, angle conversion
   - showcase coverage через `bench_09_math_navigation.skd` и `bench_10_v1_1_toolbox.skd`
 - showcase coverage
-  - compile-pipeline shape tests покрывают `bench_01..15`
-  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..15`
+  - compile-pipeline shape tests покрывают `bench_01..16`
+  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..16`
   - runtime showcase e2e покрывает:
     - CLI-driven subset `bench_01..05`
     - stable subset `bench_06..09`
@@ -118,6 +118,11 @@
     codegen и List/Task/Channel boundaries
   - `tests/codegen_e2e.rs` запускает angle arithmetic и trigonometry через native C
   - `bench_15_angle_navigation.skd` входит в native showcase gate
+- experimental Vector coverage
+  - `tests/vector_model.rs` проверяет точную construction shape, components, арифметику,
+    builtins, negative dimension/type rules, formatter, codegen и List/Task/Channel boundaries
+  - `tests/codegen_e2e.rs` запускает vector math и zero normalization через native C
+  - `bench_16_vector_navigation.skd` входит в native showcase gate
 
 ## 2. Что покрыто частично / что ещё требует углубления
 

@@ -20,7 +20,7 @@ Skadi в этом репозитории сейчас:
 
 - компилируется по цепочке `Skadi -> C -> native exe`;
 - имеет хорошо тестируемую stable поверхность `v1.1` и исполняемые experimental
-  Memory, Task/Channel, Time/Duration, ByteSize и Angle slices `v1.2`;
+  Memory, Task/Channel, Time/Duration, ByteSize, Angle и Vector slices `v1.2`;
 - предпочитает канонический и предсказуемый синтаксис;
 - не любит “догадки по аналогии” с Rust, Python, Go, TypeScript или Kotlin;
 - требует использовать только реально поддержанные конструкции и builtins.
@@ -96,7 +96,7 @@ for item in items {
 - math core из `v1.1`.
 - относительные imports `import "./file.skd"`, `local`, `hide` и `module.symbol`;
 
-Experimental `Memory`, `Task/Channel`, `Time/Duration`, `ByteSize` и `Angle` используйте только когда
+Experimental `Memory`, `Task/Channel`, `Time/Duration`, `ByteSize`, `Angle` и `Vec2/Vec3/Vec4` используйте только когда
 задача прямо требует systems surface и контракт сверяется с соответствующим
 разделом справочника.
 

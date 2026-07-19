@@ -321,7 +321,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.skd",
-          "match": "\\b(output|print|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\\b(?=\\s*\\()"
+          "match": "\\b(output|print|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg|dot|length|length_sq|normalize|distance|distance_sq|cross)\\b(?=\\s*\\()"
         },
         {
           "name": "meta.namespace.fs.skd",

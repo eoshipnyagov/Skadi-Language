@@ -29,8 +29,8 @@ iterate entries as entry {
 
   - `Int`, `Float`, `Bool`, `Char`, `Text`, `Path`, `List`
 - `bool` и `char` допустимы для совместимости, но в showcase-стиле предпочтительны `Bool` и `Char`.
-- `Vec2`, `Vec3`, `Vec4` пока planned и не должны появляться в текущем
-  пользовательском коде до завершения Vector MVP.
+- `Vec2`, `Vec3`, `Vec4` доступны как experimental `v1.2` types; используйте
+  точные structural literals `{x = ..., y = ...}` и не выдумывайте constructor calls.
 
 ## 3. Разбор CLI-флагов
 

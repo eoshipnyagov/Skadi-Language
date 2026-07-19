@@ -43,6 +43,7 @@ Skadi -> lexer -> parser -> semantic -> C codegen -> host C compiler -> binary
 | `Time`, `Duration` | nominal Skadi types lowered to `int64_t` nanoseconds |
 | `ByteSize` | nominal Skadi type lowered to signed `int64_t` bytes |
 | `Angle` | nominal Skadi type lowered to `double` radians |
+| `Vec2`, `Vec3`, `Vec4` | value structs из 2/3/4 `double` components |
 | user struct | generated C `typedef struct` |
 
 Nominal semantic rules сохраняются до codegen: совпадающее C representation не
@@ -70,6 +71,7 @@ Math core понижается через `math.h` и generated helper expressio
 - `floor`, `ceil`, `round`;
 - `sin`, `cos`, `atan2`, `sqrt`, `root`;
 - `deg_to_rad`, `rad_to_deg`;
+- `dot`, `length`, `length_sq`, `normalize`, `distance`, `distance_sq`, `cross`;
 - оператор степени `^` через `pow`.
 
 ## Memory runtime (`v1.2`, experimental)
@@ -123,6 +125,16 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
 - `sin/cos/atan2` используют `math.h` напрямую;
 - `deg_to_rad` и `rad_to_deg` lower'ятся в явные expressions с `M_PI`;
 - Lists, Task и Channel используют value-safe `double` representation.
+
+## Vector runtime (`v1.2`, experimental)
+
+- `Vec2`, `Vec3`, `Vec4` lower'ятся в C structs из `double` components;
+- typed structural literals становятся designated initializers;
+- arithmetic, dot products, lengths, normalization and distance используют
+  небольшие статические helpers без hidden allocation;
+- zero normalization возвращает zero-initialized struct;
+- `cross` генерируется только для `Vec3`;
+- Lists, Task и Channel используют value-safe struct representation.
 
 ## Platform scope
 

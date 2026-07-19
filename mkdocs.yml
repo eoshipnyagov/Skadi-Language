@@ -49,6 +49,7 @@ plugins:
             Время и длительности: Time and Duration
             Размеры памяти: Byte Sizes
             Углы: Angles
+            Векторы: Vectors
             Многопоточность: Concurrency
             Статус синтаксиса: Syntax Status
             Skadi для AI и vibe coding: Skadi for AI and vibe coding
@@ -114,6 +115,7 @@ nav:
       - Время и длительности: user/time-duration.md
       - Размеры памяти: user/byte-size.md
       - Углы: user/angle.md
+      - Векторы: user/vectors.md
       - Многопоточность: user/concurrency.md
       - Статус синтаксиса: user/syntax-status.md
       - Skadi для AI и vibe coding: user/ai-guide.md

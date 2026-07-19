@@ -761,6 +761,40 @@ output(heading / divisor)
 }
 
 #[test]
+fn e2e_vector_math_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping vector e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Vec3 x_axis = {x = 1.0, y = 0.0, z = 0.0}
+new Vec3 y_axis = {x = 0.0, y = 1.0, z = 0.0}
+new Vec3 normal = normalize(cross(x_axis, y_axis))
+new Vec3 zero = {x = 0.0, y = 0.0, z = 0.0}
+new Vec3 safe_zero = normalize(zero)
+output(normal.z)
+output(length(normal))
+output(distance(x_axis, y_axis))
+output(safe_zero.x)
+"#;
+    let c = compile_showcase_to_c(src);
+    let run = compile_c_and_execute(compiler, &c, "Skadi_e2e_vector", &["-lm"], &[], None);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let values = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(|line| line.parse::<f64>().expect("numeric vector output"))
+        .collect::<Vec<_>>();
+    assert!((values[0] - 1.0).abs() < 1e-9, "{values:?}");
+    assert!((values[1] - 1.0).abs() < 1e-9, "{values:?}");
+    assert!((values[2] - 2.0_f64.sqrt()).abs() < 1e-5, "{values:?}");
+    assert!(values[3].abs() < 1e-9, "{values:?}");
+}
+
+#[test]
 fn e2e_power_operator_lowers_to_math_runtime() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");

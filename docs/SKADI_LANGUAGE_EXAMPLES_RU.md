@@ -158,6 +158,20 @@ Math core и константы `PI`, `TAU`, `E`, `EPSILON` входят в stab
 Nominal `Angle` и literals `deg/rad` относятся к experimental `v1.2`; полный
 контракт описан на странице [Углы](angle.md).
 
+## Векторы (`v1.2`, experimental)
+
+```skadi
+new Vec2 position = {x = 2.0, y = 1.0}
+new Vec2 target = {x = 8.0, y = 9.0}
+new Vec2 heading = normalize(target - position)
+new Float route_length = distance(position, target)
+output(heading.x)
+output(route_length)
+```
+
+Размерность входит в тип, components имеют `f64` representation. Полный
+контракт и список builtins описаны на странице [Векторы](vectors.md).
+
 ## Время и длительности (`v1.2`, experimental)
 
 ```skadi

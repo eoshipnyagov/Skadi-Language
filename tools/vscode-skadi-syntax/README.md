@@ -41,6 +41,7 @@ This folder contains a local VS Code syntax-highlighting extension for Skadi.
 - struct literal field names, `ByteSize`, and memory size literals (`16kb`, `8mb`, ...)
 - `Time`, `Duration`, duration literals (`5ms`, `2s`, `3min`) and time builtins
 - `Angle`, angle literals (`45deg`, `0.25rad`) and trigonometry integration
+- `Vec2`, `Vec3`, `Vec4`, component fields and vector math builtins
 - label members, struct field declarations, and typed variable declarations
 - paired control forms like `on error`, `place in`, and `iterate ... as ...`
 - operators and function call highlighting

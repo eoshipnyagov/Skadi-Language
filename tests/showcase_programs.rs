@@ -190,3 +190,13 @@ fn showcase_angle_navigation_compiles() {
     assert!(c.contains("cos(target)"));
     assert!(c.contains("sin(target)"));
 }
+
+#[test]
+fn showcase_vector_navigation_compiles() {
+    let src = include_str!("../benchmarks/bench_16_vector_navigation.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("Vec2 direction(Vec2 from, Vec2 to)"));
+    assert!(c.contains("sk_vec2_normalize(sk_vec2_sub(to, from))"));
+    assert!(c.contains("sk_vec3_cross(east, north)"));
+    assert!(c.contains("sk_vec4_normalize(weights)"));
+}

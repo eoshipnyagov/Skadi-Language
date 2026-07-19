@@ -377,12 +377,12 @@ nominal arithmetic и временная numeric-radians compatibility толь�
 `sin/cos`. Общая dimensional algebra, angular velocity и implicit
 `Float <-> Angle` conversions не входят в MVP.
 
-### Milestone 11: Vector MVP
+### Milestone 11: Vector MVP - functional slice выполнен
 
 Цель: добавить первый ограниченный math value layer после серии проверенных
 nominal-type slices.
 
-Планируемый bounded slice:
+Реализовано:
 
 - `Vec2`, `Vec3`, `Vec4` с одним явно выбранным scalar representation;
 - создание, доступ к компонентам и value semantics;
@@ -390,6 +390,9 @@ nominal-type slices.
 - `dot`, `length`, `length_sq`, `normalize`, `distance`, `distance_sq`;
 - `cross` только для `Vec3`;
 - semantic negative coverage, C lowering, e2e и showcase.
+
+Контракт зафиксирован: `f64` components, точные structural literals,
+same-dimension operations, zero-safe normalization и value-safe boundaries.
 
 Матрицы, SIMD-specific lowering, generic vectors, swizzling и пользовательский
 operator overloading не входят в первый vector slice. Реализованный перед ним

@@ -176,6 +176,14 @@
   - `sin/cos` принимают `Angle`, сохраняя numeric raw-radians compatibility для `v1.1`;
   - dimensional algebra, normalization и fixed-point embedded representation отложены;
   - полный контракт: [Углы](angle.md).
+- vector math MVP - `Experimental / Runtime MVP`
+  - `Vec2`, `Vec3`, `Vec4` имеют `f64` components и точную structural-literal форму;
+  - component access/assignment, same-dimension `+/-`, unary minus и scalar `*//` реализованы;
+  - `dot`, `length`, `length_sq`, `normalize`, `distance`, `distance_sq` работают для всех трёх типов;
+  - `cross` принимает только два `Vec3`, zero normalization возвращает zero vector;
+  - векторы value-safe для struct/List/Task/Channel;
+  - matrices, generic/SIMD vectors, swizzling и operator overloading отложены;
+  - полный контракт: [Векторы](vectors.md).
 - memory model MVP surface - `Experimental / Partial`
   - frontend принимает `Memory name = memory(size)`, `place in memory { ... } on error { ... }` и `memory.clear()`;
   - semantic layer проверяет базовые escape / use-after-clear правила только для dynamic payload (`Text`, `List`, и struct-значений с такими полями);

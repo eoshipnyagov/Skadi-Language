@@ -1,6 +1,6 @@
 # Skadi Showcase Programs
 
-This page collects 15 small showcase programs for the current Skadi toolchain.
+This page collects 16 small showcase programs for the current Skadi toolchain.
 
 They serve three roles:
 
@@ -45,6 +45,9 @@ They serve three roles:
 15. `bench_15_angle_navigation.skd`
     Nominal `Angle` navigation with `deg/rad` literals, scalar arithmetic,
     trigonometry, conversion to degrees, and an `Angle List`.
+16. `bench_16_vector_navigation.skd`
+    `Vec2/Vec3/Vec4` navigation with component access, vector/scalar arithmetic,
+    normalization, distance, length, and `Vec3` cross product.
 
 ## Stable showcase fixtures
 
@@ -75,14 +78,14 @@ POSIX shell:
 
 ## Coverage notes
 
-- compile-pipeline showcase tests cover `bench_01..15`;
-- native build tests cover `bench_01..15`;
+- compile-pipeline showcase tests cover `bench_01..16`;
+- native build tests cover `bench_01..16`;
 - runtime e2e coverage is split into:
   - CLI-driven showcase subset `bench_01..05`,
   - stable showcase subset `bench_06..09`,
   - dedicated `bench_10` showcase e2e,
   - native Task/Channel and combined systems coverage through `bench_11..12`,
-  - time, byte-size, and angle coverage through `bench_13..15`.
+  - time, byte-size, angle, and vector coverage through `bench_13..16`.
 
 See the [Concurrency Guide](concurrency.md) for Task/Channel lifecycle,
 multi-worker patterns, platform details, and the ESP32/RTOS roadmap.

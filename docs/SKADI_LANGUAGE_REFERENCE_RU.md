@@ -694,6 +694,28 @@ new Float measured_degrees = rad_to_deg(measured)
 
 Подробный контракт: [Углы](angle.md).
 
+## 18.6 Experimental `Vec2/Vec3/Vec4` MVP
+
+```skadi
+new Vec3 east = {x = 1.0, y = 0.0, z = 0.0}
+new Vec3 north = {x = 0.0, y = 1.0, z = 0.0}
+new Vec3 up = normalize(cross(east, north))
+new Float separation = distance(east, north)
+```
+
+Текущий контракт:
+
+- компоненты `x/y[/z/w]` имеют `f64` representation и читаются как `Float`;
+- structural literal обязан содержать точный набор компонентов своего типа;
+- одинаковые `VecN` поддерживают `+`, `-`, unary `-` и scalar `*`/`/`;
+- `dot`, `length`, `length_sq`, `normalize`, `distance`, `distance_sq` работают
+  для `Vec2/Vec3/Vec4`, а `cross` - только для `Vec3`;
+- `normalize` нулевого вектора возвращает нулевой вектор;
+- векторы value-safe для struct/List/Task/Channel;
+- matrices, swizzling, generic/SIMD vectors и operator overloading отложены.
+
+Подробный контракт: [Векторы](vectors.md).
+
 ## 19. Диагностика
 
 Пользовательские ошибки стараются быть нормализованными:

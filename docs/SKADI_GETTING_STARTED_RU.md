@@ -547,6 +547,22 @@ new Float measured_degrees = rad_to_deg(atan2(y, x))
 `deg/rad` пишутся слитно; `deg_to_rad` и `atan2` возвращают `Angle`, а
 `rad_to_deg` явно возвращает числовые градусы. Полный контракт: [Углы](angle.md).
 
+### `Vec2`, `Vec3`, `Vec4`
+
+```skadi
+new Vec2 position = {x = 2.0, y = 1.0}
+new Vec2 target = {x = 8.0, y = 9.0}
+new Vec2 heading = normalize(target - position)
+new Float route_length = distance(position, target)
+output(heading.x)
+output(route_length)
+```
+
+Векторы используют точный набор компонентов `x/y[/z/w]`, хранят их как `f64`
+и поддерживают bounded арифметику и функции `dot`, `length`, `length_sq`,
+`normalize`, `distance`, `distance_sq`; `cross` определён только для `Vec3`.
+Полный контракт: [Векторы](vectors.md).
+
 ### `Time` и `Duration`
 
 ```skadi
@@ -692,6 +708,7 @@ Showcase-программы:
 - `benchmarks/bench_13_time_budget.skd`
 - `benchmarks/bench_14_byte_size_budget.skd`
 - `benchmarks/bench_15_angle_navigation.skd`
+- `benchmarks/bench_16_vector_navigation.skd`
 
 Описание: [Showcase-программы](showcases.md)
 
@@ -711,5 +728,6 @@ Showcase-программы:
 - [Время и длительности](time-duration.md) - `Time`, `Duration`, unit literals и runtime
 - [Размеры памяти](byte-size.md) - `ByteSize`, бинарные unit literals и `memory(ByteSize)`
 - [Углы](angle.md) - `Angle`, literals `deg/rad` и trigonometry contract
+- [Векторы](vectors.md) - `Vec2/Vec3/Vec4`, value semantics и vector math
 - [Статус синтаксиса](syntax-status.md) - точный срез текущего синтаксиса
 - [Покрытие тестами](../internal/test-coverage.md) - что реально покрыто тестами

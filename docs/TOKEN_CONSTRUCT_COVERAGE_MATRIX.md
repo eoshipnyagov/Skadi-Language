@@ -88,6 +88,7 @@ Legend:
 - Time/Duration frontend/runtime: `tests/time_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_13_time_budget.skd`
 - ByteSize frontend/runtime: `tests/byte_size_model.rs`, `benchmarks/bench_14_byte_size_budget.skd`
 - Angle frontend/runtime: `tests/angle_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_15_angle_navigation.skd`
+- Vector frontend/runtime: `tests/vector_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_16_vector_navigation.skd`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
 
 ## 4. Synchronization rules

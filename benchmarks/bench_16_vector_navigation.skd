@@ -1,0 +1,22 @@
+fn direction(Vec2 from, Vec2 to) returns Vec2 {
+    return normalize(to - from)
+}
+
+new Vec2 origin = {x = 2.0, y = 1.0}
+new Vec2 target = {x = 8.0, y = 9.0}
+new Vec2 heading = direction(origin, target)
+new Float route_length = distance(origin, target)
+
+new Vec3 east = {x = 1.0, y = 0.0, z = 0.0}
+new Vec3 north = {x = 0.0, y = 1.0, z = 0.0}
+new Vec3 up = cross(east, north)
+
+new Vec4 weights = {x = 1.0, y = 2.0, z = 3.0, w = 4.0}
+new Vec4 normalized_weights = normalize(weights)
+
+output("Vector navigation ready")
+output(heading.x)
+output(heading.y)
+output(route_length)
+output(up.z)
+output(length(normalized_weights))

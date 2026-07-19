@@ -19,6 +19,7 @@ ROUTE_MAP = [
     ("user/time-duration", "SKADI_TIME_DURATION_RU.md"),
     ("user/byte-size", "SKADI_BYTE_SIZE_RU.md"),
     ("user/angle", "SKADI_ANGLE_RU.md"),
+    ("user/vectors", "SKADI_VECTORS_RU.md"),
     ("user/concurrency", "SKADI_CONCURRENCY_GUIDE_RU.md"),
     ("user/syntax-status", "SKADI_SYNTAX_STATUS.md"),
     ("user/ai-guide", "SKADI_FOR_AI_RU.md"),
@@ -146,6 +147,7 @@ tracks поверх неё.
 - [Время и длительности](time-duration.md)
 - [Размеры памяти](byte-size.md)
 - [Углы](angle.md)
+- [Векторы](vectors.md)
 - [Многопоточность](concurrency.md)
 - [Статус синтаксиса](syntax-status.md)
 - [Showcase-программы](showcases.md)
@@ -171,6 +173,7 @@ adds experimental systems tracks on top of it.
 - [Time and Duration](time-duration.en.md)
 - [Byte Sizes](byte-size.en.md)
 - [Angles](angle.en.md)
+- [Vectors](vectors.en.md)
 - [Concurrency](concurrency.en.md)
 - [Syntax Status](syntax-status.en.md)
 - [Showcase Programs](showcases.en.md)

@@ -166,10 +166,9 @@ value-safe container/concurrency boundaries.
 - `sin`, `cos`, `atan2`, `sqrt`, `root`, `deg_to_rad`, `rad_to_deg`;
 - numeric semantic checks, `math.h` lowering и e2e/showcase coverage.
 
-Остальные пункты этого документа являются backlog. `Time/Duration`, `ByteSize` и
-`Angle` уже дали рабочие контракты nominal specialized types. В текущем спринте
-остаётся bounded milestone `Vec2/Vec3/Vec4`.
+Остальные пункты этого документа являются backlog. `Time/Duration`, `ByteSize`,
+`Angle` и bounded `Vec2/Vec3/Vec4` уже имеют рабочие experimental контракты.
 
-Первый Vector MVP не включает матрицы, SIMD-specific lowering, generic vectors,
+Реализованный Vector MVP не включает матрицы, SIMD-specific lowering, generic vectors,
 swizzling и пользовательский operator overloading. Дополнительные math functions,
 random API и Matrix2D остаются самостоятельными последующими срезами.
