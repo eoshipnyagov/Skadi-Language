@@ -79,6 +79,23 @@ fn list_meta_dynamic(elem: &str) -> (String, String) {
     (elem.to_string(), elem.to_string())
 }
 
+fn channel_elem_from_decl(declared_type: &str) -> Option<&str> {
+    let base_type = declared_type
+        .strip_suffix("@owned")
+        .unwrap_or(declared_type);
+    base_type
+        .strip_prefix("Channel(")
+        .and_then(|inner| inner.strip_suffix(')'))
+        .map(str::trim)
+}
+
+fn channel_type_suffix(skadi_type: &str) -> String {
+    skadi_type
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect()
+}
+
 fn collect_struct_names(program: &Program) -> Vec<String> {
     program
         .statements
@@ -88,6 +105,14 @@ fn collect_struct_names(program: &Program) -> Vec<String> {
             _ => None,
         })
         .collect()
+}
+
+fn emit_thread_local_support(out: &mut String) {
+    out.push_str("#if defined(_MSC_VER)\n");
+    out.push_str("#define SK_THREAD_LOCAL __declspec(thread)\n");
+    out.push_str("#else\n");
+    out.push_str("#define SK_THREAD_LOCAL _Thread_local\n");
+    out.push_str("#endif\n\n");
 }
 
 fn emit_memory_runtime(out: &mut String) {
@@ -103,7 +128,7 @@ fn emit_memory_runtime(out: &mut String) {
     out.push_str("    size_t size;\n");
     out.push_str("} SkAllocHeader;\n\n");
     out.push_str("#define SK_ALLOC_MAGIC 0x534B4144u\n\n");
-    out.push_str("static SkMemoryRegion *sk_active_region = NULL;\n\n");
+    out.push_str("static SK_THREAD_LOCAL SkMemoryRegion *sk_active_region = NULL;\n\n");
     out.push_str("static size_t sk_mem_align_up(size_t value, size_t alignment) {\n");
     out.push_str("    size_t rem = value % alignment;\n");
     out.push_str("    return rem == 0 ? value : (value + (alignment - rem));\n");
@@ -547,12 +572,7 @@ fn statement_uses_memory_surface(stmt: &Statement) -> bool {
 fn expression_uses_task_surface(expr: &Expression) -> bool {
     match expr {
         Expression::RunTask { .. } | Expression::WaitTask { .. } | Expression::Stopping => true,
-        Expression::Call { name, args } => {
-            name == "channel"
-                || name.ends_with(".send")
-                || name.ends_with(".receive")
-                || args.iter().any(expression_uses_task_surface)
-        }
+        Expression::Call { args, .. } => args.iter().any(expression_uses_task_surface),
         Expression::BinaryOp { left, right, .. } => {
             expression_uses_task_surface(left)
                 || right
@@ -585,7 +605,7 @@ fn statement_uses_task_surface(stmt: &Statement) -> bool {
         } => {
             declared_type
                 .as_deref()
-                .map(|ty| ty == "Task" || ty.starts_with("Task(") || ty.starts_with("Channel("))
+                .map(|ty| ty == "Task" || ty.starts_with("Task("))
                 .unwrap_or(false)
                 || expression_uses_task_surface(value)
         }
@@ -603,20 +623,19 @@ fn statement_uses_task_surface(stmt: &Statement) -> bool {
                 param
                     .param_type
                     .as_deref()
-                    .map(|ty| ty == "Task" || ty.starts_with("Task(") || ty.starts_with("Channel("))
+                    .map(|ty| ty == "Task" || ty.starts_with("Task("))
                     .unwrap_or(false)
             }) || statement_list_uses_task_surface(&body.statements)
         }
         Statement::StructDecl {
             fields, methods, ..
         } => {
-            fields.iter().any(|field| {
-                field.field_type == "Task"
-                    || field.field_type.starts_with("Task(")
-                    || field.field_type.starts_with("Channel(")
-            }) || methods
+            fields
                 .iter()
-                .any(|method| statement_list_uses_task_surface(&method.body.statements))
+                .any(|field| field.field_type == "Task" || field.field_type.starts_with("Task("))
+                || methods
+                    .iter()
+                    .any(|method| statement_list_uses_task_surface(&method.body.statements))
         }
         Statement::IfStatement {
             condition,
@@ -711,14 +730,714 @@ fn statement_list_uses_task_surface(statements: &[Statement]) -> bool {
     statements.iter().any(statement_uses_task_surface)
 }
 
-pub fn ensure_codegen_supported(program: &Program) -> Result<(), String> {
-    if statement_list_uses_task_surface(&program.statements) {
-        return Err(
-            "[SC-CG-301] task model frontend is implemented, but backend lowering is not available yet."
-                .to_string(),
-        );
+fn expression_uses_deferred_task_surface(expr: &Expression) -> bool {
+    match expr {
+        Expression::Call { name, args } => {
+            name == "channel"
+                || name.ends_with(".send")
+                || name.ends_with(".receive")
+                || args.iter().any(expression_uses_deferred_task_surface)
+        }
+        Expression::RunTask { args, .. } => args.iter().any(expression_uses_deferred_task_surface),
+        Expression::WaitTask { .. } | Expression::Stopping => false,
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_deferred_task_surface(left)
+                || right
+                    .as_deref()
+                    .map(expression_uses_deferred_task_surface)
+                    .unwrap_or(false)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_deferred_task_surface(base)
+                || expression_uses_deferred_task_surface(index)
+        }
+        Expression::ListLiteral(items) => items.iter().any(expression_uses_deferred_task_surface),
+        Expression::StructConstruction { fields } => fields
+            .values()
+            .any(|value| expression_uses_deferred_task_surface(value)),
+        _ => false,
     }
+}
+
+fn statement_uses_deferred_task_surface(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::VarDecl {
+            declared_type,
+            value,
+            ..
+        } => {
+            declared_type
+                .as_deref()
+                .map(|ty| ty.starts_with("Channel("))
+                .unwrap_or(false)
+                || expression_uses_deferred_task_surface(value)
+        }
+        Statement::StopTask { .. } => false,
+        Statement::Assignment { value, .. }
+        | Statement::FieldAssignment { value, .. }
+        | Statement::ListPush { value, .. } => expression_uses_deferred_task_surface(value),
+        Statement::ReturnStatement { value, .. } => value
+            .as_deref()
+            .map(expression_uses_deferred_task_surface)
+            .unwrap_or(false),
+        Statement::ExpressionStatement { expr, .. } => expression_uses_deferred_task_surface(expr),
+        Statement::FunctionDef { params, body, .. } => {
+            params.iter().any(|param| {
+                param
+                    .param_type
+                    .as_deref()
+                    .map(|ty| ty.starts_with("Channel("))
+                    .unwrap_or(false)
+            }) || body
+                .statements
+                .iter()
+                .any(statement_uses_deferred_task_surface)
+        }
+        Statement::StructDecl {
+            fields, methods, ..
+        } => {
+            fields
+                .iter()
+                .any(|field| field.field_type.starts_with("Channel("))
+                || methods.iter().any(|method| {
+                    method
+                        .body
+                        .statements
+                        .iter()
+                        .any(statement_uses_deferred_task_surface)
+                })
+        }
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expression_uses_deferred_task_surface(condition)
+                || then_block
+                    .statements
+                    .iter()
+                    .any(statement_uses_deferred_task_surface)
+                || else_block
+                    .as_ref()
+                    .map(|block| {
+                        block
+                            .statements
+                            .iter()
+                            .any(statement_uses_deferred_task_surface)
+                    })
+                    .unwrap_or(false)
+        }
+        Statement::ForLoop {
+            initialization,
+            condition,
+            update,
+            body,
+            ..
+        } => {
+            initialization
+                .as_deref()
+                .map(expression_uses_deferred_task_surface)
+                .unwrap_or(false)
+                || condition
+                    .as_deref()
+                    .map(expression_uses_deferred_task_surface)
+                    .unwrap_or(false)
+                || update
+                    .as_deref()
+                    .map(expression_uses_deferred_task_surface)
+                    .unwrap_or(false)
+                || body
+                    .statements
+                    .iter()
+                    .any(statement_uses_deferred_task_surface)
+        }
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+            ..
+        } => {
+            expression_uses_deferred_task_surface(when_expression)
+                || cases.iter().any(|(expressions, block)| {
+                    expressions
+                        .iter()
+                        .any(expression_uses_deferred_task_surface)
+                        || block
+                            .statements
+                            .iter()
+                            .any(statement_uses_deferred_task_surface)
+                })
+                || else_block
+                    .as_ref()
+                    .map(|block| {
+                        block
+                            .statements
+                            .iter()
+                            .any(statement_uses_deferred_task_surface)
+                    })
+                    .unwrap_or(false)
+        }
+        Statement::WhileLoop {
+            condition, body, ..
+        } => {
+            expression_uses_deferred_task_surface(condition)
+                || body
+                    .statements
+                    .iter()
+                    .any(statement_uses_deferred_task_surface)
+        }
+        Statement::LoopStatement { body, .. } | Statement::OnBlock { body, .. } => body
+            .statements
+            .iter()
+            .any(statement_uses_deferred_task_surface),
+        Statement::PlaceIn { body, on_error, .. } => {
+            body.statements
+                .iter()
+                .any(statement_uses_deferred_task_surface)
+                || on_error
+                    .as_ref()
+                    .map(|block| {
+                        block
+                            .statements
+                            .iter()
+                            .any(statement_uses_deferred_task_surface)
+                    })
+                    .unwrap_or(false)
+        }
+        Statement::MemoryDecl { on_error, .. } => on_error
+            .as_ref()
+            .map(|block| {
+                block
+                    .statements
+                    .iter()
+                    .any(statement_uses_deferred_task_surface)
+            })
+            .unwrap_or(false),
+        Statement::DangerAssignOnError { on_error, .. }
+        | Statement::DangerCallOnError { on_error, .. }
+        | Statement::ListPopOnError { on_error, .. } => on_error
+            .statements
+            .iter()
+            .any(statement_uses_deferred_task_surface),
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => {
+            statements.iter().any(statement_uses_deferred_task_surface)
+        }
+        _ => false,
+    }
+}
+
+fn statement_list_uses_deferred_task_surface(statements: &[Statement]) -> bool {
+    statements.iter().any(statement_uses_deferred_task_surface)
+}
+
+pub fn ensure_codegen_supported(program: &Program) -> Result<(), String> {
+    let _ = program;
     Ok(())
+}
+
+fn collect_task_entries_from_expression(expr: &Expression, entries: &mut HashSet<String>) {
+    match expr {
+        Expression::RunTask { call_name, args } => {
+            entries.insert(call_name.clone());
+            for arg in args {
+                collect_task_entries_from_expression(arg, entries);
+            }
+        }
+        Expression::Call { args, .. } | Expression::ListLiteral(args) => {
+            for arg in args {
+                collect_task_entries_from_expression(arg, entries);
+            }
+        }
+        Expression::Index { base, index } => {
+            collect_task_entries_from_expression(base, entries);
+            collect_task_entries_from_expression(index, entries);
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            collect_task_entries_from_expression(left, entries);
+            if let Some(right) = right {
+                collect_task_entries_from_expression(right, entries);
+            }
+        }
+        Expression::StructConstruction { fields } => {
+            for value in fields.values() {
+                collect_task_entries_from_expression(value, entries);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_task_entries_from_statements(statements: &[Statement], entries: &mut HashSet<String>) {
+    for stmt in statements {
+        match stmt {
+            Statement::VarDecl { value, .. }
+            | Statement::Assignment { value, .. }
+            | Statement::FieldAssignment { value, .. }
+            | Statement::ListPush { value, .. }
+            | Statement::ExpressionStatement { expr: value, .. } => {
+                collect_task_entries_from_expression(value, entries);
+            }
+            Statement::ReturnStatement {
+                value: Some(value), ..
+            } => collect_task_entries_from_expression(value, entries),
+            Statement::FunctionDef { body, .. } => {
+                collect_task_entries_from_statements(&body.statements, entries)
+            }
+            Statement::StructDecl { methods, .. } => {
+                for method in methods {
+                    collect_task_entries_from_statements(&method.body.statements, entries);
+                }
+            }
+            Statement::IfStatement {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                collect_task_entries_from_expression(condition, entries);
+                collect_task_entries_from_statements(&then_block.statements, entries);
+                if let Some(else_block) = else_block {
+                    collect_task_entries_from_statements(&else_block.statements, entries);
+                }
+            }
+            Statement::ForLoop {
+                initialization,
+                condition,
+                update,
+                body,
+                ..
+            } => {
+                if let Some(expression) = initialization {
+                    collect_task_entries_from_expression(expression, entries);
+                }
+                if let Some(expression) = condition {
+                    collect_task_entries_from_expression(expression, entries);
+                }
+                if let Some(expression) = update {
+                    collect_task_entries_from_expression(expression, entries);
+                }
+                collect_task_entries_from_statements(&body.statements, entries);
+            }
+            Statement::WhileLoop {
+                condition, body, ..
+            } => {
+                collect_task_entries_from_expression(condition, entries);
+                collect_task_entries_from_statements(&body.statements, entries);
+            }
+            Statement::LoopStatement { body, .. } | Statement::OnBlock { body, .. } => {
+                collect_task_entries_from_statements(&body.statements, entries)
+            }
+            Statement::WhenBlock {
+                when_expression,
+                cases,
+                else_block,
+                ..
+            } => {
+                collect_task_entries_from_expression(when_expression, entries);
+                for (expressions, block) in cases {
+                    for expression in expressions {
+                        collect_task_entries_from_expression(expression, entries);
+                    }
+                    collect_task_entries_from_statements(&block.statements, entries);
+                }
+                if let Some(else_block) = else_block {
+                    collect_task_entries_from_statements(&else_block.statements, entries);
+                }
+            }
+            Statement::PlaceIn { body, on_error, .. } => {
+                collect_task_entries_from_statements(&body.statements, entries);
+                if let Some(on_error) = on_error {
+                    collect_task_entries_from_statements(&on_error.statements, entries);
+                }
+            }
+            Statement::MemoryDecl {
+                on_error: Some(on_error),
+                ..
+            } => collect_task_entries_from_statements(&on_error.statements, entries),
+            Statement::DangerAssignOnError { args, on_error, .. }
+            | Statement::DangerCallOnError { args, on_error, .. } => {
+                for arg in args {
+                    collect_task_entries_from_expression(arg, entries);
+                }
+                collect_task_entries_from_statements(&on_error.statements, entries);
+            }
+            Statement::ListPopOnError { on_error, .. } => {
+                collect_task_entries_from_statements(&on_error.statements, entries)
+            }
+            Statement::BlockStatement { statements, .. }
+            | Statement::OnErrorBlock { statements, .. } => {
+                collect_task_entries_from_statements(statements, entries)
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_task_entries(program: &Program) -> HashSet<String> {
+    let mut entries = HashSet::new();
+    collect_task_entries_from_statements(&program.statements, &mut entries);
+    entries
+}
+
+fn emit_task_runtime(out: &mut String) {
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("typedef HANDLE SkPlatformThread;\n");
+    out.push_str("#else\n");
+    out.push_str("typedef pthread_t SkPlatformThread;\n");
+    out.push_str("#endif\n\n");
+    out.push_str("typedef struct SkTask SkTask;\n");
+    out.push_str("typedef void (*SkTaskEntry)(SkTask *task, void *context);\n\n");
+    out.push_str("struct SkTask {\n");
+    out.push_str("    SkPlatformThread thread;\n");
+    out.push_str("    void *context;\n");
+    out.push_str("    bool started;\n");
+    out.push_str("    bool joined;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    volatile LONG stop_requested;\n");
+    out.push_str("#else\n");
+    out.push_str("    pthread_mutex_t stop_mutex;\n");
+    out.push_str("    bool stop_requested;\n");
+    out.push_str("#endif\n");
+    out.push_str("};\n\n");
+    out.push_str("static SK_THREAD_LOCAL SkTask *sk_current_task = NULL;\n\n");
+    out.push_str("typedef struct {\n");
+    out.push_str("    SkTask *task;\n");
+    out.push_str("    SkTaskEntry entry;\n");
+    out.push_str("} SkTaskLaunch;\n\n");
+    out.push_str("static void sk_task_panic(const char *code, const char *message) {\n");
+    out.push_str("    fprintf(stderr, \"Runtime error: [%s] %s\\n\", code, message);\n");
+    out.push_str("    exit(1);\n");
+    out.push_str("}\n\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("static DWORD WINAPI sk_task_platform_entry(LPVOID raw) {\n");
+    out.push_str("    SkTaskLaunch *launch = (SkTaskLaunch*)raw;\n");
+    out.push_str("    SkTask *task = launch->task;\n");
+    out.push_str("    SkTaskEntry entry = launch->entry;\n");
+    out.push_str("    free(launch);\n");
+    out.push_str("    sk_current_task = task;\n");
+    out.push_str("    entry(task, task->context);\n");
+    out.push_str("    sk_current_task = NULL;\n");
+    out.push_str("    return 0;\n");
+    out.push_str("}\n");
+    out.push_str("#else\n");
+    out.push_str("static void* sk_task_platform_entry(void *raw) {\n");
+    out.push_str("    SkTaskLaunch *launch = (SkTaskLaunch*)raw;\n");
+    out.push_str("    SkTask *task = launch->task;\n");
+    out.push_str("    SkTaskEntry entry = launch->entry;\n");
+    out.push_str("    free(launch);\n");
+    out.push_str("    sk_current_task = task;\n");
+    out.push_str("    entry(task, task->context);\n");
+    out.push_str("    sk_current_task = NULL;\n");
+    out.push_str("    return NULL;\n");
+    out.push_str("}\n");
+    out.push_str("#endif\n\n");
+    out.push_str("static bool sk_task_start(SkTask *task, SkTaskEntry entry, void *context) {\n");
+    out.push_str("    if (!task || !entry || !context) return false;\n");
+    out.push_str("    task->context = context;\n");
+    out.push_str("    task->started = false;\n");
+    out.push_str("    task->joined = false;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    task->stop_requested = 0;\n");
+    out.push_str("#else\n");
+    out.push_str("    task->stop_requested = false;\n");
+    out.push_str("    if (pthread_mutex_init(&task->stop_mutex, NULL) != 0) return false;\n");
+    out.push_str("#endif\n");
+    out.push_str("    SkTaskLaunch *launch = (SkTaskLaunch*)malloc(sizeof(SkTaskLaunch));\n");
+    out.push_str("    if (!launch) {\n");
+    out.push_str("#if !defined(_WIN32)\n");
+    out.push_str("        pthread_mutex_destroy(&task->stop_mutex);\n");
+    out.push_str("#endif\n");
+    out.push_str("        return false;\n");
+    out.push_str("    }\n");
+    out.push_str("    launch->task = task;\n");
+    out.push_str("    launch->entry = entry;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str(
+        "    task->thread = CreateThread(NULL, 0, sk_task_platform_entry, launch, 0, NULL);\n",
+    );
+    out.push_str("    if (!task->thread) { free(launch); return false; }\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_create(&task->thread, NULL, sk_task_platform_entry, launch) != 0) { free(launch); pthread_mutex_destroy(&task->stop_mutex); return false; }\n");
+    out.push_str("#endif\n");
+    out.push_str("    task->started = true;\n");
+    out.push_str("    return true;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_task_request_stop(SkTask *task) {\n");
+    out.push_str("    if (!task || !task->started || task->joined) sk_task_panic(\"SC-RT-303\", \"invalid task state at stop\");\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    InterlockedExchange(&task->stop_requested, 1);\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_mutex_lock(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-304\", \"task stop synchronization failed\");\n");
+    out.push_str("    task->stop_requested = true;\n");
+    out.push_str("    if (pthread_mutex_unlock(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-304\", \"task stop synchronization failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_task_is_stopping(void) {\n");
+    out.push_str("    SkTask *task = sk_current_task;\n");
+    out.push_str("    if (!task) sk_task_panic(\"SC-RT-303\", \"stopping evaluated outside task context\");\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    return InterlockedCompareExchange(&task->stop_requested, 0, 0) != 0;\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_mutex_lock(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-304\", \"task stop synchronization failed\");\n");
+    out.push_str("    bool requested = task->stop_requested;\n");
+    out.push_str("    if (pthread_mutex_unlock(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-304\", \"task stop synchronization failed\");\n");
+    out.push_str("    return requested;\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_task_join(SkTask *task) {\n");
+    out.push_str("    if (!task || !task->started || task->joined) sk_task_panic(\"SC-RT-303\", \"invalid task state at wait\");\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    if (WaitForSingleObject(task->thread, INFINITE) != WAIT_OBJECT_0) sk_task_panic(\"SC-RT-302\", \"task join failed\");\n");
+    out.push_str("    CloseHandle(task->thread);\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_join(task->thread, NULL) != 0) sk_task_panic(\"SC-RT-302\", \"task join failed\");\n");
+    out.push_str("    if (pthread_mutex_destroy(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-304\", \"task stop synchronization teardown failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("    task->joined = true;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_task_release_context(SkTask *task) {\n");
+    out.push_str("    if (!task || !task->joined || !task->context) sk_task_panic(\"SC-RT-303\", \"invalid task state at context release\");\n");
+    out.push_str("    free(task->context);\n");
+    out.push_str("    task->context = NULL;\n");
+    out.push_str("}\n\n");
+}
+
+fn emit_channel_runtime(out: &mut String) {
+    out.push_str("typedef struct {\n");
+    out.push_str("    unsigned char *buffer;\n");
+    out.push_str("    size_t capacity;\n");
+    out.push_str("    size_t element_size;\n");
+    out.push_str("    size_t head;\n");
+    out.push_str("    size_t tail;\n");
+    out.push_str("    size_t count;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    CRITICAL_SECTION lock;\n");
+    out.push_str("    CONDITION_VARIABLE not_empty;\n");
+    out.push_str("    CONDITION_VARIABLE not_full;\n");
+    out.push_str("#else\n");
+    out.push_str("    pthread_mutex_t lock;\n");
+    out.push_str("    pthread_cond_t not_empty;\n");
+    out.push_str("    pthread_cond_t not_full;\n");
+    out.push_str("#endif\n");
+    out.push_str("} SkChannel;\n\n");
+    out.push_str("static void sk_channel_panic(const char *code, const char *message) {\n");
+    out.push_str("    fprintf(stderr, \"Runtime error: [%s] %s\\n\", code, message);\n");
+    out.push_str("    exit(1);\n");
+    out.push_str("}\n\n");
+    out.push_str(
+        "static SkChannel* sk_channel_create(int64_t capacity_value, size_t element_size) {\n",
+    );
+    out.push_str("    if (capacity_value <= 0 || element_size == 0 || (uint64_t)capacity_value > SIZE_MAX / element_size) sk_channel_panic(\"SC-RT-312\", \"channel capacity must be positive and fit addressable memory\");\n");
+    out.push_str("    SkChannel *channel = (SkChannel*)calloc(1, sizeof(SkChannel));\n");
+    out.push_str(
+        "    if (!channel) sk_channel_panic(\"SC-RT-311\", \"channel allocation failed\");\n",
+    );
+    out.push_str("    channel->capacity = (size_t)capacity_value;\n");
+    out.push_str("    channel->element_size = element_size;\n");
+    out.push_str(
+        "    channel->buffer = (unsigned char*)calloc(channel->capacity, element_size);\n",
+    );
+    out.push_str("    if (!channel->buffer) { free(channel); sk_channel_panic(\"SC-RT-311\", \"channel buffer allocation failed\"); }\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    InitializeCriticalSection(&channel->lock);\n");
+    out.push_str("    InitializeConditionVariable(&channel->not_empty);\n");
+    out.push_str("    InitializeConditionVariable(&channel->not_full);\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_mutex_init(&channel->lock, NULL) != 0) { free(channel->buffer); free(channel); sk_channel_panic(\"SC-RT-313\", \"channel mutex initialization failed\"); }\n");
+    out.push_str("    if (pthread_cond_init(&channel->not_empty, NULL) != 0) { pthread_mutex_destroy(&channel->lock); free(channel->buffer); free(channel); sk_channel_panic(\"SC-RT-313\", \"channel condition initialization failed\"); }\n");
+    out.push_str("    if (pthread_cond_init(&channel->not_full, NULL) != 0) { pthread_cond_destroy(&channel->not_empty); pthread_mutex_destroy(&channel->lock); free(channel->buffer); free(channel); sk_channel_panic(\"SC-RT-313\", \"channel condition initialization failed\"); }\n");
+    out.push_str("#endif\n");
+    out.push_str("    return channel;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_channel_send_raw(SkChannel *channel, const void *value) {\n");
+    out.push_str("    if (!channel || !value) sk_channel_panic(\"SC-RT-313\", \"invalid channel send state\");\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    EnterCriticalSection(&channel->lock);\n");
+    out.push_str("    while (channel->count == channel->capacity) {\n");
+    out.push_str("        if (!SleepConditionVariableCS(&channel->not_full, &channel->lock, INFINITE)) sk_channel_panic(\"SC-RT-313\", \"channel send wait failed\");\n");
+    out.push_str("    }\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_mutex_lock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel send lock failed\");\n");
+    out.push_str("    while (channel->count == channel->capacity) {\n");
+    out.push_str("        if (pthread_cond_wait(&channel->not_full, &channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel send wait failed\");\n");
+    out.push_str("    }\n");
+    out.push_str("#endif\n");
+    out.push_str("    memcpy(channel->buffer + (channel->tail * channel->element_size), value, channel->element_size);\n");
+    out.push_str("    channel->tail = (channel->tail + 1) % channel->capacity;\n");
+    out.push_str("    channel->count += 1;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    WakeConditionVariable(&channel->not_empty);\n");
+    out.push_str("    LeaveCriticalSection(&channel->lock);\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_cond_signal(&channel->not_empty) != 0 || pthread_mutex_unlock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel send notification failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_channel_receive_raw(SkChannel *channel, void *out_value) {\n");
+    out.push_str("    if (!channel || !out_value) sk_channel_panic(\"SC-RT-313\", \"invalid channel receive state\");\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    EnterCriticalSection(&channel->lock);\n");
+    out.push_str("    while (channel->count == 0) {\n");
+    out.push_str("        if (!SleepConditionVariableCS(&channel->not_empty, &channel->lock, INFINITE)) sk_channel_panic(\"SC-RT-313\", \"channel receive wait failed\");\n");
+    out.push_str("    }\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_mutex_lock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel receive lock failed\");\n");
+    out.push_str("    while (channel->count == 0) {\n");
+    out.push_str("        if (pthread_cond_wait(&channel->not_empty, &channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel receive wait failed\");\n");
+    out.push_str("    }\n");
+    out.push_str("#endif\n");
+    out.push_str("    memcpy(out_value, channel->buffer + (channel->head * channel->element_size), channel->element_size);\n");
+    out.push_str("    channel->head = (channel->head + 1) % channel->capacity;\n");
+    out.push_str("    channel->count -= 1;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    WakeConditionVariable(&channel->not_full);\n");
+    out.push_str("    LeaveCriticalSection(&channel->lock);\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_cond_signal(&channel->not_full) != 0 || pthread_mutex_unlock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel receive notification failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_channel_destroy(SkChannel *channel) {\n");
+    out.push_str(
+        "    if (!channel) sk_channel_panic(\"SC-RT-313\", \"invalid channel destroy state\");\n",
+    );
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    DeleteCriticalSection(&channel->lock);\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_cond_destroy(&channel->not_empty) != 0 || pthread_cond_destroy(&channel->not_full) != 0 || pthread_mutex_destroy(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel synchronization teardown failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("    free(channel->buffer);\n");
+    out.push_str("    free(channel);\n");
+    out.push_str("}\n\n");
+}
+
+fn emit_channel_typed_wrapper(out: &mut String, skadi_type: &str) {
+    let c_type = map_skadi_type_to_c(Some(skadi_type));
+    let suffix = channel_type_suffix(skadi_type);
+    out.push_str("static int64_t sk_channel_send_");
+    out.push_str(&suffix);
+    out.push_str("(SkChannel *channel, ");
+    out.push_str(&c_type);
+    out.push_str(" value) {\n");
+    out.push_str("    sk_channel_send_raw(channel, &value);\n");
+    out.push_str("    return 0;\n");
+    out.push_str("}\n\n");
+    out.push_str("static ");
+    out.push_str(&c_type);
+    out.push_str(" sk_channel_receive_");
+    out.push_str(&suffix);
+    out.push_str("(SkChannel *channel) {\n");
+    out.push_str("    ");
+    out.push_str(&c_type);
+    out.push_str(" value;\n");
+    out.push_str("    sk_channel_receive_raw(channel, &value);\n");
+    out.push_str("    return value;\n");
+    out.push_str("}\n\n");
+}
+
+fn emit_channel_typed_wrappers(out: &mut String, struct_names: &[String]) {
+    const BUILTIN_CHANNEL_TYPES: [&str; 18] = [
+        "i8", "i16", "i32", "i64", "Int", "u8", "u16", "u32", "u64", "f32", "f64", "Float", "bool",
+        "Bool", "char", "Char", "Text", "Path",
+    ];
+    for skadi_type in BUILTIN_CHANNEL_TYPES {
+        emit_channel_typed_wrapper(out, skadi_type);
+    }
+    for struct_name in struct_names {
+        emit_channel_typed_wrapper(out, struct_name);
+    }
+}
+
+fn emit_task_trampolines(program: &Program, entries: &HashSet<String>, out: &mut String) {
+    for stmt in &program.statements {
+        let Statement::FunctionDef {
+            name,
+            params,
+            returns,
+            ..
+        } = stmt
+        else {
+            continue;
+        };
+        if !entries.contains(name) {
+            continue;
+        }
+        out.push_str("typedef struct {\n");
+        if params.is_empty() && returns.is_none() {
+            out.push_str("    unsigned char unused;\n");
+        } else {
+            for (index, param) in params.iter().enumerate() {
+                out.push_str("    ");
+                out.push_str(&map_skadi_type_to_c(param.param_type.as_deref()));
+                out.push_str(" arg_");
+                out.push_str(&index.to_string());
+                out.push_str(";\n");
+            }
+            if let Some(result_type) = returns.as_deref() {
+                out.push_str("    ");
+                out.push_str(&map_skadi_type_to_c(Some(result_type)));
+                out.push_str(" result;\n");
+            }
+        }
+        out.push_str("} SkTaskContext_");
+        out.push_str(name);
+        out.push_str(";\n\n");
+        out.push_str("static void sk_task_entry_");
+        out.push_str(name);
+        out.push_str("(SkTask *task, void *raw_context) {\n");
+        out.push_str("    (void)task;\n");
+        out.push_str("    SkTaskContext_");
+        out.push_str(name);
+        out.push_str(" *context = (SkTaskContext_");
+        out.push_str(name);
+        out.push_str("*)raw_context;\n");
+        out.push_str("    ");
+        if returns.is_some() {
+            out.push_str("context->result = ");
+        }
+        out.push_str(map_function_name(name));
+        out.push('(');
+        for (index, _) in params.iter().enumerate() {
+            if index > 0 {
+                out.push_str(", ");
+            }
+            out.push_str("context->arg_");
+            out.push_str(&index.to_string());
+        }
+        out.push_str(");\n");
+        out.push_str("}\n\n");
+    }
+}
+
+fn emit_task_entry_prototypes(program: &Program, entries: &HashSet<String>, out: &mut String) {
+    for stmt in &program.statements {
+        let Statement::FunctionDef {
+            name,
+            params,
+            returns,
+            ..
+        } = stmt
+        else {
+            continue;
+        };
+        if !entries.contains(name) {
+            continue;
+        }
+        out.push_str(&map_skadi_type_to_c(returns.as_deref()));
+        out.push(' ');
+        out.push_str(map_function_name(name));
+        out.push('(');
+        for (index, param) in params.iter().enumerate() {
+            if index > 0 {
+                out.push_str(", ");
+            }
+            out.push_str(&map_skadi_type_to_c(param.param_type.as_deref()));
+            out.push(' ');
+            out.push_str(&param.name);
+        }
+        out.push_str(");\n");
+    }
+    out.push('\n');
 }
 
 pub fn transpile_program_to_c(program: &Program) -> String {
@@ -731,6 +1450,9 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
     let needs_math_runtime = program_uses_math_runtime(program);
+    let needs_task_runtime = statement_list_uses_task_surface(&program.statements);
+    let needs_channel_runtime = statement_list_uses_deferred_task_surface(&program.statements);
+    let task_entries = collect_task_entries(program);
     let needs_memory_runtime = statement_list_uses_memory_surface(&program.statements)
         || needs_list_runtime
         || needs_text_runtime
@@ -740,7 +1462,13 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         || needs_args_runtime;
     let user_main_present = has_user_main(program);
     out.push_str("#include <stdio.h>\n\n");
-    if needs_list_runtime || needs_text_runtime || needs_io_runtime || needs_memory_runtime {
+    if needs_list_runtime
+        || needs_text_runtime
+        || needs_io_runtime
+        || needs_memory_runtime
+        || needs_task_runtime
+        || needs_channel_runtime
+    {
         out.push_str("#include <stddef.h>\n");
         out.push_str("#include <stdlib.h>\n");
     }
@@ -752,12 +1480,29 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         || needs_io_runtime
         || needs_args_runtime
         || needs_memory_runtime
+        || needs_channel_runtime
     {
         out.push_str("#include <string.h>\n\n");
     }
     if needs_math_runtime {
         out.push_str("#include <math.h>\n\n");
         emit_math_runtime(&mut out);
+    }
+    if needs_task_runtime || needs_channel_runtime {
+        out.push_str("#if defined(_WIN32)\n");
+        out.push_str("#include <windows.h>\n");
+        out.push_str("#else\n");
+        out.push_str("#include <pthread.h>\n");
+        out.push_str("#endif\n\n");
+    }
+    if needs_memory_runtime || needs_task_runtime {
+        emit_thread_local_support(&mut out);
+    }
+    if needs_task_runtime {
+        emit_task_runtime(&mut out);
+    }
+    if needs_channel_runtime {
+        emit_channel_runtime(&mut out);
     }
     if needs_fs_list || needs_fs_is_dir || needs_fs_join {
         out.push_str("#include <dirent.h>\n");
@@ -780,6 +1525,14 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         emit_io_runtime(&mut out, needs_args_runtime);
     }
     emit_error_code_enum(program, &mut out);
+    if needs_channel_runtime {
+        emit_channel_typed_wrappers(&mut out, &struct_names);
+    }
+
+    if needs_task_runtime {
+        emit_task_entry_prototypes(program, &task_entries, &mut out);
+        emit_task_trampolines(program, &task_entries, &mut out);
+    }
 
     for stmt in &program.statements {
         if let Statement::FunctionDef { .. } = stmt {
@@ -835,6 +1588,13 @@ fn emit_top_level_cleanup(program: &Program, out: &mut String) {
         let Some(dt) = declared_type.as_deref() else {
             continue;
         };
+
+        if channel_elem_from_decl(dt).is_some() {
+            out.push_str("    sk_channel_destroy(");
+            out.push_str(name);
+            out.push_str(");\n");
+            continue;
+        }
 
         if let Some(elem) = list_elem_from_decl(dt) {
             let suffix = list_meta_dynamic(elem).1;
@@ -1600,6 +2360,36 @@ fn emit_block(
             out.push_str(";\n");
         }
     }
+    for stmt in block.statements.iter().rev() {
+        if let Statement::VarDecl {
+            name,
+            declared_type: Some(declared_type),
+            ..
+        } = stmt
+            && channel_elem_from_decl(declared_type).is_some()
+        {
+            out.push_str(&"    ".repeat(indent));
+            out.push_str("sk_channel_destroy(");
+            out.push_str(name);
+            out.push_str(");\n");
+        }
+    }
+}
+
+fn emit_owned_channel_cleanup(out: &mut String, pad: &str, declared: &HashMap<String, String>) {
+    let mut channel_names: Vec<&str> = declared
+        .iter()
+        .filter_map(|(name, declared_type)| {
+            declared_type.ends_with("@owned").then_some(name.as_str())
+        })
+        .collect();
+    channel_names.sort_unstable();
+    for channel_name in channel_names.into_iter().rev() {
+        out.push_str(pad);
+        out.push_str("sk_channel_destroy(");
+        out.push_str(channel_name);
+        out.push_str(");\n");
+    }
 }
 
 fn emit_statement(
@@ -2066,9 +2856,11 @@ fn emit_statement(
             out.push_str(memory_name);
             out.push_str(");\n");
         }
-        Statement::StopTask { .. } => {
+        Statement::StopTask { task_name, .. } => {
             out.push_str(&pad);
-            out.push_str("/* task backend not implemented */\n");
+            out.push_str("sk_task_request_stop(&");
+            out.push_str(task_name);
+            out.push_str(");\n");
         }
         Statement::ReturnStatement { value, .. } => {
             if let Some(place_ctx) = place_ctx {
@@ -2090,36 +2882,79 @@ fn emit_statement(
                             declared,
                         ));
                         out.push_str(";\n");
+                        emit_owned_channel_cleanup(out, &pad, declared);
                         out.push_str(&pad);
                         out.push_str("return 0;\n");
                         return;
                     }
                     (true, None) => {
+                        emit_owned_channel_cleanup(out, &pad, declared);
                         out.push_str(&pad);
                         out.push_str("return 1;\n");
                         return;
                     }
                     (false, Some(expr)) => {
+                        let has_owned_channel = declared.values().any(|ty| ty.ends_with("@owned"));
                         out.push_str(&pad);
-                        out.push_str("return ");
+                        if has_owned_channel {
+                            out.push_str("int sk_channel_return_value_");
+                        } else {
+                            out.push_str("return ");
+                        }
+                        let return_id = has_owned_channel.then(|| state.next_id());
+                        if let Some(return_id) = return_id {
+                            out.push_str(&return_id.to_string());
+                            out.push_str(" = ");
+                        }
                         out.push_str(&emit_return_expr(
                             expr,
                             ctx.return_type.as_deref(),
                             declared,
                         ));
                         out.push_str(";\n");
+                        emit_owned_channel_cleanup(out, &pad, declared);
+                        if let Some(return_id) = return_id {
+                            out.push_str(&pad);
+                            out.push_str("return sk_channel_return_value_");
+                            out.push_str(&return_id.to_string());
+                            out.push_str(";\n");
+                        }
                         return;
                     }
                     (false, None) => {
+                        emit_owned_channel_cleanup(out, &pad, declared);
                         out.push_str(&pad);
                         out.push_str("return 1;\n");
                         return;
                     }
                 }
             }
+            let has_owned_channel = declared.values().any(|ty| ty.ends_with("@owned"));
+            let return_temp = value.as_ref().filter(|_| has_owned_channel).map(|expr| {
+                let return_id = state.next_id();
+                out.push_str(&pad);
+                out.push_str(&map_skadi_type_to_c(
+                    fn_ctx.and_then(|ctx| ctx.return_type.as_deref()),
+                ));
+                out.push_str(" sk_channel_return_value_");
+                out.push_str(&return_id.to_string());
+                out.push_str(" = ");
+                out.push_str(&emit_return_expr(
+                    expr,
+                    fn_ctx.and_then(|ctx| ctx.return_type.as_deref()),
+                    declared,
+                ));
+                out.push_str(";\n");
+                return_id
+            });
+            emit_owned_channel_cleanup(out, &pad, declared);
             out.push_str(&pad);
             out.push_str("return");
-            if let Some(expr) = value {
+            if let Some(return_id) = return_temp {
+                out.push(' ');
+                out.push_str("sk_channel_return_value_");
+                out.push_str(&return_id.to_string());
+            } else if let Some(expr) = value {
                 out.push(' ');
                 out.push_str(&emit_return_expr(
                     expr,
@@ -2131,8 +2966,18 @@ fn emit_statement(
         }
         Statement::ExpressionStatement { expr, .. } => {
             out.push_str(&pad);
-            out.push_str(&emit_expr(expr, declared));
-            out.push_str(";\n");
+            if let Expression::WaitTask { task_name } = expr.as_ref() {
+                out.push_str("sk_task_join(&");
+                out.push_str(task_name);
+                out.push_str(");\n");
+                out.push_str(&pad);
+                out.push_str("sk_task_release_context(&");
+                out.push_str(task_name);
+                out.push_str(");\n");
+            } else {
+                out.push_str(&emit_expr(expr, declared));
+                out.push_str(";\n");
+            }
         }
         Statement::ReturnError { code, .. } => {
             if let Some(place_ctx) = place_ctx {
@@ -2141,6 +2986,7 @@ fn emit_statement(
                 out.push_str(&place_ctx.restore_region_var);
                 out.push_str(");\n");
             }
+            emit_owned_channel_cleanup(out, &pad, declared);
             out.push_str(&pad);
             out.push_str("return ErrorCode_");
             out.push_str(code);
@@ -2240,6 +3086,115 @@ fn emit_statement(
             declared_type,
             ..
         } => {
+            if let Some(channel_element) = declared_type.as_deref().and_then(channel_elem_from_decl)
+                && let Expression::Call {
+                    name: call_name,
+                    args,
+                } = value.as_ref()
+                && call_name == "channel"
+            {
+                out.push_str(&pad);
+                out.push_str("SkChannel *");
+                out.push_str(name);
+                out.push_str(" = sk_channel_create(");
+                out.push_str(&emit_expr(&args[0], declared));
+                out.push_str(", sizeof(");
+                out.push_str(&map_skadi_type_to_c(Some(channel_element)));
+                out.push_str("));\n");
+                declared.insert(name.clone(), format!("Channel({channel_element})@owned"));
+                return;
+            }
+            if let Expression::WaitTask { task_name } = value.as_ref()
+                && let Some((_, call_name)) = declared
+                    .get(task_name)
+                    .and_then(|task_type| task_type.split_once('@'))
+            {
+                out.push_str(&pad);
+                out.push_str("sk_task_join(&");
+                out.push_str(task_name);
+                out.push_str(");\n");
+                out.push_str(&pad);
+                out.push_str(&map_skadi_type_to_c(declared_type.as_deref()));
+                out.push(' ');
+                out.push_str(name);
+                out.push_str(" = ((SkTaskContext_");
+                out.push_str(call_name);
+                out.push_str("*)");
+                out.push_str(task_name);
+                out.push_str(".context)->result;\n");
+                out.push_str(&pad);
+                out.push_str("sk_task_release_context(&");
+                out.push_str(task_name);
+                out.push_str(");\n");
+                declared.insert(
+                    name.clone(),
+                    declared_type.clone().unwrap_or_else(|| "Int".to_string()),
+                );
+                return;
+            }
+            if declared_type
+                .as_deref()
+                .map(|task_type| task_type == "Task" || task_type.starts_with("Task("))
+                .unwrap_or(false)
+                && let Expression::RunTask { call_name, args } = value.as_ref()
+            {
+                out.push_str(&pad);
+                out.push_str("SkTask ");
+                out.push_str(name);
+                out.push_str(" = {0};\n");
+                out.push_str(&pad);
+                out.push_str("SkTaskContext_");
+                out.push_str(call_name);
+                out.push_str(" *");
+                out.push_str(name);
+                out.push_str("_context = (SkTaskContext_");
+                out.push_str(call_name);
+                out.push_str("*)malloc(sizeof(SkTaskContext_");
+                out.push_str(call_name);
+                out.push_str("));\n");
+                out.push_str(&pad);
+                out.push_str("if (!");
+                out.push_str(name);
+                out.push_str(
+                    "_context) sk_task_panic(\"SC-RT-301\", \"task context allocation failed\");\n",
+                );
+                if args.is_empty() && declared_type.as_deref() == Some("Task") {
+                    out.push_str(&pad);
+                    out.push_str(name);
+                    out.push_str("_context->unused = 0;\n");
+                } else {
+                    for (index, arg) in args.iter().enumerate() {
+                        out.push_str(&pad);
+                        out.push_str(name);
+                        out.push_str("_context->arg_");
+                        out.push_str(&index.to_string());
+                        out.push_str(" = ");
+                        out.push_str(&emit_expr(arg, declared));
+                        out.push_str(";\n");
+                    }
+                }
+                out.push_str(&pad);
+                out.push_str("if (!sk_task_start(&");
+                out.push_str(name);
+                out.push_str(", sk_task_entry_");
+                out.push_str(call_name);
+                out.push_str(", ");
+                out.push_str(name);
+                out.push_str("_context)) { free(");
+                out.push_str(name);
+                out.push_str(
+                    "_context); sk_task_panic(\"SC-RT-301\", \"native task creation failed\"); }\n",
+                );
+                declared.insert(
+                    name.clone(),
+                    format!(
+                        "{}@{}",
+                        declared_type.as_deref().unwrap_or("Task"),
+                        call_name
+                    ),
+                );
+                return;
+            }
             if let Some(dt) = declared_type.as_deref()
                 && let Some(elem) = list_elem_from_decl(dt)
             {
@@ -2323,6 +3278,9 @@ fn emit_statement(
 }
 
 fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
+    if skadi_type.and_then(channel_elem_from_decl).is_some() {
+        return "SkChannel*".to_string();
+    }
     if let Some(list_elem) = skadi_type.and_then(list_elem_from_decl) {
         let suffix = list_meta_dynamic(list_elem).1;
         return format!("SkadiList_{}", suffix);
@@ -2533,6 +3491,24 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             format!("{}.data[{}]", base_rendered, index_rendered)
         }
         Expression::Call { name, args } => {
+            if let Some((channel_name, method)) = name.split_once('.')
+                && let Some(channel_element) = declared
+                    .get(channel_name)
+                    .and_then(|declared_type| channel_elem_from_decl(declared_type))
+            {
+                let suffix = channel_type_suffix(channel_element);
+                if method == "send" && args.len() == 1 {
+                    return format!(
+                        "sk_channel_send_{}({}, {})",
+                        suffix,
+                        channel_name,
+                        emit_expr(&args[0], declared)
+                    );
+                }
+                if method == "receive" && args.is_empty() {
+                    return format!("sk_channel_receive_{}({})", suffix, channel_name);
+                }
+            }
             if let Some(builtin) = builtin_from_name(name) {
                 match builtin {
                     Builtin::Len if args.len() == 1 => {
@@ -2712,9 +3688,8 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
             format!("{}({})", map_function_name(name), rendered.join(", "))
         }
-        Expression::RunTask { .. } | Expression::WaitTask { .. } | Expression::Stopping => {
-            "0".to_string()
-        }
+        Expression::Stopping => "sk_task_is_stopping()".to_string(),
+        Expression::RunTask { .. } | Expression::WaitTask { .. } => "0".to_string(),
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {
                 if let Some(r) = right {

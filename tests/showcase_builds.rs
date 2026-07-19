@@ -65,6 +65,16 @@ const SHOWCASE_CASES: &[ShowcaseCase] = &[
         source: "benchmarks/bench_10_v1_1_toolbox.skd",
         extra_flags: &["-lm"],
     },
+    ShowcaseCase {
+        name: "bench_11_task_channel_pipeline",
+        source: "benchmarks/bench_11_task_channel_pipeline.skd",
+        extra_flags: &["-pthread"],
+    },
+    ShowcaseCase {
+        name: "bench_12_systems_pipeline",
+        source: "benchmarks/bench_12_systems_pipeline.skd",
+        extra_flags: &["-pthread", "-lm"],
+    },
 ];
 
 fn find_c_compiler() -> Option<&'static str> {
@@ -108,6 +118,9 @@ fn compile_c_to_binary(compiler: &str, c_src: &str, stem: &str, extra_flags: &[&
     let mut compile_cmd = Command::new(compiler);
     compile_cmd.arg(&c_path).arg("-o").arg(&exe_path);
     for flag in extra_flags {
+        if cfg!(windows) && *flag == "-pthread" {
+            continue;
+        }
         compile_cmd.arg(flag);
     }
 

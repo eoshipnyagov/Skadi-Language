@@ -1,13 +1,16 @@
 # Skadi MVP: Контракт Task Model
 
-Дата: 2026-06-07  
-Статус: experimental / partial frontend MVP.
+Дата: 2026-07-12
+Статус: experimental / partial runtime MVP.
 
 ## 1. Назначение
 
 Этот документ фиксирует не полную желаемую concurrency/task model Skadi, а именно минимальный контракт, который можно брать в parser/semantic/runtime design ближайшей реализации.
 
 Широкая design-версия описана в [Task Draft](task-model-draft.md).
+
+Backend-архитектура зафиксирована отдельно в
+[Task Runtime MVP Design](task-runtime-mvp-design.md).
 
 ## 2. Что считается частью MVP
 
@@ -23,7 +26,7 @@
 8. `channel(N)` как создание буферизированного канала;
 9. `send` и `receive` как базовые операции обмена сообщениями;
 10. blocking semantics для `send/receive` по умолчанию;
-11. warning при игнорировании task handle;
+11. hard error при игнорировании task handle;
 12. message-passing-first как основной concurrency story.
 
 ## 3. Базовая единица конкурентности: `Task`
@@ -247,15 +250,21 @@ wait task
 run worker()
 ```
 
-MVP должен как минимум выдавать warning.
+Текущий frontend выдаёт hard error.
 
 Например:
 
 ```text
-warning: task handle ignored
+Semantic error: [SC-SEM-070] task handle ignored
 ```
 
-В текущем frontend MVP это именно warning, а не hard error.
+```text
+Каждый run должен передать handle явному владельцу.
+Каждый handle должен завершиться через wait на всех путях управления.
+```
+
+Иначе backend был бы вынужден неявно создавать detached task или скрытый process
+registry, что противоречит явному lifecycle Skadi.
 
 ## 15.1. Текущий implementation status
 
@@ -263,15 +272,25 @@ warning: task handle ignored
 
 - parser/AST принимают `Task`, `Task(T)`, `run`, `wait`, `stop`, `stopping`, `Channel(T)`, `channel(N)`, `send` и `receive`;
 - semantic layer проверяет lifecycle task handle, task-context для `stopping`, value-safe channel messages и запрет `Task` как обычного value-type;
-- codegen намеренно останавливается на `SC-CG-301`, потому что backend/runtime concurrency ещё не реализованы.
+- codegen исполняет void и result-bearing `run/wait` через Win32/pthread runtime;
+- `Task(T)` переносит result из typed task context в ожидающий scope;
+- `stop/stopping` работают как синхронизированный кооперативный запрос через
+  thread-local current-task context;
+- bounded `Channel(T)` исполняет blocking FIFO `send/receive` через
+  Win32/pthread synchronization primitives;
+- mutable `List` не считается value-safe сообщением до появления move/deep-copy
+  контракта.
+- channel owner создаётся вне loop и `place in`, чтобы `break/continue` или
+  recovery jump не могли обойти deterministic cleanup; borrowed Channel-параметр
+  использовать внутри таких блоков можно.
 
-То есть это не stable runtime feature. Это зафиксированная experimental language surface, готовая для следующего backend milestone.
+Task/Channel runtime уже является исполняемым, но всё ещё experimental slice.
+Дальнейшее укрепление включает stress/sanitizer/CI matrix и showcase coverage;
+`close`, cancellation, timeout и `select` остаются будущими контрактами.
 
-Почему именно warning, а не error:
-
-- это мягче для первого среза;
-- уже помогает не терять lifecycle из вида;
-- не блокирует дальнейшую эволюцию в более строгую сторону.
+Path-sensitive semantic pass принимает `wait` во всех ветках, отвергает cleanup
+только в части веток, ранний `return` с живым handle и lifecycle, зависящий от
+выполнения loop iteration.
 
 ## 16. Что обещает MVP
 
@@ -282,7 +301,7 @@ MVP task model обещает:
 - видимый lifecycle через handle;
 - message passing через typed channels;
 - blocking communication semantics по умолчанию;
-- предупреждение на fire-and-forget без явной ответственности.
+- запрет fire-and-forget без явной ответственности.
 
 ## 17. Что MVP пока не обещает
 

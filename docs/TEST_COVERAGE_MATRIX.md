@@ -68,7 +68,25 @@
   - `tests/memory_model_examples.rs` проверяет self-contained positive examples, большой canonical example, native build/run path, style pitfalls и negative example suite из `examples/memory/`
 - experimental task/channel frontend coverage
   - `tests/task_model_frontend.rs` проверяет parser/semantic contract для `Task`, `run`, `wait`, `stop`, `stopping`, `Channel(T)`, `channel(N)`, `send` и `receive`
-  - тот же suite проверяет ignored-run warning, value-safe channel messages и backend gate `SC-CG-301`
+  - тот же suite проверяет ignored-run hard error, all-path lifecycle,
+    task-safe boundaries и value-safe channel messages, включая запрет mutable `List`
+  - memory suites проверяют TLS shape и native Win32/pthread isolation active regions
+  - `tests/task_model_runtime.rs` проверяет native void и result-bearing tasks,
+    typed arguments, scalar/struct/Text result transfer, `stop -> stopping -> wait`,
+    bounded FIFO, backpressure, 1000-message producer/consumer stress, local owner
+    cleanup и `SC-RT-312`
+  - тот же native suite закрепляет пять одновременно запущенных producers через
+    bounded Channel и повторный `run -> wait` с новым handle внутри каждой
+    итерации цикла
+  - CLI smoke проверяет `check/build/run`, result-bearing task, cooperative stop и
+    Channel официальным workflow
+  - `tests/task_model_sanitizer.rs` является обязательным TSan gate при
+    `SKADI_REQUIRE_TSAN=1`; dedicated CI job не позволяет silently skip проверку
+    и использует `setarch x86_64 -R` для стабильного GCC TSan startup
+  - native compiler matrix запускает systems project через Linux GCC/Clang и
+    Windows MinGW/MSVC
+  - `bench_12_systems_pipeline.skd` проверяет совместное использование thread-local
+    Memory context и Task/Channel runtime
 
 ## 2. Что покрыто частично / что ещё требует углубления
 
@@ -78,8 +96,8 @@
 - runtime semantics для `on interrupt` / `on event`
   - parse-level coverage уже есть, runtime binding остаётся TODO
 - task/channel backend/runtime
-  - frontend MVP реализован, но C backend останавливается на `SC-CG-301`
-  - реальный scheduler/runtime, `select`, task groups и embedded APIs остаются TODO
+  - void и `Task(T)` run/wait, `stop`, `stopping` и bounded Channel реализованы через Win32/pthread backend
+  - `close`, timeout, cancellation, `select`, task groups и embedded APIs остаются TODO
 
 ## 3. Политика для новых фич
 

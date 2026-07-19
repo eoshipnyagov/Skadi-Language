@@ -55,12 +55,12 @@ fn compile_c_and_execute(
 
     fs::write(&c_path, c_src).expect("write C source");
 
-    let compile = Command::new(compiler)
-        .arg(&c_path)
-        .arg("-o")
-        .arg(&exe_path)
-        .output()
-        .expect("run C compiler");
+    let mut compile_cmd = Command::new(compiler);
+    compile_cmd.arg(&c_path).arg("-o").arg(&exe_path);
+    if !cfg!(windows) {
+        compile_cmd.arg("-pthread");
+    }
+    let compile = compile_cmd.output().expect("run C compiler");
     assert!(
         compile.status.success(),
         "C compile failed: {}",
@@ -84,6 +84,108 @@ fn compile_program_to_c(src: &str) -> String {
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     transpile_program_to_c(&program)
+}
+
+#[test]
+fn memory_active_region_is_thread_local_at_runtime() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping memory TLS runtime test: no clang/gcc/cc in PATH.");
+        return;
+    };
+
+    let mut c_src = compile_program_to_c(
+        r#"
+Memory bootstrap_memory = memory(64b)
+bootstrap_memory.clear()
+"#,
+    );
+    c_src = c_src.replacen("int main(void)", "static int skadi_original_main(void)", 1);
+    c_src.push_str(
+        r#"
+
+#if defined(_WIN32)
+#include <windows.h>
+
+static volatile LONG sk_tls_ready = 0;
+
+static DWORD WINAPI sk_tls_worker(LPVOID unused) {
+    (void)unused;
+    SkMemoryRegion region;
+    if (!sk_mem_region_init(&region, 128)) return 2;
+    sk_mem_set_active(&region);
+    InterlockedIncrement(&sk_tls_ready);
+    while (InterlockedCompareExchange(&sk_tls_ready, 0, 0) < 2) Sleep(0);
+    DWORD result = sk_mem_current() == &region ? 0 : 3;
+    sk_mem_set_active(NULL);
+    free(region.buffer);
+    return result;
+}
+
+int main(void) {
+    HANDLE first = CreateThread(NULL, 0, sk_tls_worker, NULL, 0, NULL);
+    HANDLE second = CreateThread(NULL, 0, sk_tls_worker, NULL, 0, NULL);
+    if (!first || !second) return 4;
+    WaitForSingleObject(first, INFINITE);
+    WaitForSingleObject(second, INFINITE);
+    DWORD first_result = 0;
+    DWORD second_result = 0;
+    GetExitCodeThread(first, &first_result);
+    GetExitCodeThread(second, &second_result);
+    CloseHandle(first);
+    CloseHandle(second);
+    return first_result == 0 && second_result == 0 ? 0 : 5;
+}
+#else
+#include <pthread.h>
+
+static pthread_mutex_t sk_tls_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t sk_tls_ready_condition = PTHREAD_COND_INITIALIZER;
+static int sk_tls_ready = 0;
+
+static void* sk_tls_worker(void *unused) {
+    (void)unused;
+    SkMemoryRegion region;
+    if (!sk_mem_region_init(&region, 128)) return (void*)2;
+    sk_mem_set_active(&region);
+
+    pthread_mutex_lock(&sk_tls_lock);
+    sk_tls_ready += 1;
+    if (sk_tls_ready == 2) {
+        pthread_cond_broadcast(&sk_tls_ready_condition);
+    } else {
+        while (sk_tls_ready < 2) {
+            pthread_cond_wait(&sk_tls_ready_condition, &sk_tls_lock);
+        }
+    }
+    pthread_mutex_unlock(&sk_tls_lock);
+
+    void *result = sk_mem_current() == &region ? 0 : (void*)3;
+    sk_mem_set_active(NULL);
+    free(region.buffer);
+    return result;
+}
+
+int main(void) {
+    pthread_t first;
+    pthread_t second;
+    if (pthread_create(&first, NULL, sk_tls_worker, NULL) != 0) return 4;
+    if (pthread_create(&second, NULL, sk_tls_worker, NULL) != 0) return 4;
+    void *first_result = NULL;
+    void *second_result = NULL;
+    pthread_join(first, &first_result);
+    pthread_join(second, &second_result);
+    return first_result == NULL && second_result == NULL ? 0 : 5;
+}
+#endif
+"#,
+    );
+
+    let run = compile_c_and_execute(compiler, &c_src, "memory_tls_runtime", &[], None);
+    assert!(
+        run.status.success(),
+        "thread-local active Memory isolation failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
 }
 
 #[test]

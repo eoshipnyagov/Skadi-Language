@@ -1,6 +1,6 @@
 # Showcase-программы Skadi
 
-В этом разделе собраны 10 небольших showcase-программ.
+В этом разделе собраны 12 небольших showcase-программ.
 
 Их цель:
 
@@ -22,6 +22,8 @@
   <li><code>bench_08_path_list_helpers.skd</code><ul><li>Утилита для обхода и фильтрации путей.</li><li>Покрытие: <code>Path List</code>, <code>fs.list</code>, <code>fs.join</code>, <code>fs.is_dir</code>, <code>iterate ... as ...</code>.</li></ul></li>
   <li><code>bench_09_math_navigation.skd</code><ul><li>Небольшой showcase для math и навигации.</li><li>Покрытие: <code>deg_to_rad</code>, <code>sin</code>, <code>cos</code>, <code>atan2</code>, <code>sqrt</code>, <code>round</code>, <code>clamp</code>.</li></ul></li>
   <li><code>bench_10_v1_1_toolbox.skd</code><ul><li>Сборный showcase для ключевых обновлений <code>v1.1</code>.</li><li>Покрытие: <code>danger fn</code>, <code>on error</code>, <code>label ErrorCode</code>, <code>struct</code>, методы, <code>List</code>, <code>iterate ... as ...</code>, <code>when</code>, math core и cleanup generated C.</li></ul></li>
+  <li><code>bench_11_task_channel_pipeline.skd</code><ul><li>Исполняемый showcase concurrency slice <code>v1.2</code>.</li><li>Покрытие: <code>Task</code>, <code>Task(Float)</code>, bounded <code>Channel(Reading)</code>, capacity-1 backpressure, struct messages, blocking <code>send/receive</code> и обязательный <code>wait</code>.</li></ul></li>
+  <li><code>bench_12_systems_pipeline.skd</code><ul><li>Совместный systems showcase <code>v1.2</code>.</li><li>Покрытие: fixed-capacity <code>Memory</code>, <code>place in</code>, Task/Channel pipeline, thread-local runtime contexts и безопасная граница между region-owned данными и сообщениями.</li></ul></li>
 </ol>
 
 ## Репозиторные входные данные
@@ -35,22 +37,7 @@
 
 ## Сборка всех showcase-программ
 
-Из корня репозитория:
-
-```powershell
-cargo run -- --input benchmarks/bench_01_tree.skd --emit-exe bench_01_tree.exe
-cargo run -- --input benchmarks/bench_02_read_stats.skd --emit-exe bench_02_read_stats.exe
-cargo run -- --input benchmarks/bench_03_find_count.skd --emit-exe bench_03_find_count.exe
-cargo run -- --input benchmarks/bench_04_sum_ints.skd --emit-exe bench_04_sum_ints.exe
-cargo run -- --input benchmarks/bench_05_push_pop.skd --emit-exe bench_05_push_pop.exe
-cargo run -- --input benchmarks/bench_06_struct_account.skd --emit-exe bench_06_struct_account.exe
-cargo run -- --input benchmarks/bench_07_struct_list.skd --emit-exe bench_07_struct_list.exe
-cargo run -- --input benchmarks/bench_08_path_list_helpers.skd --emit-exe bench_08_path_list_helpers.exe
-cargo run -- --input benchmarks/bench_09_math_navigation.skd --emit-exe bench_09_math_navigation.exe
-cargo run -- --input benchmarks/bench_10_v1_1_toolbox.skd --emit-exe bench_10_v1_1_toolbox.exe
-```
-
-Или через вспомогательные скрипты:
+Из корня репозитория используйте release smoke-скрипт:
 
 ```powershell
 .\scripts\run_showcase.ps1 -Mode build
@@ -59,6 +46,13 @@ cargo run -- --input benchmarks/bench_10_v1_1_toolbox.skd --emit-exe bench_10_v1
 ```bash
 ./scripts/run_showcase.sh build
 ```
+
+Обычные проекты собираются через `skadi-cli check/build/run`. Showcase-файлы
+остаются репозиторным smoke-набором и запускаются скриптом, который подбирает для
+них стабильные fixtures и ожидаемые аргументы.
+
+Практические правила Task/Channel и пример запуска нескольких workers описаны в
+[руководстве по многопоточности](concurrency.md).
 
 ## Smoke-запуск
 
@@ -76,6 +70,8 @@ Pop-Location
 .\bench_07_struct_list.exe
 .\bench_09_math_navigation.exe
 .\bench_10_v1_1_toolbox.exe
+.\bench_11_task_channel_pipeline.exe
+.\bench_12_systems_pipeline.exe
 ```
 
 Или через вспомогательные скрипты:

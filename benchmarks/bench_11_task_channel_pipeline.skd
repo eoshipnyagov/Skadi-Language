@@ -1,0 +1,27 @@
+struct Reading {
+    Int sensor_id
+    Float value
+}
+
+fn produce(Channel(Reading) readings) {
+    new Reading first = {sensor_id = 1, value = 18.5}
+    new Reading second = {sensor_id = 2, value = 21.0}
+    new Reading third = {sensor_id = 3, value = 23.5}
+    readings.send(first)
+    readings.send(second)
+    readings.send(third)
+}
+
+fn average_three(Channel(Reading) readings) Float {
+    new Reading first = readings.receive()
+    new Reading second = readings.receive()
+    new Reading third = readings.receive()
+    return (first.value + second.value + third.value) / 3.0
+}
+
+Channel(Reading) readings = channel(1)
+Task producer_task = run produce(readings)
+Task(Float) average_task = run average_three(readings)
+wait producer_task
+new Float average = wait average_task
+output(average)

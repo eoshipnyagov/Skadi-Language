@@ -1,6 +1,6 @@
 # Руководство по стилю диагностических сообщений
 
-Этот документ определяет канонический user-facing формат diagnostics для стадий компилятора Skadi.
+Этот документ определяет канонический user-facing формат diagnostics для стадий компилятора и runtime Skadi.
 
 ## Канонический формат
 
@@ -8,7 +8,7 @@
 
 Где:
 
-- `<Kind>` — один из: `Lex`, `Parse`, `Semantic`
+- `<Kind>` — один из: `Lex`, `Parse`, `Semantic`, `Codegen`, `Runtime`
 - `<CODE>` — опционален, но желателен (`SC-LEX-001`, `SC-PARSE-003`, `SC-SEM-020`)
 - `line`/`col` — 1-based source coordinates, когда они доступны
 - `index` — опциональный token index (сейчас используется в parser entry diagnostics)
@@ -44,10 +44,33 @@
 - `SC-SEM-030` — unknown function
 - `SC-SEM-031` — argument count mismatch
 - `SC-SEM-032` — argument type mismatch
+- `SC-SEM-033` — builtin argument mismatch
 - `SC-SEM-040` — invalid semantic context
 - `SC-SEM-050` — return-path/return-form rule
 - `SC-SEM-051` — `ErrorCode` label/variant rule
+- `SC-SEM-060` — Memory placement/clear rule
+- `SC-SEM-061` — Memory lifetime/escape rule
+- `SC-SEM-062` — Memory capability misuse
+- `SC-SEM-070` — Task lifecycle/context/boundary rule
+- `SC-SEM-071` — Task capability misuse
+- `SC-SEM-080` — Channel type/message/lifecycle rule
 - `SC-SEM-900` — internal semantic consistency error
+
+## Backend и runtime codes
+
+Backend/runtime error без source location использует форму:
+
+`<Kind> error: [<CODE>] <message>`
+
+Текущие и зарезервированные классы:
+
+- `SC-CG-301` — зарезервирован для будущей frontend-формы без lowering; в текущем
+  Task/Channel MVP активного backend gate нет
+- `SC-RT-301..304` — task creation/join/state/stop-synchronization failures
+- `SC-RT-311..313` — channel allocation/capacity/synchronization failures
+
+Runtime code считается публичным только после появления соответствующего runtime
+пути и regression test. До этого он является зарезервированным design contract.
 
 ## Карта parse codes (текущее состояние)
 

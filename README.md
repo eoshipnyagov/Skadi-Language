@@ -10,7 +10,7 @@ Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
 
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
 
-The current stable base is the `v1.1` toolchain surface. Active development is now focused on the `v1.2` experimental systems layer: Memory MVP and Task/Channel frontend contracts.
+The current stable base is the `v1.1` toolchain surface. Active development is now focused on the `v1.2` experimental systems layer: executable Memory and Task/Channel runtime MVPs.
 
 The long-term design direction is broader:
 
@@ -38,7 +38,7 @@ The repository includes:
 - formatter,
 - math/core support for `v1.1`,
 - experimental Memory MVP work for `v1.2`,
-- experimental Task/Channel frontend work for `v1.2`,
+- experimental native Task/Channel runtime for `v1.2`,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,
@@ -265,22 +265,24 @@ Why this matters:
 
 ### 2. Task / Channel
 
-**Status: design direction / future versions.**
+**Status: experimental `v1.2` runtime MVP.**
 
-Skadi is planned to use tasks for independent work and channels for message passing.
+Skadi uses tasks for independent work and bounded channels for message passing.
 
-Possible future syntax:
+Current syntax:
 
 ```skadi
 Channel(SensorData) sensors = channel(8)
 
-new sensor_task = run sensor_loop(sensors)
+Task sensor_task = run sensor_loop(sensors)
 
 loop {
     new data = sensors.receive()
     draw_status(canvas, data)
     screen.present()
 }
+
+wait sensor_task
 ```
 
 The intended model:
@@ -293,8 +295,10 @@ wait joins and returns result.
 shared mutable memory is not the default.
 ```
 
-The goal is not to build a massive async runtime first.
-The goal is a readable base model for common systems work.
+The current C backend maps each task to a Win32 or pthread native thread and
+implements blocking bounded channels. Advanced scheduling, channel close,
+timeouts, and embedded/RTOS targets remain future work. See the
+[Concurrency Guide](https://eoshipnyagov.github.io/Skadi-Language/en/user/concurrency/).
 
 ### 3. Canvas
 
@@ -510,7 +514,7 @@ The repository already includes:
 - formatter,
 - math/core support for `v1.1`,
 - experimental Memory MVP work for `v1.2`,
-- experimental Task/Channel frontend work for `v1.2`,
+- experimental native Task/Channel runtime for `v1.2`,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,

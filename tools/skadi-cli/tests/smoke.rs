@@ -152,6 +152,68 @@ fn new_check_and_optional_build_run_smoke() {
 }
 
 #[test]
+fn task_runtime_builds_and_runs_through_official_cli() {
+    if !host_compiler_ready() {
+        eprintln!("Skipping CLI Task runtime smoke: no host C compiler.");
+        return;
+    }
+    let temp = unique_temp_dir("task_runtime");
+    let init = run_cli(&temp, &["init"]);
+    assert!(init.status.success(), "init failed: {}", stderr_text(&init));
+    fs::write(
+        temp.join("src").join("main.skd"),
+        r#"fn worker(Int worker_id, Channel(Int) events) {
+    while not stopping {
+        pass
+    }
+    events.send(worker_id)
+}
+
+fn calculate(Int base) Int {
+    return base + 7
+}
+
+Channel(Int) events = channel(1)
+Task worker_task = run worker(42, events)
+Task(Int) result_task = run calculate(42)
+stop worker_task
+new Int worker_event = events.receive()
+wait worker_task
+new Int result = wait result_task
+output(worker_event)
+output(result)
+output("task joined")
+"#,
+    )
+    .expect("task entry should be writable");
+
+    let check = run_cli(&temp, &["check"]);
+    assert!(
+        check.status.success(),
+        "task check failed: {}",
+        stderr_text(&check)
+    );
+    let build = run_cli(&temp, &["build"]);
+    assert!(
+        build.status.success(),
+        "task build failed: {}",
+        stderr_text(&build)
+    );
+    let run = run_cli(&temp, &["run"]);
+    assert!(
+        run.status.success(),
+        "task run failed: {}",
+        stderr_text(&run)
+    );
+    let output = stdout_text(&run);
+    assert!(output.contains("42"), "{output}");
+    assert!(output.contains("49"), "{output}");
+    assert!(output.contains("task joined"), "{output}");
+
+    let _ = fs::remove_dir_all(temp);
+}
+
+#[test]
 fn init_and_check_smoke() {
     let temp = unique_temp_dir("init_flow");
 

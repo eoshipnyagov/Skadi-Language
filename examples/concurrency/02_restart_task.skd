@@ -1,0 +1,13 @@
+fn calculate(Int value) Int {
+    return value + 1
+}
+
+new Int index = 0
+new Int total = 0
+while index < 5 {
+    Task(Int) iteration_task = run calculate(index)
+    new Int result = wait iteration_task
+    total = total + result
+    index++
+}
+output(total)

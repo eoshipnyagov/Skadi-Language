@@ -524,9 +524,11 @@ arena.clear()
 
 Если memory syntax прошла parser и semantic, текущий backend strict MVP уже доводит её до `Skadi -> C -> native` через fixed-capacity region runtime. Experimental-ограничения при этом сохраняются: `allow grow`, `allow drop`, `memory.child` и `memory.static` пока не входят в supported surface.
 
-## 18.2 Experimental task/channel frontend MVP
+## 18.2 Experimental task/channel systems MVP
 
-Task model сейчас является experimental frontend surface, а не runtime/backend feature.
+Task model является experimental `v1.2` systems surface. Parser, semantic layer и
+C backend уже поддерживают его на Windows и POSIX host, но API ещё не объявлен
+стабильным.
 
 Канонический syntax первого milestone:
 
@@ -548,17 +550,25 @@ new Event next_event = events.receive()
 - semantic layer проверяет, что `Task` не используется как обычное storable/returnable значение;
 - `wait` и `stop` разрешены только для task handles;
 - `stopping` разрешён только внутри функции, которая локально запускается через `run`;
-- `Channel(T)` принимает только value-safe messages;
-- ignored `run worker()` выдаёт warning про потерянный task handle.
+- `Channel(T)` принимает только value-safe messages; mutable `List`, Memory,
+  Task, Channel и region-owned payload запрещены;
+- ignored `run worker()` является `SC-SEM-070` hard error;
+- owning task handle должен быть `wait`-нут на всех путях до выхода из scope;
+- `Memory`, region-owned payload и mutable `List` не пересекают task boundary.
 
-Что этот milestone пока не обещает:
+Task slice уже проходит `Skadi -> C -> native`: `run` создаёт native worker через
+Win32/pthread, `stop` потокобезопасно публикует кооперативный запрос, `stopping`
+читает его внутри worker, а `wait` выполняет join. `Task(T)` переносит scalar,
+struct или Text result в ожидающий scope до освобождения runtime context.
+Bounded `Channel(T)` также проходит `Skadi -> C -> native`: `channel(N)` создаёт
+FIFO фиксированной ёмкости, `send` блокируется на заполненной очереди, а `receive`
+блокируется на пустой. В MVP нет `close`, timeout, `select` и автоматического
+прерывания channel operation по `stop`. Owning declaration `Channel(T) name =
+channel(N)` размещается вне loop и `place in`; borrowed Channel-параметры можно
+использовать внутри этих блоков.
 
-- реальный runtime scheduler;
-- OS threads или platform-specific concurrency ABI;
-- backend lowering в C;
-- `try_send`, `try_receive`, `select`, task groups, `allow drop`, async/await.
-
-Если task/channel syntax прошла parser и semantic, текущий backend намеренно останавливается на `SC-CG-301`: task frontend уже реализован, но backend lowering ещё не доступен.
+Полное пользовательское руководство, включая несколько параллельных workers,
+повторный запуск, deadlock-риски и статус ESP32: [Многопоточность](concurrency.md).
 
 ## 19. Диагностика
 
@@ -575,7 +585,7 @@ new Event next_event = events.receive()
 Не стоит пока закладываться на это как на законченный stable/runtime слой:
 
 - модульную систему / imports;
-- runtime/backend поддержку task/channel model;
+- стабильный production-контракт task/channel model;
 - visual core;
 - systems additions tracks;
 - завершённую семантику выполнения для `on interrupt` и родственных будущих hooks.

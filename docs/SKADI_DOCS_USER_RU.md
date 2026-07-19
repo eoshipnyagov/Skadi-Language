@@ -5,7 +5,8 @@
 Стабильная пользовательская база сейчас соответствует `v1.1`: CLI/TUI,
 formatter, diagnostics, math core, I/O и showcase workflow. Текущая разработка
 `v1.2` добавляет experimental systems tracks; они описаны в справочнике языка и
-статусе синтаксиса, но не всегда являются stable runtime surface.
+статусе синтаксиса. Strict Memory и Task/Channel уже имеют исполняемый runtime
+MVP, но пока не объявлены stable API.
 
 Эти материалы теперь можно поддерживать не только как Markdown-файлы, но и как
 HTML-сайт документации.
@@ -39,6 +40,10 @@ HTML-сайт документации.
 
 - [Справочник CLI/TUI](cli-reference.md)
   - справочник по командам `skadi-cli` и возможностям `skadi-cli tui`.
+
+- [Многопоточность](concurrency.md)
+  - `Task`, `Channel(T)`, lifecycle, несколько workers и повторный запуск;
+  - текущие desktop backends, ограничения и roadmap ESP32/RTOS.
 
 - [Статус синтаксиса](syntax-status.md)
   - точный срез того, что реально поддерживается сейчас.

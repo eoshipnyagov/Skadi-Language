@@ -77,6 +77,114 @@ jobs:
       - name: Build MkDocs site
         run: python -m mkdocs build --strict
 
+  concurrency-tsan:
+    runs-on: ubuntu-latest
+    env:
+      SKADI_REQUIRE_TSAN: "1"
+      CC: gcc
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run required Task/Channel ThreadSanitizer stress
+        run: cargo test --test task_model_sanitizer -- --nocapture
+
+  native-compiler-matrix:
+    needs: [quality-gates]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            msys2: false
+            msvc: false
+          - os: ubuntu-latest
+            cc: clang
+            msys2: false
+            msvc: false
+          - os: windows-2025-vs2026
+            cc: gcc
+            msys2: true
+            msvc: false
+          - os: windows-2025-vs2026
+            cc: cl
+            msys2: false
+            msvc: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install MSYS2 GCC
+        if: matrix.msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+
+      - name: Add MSYS2 GCC to PATH
+        if: matrix.msys2
+        shell: pwsh
+        run: echo "C:\msys64\ucrt64\bin" >> $env:GITHUB_PATH
+
+      - name: Enable MSVC developer environment
+        if: matrix.msvc
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build and run systems project with selected compiler
+        shell: pwsh
+        run: |
+          $projectDir = Join-Path $env:RUNNER_TEMP "skadi_systems_${{ matrix.cc }}"
+          New-Item -ItemType Directory -Force -Path $projectDir | Out-Null
+          Set-Location $projectDir
+
+          cargo run --manifest-path "$env:GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- init
+          @'
+          struct Reading {
+              Int id
+              Float value
+          }
+
+          fn produce(Channel(Reading) readings) {
+              new Reading item = {id = 7, value = 12.5}
+              readings.send(item)
+          }
+
+          fn consume(Channel(Reading) readings) Int {
+              new Reading item = readings.receive()
+              return item.id
+          }
+
+          Memory report_memory = memory(4kb)
+          Channel(Reading) readings = channel(1)
+          Task producer_task = run produce(readings)
+          Task(Int) consumer_task = run consume(readings)
+          wait producer_task
+          new Int result = wait consumer_task
+          output(result)
+          place in report_memory {
+              output("systems matrix ok")
+          }
+          '@ | Set-Content -Encoding utf8 src/main.skd
+
+          cargo run --manifest-path "$env:GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- check
+          $output = cargo run --manifest-path "$env:GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- run --target host --cc ${{ matrix.cc }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($output -notmatch "7" -or $output -notmatch "systems matrix ok") {
+              throw "Unexpected systems project output: $output"
+          }
+
   core-tests:
     needs: [showcase-builds, quality-gates]
     runs-on: ${{ matrix.os }}

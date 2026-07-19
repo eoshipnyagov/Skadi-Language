@@ -1,0 +1,30 @@
+struct Reading {
+    Int sensor_id
+    Float value
+}
+
+fn collect(Channel(Reading) readings) {
+    new Reading indoor = {sensor_id = 1, value = 20.0}
+    new Reading outdoor = {sensor_id = 2, value = 8.0}
+    readings.send(indoor)
+    readings.send(outdoor)
+}
+
+fn calculate_delta(Channel(Reading) readings) Float {
+    new Reading first = readings.receive()
+    new Reading second = readings.receive()
+    return abs(first.value - second.value)
+}
+
+Memory report_memory = memory(4kb)
+Channel(Reading) readings = channel(1)
+Task collector_task = run collect(readings)
+Task(Float) delta_task = run calculate_delta(readings)
+wait collector_task
+new Float delta = wait delta_task
+output(delta)
+
+place in report_memory {
+    new Text report = concat("systems pipeline: ", "complete")
+    output(report)
+}

@@ -24,7 +24,7 @@
 - formatter для текущего слоя `v1.1`;
 - math/core срез `v1.1`;
 - strict Memory MVP как experimental `v1.2` systems layer;
-- Task/Channel frontend MVP как experimental `v1.2` syntax/semantic layer;
+- Task/Channel runtime MVP как experimental `v1.2` systems layer;
 - showcase-программы и набор регрессионных тестов;
 - HTML-сайт документации на базе `MkDocs` с каркасом RU/EN.
 
@@ -102,7 +102,13 @@ workflow [docs-pages.yml](.github/workflows/docs-pages.yml), который со
 `v1.2` развивается поверх stable base `v1.1`.
 
 - Memory MVP уже проходит parser/semantic/codegen/runtime путь для strict fixed-capacity surface.
-- Task/Channel MVP уже проходит parser/semantic/formatter/highlighting путь, но backend/runtime concurrency ещё gated через `SC-CG-301`.
+- Task/Channel MVP проходит parser/semantic/codegen/runtime путь: native `run/wait`,
+  cooperative `stop/stopping` и bounded blocking Channel работают на Win32/pthread.
+  Слой остаётся experimental до успешной проверки dedicated TSan и
+  GCC/Clang/MinGW/MSVC jobs в release CI.
+
+Пользовательский контракт и практические шаблоны собраны в
+[руководстве по многопоточности](concurrency.md).
 
 Подробная рамка находится в [Плане v1.2](docs/SKADI_V1_2_PLAN_RU.md).
 
@@ -110,7 +116,7 @@ workflow [docs-pages.yml](.github/workflows/docs-pages.yml), который со
 
 - imports / modules;
 - расширенные memory policies: `allow grow`, `allow drop`, `memory.child`, `memory.static`;
-- task/concurrency runtime/backend implementation;
+- расширенный concurrency surface: `close`, cancellation, timeout, `select`, task groups;
 - visual core;
 - systems additions;
 - законченная семантика выполнения для `on interrupt`.

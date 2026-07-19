@@ -1,6 +1,6 @@
 # Skadi Showcase Programs
 
-This page collects 10 small showcase programs for the current Skadi toolchain.
+This page collects 12 small showcase programs for the current Skadi toolchain.
 
 They serve three roles:
 
@@ -30,6 +30,12 @@ They serve three roles:
    Compact math/navigation showcase.
 10. `bench_10_v1_1_toolbox.skd`
     Combined `v1.1` showcase for danger calls, lists, structs, `when`, and math.
+11. `bench_11_task_channel_pipeline.skd`
+    Executable `v1.2` concurrency showcase with `Task`, `Task(Float)`, a bounded
+    capacity-one `Channel(Reading)`, backpressure, and blocking send/receive.
+12. `bench_12_systems_pipeline.skd`
+    Combined `v1.2` systems showcase for fixed-capacity `Memory`, `place in`,
+    Task/Channel, thread-local runtime contexts, and safe region boundaries.
 
 ## Stable showcase fixtures
 
@@ -60,11 +66,15 @@ POSIX shell:
 
 ## Coverage notes
 
-- compile-pipeline showcase tests cover `bench_01..10`;
-- native build tests cover `bench_01..10`;
+- compile-pipeline showcase tests cover `bench_01..12`;
+- native build tests cover `bench_01..12`;
 - runtime e2e coverage is split into:
   - CLI-driven showcase subset `bench_01..05`,
   - stable showcase subset `bench_06..09`,
-  - dedicated `bench_10` showcase e2e.
+  - dedicated `bench_10` showcase e2e,
+  - native Task/Channel and combined systems coverage through `bench_11..12`.
+
+See the [Concurrency Guide](concurrency.md) for Task/Channel lifecycle,
+multi-worker patterns, platform details, and the ESP32/RTOS roadmap.
 
 Russian remains the primary source of truth for the full showcase documentation.

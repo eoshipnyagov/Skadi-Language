@@ -1,0 +1,23 @@
+fn square_and_send(Int value, Channel(Int) results) {
+    results.send(value * value)
+}
+
+Channel(Int) results = channel(2)
+Task first_task = run square_and_send(1, results)
+Task second_task = run square_and_send(2, results)
+Task third_task = run square_and_send(3, results)
+Task fourth_task = run square_and_send(4, results)
+Task fifth_task = run square_and_send(5, results)
+new Int total = 0
+new Int received = 0
+while received < 5 {
+    new Int value = results.receive()
+    total = total + value
+    received++
+}
+wait first_task
+wait second_task
+wait third_task
+wait fourth_task
+wait fifth_task
+output(total)

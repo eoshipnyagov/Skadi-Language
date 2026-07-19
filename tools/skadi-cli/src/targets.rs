@@ -20,6 +20,15 @@ pub enum OutputKind {
     LinuxElf,
 }
 
+fn gnu_link_args(c: &str, out: &str, pthread: bool) -> Vec<String> {
+    let mut args = vec![c.to_string(), "-o".to_string(), out.to_string()];
+    if pthread {
+        args.push("-pthread".to_string());
+    }
+    args.push("-lm".to_string());
+    args
+}
+
 const HOST_OUTPUT_KIND: OutputKind = if cfg!(windows) {
     OutputKind::WindowsExe
 } else {
@@ -68,15 +77,15 @@ pub fn candidate_invocations(
             let mut xs = vec![
                 CompilerInvocation {
                     program: "gcc".to_string(),
-                    args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
+                    args: gnu_link_args(&c, &out, !cfg!(windows)),
                 },
                 CompilerInvocation {
                     program: "clang".to_string(),
-                    args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
+                    args: gnu_link_args(&c, &out, !cfg!(windows)),
                 },
                 CompilerInvocation {
                     program: "cc".to_string(),
-                    args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
+                    args: gnu_link_args(&c, &out, !cfg!(windows)),
                 },
             ];
             if cfg!(windows) {
@@ -90,17 +99,17 @@ pub fn candidate_invocations(
         "x86_64-w64-mingw32" => vec![
             CompilerInvocation {
                 program: "x86_64-w64-mingw32-gcc".to_string(),
-                args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
+                args: gnu_link_args(&c, &out, false),
             },
             CompilerInvocation {
                 program: "gcc".to_string(),
-                args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
+                args: gnu_link_args(&c, &out, false),
             },
         ],
         "x86_64-unknown-linux-gnu" => vec![
             CompilerInvocation {
                 program: "x86_64-linux-gnu-gcc".to_string(),
-                args: vec![c.clone(), "-o".to_string(), out.clone(), "-lm".to_string()],
+                args: gnu_link_args(&c, &out, true),
             },
             CompilerInvocation {
                 program: "clang".to_string(),
@@ -109,6 +118,7 @@ pub fn candidate_invocations(
                     c.clone(),
                     "-o".to_string(),
                     out.clone(),
+                    "-pthread".to_string(),
                     "-lm".to_string(),
                 ],
             },
@@ -138,19 +148,18 @@ pub fn single_compiler_invocation(
                 args: vec!["/nologo".to_string(), c, format!("/Fe:{out}")],
             }
         }
-        other => CompilerInvocation {
-            program: other.to_string(),
-            args: match target {
-                "x86_64-unknown-linux-gnu" if other == "clang" => vec![
-                    "--target=x86_64-unknown-linux-gnu".to_string(),
-                    c,
-                    "-o".to_string(),
-                    out,
-                    "-lm".to_string(),
-                ],
-                _ => vec![c, "-o".to_string(), out, "-lm".to_string()],
-            },
-        },
+        other => {
+            let pthread =
+                target == "x86_64-unknown-linux-gnu" || (target == "host" && !cfg!(windows));
+            let mut args = gnu_link_args(&c, &out, pthread);
+            if target == "x86_64-unknown-linux-gnu" && other == "clang" {
+                args.insert(0, "--target=x86_64-unknown-linux-gnu".to_string());
+            }
+            CompilerInvocation {
+                program: other.to_string(),
+                args,
+            }
+        }
     };
     Ok(inv)
 }
@@ -218,6 +227,21 @@ mod tests {
             inv.args
                 .iter()
                 .any(|a| a == "--target=x86_64-unknown-linux-gnu")
+        );
+        assert!(inv.args.iter().any(|a| a == "-pthread"));
+    }
+
+    #[test]
+    fn linux_profile_adds_pthread_link_flag() {
+        let xs = candidate_invocations(
+            "x86_64-unknown-linux-gnu",
+            Path::new("a.c"),
+            Path::new("a.out"),
+        )
+        .expect("linux invocations should be available");
+        assert!(
+            xs.iter()
+                .all(|invocation| invocation.args.iter().any(|arg| arg == "-pthread"))
         );
     }
 

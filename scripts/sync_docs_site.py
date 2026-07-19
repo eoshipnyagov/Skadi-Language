@@ -15,6 +15,7 @@ ROUTE_MAP = [
     ("user/cli-quick-start", "SKADI_CLI_QUICK_START_RU.md"),
     ("user/cli-reference", "SKADI_CLI_REFERENCE_RU.md"),
     ("user/language-reference", "SKADI_LANGUAGE_REFERENCE_RU.md"),
+    ("user/concurrency", "SKADI_CONCURRENCY_GUIDE_RU.md"),
     ("user/syntax-status", "SKADI_SYNTAX_STATUS.md"),
     ("user/ai-guide", "SKADI_FOR_AI_RU.md"),
     ("user/showcases", "SHOWCASE_PROGRAMS.md"),
@@ -40,6 +41,7 @@ ROUTE_MAP = [
     ("internal/memory-model-examples", "SKADI_MEMORY_MODEL_EXAMPLES_RU.md"),
     ("internal/task-model-draft", "SKADI_TASK_MODEL_DRAFT_RU.md"),
     ("internal/task-model-mvp", "SKADI_TASK_MODEL_MVP_CONTRACT_RU.md"),
+    ("internal/task-runtime-mvp-design", "SKADI_TASK_RUNTIME_MVP_DESIGN_RU.md"),
     ("internal/visual-core-draft", "SKADI_VISUAL_CORE_DRAFT_RU.md"),
     ("internal/visual-core-mvp", "SKADI_VISUAL_CORE_MVP_CONTRACT_RU.md"),
     ("internal/systems-additions-draft", "SKADI_SYSTEMS_ADDITIONS_DRAFT_RU.md"),
@@ -131,6 +133,7 @@ def make_user_index_ru() -> str:
 - [Быстрый старт CLI](cli-quick-start.md)
 - [Справочник CLI/TUI](cli-reference.md)
 - [Справочник языка](language-reference.md)
+- [Многопоточность](concurrency.md)
 - [Статус синтаксиса](syntax-status.md)
 - [Showcase-программы](showcases.md)
 """
@@ -151,6 +154,7 @@ adds experimental systems tracks on top of it.
 - [CLI Quick Start](cli-quick-start.en.md)
 - [CLI/TUI Reference](cli-reference.en.md)
 - [Language Reference](language-reference.en.md)
+- [Concurrency](concurrency.en.md)
 - [Syntax Status](syntax-status.en.md)
 - [Showcase Programs](showcases.en.md)
 """

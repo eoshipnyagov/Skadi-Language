@@ -561,8 +561,13 @@ Showcase-программы:
 - `benchmarks/bench_08_path_list_helpers.skd`
 - `benchmarks/bench_09_math_navigation.skd`
 - `benchmarks/bench_10_v1_1_toolbox.skd`
+- `benchmarks/bench_11_task_channel_pipeline.skd`
+- `benchmarks/bench_12_systems_pipeline.skd`
 
 Описание: [Showcase-программы](showcases.md)
+
+Для `Task`, `Channel(T)`, нескольких параллельных workers, повторного запуска и
+текущего статуса ESP32 смотри [Многопоточность в Skadi](concurrency.md).
 
 Для быстрых и воспроизводимых smoke-запусков используйте данные из
 `benchmarks/showcase-data/`: текстовый fixture для file/text showcase и
@@ -572,5 +577,6 @@ Showcase-программы:
 
 - [Справочник языка](language-reference.md) - полный справочник синтаксиса и builtins
 - [Справочник CLI/TUI](cli-reference.md) - команды CLI и TUI
+- [Многопоточность](concurrency.md) - Task/Channel, lifecycle и платформы
 - [Статус синтаксиса](syntax-status.md) - точный срез текущего синтаксиса
 - [Покрытие тестами](../internal/test-coverage.md) - что реально покрыто тестами

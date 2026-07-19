@@ -137,3 +137,23 @@ fn showcase_v1_1_toolbox_compiles() {
     assert!(c.contains("sk_list_Waypoint_free(&route);"));
     assert!(c.contains("sk_free_text((void*)summary);"));
 }
+
+#[test]
+fn showcase_task_channel_pipeline_compiles() {
+    let src = include_str!("../benchmarks/bench_11_task_channel_pipeline.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("sk_channel_create(1, sizeof(Reading))"));
+    assert!(c.contains("sk_task_start(&producer_task"));
+    assert!(c.contains("sk_channel_receive_Reading"));
+}
+
+#[test]
+fn showcase_systems_pipeline_compiles() {
+    let src = include_str!("../benchmarks/bench_12_systems_pipeline.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("SkMemoryRegion report_memory_storage"));
+    assert!(c.contains("static SK_THREAD_LOCAL SkMemoryRegion *sk_active_region"));
+    assert!(c.contains("static SK_THREAD_LOCAL SkTask *sk_current_task"));
+    assert!(c.contains("sk_channel_create(1, sizeof(Reading))"));
+    assert!(c.contains("sk_mem_set_active(report_memory)"));
+}

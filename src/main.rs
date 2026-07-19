@@ -27,11 +27,12 @@ fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
     let mut errs: Vec<String> = Vec::new();
 
     for compiler in candidates {
-        let output = Command::new(compiler)
-            .arg(c_path)
-            .arg("-o")
-            .arg(exe_path)
-            .output();
+        let mut command = Command::new(compiler);
+        command.arg(c_path).arg("-o").arg(exe_path).arg("-lm");
+        if !cfg!(windows) {
+            command.arg("-pthread");
+        }
+        let output = command.output();
         match output {
             Ok(out) => {
                 if out.status.success() {

@@ -29,7 +29,7 @@
   - что реально покрыто тестами.
 
 - [Стиль диагностики](diagnostics-style.md)
-  - стиль и форма диагностических сообщений.
+  - стиль, форма и code ranges диагностических сообщений.
 
 - `CLI_USAGE.md`
   - служебная заметка про пользовательские входы и низкоуровневый driver.
@@ -54,7 +54,7 @@
   - stable/productization план `v1.1`.
 
 - [План v1.2](v1-2-plan.md)
-  - текущая рабочая линия после `v1.1`: Memory MVP и Task/Channel frontend MVP.
+  - текущая рабочая линия после `v1.1`: Memory MVP и Task/Channel runtime track.
 
 - [Блокеры v1](v1-blockers.md)
   - блокеры и несогласованности.
@@ -77,6 +77,7 @@
 
 - [Task Draft](task-model-draft.md)
 - [Task MVP Contract](task-model-mvp.md)
+- [Task Runtime MVP Design](task-runtime-mvp-design.md)
 
 ## 5. Future tracks
 

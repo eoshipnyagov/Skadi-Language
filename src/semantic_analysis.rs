@@ -272,6 +272,34 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         }
     }
 
+    // User-defined struct types may be declared after functions. Resolve function
+    // signatures again once the complete struct table is available.
+    for stmt in &program.statements {
+        if let Statement::FunctionDef {
+            name,
+            returns,
+            params,
+            ..
+        } = stmt
+            && let Some(sig) = functions.get_mut(name)
+        {
+            sig.return_type = returns
+                .as_deref()
+                .map(|name| parse_declared_type_name(name, &structs))
+                .or(Some(ValueType::Int));
+            sig.param_types = params
+                .iter()
+                .map(|param| {
+                    param
+                        .param_type
+                        .as_deref()
+                        .map(|name| parse_declared_type_name(name, &structs))
+                        .unwrap_or(ValueType::Int)
+                })
+                .collect();
+        }
+    }
+
     validate_error_code_label(&labels)?;
 
     let mut scope: HashMap<String, ValueType> = HashMap::new();
@@ -286,7 +314,8 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         &task_context_functions,
         None,
         false,
-    )
+    )?;
+    validate_task_lifecycle(program)
 }
 
 pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
@@ -590,12 +619,6 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     loc,
                 } => visit_expression_style(value, loc.line, loc.column, out),
                 Statement::ExpressionStatement { expr, loc } => {
-                    if matches!(expr.as_ref(), Expression::RunTask { .. }) {
-                        out.push(format!(
-                            "style warning at line {}, col {}: task handle ignored; assign run result to a Task handle and wait or stop/wait it.",
-                            loc.line, loc.column
-                        ));
-                    }
                     visit_expression_style(expr, loc.line, loc.column, out);
                 }
                 Statement::StructDecl { methods, .. } => {
@@ -974,8 +997,32 @@ fn is_value_safe_channel_message(ty: &ValueType, structs: &HashMap<String, Struc
                     .all(|field_ty| is_value_safe_channel_message(field_ty, structs))
             })
             .unwrap_or(false),
-        ValueType::List(inner) => is_value_safe_channel_message(inner, structs),
+        ValueType::List(_) => false,
         _ => true,
+    }
+}
+
+fn is_task_safe_boundary_type(
+    ty: &ValueType,
+    structs: &HashMap<String, StructInfo>,
+    allow_channel: bool,
+) -> bool {
+    match ty {
+        ValueType::Int | ValueType::Float | ValueType::Bool | ValueType::Char | ValueType::Text => {
+            true
+        }
+        ValueType::Struct(name) => structs
+            .get(name)
+            .map(|info| {
+                info.fields
+                    .values()
+                    .all(|field_ty| is_task_safe_boundary_type(field_ty, structs, false))
+            })
+            .unwrap_or(false),
+        ValueType::Channel(inner) => allow_channel && is_value_safe_channel_message(inner, structs),
+        // Lists have mutable backing storage in the current runtime. Passing their
+        // representation by value would create a cross-task mutable alias.
+        ValueType::List(_) | ValueType::Memory | ValueType::Task(_) | ValueType::Unknown => false,
     }
 }
 
@@ -1324,6 +1371,22 @@ fn analyze_statement(
             });
             scope.insert(name.clone(), final_ty);
             let final_ty = scope.get(name).cloned().unwrap_or(ValueType::Unknown);
+            if matches!(final_ty, ValueType::Channel(_)) && in_loop {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_CHANNEL_RULE,
+                    "Channel owner cannot be created inside a loop because break/continue could bypass deterministic cleanup. Create it in the enclosing scope."
+                        .to_string(),
+                ));
+            }
+            if matches!(final_ty, ValueType::Channel(_)) && memory_state.active_memory.is_some() {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_CHANNEL_RULE,
+                    "Channel owner cannot be created inside 'place in' because recovery control flow could bypass deterministic cleanup. Create it outside the memory region."
+                        .to_string(),
+                ));
+            }
             if let ValueType::Task(result_type) = &final_ty {
                 memory_state.tasks.insert(
                     name.clone(),
@@ -2046,6 +2109,20 @@ fn analyze_statement(
                     ),
                 ));
             };
+            if binding.stopped {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    format!("task handle '{}' was already stopped.", task_name),
+                ));
+            }
+            if binding.waited {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    format!("task handle '{}' was already waited.", task_name),
+                ));
+            }
             binding.stopped = true;
             Ok(())
         }
@@ -2424,6 +2501,14 @@ fn analyze_statement(
             Ok(())
         }
         Statement::ExpressionStatement { expr, .. } => {
+            if matches!(expr.as_ref(), Expression::RunTask { .. }) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    "task handle ignored: assign the result of 'run' to a Task handle and wait it on all paths."
+                        .to_string(),
+                ));
+            }
             let _ = infer_expression_type(
                 expr,
                 scope,
@@ -2601,6 +2686,524 @@ fn record_task_effects_in_expr(
         | Expression::LiteralBool(_)
         | Expression::LiteralString(_) => Ok(()),
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TaskFlowBinding {
+    stopped: bool,
+    line: u32,
+    column: u32,
+}
+
+type TaskFlowState = HashMap<String, TaskFlowBinding>;
+
+fn open_task_error(name: &str, binding: &TaskFlowBinding) -> String {
+    format_diagnostic(
+        DiagnosticKind::Semantic,
+        Some(SEM_TASK_RULE),
+        format!(
+            "task handle '{}' must be waited on all paths before leaving its owning scope.",
+            name
+        ),
+        Some(binding.line),
+        Some(binding.column),
+        None,
+    )
+}
+
+fn ensure_no_new_task_bindings(
+    initial: &TaskFlowState,
+    outputs: &[TaskFlowState],
+) -> Result<(), String> {
+    for output in outputs {
+        for (name, binding) in output {
+            if !initial.contains_key(name) {
+                return Err(open_task_error(name, binding));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn apply_task_flow_expression(
+    stmt: &Statement,
+    expr: &Expression,
+    state: &mut TaskFlowState,
+) -> Result<(), String> {
+    match expr {
+        Expression::RunTask { .. } => Err(err_at_code(
+            stmt,
+            SEM_TASK_RULE,
+            "task handle ignored: 'run' is only allowed as the initializer of an owning Task declaration."
+                .to_string(),
+        )),
+        Expression::WaitTask { task_name } => {
+            if state.remove(task_name).is_none() {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TASK_RULE,
+                    format!(
+                        "task handle '{}' is not live on every path at this wait.",
+                        task_name
+                    ),
+                ));
+            }
+            Ok(())
+        }
+        Expression::Call { args, .. } | Expression::ListLiteral(args) => {
+            for arg in args {
+                apply_task_flow_expression(stmt, arg, state)?;
+            }
+            Ok(())
+        }
+        Expression::Index { base, index } => {
+            apply_task_flow_expression(stmt, base, state)?;
+            apply_task_flow_expression(stmt, index, state)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            apply_task_flow_expression(stmt, left, state)?;
+            if let Some(right) = right {
+                apply_task_flow_expression(stmt, right, state)?;
+            }
+            Ok(())
+        }
+        Expression::StructConstruction { fields } => {
+            for value in fields.values() {
+                apply_task_flow_expression(stmt, value, state)?;
+            }
+            Ok(())
+        }
+        Expression::LiteralInt(_)
+        | Expression::LiteralFloat(_)
+        | Expression::LiteralBool(_)
+        | Expression::LiteralString(_)
+        | Expression::VariableReference(_)
+        | Expression::MemberAccess { .. }
+        | Expression::Stopping => Ok(()),
+    }
+}
+
+fn apply_task_flow_expressions(
+    stmt: &Statement,
+    expressions: &[Expression],
+    state: &mut TaskFlowState,
+) -> Result<(), String> {
+    for expression in expressions {
+        apply_task_flow_expression(stmt, expression, state)?;
+    }
+    Ok(())
+}
+
+fn expression_uses_task_handle(expr: &Expression, names: &HashSet<String>) -> bool {
+    match expr {
+        Expression::WaitTask { task_name } => names.contains(task_name),
+        Expression::Call { args, .. }
+        | Expression::RunTask { args, .. }
+        | Expression::ListLiteral(args) => args
+            .iter()
+            .any(|arg| expression_uses_task_handle(arg, names)),
+        Expression::Index { base, index } => {
+            expression_uses_task_handle(base, names) || expression_uses_task_handle(index, names)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_task_handle(left, names)
+                || right
+                    .as_deref()
+                    .map(|expr| expression_uses_task_handle(expr, names))
+                    .unwrap_or(false)
+        }
+        Expression::StructConstruction { fields } => fields
+            .values()
+            .any(|value| expression_uses_task_handle(value, names)),
+        _ => false,
+    }
+}
+
+fn statements_use_task_handle(statements: &[Statement], names: &HashSet<String>) -> bool {
+    statements.iter().any(|stmt| match stmt {
+        Statement::StopTask { task_name, .. } => names.contains(task_name),
+        Statement::VarDecl { value, .. }
+        | Statement::Assignment { value, .. }
+        | Statement::FieldAssignment { value, .. }
+        | Statement::ListPush { value, .. }
+        | Statement::ExpressionStatement { expr: value, .. } => {
+            expression_uses_task_handle(value, names)
+        }
+        Statement::ReturnStatement {
+            value: Some(value), ..
+        } => expression_uses_task_handle(value, names),
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expression_uses_task_handle(condition, names)
+                || statements_use_task_handle(&then_block.statements, names)
+                || else_block
+                    .as_deref()
+                    .map(|block| statements_use_task_handle(&block.statements, names))
+                    .unwrap_or(false)
+        }
+        Statement::ForLoop { body, .. }
+        | Statement::WhileLoop { body, .. }
+        | Statement::LoopStatement { body, .. }
+        | Statement::OnBlock { body, .. } => statements_use_task_handle(&body.statements, names),
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+            ..
+        } => {
+            expression_uses_task_handle(when_expression, names)
+                || cases
+                    .iter()
+                    .any(|(_, block)| statements_use_task_handle(&block.statements, names))
+                || else_block
+                    .as_deref()
+                    .map(|block| statements_use_task_handle(&block.statements, names))
+                    .unwrap_or(false)
+        }
+        Statement::PlaceIn { body, on_error, .. } => {
+            statements_use_task_handle(&body.statements, names)
+                || on_error
+                    .as_deref()
+                    .map(|block| statements_use_task_handle(&block.statements, names))
+                    .unwrap_or(false)
+        }
+        Statement::MemoryDecl { on_error, .. } => on_error
+            .as_deref()
+            .map(|block| statements_use_task_handle(&block.statements, names))
+            .unwrap_or(false),
+        Statement::DangerAssignOnError { args, on_error, .. }
+        | Statement::DangerCallOnError { args, on_error, .. } => {
+            args.iter()
+                .any(|arg| expression_uses_task_handle(arg, names))
+                || statements_use_task_handle(&on_error.statements, names)
+        }
+        Statement::ListPopOnError { on_error, .. } => {
+            statements_use_task_handle(&on_error.statements, names)
+        }
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => {
+            statements_use_task_handle(statements, names)
+        }
+        Statement::StructDecl { methods, .. } => methods
+            .iter()
+            .any(|method| statements_use_task_handle(&method.body.statements, names)),
+        _ => false,
+    })
+}
+
+fn validate_loop_task_flow(
+    stmt: &Statement,
+    body: &BlockStatement,
+    states: Vec<TaskFlowState>,
+) -> Result<Vec<TaskFlowState>, String> {
+    let mut outputs = Vec::new();
+    for state in states {
+        let outer_names = state.keys().cloned().collect::<HashSet<_>>();
+        if statements_use_task_handle(&body.statements, &outer_names) {
+            return Err(err_at_code(
+                stmt,
+                SEM_TASK_RULE,
+                "task lifecycle cannot depend on a loop iteration; create, stop and wait the task outside the loop, or complete its full lifecycle inside one iteration."
+                    .to_string(),
+            ));
+        }
+        let body_outputs = process_task_flow_statements(&body.statements, vec![state.clone()])?;
+        ensure_no_new_task_bindings(&state, &body_outputs)?;
+        if body_outputs.iter().any(|output| output != &state) {
+            return Err(err_at_code(
+                stmt,
+                SEM_TASK_RULE,
+                "task lifecycle cannot depend on a loop iteration; create, stop and wait the task outside the loop, or complete its full lifecycle inside one iteration."
+                    .to_string(),
+            ));
+        }
+        outputs.push(state);
+    }
+    Ok(outputs)
+}
+
+fn process_task_flow_statement(
+    stmt: &Statement,
+    states: Vec<TaskFlowState>,
+) -> Result<Vec<TaskFlowState>, String> {
+    match stmt {
+        Statement::VarDecl {
+            name, value, loc, ..
+        } => {
+            let mut outputs = Vec::new();
+            for mut state in states {
+                if let Expression::RunTask { args, .. } = value.as_ref() {
+                    apply_task_flow_expressions(stmt, args, &mut state)?;
+                    if state.contains_key(name) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TASK_RULE,
+                            format!("task handle '{}' already has an active owner.", name),
+                        ));
+                    }
+                    state.insert(
+                        name.clone(),
+                        TaskFlowBinding {
+                            stopped: false,
+                            line: loc.line,
+                            column: loc.column,
+                        },
+                    );
+                } else {
+                    apply_task_flow_expression(stmt, value, &mut state)?;
+                }
+                outputs.push(state);
+            }
+            Ok(outputs)
+        }
+        Statement::StopTask { task_name, .. } => {
+            let mut outputs = Vec::new();
+            for mut state in states {
+                let Some(binding) = state.get_mut(task_name) else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TASK_RULE,
+                        format!(
+                            "task handle '{}' is not live on every path at this stop.",
+                            task_name
+                        ),
+                    ));
+                };
+                if binding.stopped {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TASK_RULE,
+                        format!("task handle '{}' was already stopped.", task_name),
+                    ));
+                }
+                binding.stopped = true;
+                outputs.push(state);
+            }
+            Ok(outputs)
+        }
+        Statement::ExpressionStatement { expr, .. } => {
+            let mut outputs = Vec::new();
+            for mut state in states {
+                apply_task_flow_expression(stmt, expr, &mut state)?;
+                outputs.push(state);
+            }
+            Ok(outputs)
+        }
+        Statement::Assignment { value, .. }
+        | Statement::FieldAssignment { value, .. }
+        | Statement::ListPush { value, .. } => {
+            let mut outputs = Vec::new();
+            for mut state in states {
+                apply_task_flow_expression(stmt, value, &mut state)?;
+                outputs.push(state);
+            }
+            Ok(outputs)
+        }
+        Statement::ReturnStatement { value, .. } => {
+            for mut state in states {
+                if let Some(value) = value {
+                    apply_task_flow_expression(stmt, value, &mut state)?;
+                }
+                if let Some((name, binding)) = state.iter().next() {
+                    return Err(open_task_error(name, binding));
+                }
+            }
+            Ok(Vec::new())
+        }
+        Statement::ReturnError { .. } => {
+            for state in states {
+                if let Some((name, binding)) = state.iter().next() {
+                    return Err(open_task_error(name, binding));
+                }
+            }
+            Ok(Vec::new())
+        }
+        Statement::IfStatement {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            let mut outputs = Vec::new();
+            for mut state in states {
+                apply_task_flow_expression(stmt, condition, &mut state)?;
+                let then_outputs =
+                    process_task_flow_statements(&then_block.statements, vec![state.clone()])?;
+                ensure_no_new_task_bindings(&state, &then_outputs)?;
+                outputs.extend(then_outputs);
+                if let Some(else_block) = else_block {
+                    let else_outputs =
+                        process_task_flow_statements(&else_block.statements, vec![state.clone()])?;
+                    ensure_no_new_task_bindings(&state, &else_outputs)?;
+                    outputs.extend(else_outputs);
+                } else {
+                    outputs.push(state);
+                }
+            }
+            Ok(outputs)
+        }
+        Statement::WhenBlock {
+            when_expression,
+            cases,
+            else_block,
+            ..
+        } => {
+            let mut outputs = Vec::new();
+            for mut state in states {
+                apply_task_flow_expression(stmt, when_expression, &mut state)?;
+                for (_, block) in cases {
+                    let case_outputs =
+                        process_task_flow_statements(&block.statements, vec![state.clone()])?;
+                    ensure_no_new_task_bindings(&state, &case_outputs)?;
+                    outputs.extend(case_outputs);
+                }
+                if let Some(else_block) = else_block {
+                    let else_outputs =
+                        process_task_flow_statements(&else_block.statements, vec![state.clone()])?;
+                    ensure_no_new_task_bindings(&state, &else_outputs)?;
+                    outputs.extend(else_outputs);
+                } else {
+                    outputs.push(state);
+                }
+            }
+            Ok(outputs)
+        }
+        Statement::ForLoop { body, .. }
+        | Statement::WhileLoop { body, .. }
+        | Statement::LoopStatement { body, .. } => validate_loop_task_flow(stmt, body, states),
+        Statement::BlockStatement { statements, .. }
+        | Statement::OnErrorBlock { statements, .. } => {
+            let mut outputs = Vec::new();
+            for state in states {
+                let block_outputs = process_task_flow_statements(statements, vec![state.clone()])?;
+                ensure_no_new_task_bindings(&state, &block_outputs)?;
+                outputs.extend(block_outputs);
+            }
+            Ok(outputs)
+        }
+        Statement::OnBlock { body, .. } => process_task_flow_statements(&body.statements, states),
+        Statement::PlaceIn { body, on_error, .. } => {
+            let mut outputs = Vec::new();
+            for state in states {
+                let body_outputs =
+                    process_task_flow_statements(&body.statements, vec![state.clone()])?;
+                ensure_no_new_task_bindings(&state, &body_outputs)?;
+                outputs.extend(body_outputs);
+                if let Some(on_error) = on_error {
+                    let error_outputs =
+                        process_task_flow_statements(&on_error.statements, vec![state.clone()])?;
+                    ensure_no_new_task_bindings(&state, &error_outputs)?;
+                    outputs.extend(error_outputs);
+                }
+            }
+            Ok(outputs)
+        }
+        Statement::MemoryDecl { on_error, .. } => {
+            if let Some(on_error) = on_error {
+                let mut outputs = Vec::new();
+                for state in states {
+                    outputs.push(state.clone());
+                    let error_outputs =
+                        process_task_flow_statements(&on_error.statements, vec![state.clone()])?;
+                    ensure_no_new_task_bindings(&state, &error_outputs)?;
+                    outputs.extend(error_outputs);
+                }
+                Ok(outputs)
+            } else {
+                Ok(states)
+            }
+        }
+        Statement::DangerAssignOnError { args, on_error, .. }
+        | Statement::DangerCallOnError { args, on_error, .. } => {
+            let mut outputs = Vec::new();
+            for mut state in states {
+                apply_task_flow_expressions(stmt, args, &mut state)?;
+                outputs.push(state.clone());
+                let error_outputs =
+                    process_task_flow_statements(&on_error.statements, vec![state.clone()])?;
+                ensure_no_new_task_bindings(&state, &error_outputs)?;
+                outputs.extend(error_outputs);
+            }
+            Ok(outputs)
+        }
+        Statement::ListPopOnError { on_error, .. } => {
+            let mut outputs = states.clone();
+            for state in states {
+                let error_outputs =
+                    process_task_flow_statements(&on_error.statements, vec![state.clone()])?;
+                ensure_no_new_task_bindings(&state, &error_outputs)?;
+                outputs.extend(error_outputs);
+            }
+            Ok(outputs)
+        }
+        Statement::BreakStatement { .. } | Statement::ContinueStatement { .. } => {
+            for state in &states {
+                if let Some((name, binding)) = state.iter().next() {
+                    return Err(open_task_error(name, binding));
+                }
+            }
+            Ok(Vec::new())
+        }
+        Statement::FunctionDef { .. }
+        | Statement::StructDecl { .. }
+        | Statement::MemoryClear { .. }
+        | Statement::IncDec { .. }
+        | Statement::PassStatement { .. }
+        | Statement::LabelDecl { .. } => Ok(states),
+    }
+}
+
+fn process_task_flow_statements(
+    statements: &[Statement],
+    mut states: Vec<TaskFlowState>,
+) -> Result<Vec<TaskFlowState>, String> {
+    for stmt in statements {
+        if states.is_empty() {
+            break;
+        }
+        states = process_task_flow_statement(stmt, states)?;
+    }
+    Ok(states)
+}
+
+fn ensure_task_flow_finished(states: &[TaskFlowState]) -> Result<(), String> {
+    for state in states {
+        if let Some((name, binding)) = state.iter().next() {
+            return Err(open_task_error(name, binding));
+        }
+    }
+    Ok(())
+}
+
+fn validate_task_lifecycle(program: &Program) -> Result<(), String> {
+    let top_level =
+        process_task_flow_statements(&program.statements, vec![TaskFlowState::default()])?;
+    ensure_task_flow_finished(&top_level)?;
+
+    for stmt in &program.statements {
+        match stmt {
+            Statement::FunctionDef { body, .. } => {
+                let states =
+                    process_task_flow_statements(&body.statements, vec![TaskFlowState::default()])?;
+                ensure_task_flow_finished(&states)?;
+            }
+            Statement::StructDecl { methods, .. } => {
+                for method in methods {
+                    let states = process_task_flow_statements(
+                        &method.body.statements,
+                        vec![TaskFlowState::default()],
+                    )?;
+                    ensure_task_flow_finished(&states)?;
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn infer_expression_type(
@@ -3408,6 +4011,15 @@ fn infer_expression_type(
                     format!("unknown function '{}' in run task expression.", call_name),
                 ));
             };
+            if sig.is_danger {
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    format!(
+                        "danger fn '{}' cannot be used as task entry in the v1.2 runtime MVP.",
+                        call_name
+                    ),
+                ));
+            }
             validate_call_args(
                 call_name,
                 args,
@@ -3418,6 +4030,54 @@ fn infer_expression_type(
                 structs,
                 fn_ctx,
             )?;
+            for (index, (arg, param_ty)) in args.iter().zip(&sig.param_types).enumerate() {
+                let actual_ty =
+                    infer_expression_type(arg, scope, memory_state, functions, structs, fn_ctx)?;
+                if !is_task_safe_boundary_type(param_ty, structs, true)
+                    || !is_task_safe_boundary_type(&actual_ty, structs, true)
+                {
+                    return Err(sem_err(
+                        SEM_TASK_RULE,
+                        format!(
+                            "task-unsafe argument {} in run '{}': type {:?} cannot cross a task boundary.",
+                            index + 1,
+                            call_name,
+                            actual_ty
+                        ),
+                    ));
+                }
+                if let Some(memory_name) = infer_expression_memory_provenance(
+                    arg,
+                    &actual_ty,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx,
+                )? {
+                    return Err(sem_err(
+                        SEM_TASK_RULE,
+                        format!(
+                            "task-unsafe argument {} in run '{}': region-owned value from Memory '{}' cannot cross a task boundary.",
+                            index + 1,
+                            call_name,
+                            memory_name
+                        ),
+                    ));
+                }
+            }
+            if let Some(result_ty) = sig.return_type.as_ref()
+                && sig.has_explicit_return
+                && !is_task_safe_boundary_type(result_ty, structs, false)
+            {
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    format!(
+                        "task-unsafe result from '{}': type {:?} cannot cross a task boundary.",
+                        call_name, result_ty
+                    ),
+                ));
+            }
             let result_type = if sig.has_explicit_return {
                 sig.return_type.clone().map(Box::new)
             } else {

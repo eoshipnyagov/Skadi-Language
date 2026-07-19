@@ -1,5 +1,5 @@
 use v01::ast_nodes::Statement;
-use v01::codegen::ensure_codegen_supported;
+use v01::codegen::{ensure_codegen_supported, transpile_program_to_c};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
@@ -349,4 +349,8 @@ fn warmup(Memory arena) Int {
     let program = parse_ok(src);
     semantic_analyze(&program).expect("semantic analysis should pass");
     ensure_codegen_supported(&program).expect("memory backend support should pass");
+    let generated = transpile_program_to_c(&program);
+    assert!(generated.contains("#define SK_THREAD_LOCAL"));
+    assert!(generated.contains("static SK_THREAD_LOCAL SkMemoryRegion *sk_active_region"));
+    assert!(!generated.contains("static SkMemoryRegion *sk_active_region"));
 }

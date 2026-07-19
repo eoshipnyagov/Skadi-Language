@@ -132,11 +132,19 @@
   - `Memory` считается capability/resource handle, а не обычным storable value type;
   - C backend уже lower'ит strict MVP surface в fixed-capacity region runtime и доводит её до `Skadi -> C -> native`;
   - `allow grow`, `allow drop`, `memory.child`, `memory.static` остаются design-level future surface.
-- task/channel frontend MVP - `Experimental / Partial`
+- task/channel systems MVP - `Experimental / Runtime MVP`
   - parser принимает `Task`, `Task(T)`, `run worker(...)`, `wait task`, `stop task`, `stopping`, `Channel(T)`, `channel(N)`, `channel.send(value)` и `channel.receive()`;
   - semantic layer проверяет task handle lifecycle, запрет `Task` как обычного value-type, task-context для `stopping` и value-safe channel messages;
-  - игнорирование результата `run worker()` остаётся warning;
-  - C backend намеренно останавливается на `SC-CG-301`, потому что runtime/backend concurrency ещё не реализованы.
+  - игнорирование результата `run worker()` является hard error;
+  - semantic pass требует `wait` на всех путях и проверяет task-safe boundary;
+  - `Task = run void_fn(...)`, `Task(T) = run fn(...)`, `stop`, `stopping` и `wait` работают через Win32/pthread backend;
+  - `stop` является кооперативным запросом и не отменяет обязательный `wait`;
+  - bounded `Channel(T)` работает через blocking FIFO `send/receive` на Win32/pthread;
+  - mutable `List`, Memory/capability и region-owned значения не являются value-safe сообщениями;
+  - owner declaration внутри loop и `place in` запрещён ради deterministic cleanup;
+  - `close`, timeout, `select` и отмена блокирующей channel operation отложены.
+  - практические шаблоны и платформенный статус описаны в
+    [руководстве по многопоточности](concurrency.md).
 - formatter coverage - `Partial`
   - ориентирован на текущий рабочий слой `v1.1` и экспериментальные формы `v1.2`, где это безопасно;
   - уже пригоден для повседневной работы, но продолжает развиваться вместе с синтаксисом.
