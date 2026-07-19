@@ -1,4 +1,4 @@
-# Матрица тестового покрытия (`Skadi v1`)
+# Матрица тестового покрытия (stable `v1.1` + experimental `v1.2`)
 
 Дата: 2026-07-19
 Ответственный слой: Skadi core
@@ -32,6 +32,8 @@
 - интеграционные pipeline-тесты
   - `tests/language_programs.rs`
   - end-to-end через `lex -> parse -> semantic -> C generation` для многофичевых программ
+  - включает compile-checked `examples/language/01_small_features.skd` для
+    word operators, fixed-width values, List, struct/method и danger flow
 - multi-file/import pipeline
   - `tools/skadi-cli/src/pipeline.rs` проверяет относительные path-imports, отсутствующие файлы и циклы
   - закреплены `SC-MOD-001`, `SC-MOD-002` и `SC-MOD-003`
@@ -63,12 +65,14 @@
   - codegen shape checks для `math.h`, constants, trigonometry, `root`, angle conversion
   - showcase coverage через `bench_09_math_navigation.skd` и `bench_10_v1_1_toolbox.skd`
 - showcase coverage
-  - compile-pipeline shape tests покрывают `bench_01..10`
-  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..10`
+  - compile-pipeline shape tests покрывают `bench_01..12`
+  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..12`
   - runtime showcase e2e покрывает:
     - CLI-driven subset `bench_01..05`
     - stable subset `bench_06..09`
     - dedicated full showcase `bench_10_v1_1_toolbox.skd`
+    - concurrency showcase `bench_11_task_channel_pipeline.skd`
+    - combined systems showcase `bench_12_systems_pipeline.skd`
   - showcase fixtures лежат в `benchmarks/showcase-data/` и используются в script/e2e smoke-path
 - experimental memory frontend coverage
   - `tests/memory_model_frontend.rs` проверяет parser/semantic contract для `Memory`, `place in`, `clear`, escape rules и illegal `Memory` usage

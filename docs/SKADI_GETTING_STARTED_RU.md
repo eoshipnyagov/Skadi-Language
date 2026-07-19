@@ -525,7 +525,52 @@ new Float bounded = clamp(restored_deg, 0.0, 90.0)
 output(bounded)
 ```
 
-## 16. Что ещё есть, но пока не стоит считать завершённой частью языка
+## 16. Экспериментальный systems-слой `v1.2`
+
+Stable base `v1.1` не требует этих возможностей, но текущая ветка разработки уже
+позволяет проверять и запускать их на Windows и POSIX host.
+
+### `Memory`
+
+```skadi
+Memory scratch_memory = memory(16kb) on error {
+    output("memory allocation failed")
+}
+
+place in scratch_memory {
+    new Text preview_text = read("input.txt")
+    output(preview_text)
+} on error {
+    scratch_memory.clear()
+    output("memory region overflow")
+}
+
+scratch_memory.clear()
+```
+
+`Memory` - fixed-capacity region и capability handle. Значения с динамическими
+данными из локальной region нельзя переносить за её lifetime.
+
+### `Task` и `Channel(T)`
+
+```skadi
+fn produce(Channel(Int) values) {
+    values.send(42)
+}
+
+Channel(Int) values = channel(1)
+Task producer_task = run produce(values)
+new Int value = values.receive()
+wait producer_task
+output(value)
+```
+
+`Task` использует native Win32/pthread backend, а `Channel(T)` - bounded blocking
+FIFO. Каждый owning task handle должен завершиться ровно одним `wait`; `stop`
+только публикует кооперативный запрос и не заменяет `wait`.
+
+Подробные ограничения и multi-worker patterns описаны в
+[руководстве по многопоточности](concurrency.md).
 
 ### `on interrupt`
 
@@ -582,6 +627,10 @@ TUI умеет:
 
 ## 20. Где смотреть примеры
 
+Для быстрого поиска маленьких рецептов по операторам, ошибкам, структурам,
+модулям, I/O, math и systems surface используйте
+[Короткие примеры Skadi](language-examples.md).
+
 Showcase-программы:
 
 - `benchmarks/bench_01_tree.skd`
@@ -609,6 +658,7 @@ Showcase-программы:
 ## 21. Что читать после этого
 
 - [Справочник языка](language-reference.md) - полный справочник синтаксиса и builtins
+- [Короткие примеры](language-examples.md) - небольшие рецепты по отдельным конструкциям
 - [Справочник CLI/TUI](cli-reference.md) - команды CLI и TUI
 - [Многопоточность](concurrency.md) - Task/Channel, lifecycle и платформы
 - [Статус синтаксиса](syntax-status.md) - точный срез текущего синтаксиса

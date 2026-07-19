@@ -1,10 +1,18 @@
-# Math/Vector Core Backlog (отложено до 1.x)
+# Math/Vector Core: реализованная база и backlog 1.x
 
-Статус: отложено до 1.x  
-Дата: 2026-05-22  
-Контекст: приоритет для направления gamedev/embedded, но не блокирует текущий этап стабилизации компилятора.
+Статус: базовый math slice реализован в `v1.1`; расширение и vector layer остаются backlog
+
+Дата: 2026-07-19
+Контекст: направление gamedev/embedded после стабилизации текущего systems layer.
+
+Условные обозначения:
+
+- `Stable` - уже реализовано, документировано и покрыто semantic/codegen/e2e;
+- `Backlog` - не является частью текущего языка.
 
 ## 1. Константы
+
+Все четыре константы ниже имеют статус `Stable`: `PI`, `TAU`, `E`, `EPSILON`.
 
 - `PI`
   - Что это: число pi (`3.141592...`), отношение длины окружности к диаметру.
@@ -27,6 +35,10 @@
   - Частота: **очень часто** в math/physics/graphics.
 
 ## 2. Базовые численные функции
+
+`Stable`: `abs`, `min`, `max`, `clamp`, `floor`, `ceil`, `round`.
+
+`Backlog`: `sign`, `trunc`, `fract`.
 
 - `abs`, `sign`
   - Где применяется: физика, обработка сигналов, контроллеры.
@@ -54,6 +66,10 @@
 
 ## 3. Тригонометрия и углы
 
+`Stable`: `sin`, `cos`, `atan2`, `deg_to_rad`, `rad_to_deg`.
+
+`Backlog`: `tan`, `asin`, `acos`, `atan`, `normalize_angle`.
+
 - `sin`, `cos`, `tan`
   - Частота: **очень часто**.
 
@@ -75,6 +91,10 @@
   - Частота: **часто** в камерах, AI, управлении, физике вращений.
 
 ## 4. Степени, корни, логи
+
+`Stable`: оператор `^`, `sqrt`, `root`.
+
+`Backlog`: отдельный `pow`, `exp`, `ln`, `log2`, `log10`.
 
 - `sqrt`
   - Частота: **очень часто**.
@@ -135,7 +155,14 @@
 
 ## 10. Реализационный статус
 
-Отложено до `1.x`:
+Завершённый baseline `v1.1`:
 
-- список выше зафиксирован как roadmap для ядра,
-- внедряется после стабилизации текущего core-пайплайна.
+- `PI`, `TAU`, `E`, `EPSILON`;
+- `abs`, `min`, `max`, `clamp`, `floor`, `ceil`, `round`;
+- `sin`, `cos`, `atan2`, `sqrt`, `root`, `deg_to_rad`, `rad_to_deg`;
+- numeric semantic checks, `math.h` lowering и e2e/showcase coverage.
+
+Остальные пункты этого документа являются backlog. Следующий math-oriented
+slice не следует начинать одновременно с `Time/Duration`: сначала нужен общий
+контракт nominal specialized types и их операторов. `Vec2/Vec3/Vec4` разумно
+брать после него отдельным milestone.

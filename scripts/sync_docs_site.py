@@ -15,6 +15,7 @@ ROUTE_MAP = [
     ("user/cli-quick-start", "SKADI_CLI_QUICK_START_RU.md"),
     ("user/cli-reference", "SKADI_CLI_REFERENCE_RU.md"),
     ("user/language-reference", "SKADI_LANGUAGE_REFERENCE_RU.md"),
+    ("user/language-examples", "SKADI_LANGUAGE_EXAMPLES_RU.md"),
     ("user/concurrency", "SKADI_CONCURRENCY_GUIDE_RU.md"),
     ("user/syntax-status", "SKADI_SYNTAX_STATUS.md"),
     ("user/ai-guide", "SKADI_FOR_AI_RU.md"),
@@ -137,6 +138,7 @@ def make_user_index_ru() -> str:
 - [Быстрый старт CLI](cli-quick-start.md)
 - [Справочник CLI/TUI](cli-reference.md)
 - [Справочник языка](language-reference.md)
+- [Короткие примеры](language-examples.md)
 - [Многопоточность](concurrency.md)
 - [Статус синтаксиса](syntax-status.md)
 - [Showcase-программы](showcases.md)
@@ -158,6 +160,7 @@ adds experimental systems tracks on top of it.
 - [CLI Quick Start](cli-quick-start.en.md)
 - [CLI/TUI Reference](cli-reference.en.md)
 - [Language Reference](language-reference.en.md)
+- [Short Language Examples](language-examples.en.md)
 - [Concurrency](concurrency.en.md)
 - [Syntax Status](syntax-status.en.md)
 - [Showcase Programs](showcases.en.md)

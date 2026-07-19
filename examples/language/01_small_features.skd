@@ -1,0 +1,48 @@
+// Compact, compile-checked examples of smaller stable language features.
+
+label ErrorCode {
+    Ok
+    InvalidValue
+}
+
+danger fn positive_half(Int value) returns Int {
+    if value < 0 {
+        return error InvalidValue
+    }
+
+    return value div 2
+}
+
+struct Sample {
+    Int value
+    Bool active
+
+    fn doubled() returns Int {
+        return my.value * 2
+    }
+}
+
+new Int quotient = 17 div 2
+new Int remainder = 17 mod 2
+new Bool odd = not (remainder == 0)
+new Bool exactly_one = odd xor false
+new Float squared = 3.0 ^ 2.0
+
+new i32 List values = [2, 4, 6]
+values.push(8)
+
+new Int total = 0
+iterate values as value {
+    total = total + value
+}
+
+new Sample sample = {value = total, active = exactly_one}
+new Int doubled = sample.doubled()
+
+new Int safe_value = 0
+safe_value = positive_half(doubled) on error {
+    safe_value = quotient
+}
+
+output(safe_value)
+output(squared)

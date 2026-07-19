@@ -3751,6 +3751,9 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     }
                     return format!("(strcmp({}, {}) != 0)", l, rr);
                 }
+                if op == "^" {
+                    return format!("pow({}, {})", l, rr);
+                }
                 let c_op = match op.as_str() {
                     "and" => "&&",
                     "or" => "||",
@@ -3793,8 +3796,9 @@ fn expression_uses_math_call(expr: &Expression) -> bool {
                     | "rad_to_deg"
             ) || args.iter().any(expression_uses_math_call)
         }
-        Expression::BinaryOp { left, right, .. } => {
-            expression_uses_math_call(left)
+        Expression::BinaryOp { op, left, right } => {
+            op == "^"
+                || expression_uses_math_call(left)
                 || right
                     .as_ref()
                     .map(|r| expression_uses_math_call(r))

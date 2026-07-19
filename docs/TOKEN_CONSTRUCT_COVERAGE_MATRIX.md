@@ -1,7 +1,7 @@
-# Token/Construct Coverage Matrix (v1 Tracking)
+# Token/Construct Coverage Matrix (current `develop`)
 
 Date: 2026-07-19
-Purpose: explicit traceability for confidence before v1 freeze.
+Purpose: traceability across stable `v1.1` and experimental `v1.2` systems surface.
 
 Legend:
 - `Y` = covered by current tests
@@ -24,6 +24,7 @@ Legend:
 | `loop` | Y | Y | Y | Y | P | e2e less dense than while/for |
 | `return` | Y | Y | Y | Y | Y | includes empty return in danger fn |
 | `return error` | Y | Y | Y | Y | Y | requires `label ErrorCode` |
+| `returns` | Y | Y | Y | Y | Y | canonical typed return syntax |
 | `new` | Y | Y | Y | Y | Y | typed/untyped paths covered |
 | `my` | Y | Y | P | P | P | struct method subset covered |
 | `on error` | P (`on` token + parse pattern) | Y | Y | Y | Y | danger/list-pop contracts covered |
@@ -40,6 +41,13 @@ Legend:
 | `and` / `or` / `xor` / `not` | Y | Y | Y | Y | P | operator paths covered; dense combo e2e can grow |
 | `div` / `mod` | Y | Y | Y | Y | P | covered in parser/semantic/smoke, moderate e2e density |
 | `true` / `false` | Y | Y | Y | Y | Y | bool pipelines covered |
+| `Memory` / `memory(size)` | Y | Y | Y | Y | Y | experimental fixed-capacity region runtime |
+| `place in` / trailing `on error` | Y | Y | Y | Y | Y | placement and overflow recovery covered |
+| `memory.clear()` | Y | Y | Y | Y | Y | use-after-clear and active-region rules covered |
+| `Task` / `Task(T)` / `run` | Y | Y | Y | Y | Y | experimental native Win32/pthread runtime |
+| `wait` / `stop` / `stopping` | Y | Y | Y | Y | Y | path-sensitive lifecycle and cooperative stop covered |
+| `Channel(T)` / `channel(N)` | Y | Y | Y | Y | Y | bounded blocking FIFO runtime |
+| `send` / `receive` | Y | Y | Y | Y | Y | value-safe payload and backpressure covered |
 
 ## 2. Operator / Form Matrix
 
@@ -63,9 +71,13 @@ Legend:
 - Semantic: `tests/semantic_smoke.rs`
 - Codegen shape: `tests/codegen_smoke.rs`, `tests/edge_matrix.rs`, `tests/language_programs.rs`
 - End-to-end C compile/run: `tests/codegen_e2e.rs`
+- Memory frontend/runtime/examples: `tests/memory_model_frontend.rs`, `tests/memory_model_examples.rs`
+- Task/Channel frontend/runtime/TSan: `tests/task_model_frontend.rs`, `tests/task_model_runtime.rs`, `tests/task_model_sanitizer.rs`
+- Compile-checked small examples: `tests/language_programs.rs`, `examples/language/`
+- Showcase systems coverage: `tests/showcase_programs.rs`, `benchmarks/bench_11_task_channel_pipeline.skd`, `benchmarks/bench_12_systems_pipeline.skd`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
 
-## 4. Pre-freeze TODO (explicit)
+## 4. Synchronization rules
 
 1. Keep experimental `fixed/const/direct/allow drop` forms explicitly separated from the stable surface.
 2. Keep this matrix synchronized with the [Test Coverage Matrix](test-coverage.md) after each feature merge.

@@ -132,3 +132,15 @@ fn program_meteostation_showcase_compiles() {
     let src = include_str!("../examples/example_meteostation.skd");
     let _c = compile_pipeline(src);
 }
+
+#[test]
+fn program_small_language_features_example_compiles() {
+    let src = include_str!("../examples/language/01_small_features.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("int64_t quotient = (17 / 2);"));
+    assert!(c.contains("bool odd = (!(remainder == 0));"));
+    assert!(c.contains("#include <math.h>"));
+    assert!(c.contains("double squared = pow(3, 2);"));
+    assert!(c.contains("Sample_doubled(&sample)"));
+    assert!(c.contains("if (positive_half(doubled, &safe_value) != 0)"));
+}

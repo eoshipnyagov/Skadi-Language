@@ -45,6 +45,7 @@ plugins:
             Быстрый старт CLI: CLI Quick Start
             Справочник CLI/TUI: CLI/TUI Reference
             Справочник языка: Language Reference
+            Короткие примеры: Short Examples
             Многопоточность: Concurrency
             Статус синтаксиса: Syntax Status
             Skadi для AI и vibe coding: Skadi for AI and vibe coding
@@ -106,6 +107,7 @@ nav:
       - Быстрый старт CLI: user/cli-quick-start.md
       - Справочник CLI/TUI: user/cli-reference.md
       - Справочник языка: user/language-reference.md
+      - Короткие примеры: user/language-examples.md
       - Многопоточность: user/concurrency.md
       - Статус синтаксиса: user/syntax-status.md
       - Skadi для AI и vibe coding: user/ai-guide.md

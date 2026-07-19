@@ -731,6 +731,35 @@ output(bounded)
 }
 
 #[test]
+fn e2e_power_operator_lowers_to_math_runtime() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Float squared = 3.0 ^ 2.0
+output(squared)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("#include <math.h>"));
+    assert!(c.contains("pow(3, 2)"));
+
+    let run = compile_c_and_execute(
+        compiler,
+        &c,
+        "Skadi_e2e_power_operator",
+        &["-lm"],
+        &[],
+        None,
+    );
+    assert!(run.status.success());
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "9.000000");
+}
+
+#[test]
 fn e2e_v1_1_toolbox_showcase_builds_and_runs() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");

@@ -473,6 +473,7 @@ User-facing docs:
 - [CLI Quick Start](docs/SKADI_CLI_QUICK_START_RU.md)
 - [CLI Reference](docs/SKADI_CLI_REFERENCE_RU.md)
 - [Language Reference](docs/SKADI_LANGUAGE_REFERENCE_RU.md)
+- [Short language examples](docs/SKADI_LANGUAGE_EXAMPLES_RU.md)
 - [Showcase programs](docs/SHOWCASE_PROGRAMS.md)
 
 Internal docs:

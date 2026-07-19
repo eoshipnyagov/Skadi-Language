@@ -1,8 +1,8 @@
 # Skadi v1.2 Plan (RU)
 
-Дата: 2026-07-12
-Статус: активная рабочая линия; Memory и Task/Channel runtime slices исполняемы,
-release hardening в работе.
+Дата: 2026-07-19
+Статус: release hardening завершён; Memory и Task/Channel runtime slices
+исполняемы и остаются experimental API текущей линии `v1.2`.
 
 ## 1. Идентичность релиза
 
@@ -72,8 +72,9 @@ Task model сейчас является experimental runtime MVP:
 - mutable `List` исключён из value-safe сообщений до move/deep-copy контракта;
 - активного `SC-CG-301` gate для текущего Task/Channel MVP больше нет.
 
-Task/Channel runtime slice исполняем end-to-end, но concurrency layer остаётся
-experimental до release hardening, stress/sanitizer и широкой CI matrix.
+Task/Channel runtime slice исполняем end-to-end и проходит stress/sanitizer и
+широкую CI matrix. Concurrency layer остаётся experimental из-за незамороженного
+API, а не из-за отсутствующего backend.
 
 ## 4. Release goals
 
@@ -99,7 +100,7 @@ experimental до release hardening, stress/sanitizer и широкой CI matri
 - `allow grow` / `allow drop` allocator policy;
 - child/static memory allocators as stable surface;
 - Visual Core runtime;
-- modules/imports.
+- module-name imports, aliases и re-exports поверх реализованных path-imports.
 
 Эти направления можно держать как drafts и future contracts, но не смешивать со стабильным обещанием `v1.2`.
 
@@ -219,7 +220,8 @@ Acceptance:
 - `stop` не уничтожает поток и не отменяет обязательный `wait`;
 - native e2e и официальный CLI smoke закрепляют `run -> stop -> stopping -> wait`.
 
-Следующий slice: release hardening и проверка новых CI gates.
+Следующим slice стал Channel runtime MVP из Milestone 5; release hardening закрыт
+в Milestone 6.
 
 Архитектурный контракт: [Task Runtime MVP Design](task-runtime-mvp-design.md).
 
@@ -255,7 +257,7 @@ Acceptance:
 - `SC-RT-311..313` закрепляют allocation/capacity/synchronization failures;
 - официальный CLI smoke и `bench_11_task_channel_pipeline.skd` используют Channel.
 
-### Milestone 6: v1.2 release hardening - в работе
+### Milestone 6: v1.2 release hardening - выполнен
 
 Цель: превратить systems slice в честный release candidate.
 
@@ -273,7 +275,7 @@ Acceptance:
 - docs однозначно разделяют реализованный runtime и deferred concurrency features;
 - активного `SC-CG-301` для текущего Task/Channel surface нет.
 
-Выполнено локально и добавлено в CI contract:
+Выполнено локально и подтверждено remote CI:
 
 - `bench_12_systems_pipeline.skd` совместно исполняет Memory и Task/Channel;
 - showcase входит в обязательный native build gate;
@@ -282,26 +284,35 @@ Acceptance:
   `setarch x86_64 -R`, чтобы GCC TSan не ломался на ASLR memory mapping до `main`;
 - `native-compiler-matrix` собирает и запускает один systems project через Linux
   GCC/Clang и Windows MinGW/MSVC;
-- локальные formatter, clippy, full tests и strict docs build остаются release gates.
+- formatter, clippy, full tests и strict docs build остаются release gates;
 - отдельное RU/EN руководство по многопоточности фиксирует multi-worker patterns,
   повторный lifecycle, backpressure, deadlock-риски и честный ESP32/RTOS roadmap;
 - native runtime suite запускает пять concurrent producers и повторно создаёт
   новый Task handle в каждой итерации.
 
-До закрытия milestone новые remote CI jobs должны пройти на GitHub, после чего
-нужно устранить найденные платформенные расхождения без отключения проверок.
+Remote GitHub Actions matrix зелёная на Windows MinGW/MSVC, Linux GCC/Clang и
+macOS. Обнаруженные platform-specific расхождения исправлены в implementation,
+без отключения sanitizer или ослабления test gates.
 
-## 7. Следующий backend choice
+## 7. Следующий bounded language slice
 
-Memory уже закреплён как clean end-to-end reference layer. Текущий порядок работ:
+После release hardening следующую работу лучше не начинать с широкого Visual Core
+или полного units framework. Наиболее связный кандидат - фундамент
+специализированных системных типов:
 
-1. прогнать новые TSan и compiler-matrix jobs на GitHub;
-2. исправить реальные platform-specific regressions, если matrix их обнаружит;
-3. синхронизировать финальный release status и только затем возвращаться к Visual Core.
+1. `Duration` как nominal builtin type;
+2. `Time` как отдельный timestamp/clock value type;
+3. literals `ms`, `s`, `min` без неявного смешивания с обычными числами;
+4. минимальные операции `now()`, `elapsed(Time)`, `sleep(Duration)` и
+   `delay(Duration)` после фиксации platform contract;
+5. parser, semantic, C lowering, diagnostics и e2e для одного маленького среза.
 
-Task и Channel разделены на два backend milestone намеренно: lifecycle, join и
-cooperative stop должны быть проверяемы независимо от блокировок и backpressure
-каналов.
+До implementation нужно отдельно зафиксировать representation, переполнение,
+единицу хранения, допустимую арифметику и разницу monotonic/wall-clock времени.
+Обобщённая dimensional algebra, `Timer`, `Hz`, `ByteSize`, `Angle`, vector types и
+operator overloading не должны случайно войти в первый slice.
+
+Полный future contract: [Systems Additions MVP](systems-additions-mvp.md).
 
 ## 8. Короткая формула
 
