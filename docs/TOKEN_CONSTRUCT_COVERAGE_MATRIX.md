@@ -69,4 +69,3 @@ Legend:
 
 1. Keep experimental `fixed/const/direct/allow drop` forms explicitly separated from the stable surface.
 2. Keep this matrix synchronized with the [Test Coverage Matrix](test-coverage.md) after each feature merge.
-
