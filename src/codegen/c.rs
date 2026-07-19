@@ -38,7 +38,7 @@ enum ExprKind {
     Unknown,
 }
 
-const LIST_TYPE_MAP: [(&str, &str, &str); 14] = [
+const LIST_TYPE_MAP: [(&str, &str, &str); 15] = [
     ("i8", "int8_t", "i8"),
     ("i16", "int16_t", "i16"),
     ("i32", "int32_t", "i32"),
@@ -53,6 +53,7 @@ const LIST_TYPE_MAP: [(&str, &str, &str); 14] = [
     ("Text", "char*", "text"),
     ("Time", "int64_t", "time"),
     ("Duration", "int64_t", "duration"),
+    ("ByteSize", "int64_t", "bytesize"),
 ];
 
 fn list_elem_from_decl(t: &str) -> Option<&str> {
@@ -646,7 +647,8 @@ fn expression_uses_task_surface(expr: &Expression) -> bool {
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
         | Expression::LiteralString(_)
-        | Expression::LiteralDuration { .. } => false,
+        | Expression::LiteralDuration { .. }
+        | Expression::LiteralByteSize { .. } => false,
     }
 }
 
@@ -1390,9 +1392,9 @@ fn emit_channel_typed_wrapper(out: &mut String, skadi_type: &str) {
 }
 
 fn emit_channel_typed_wrappers(out: &mut String, struct_names: &[String]) {
-    const BUILTIN_CHANNEL_TYPES: [&str; 20] = [
+    const BUILTIN_CHANNEL_TYPES: [&str; 21] = [
         "i8", "i16", "i32", "i64", "Int", "u8", "u16", "u32", "u64", "f32", "f64", "Float", "bool",
-        "Bool", "char", "Char", "Text", "Path", "Time", "Duration",
+        "Bool", "char", "Char", "Text", "Path", "Time", "Duration", "ByteSize",
     ];
     for skadi_type in BUILTIN_CHANNEL_TYPES {
         emit_channel_typed_wrapper(out, skadi_type);
@@ -2471,11 +2473,11 @@ fn emit_statement(
     match stmt {
         Statement::MemoryDecl {
             name,
-            size_spec,
+            size,
             on_error,
             ..
         } => {
-            let size_bytes = parse_memory_size_to_bytes(size_spec).unwrap_or(0);
+            let size_expr = emit_expr(size, declared);
             out.push_str(&pad);
             out.push_str("SkMemoryRegion ");
             out.push_str(name);
@@ -2487,11 +2489,19 @@ fn emit_statement(
             out.push_str(name);
             out.push_str("_storage;\n");
             out.push_str(&pad);
-            out.push_str("if (!sk_mem_region_init(");
+            out.push_str("int64_t ");
             out.push_str(name);
-            out.push_str(", ");
-            out.push_str(&format!("{size_bytes}ull"));
-            out.push_str(")) {\n");
+            out.push_str("_capacity = ");
+            out.push_str(&size_expr);
+            out.push_str(";\n");
+            out.push_str(&pad);
+            out.push_str("if (");
+            out.push_str(name);
+            out.push_str("_capacity <= 0 || !sk_mem_region_init(");
+            out.push_str(name);
+            out.push_str(", (size_t)");
+            out.push_str(name);
+            out.push_str("_capacity)) {\n");
             if let Some(on_error) = on_error {
                 let mut inner = declared.clone();
                 emit_block(
@@ -3358,7 +3368,7 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "i8" => "int8_t".to_string(),
         "i16" => "int16_t".to_string(),
         "i32" => "int32_t".to_string(),
-        "Int" | "i64" | "Time" | "Duration" => "int64_t".to_string(),
+        "Int" | "i64" | "Time" | "Duration" | "ByteSize" => "int64_t".to_string(),
         "u8" => "uint8_t".to_string(),
         "u16" => "uint16_t".to_string(),
         "u32" => "uint32_t".to_string(),
@@ -3371,27 +3381,6 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "Text" | "Path" => "const char*".to_string(),
         other => other.to_string(),
     }
-}
-
-fn parse_memory_size_to_bytes(size_spec: &str) -> Option<u64> {
-    let compact = size_spec.trim().replace(' ', "").to_ascii_lowercase();
-    if compact.is_empty() {
-        return None;
-    }
-    let digits_len = compact.chars().take_while(|c| c.is_ascii_digit()).count();
-    if digits_len == 0 || digits_len >= compact.len() {
-        return None;
-    }
-    let (digits, unit) = compact.split_at(digits_len);
-    let value = digits.parse::<u64>().ok()?;
-    let multiplier = match unit {
-        "b" => 1,
-        "kb" => 1024,
-        "mb" => 1024 * 1024,
-        "gb" => 1024 * 1024 * 1024,
-        _ => return None,
-    };
-    value.checked_mul(multiplier)
 }
 
 fn emit_return_expr(
@@ -3486,6 +3475,7 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
         Expression::LiteralBool(_) => ExprKind::Bool,
         Expression::LiteralString(_) => ExprKind::Text,
         Expression::LiteralDuration { .. } => ExprKind::Int,
+        Expression::LiteralByteSize { .. } => ExprKind::Int,
         Expression::VariableReference(name) => match declared.get(name).map(String::as_str) {
             Some("Float" | "f32" | "f64") => ExprKind::Float,
             Some("bool" | "Bool") => ExprKind::Bool,
@@ -3543,6 +3533,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         }
         Expression::LiteralString(s) => s.clone(),
         Expression::LiteralDuration { nanoseconds, .. } => nanoseconds.to_string(),
+        Expression::LiteralByteSize { bytes, .. } => bytes.to_string(),
         Expression::VariableReference(name) => match name.as_str() {
             "PI" => "M_PI".to_string(),
             "TAU" => "(2.0 * M_PI)".to_string(),

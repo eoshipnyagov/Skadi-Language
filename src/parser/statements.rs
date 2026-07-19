@@ -1453,13 +1453,14 @@ pub fn parse_memory_declaration(tokens: &[Token], start_index: usize) -> ParseRe
         ));
     }
     let close_paren = cursor - 1;
-    let size_spec = render_token_slice(tokens, start_index + 5, close_paren);
-    if size_spec.trim().is_empty() {
+    if start_index + 5 == close_paren {
         return Err(parse_err(
             "SC-PARSE-166",
             "Memory declaration expected non-empty size inside memory(...).",
         ));
     }
+    let size =
+        super::expressions::parse_memory_size_expression(tokens, start_index + 5, close_paren)?;
 
     let mut consumed_end = close_paren + 1;
     let mut on_error = None;
@@ -1481,7 +1482,7 @@ pub fn parse_memory_declaration(tokens: &[Token], start_index: usize) -> ParseRe
     Ok((
         Statement::MemoryDecl {
             name: tokens[start_index + 1].lexeme.clone(),
-            size_spec,
+            size: Box::new(size),
             on_error,
             loc,
         },

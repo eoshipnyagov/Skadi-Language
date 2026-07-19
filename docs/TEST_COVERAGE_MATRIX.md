@@ -65,8 +65,8 @@
   - codegen shape checks для `math.h`, constants, trigonometry, `root`, angle conversion
   - showcase coverage через `bench_09_math_navigation.skd` и `bench_10_v1_1_toolbox.skd`
 - showcase coverage
-  - compile-pipeline shape tests покрывают `bench_01..13`
-  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..13`
+  - compile-pipeline shape tests покрывают `bench_01..14`
+  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..14`
   - runtime showcase e2e покрывает:
     - CLI-driven subset `bench_01..05`
     - stable subset `bench_06..09`
@@ -74,6 +74,7 @@
     - concurrency showcase `bench_11_task_channel_pipeline.skd`
     - combined systems showcase `bench_12_systems_pipeline.skd`
     - time budget showcase `bench_13_time_budget.skd`
+    - memory budget showcase `bench_14_byte_size_budget.skd`
   - showcase fixtures лежат в `benchmarks/showcase-data/` и используются в script/e2e smoke-path
 - experimental memory frontend coverage
   - `tests/memory_model_frontend.rs` проверяет parser/semantic contract для `Memory`, `place in`, `clear`, escape rules и illegal `Memory` usage
@@ -104,6 +105,12 @@
     arithmetic, invalid conversions, codegen shape и List/Task/Channel boundaries
   - `tests/codegen_e2e.rs` запускает monotonic measurement и blocking sleep/delay
   - `bench_13_time_budget.skd` входит в native showcase gate
+- experimental ByteSize coverage
+  - `tests/byte_size_model.rs` проверяет literals, overflow, formatter, nominal
+    arithmetic, invalid numeric mixing, dynamic Memory capacity и
+    List/Task/Channel boundaries
+  - codegen shape закрепляет non-positive runtime guard до `size_t` conversion
+  - `bench_14_byte_size_budget.skd` входит в native showcase gate
 
 ## 2. Что покрыто частично / что ещё требует углубления
 

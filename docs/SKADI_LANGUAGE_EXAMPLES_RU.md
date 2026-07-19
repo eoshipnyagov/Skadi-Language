@@ -169,6 +169,21 @@ new Bool completed = measured >= budget
 поддерживаются целые literals `ms`, `s`, `min`. Полный контракт описан на
 странице [Время и длительности](time-duration.md).
 
+## Размеры памяти (`v1.2`, experimental)
+
+```skadi
+new ByteSize payload = 2kb
+new ByteSize overhead = 512b
+new ByteSize capacity = payload + overhead
+new Bool enough = capacity >= 2kb
+
+Memory scratch_memory = memory(capacity)
+```
+
+`ByteSize` не смешивается с `Int/Float` неявно. Поддерживаются целые joined
+literals `b`, `kb`, `mb`, `gb`; `memory(...)` принимает полноценное выражение
+`ByteSize`. Полный контракт описан на странице [Размеры памяти](byte-size.md).
+
 ## Memory (`v1.2`, experimental)
 
 ```skadi

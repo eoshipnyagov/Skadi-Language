@@ -342,7 +342,7 @@ The same drawing logic should eventually be able to target:
 
 ### 4. Time and Units
 
-**Status: experimental `Time/Duration` runtime MVP; broader units remain future work.**
+**Status: experimental `Time/Duration` and `ByteSize` runtime MVPs; broader units remain future work.**
 
 The implemented time slice avoids hiding meaning inside bare numbers.
 
@@ -352,13 +352,15 @@ Current and future unit syntax:
 delay(500ms)
 sleep(10min)
 
-Memory log_memory = memory(32kb)
+new ByteSize log_capacity = 32kb
+Memory log_memory = memory(log_capacity)
 
 canvas.rotate(30deg)
 ```
 
 `Time`, `Duration`, `ms`, `s`, `min`, `now`, `elapsed`, `sleep`, and `delay` are
-implemented. Memory-size syntax is implemented for `Memory`; angle and broader
+implemented. `ByteSize` is implemented as a nominal byte-count type with
+`b/kb/mb/gb` literals and `memory(ByteSize)` integration. Angle and broader
 physical units remain design direction.
 
 The goal is to reduce mistakes like:
@@ -482,6 +484,7 @@ User-facing docs:
 - [Language Reference](docs/SKADI_LANGUAGE_REFERENCE_RU.md)
 - [Short language examples](docs/SKADI_LANGUAGE_EXAMPLES_RU.md)
 - [Time and Duration](docs/SKADI_TIME_DURATION_RU.md)
+- [Byte Sizes](docs/SKADI_BYTE_SIZE_RU.md)
 - [Showcase programs](docs/SHOWCASE_PROGRAMS.md)
 
 Internal docs:
@@ -527,6 +530,7 @@ The repository already includes:
 - experimental Memory MVP work for `v1.2`,
 - experimental native Task/Channel runtime for `v1.2`,
 - experimental nominal Time/Duration runtime for `v1.2`,
+- experimental nominal ByteSize and dynamic Memory capacity for `v1.2`,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,

@@ -52,6 +52,9 @@ Legend:
 | `5ms` / `2s` / `3min` | P (number + adjacent unit) | Y | Y | Y | Y | integer and overflow-checked literals |
 | `now` / `elapsed` | P (identifiers) | Y | Y | Y | Y | monotonic clock runtime |
 | `sleep` / `delay` | P (identifiers) | Y | Y | Y | Y | blocking host runtime |
+| `ByteSize` | P (type identifier) | Y | Y | Y | Y | experimental nominal byte-count type |
+| `64b` / `4kb` / `8mb` / `1gb` | P (number + adjacent unit) | Y | Y | Y | Y | binary, integer and overflow-checked literals |
+| `memory(ByteSize)` | Y | Y | Y | Y | Y | expression capacity with non-positive runtime guard |
 
 ## 2. Operator / Form Matrix
 
@@ -80,6 +83,7 @@ Legend:
 - Compile-checked small examples: `tests/language_programs.rs`, `examples/language/`
 - Showcase systems coverage: `tests/showcase_programs.rs`, `benchmarks/bench_11_task_channel_pipeline.skd`, `benchmarks/bench_12_systems_pipeline.skd`
 - Time/Duration frontend/runtime: `tests/time_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_13_time_budget.skd`
+- ByteSize frontend/runtime: `tests/byte_size_model.rs`, `benchmarks/bench_14_byte_size_budget.skd`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
 
 ## 4. Synchronization rules

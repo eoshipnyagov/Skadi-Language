@@ -297,6 +297,26 @@ fn memory_runtime_examples_build_and_run() {
 
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
+    let rejected_capacity = r#"
+new ByteSize capacity = 1kb - 1kb
+Memory invalid_memory = memory(capacity) on error {
+    output("capacity rejected")
+}
+"#;
+    let run = compile_c_and_execute(
+        compiler,
+        &compile_program_to_c(rejected_capacity),
+        "memory_runtime_rejected_capacity",
+        &[],
+        None,
+    );
+    assert!(run.status.success());
+    assert!(
+        String::from_utf8_lossy(&run.stdout).contains("capacity rejected"),
+        "expected non-positive capacity recovery, got: {}",
+        String::from_utf8_lossy(&run.stdout)
+    );
+
     let external_memory_return = r#"
 struct LoadedText {
     Text content

@@ -5,7 +5,7 @@
 Стабильная пользовательская база сейчас соответствует `v1.1`: CLI/TUI,
 formatter, diagnostics, math core, I/O и showcase workflow. Текущая разработка
 `v1.2` добавляет experimental systems tracks; они описаны в справочнике языка и
-статусе синтаксиса. Strict Memory, Task/Channel и Time/Duration уже имеют
+статусе синтаксиса. Memory, Task/Channel, Time/Duration и ByteSize уже имеют
 исполняемый runtime MVP, но пока не объявлены stable API.
 
 Эти материалы теперь можно поддерживать не только как Markdown-файлы, но и как
@@ -43,6 +43,9 @@ HTML-сайт документации.
 
 - [Время и длительности](time-duration.md)
   - `Time`, `Duration`, unit literals, monotonic runtime и допустимая арифметика.
+
+- [Размеры памяти](byte-size.md)
+  - `ByteSize`, бинарные unit literals, арифметика и `memory(ByteSize)`.
 
 - [Справочник CLI/TUI](cli-reference.md)
   - справочник по командам `skadi-cli` и возможностям `skadi-cli tui`.

@@ -79,7 +79,7 @@ pub enum Statement {
     },
     MemoryDecl {
         name: String,
-        size_spec: String,
+        size: Box<Expression>,
         on_error: Option<Box<BlockStatement>>,
         loc: Location,
     },
@@ -248,6 +248,11 @@ pub enum Expression {
     LiteralString(String),
     LiteralDuration {
         nanoseconds: i64,
+        magnitude: i64,
+        unit: String,
+    },
+    LiteralByteSize {
+        bytes: i64,
         magnitude: i64,
         unit: String,
     },

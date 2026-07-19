@@ -106,6 +106,7 @@ count--
 - list literals
 - struct literals
 - duration literals `ms`, `s`, `min` (`v1.2`, experimental)
+- memory-size literals `b`, `kb`, `mb`, `gb` (`v1.2`, experimental)
 
 Примеры:
 
@@ -128,8 +129,8 @@ new Result r = {value, status}
 
 `Char` поддерживается как тип результата, в частности для `text[index]`, но
 отдельный character literal вида `'a'` пока не является stable expression-формой.
-Размеры `b/kb/mb/gb` в текущем Memory MVP принимаются только внутри
-`memory(...)`; самостоятельный nominal `ByteSize` относится к следующему срезу.
+`ByteSize` является самостоятельным nominal-типом; его literals и связь с
+`Memory` описаны в разделе 18.4.
 
 ## 6. Выражения
 
@@ -639,6 +640,31 @@ new Bool completed = measured >= budget
 - неявного `Int/Float <-> Time/Duration` нет.
 
 Подробный guide и platform contract: [Время и длительности](time-duration.md).
+
+## 18.4 Experimental `ByteSize` MVP
+
+```skadi
+new ByteSize payload = 2kb
+new ByteSize capacity = payload + 512b
+new Bool enough = capacity >= 2kb
+
+Memory scratch_memory = memory(capacity)
+```
+
+Текущий контракт:
+
+- `ByteSize` является nominal value-safe type с signed `i64` количеством байтов;
+- literals `b`, `kb`, `mb`, `gb` принимают только целую слитную запись;
+- единицы используют бинарные множители: `kb = 1024b`, `mb = 1024kb`, `gb = 1024mb`;
+- parser проверяет переполнение literal;
+- `ByteSize +/- ByteSize` возвращает `ByteSize`;
+- сравнения разрешены только между двумя `ByteSize`;
+- неявного смешивания с `Int/Float` и scalar multiplication/division нет;
+- `memory(...)` принимает любое выражение `ByteSize`;
+- нулевая или отрицательная ёмкость отклоняется runtime до преобразования к `size_t`;
+- старое `memory(8 mb)` принимается только как compatibility-вход и форматируется как `memory(8mb)`.
+
+Подробный контракт: [Размеры памяти](byte-size.md).
 
 ## 19. Диагностика
 

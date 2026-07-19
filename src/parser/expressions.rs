@@ -336,6 +336,14 @@ impl<'a> ExprParser<'a> {
                     unit: unit.lexeme.clone(),
                 });
             }
+            if unit.kind == TokenKind::Identifier
+                && is_adjacent
+                && matches!(unit.lexeme.as_str(), "b" | "kb" | "mb" | "gb")
+            {
+                let expression = parse_byte_size_literal(tok, unit)?;
+                self.idx += 2;
+                return Ok(expression);
+            }
         }
 
         self.idx += 1;
@@ -432,6 +440,57 @@ impl<'a> ExprParser<'a> {
             )),
         }
     }
+}
+
+fn parse_byte_size_literal(
+    magnitude_token: &Token,
+    unit_token: &Token,
+) -> Result<Expression, String> {
+    if magnitude_token.kind == TokenKind::TypeFloat {
+        return Err(parse_err(
+            "SC-PARSE-219",
+            "ByteSize literal requires an integer magnitude in the current MVP.",
+        ));
+    }
+    let magnitude = magnitude_token
+        .lexeme
+        .parse::<i64>()
+        .map_err(|_| parse_err("SC-PARSE-219", "invalid ByteSize literal magnitude."))?;
+    let multiplier = match unit_token.lexeme.as_str() {
+        "b" => 1_i64,
+        "kb" => 1024_i64,
+        "mb" => 1024_i64 * 1024,
+        "gb" => 1024_i64 * 1024 * 1024,
+        _ => {
+            return Err(parse_err(
+                "SC-PARSE-219",
+                "unsupported ByteSize literal unit.",
+            ));
+        }
+    };
+    let bytes = magnitude
+        .checked_mul(multiplier)
+        .ok_or_else(|| parse_err("SC-PARSE-219", "ByteSize literal exceeds i64 bytes."))?;
+    Ok(Expression::LiteralByteSize {
+        bytes,
+        magnitude,
+        unit: unit_token.lexeme.clone(),
+    })
+}
+
+pub(super) fn parse_memory_size_expression(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+) -> Result<Expression, String> {
+    if end == start + 2
+        && tokens[start].kind == TokenKind::TypeInt
+        && tokens[start + 1].kind == TokenKind::Identifier
+        && matches!(tokens[start + 1].lexeme.as_str(), "b" | "kb" | "mb" | "gb")
+    {
+        return parse_byte_size_literal(&tokens[start], &tokens[start + 1]);
+    }
+    parse_expression_range(tokens, start, end)
 }
 
 fn is_infix_operator(tok: &Token) -> bool {

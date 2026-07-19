@@ -17,6 +17,7 @@ ROUTE_MAP = [
     ("user/language-reference", "SKADI_LANGUAGE_REFERENCE_RU.md"),
     ("user/language-examples", "SKADI_LANGUAGE_EXAMPLES_RU.md"),
     ("user/time-duration", "SKADI_TIME_DURATION_RU.md"),
+    ("user/byte-size", "SKADI_BYTE_SIZE_RU.md"),
     ("user/concurrency", "SKADI_CONCURRENCY_GUIDE_RU.md"),
     ("user/syntax-status", "SKADI_SYNTAX_STATUS.md"),
     ("user/ai-guide", "SKADI_FOR_AI_RU.md"),
@@ -142,6 +143,7 @@ tracks поверх неё.
 - [Справочник языка](language-reference.md)
 - [Короткие примеры](language-examples.md)
 - [Время и длительности](time-duration.md)
+- [Размеры памяти](byte-size.md)
 - [Многопоточность](concurrency.md)
 - [Статус синтаксиса](syntax-status.md)
 - [Showcase-программы](showcases.md)
@@ -165,6 +167,7 @@ adds experimental systems tracks on top of it.
 - [Language Reference](language-reference.en.md)
 - [Short Language Examples](language-examples.en.md)
 - [Time and Duration](time-duration.en.md)
+- [Byte Sizes](byte-size.en.md)
 - [Concurrency](concurrency.en.md)
 - [Syntax Status](syntax-status.en.md)
 - [Showcase Programs](showcases.en.md)

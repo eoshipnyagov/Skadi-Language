@@ -80,6 +80,11 @@ const SHOWCASE_CASES: &[ShowcaseCase] = &[
         source: "benchmarks/bench_13_time_budget.skd",
         extra_flags: &["-pthread"],
     },
+    ShowcaseCase {
+        name: "bench_14_byte_size_budget",
+        source: "benchmarks/bench_14_byte_size_budget.skd",
+        extra_flags: &[],
+    },
 ];
 
 fn find_c_compiler() -> Option<&'static str> {

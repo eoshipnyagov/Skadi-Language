@@ -15,6 +15,7 @@ enum ValueType {
     Text,
     Time,
     Duration,
+    ByteSize,
     Memory,
     Task(Option<Box<ValueType>>),
     Channel(Box<ValueType>),
@@ -417,6 +418,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 | "Path"
                 | "Time"
                 | "Duration"
+                | "ByteSize"
                 | "List"
                 | "Vec2"
                 | "Vec3"
@@ -737,6 +739,7 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "Text" | "Path" => ValueType::Text,
         "Time" => ValueType::Time,
         "Duration" => ValueType::Duration,
+        "ByteSize" => ValueType::ByteSize,
         _ => ValueType::Unknown,
     }
 }
@@ -797,7 +800,8 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
             | Expression::LiteralFloat(_)
             | Expression::LiteralBool(_)
             | Expression::LiteralString(_)
-            | Expression::LiteralDuration { .. } => {}
+            | Expression::LiteralDuration { .. }
+            | Expression::LiteralByteSize { .. } => {}
         }
     }
 
@@ -1125,7 +1129,8 @@ fn is_task_safe_boundary_type(
         | ValueType::Char
         | ValueType::Text
         | ValueType::Time
-        | ValueType::Duration => true,
+        | ValueType::Duration
+        | ValueType::ByteSize => true,
         ValueType::Struct(name) => structs
             .get(name)
             .map(|info| {
@@ -1334,7 +1339,7 @@ fn analyze_statement(
     match stmt {
         Statement::MemoryDecl {
             name,
-            size_spec,
+            size,
             on_error,
             ..
         } => {
@@ -1348,11 +1353,22 @@ fn analyze_statement(
                     ),
                 ));
             }
-            if size_spec.trim().is_empty() {
+            let size_ty = infer_expression_type(
+                size,
+                scope,
+                memory_state,
+                functions,
+                structs,
+                fn_ctx.as_ref(),
+            )?;
+            if size_ty != ValueType::ByteSize {
                 return Err(err_at_code(
                     stmt,
                     SEM_MEMORY_RULE,
-                    "memory(size) requires a non-empty size specification.".to_string(),
+                    format!(
+                        "memory(size) expects ByteSize, got {:?}. use a literal like '4kb' or a ByteSize value.",
+                        size_ty
+                    ),
                 ));
             }
             scope.insert(name.clone(), ValueType::Memory);
@@ -2831,7 +2847,8 @@ fn record_task_effects_in_expr(
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
         | Expression::LiteralString(_)
-        | Expression::LiteralDuration { .. } => Ok(()),
+        | Expression::LiteralDuration { .. }
+        | Expression::LiteralByteSize { .. } => Ok(()),
     }
 }
 
@@ -2925,6 +2942,7 @@ fn apply_task_flow_expression(
         | Expression::LiteralBool(_)
         | Expression::LiteralString(_)
         | Expression::LiteralDuration { .. }
+        | Expression::LiteralByteSize { .. }
         | Expression::VariableReference(_)
         | Expression::MemberAccess { .. }
         | Expression::Stopping => Ok(()),
@@ -3368,6 +3386,7 @@ fn infer_expression_type(
         Expression::LiteralBool(_) => Ok(ValueType::Bool),
         Expression::LiteralString(_) => Ok(ValueType::Text),
         Expression::LiteralDuration { .. } => Ok(ValueType::Duration),
+        Expression::LiteralByteSize { .. } => Ok(ValueType::ByteSize),
         Expression::ListLiteral(items) => {
             if items.is_empty() {
                 return Ok(ValueType::List(Box::new(ValueType::Unknown)));
@@ -4411,6 +4430,28 @@ fn infer_expression_type(
                     )
                 });
             }
+            if lt == ValueType::ByteSize || rt == ValueType::ByteSize {
+                let result = match (op.as_str(), &lt, &rt) {
+                    ("+" | "-", ValueType::ByteSize, ValueType::ByteSize) => {
+                        Some(ValueType::ByteSize)
+                    }
+                    (
+                        "==" | "!=" | "<" | ">" | "<=" | ">=",
+                        ValueType::ByteSize,
+                        ValueType::ByteSize,
+                    ) => Some(ValueType::Bool),
+                    _ => None,
+                };
+                return result.ok_or_else(|| {
+                    sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "operator '{}' is not defined for {:?} and {:?}.",
+                            op, lt, rt
+                        ),
+                    )
+                });
+            }
             match op.as_str() {
                 "+" | "-" | "*" | "/" | "div" | "mod" | "^" => {
                     if (lt == ValueType::Int || lt == ValueType::Float)
@@ -4508,7 +4549,8 @@ fn infer_expression_memory_provenance(
         Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
-        | Expression::LiteralDuration { .. } => Ok(None),
+        | Expression::LiteralDuration { .. }
+        | Expression::LiteralByteSize { .. } => Ok(None),
     }
 }
 

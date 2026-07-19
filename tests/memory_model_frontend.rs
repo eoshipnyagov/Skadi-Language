@@ -1,4 +1,4 @@
-use v01::ast_nodes::Statement;
+use v01::ast_nodes::{Expression, Statement};
 use v01::codegen::{ensure_codegen_supported, transpile_program_to_c};
 use v01::lexer::lex;
 use v01::parser::parse_program;
@@ -35,12 +35,19 @@ arena.clear()
     match &program.statements[0] {
         Statement::MemoryDecl {
             name,
-            size_spec,
+            size,
             on_error,
             ..
         } => {
             assert_eq!(name, "arena");
-            assert_eq!(size_spec.trim(), "8 mb");
+            assert!(matches!(
+                size.as_ref(),
+                Expression::LiteralByteSize {
+                    bytes: 8_388_608,
+                    magnitude: 8,
+                    unit,
+                } if unit == "mb"
+            ));
             assert!(on_error.is_some());
         }
         _ => panic!("expected MemoryDecl"),

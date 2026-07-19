@@ -23,7 +23,8 @@ $benches = @(
     @{ name = "bench_10_v1_1_toolbox"; file = "benchmarks/bench_10_v1_1_toolbox.skd"; args = @() },
     @{ name = "bench_11_task_channel_pipeline"; file = "benchmarks/bench_11_task_channel_pipeline.skd"; args = @() },
     @{ name = "bench_12_systems_pipeline"; file = "benchmarks/bench_12_systems_pipeline.skd"; args = @() },
-    @{ name = "bench_13_time_budget"; file = "benchmarks/bench_13_time_budget.skd"; args = @() }
+    @{ name = "bench_13_time_budget"; file = "benchmarks/bench_13_time_budget.skd"; args = @() },
+    @{ name = "bench_14_byte_size_budget"; file = "benchmarks/bench_14_byte_size_budget.skd"; args = @() }
 )
 
 function Invoke-Step {

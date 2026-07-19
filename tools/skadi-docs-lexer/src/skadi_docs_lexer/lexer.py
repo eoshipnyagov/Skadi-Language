@@ -1,5 +1,5 @@
 from pygments.lexer import RegexLexer, words
-from pygments.token import Comment, Keyword, Name, Operator, Punctuation, String, Text
+from pygments.token import Comment, Keyword, Name, Number, Operator, Punctuation, String, Text
 
 
 class SkadiLexer(RegexLexer):
@@ -70,6 +70,8 @@ class SkadiLexer(RegexLexer):
                         "String",
                         "Path",
                         "Time",
+                        "Duration",
+                        "ByteSize",
                         "Memory",
                         "Task",
                         "Channel",
@@ -99,10 +101,14 @@ class SkadiLexer(RegexLexer):
                 ),
                 Name.Builtin,
             ),
+            (r"\b\d+(?:ms|min|s)\b", Number.Other),
+            (r"\b\d+(?:kb|mb|gb|b)\b", Number.Other),
+            (r"\b\d+\.\d+\b", Number.Float),
+            (r"\b\d+\b", Number.Integer),
             (words(("true", "false", "null", "PI", "TAU", "E", "EPSILON"), suffix=r"\b"), Name.Constant),
             (r"\bfs\.(list|read|write|is_dir|join)\b", Name.Builtin.Pseudo),
             (
-                r"\b(output|print|input|read|write|len|find|slice|concat|args|delay|sleep|memory|channel|send|receive|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\b(?=\s*\()",
+                r"\b(output|print|input|read|write|len|find|slice|concat|args|now|elapsed|delay|sleep|memory|channel|send|receive|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg)\b(?=\s*\()",
                 Name.Builtin,
             ),
             (r"\bmy\b", Name.Variable.Instance),

@@ -336,12 +336,12 @@ parser, semantic, formatter, codegen, CLI и TUI contracts.
 - RU/EN HTML-навигация и generated site собираются в strict mode;
 - historical/future документы не выглядят как обещание текущего runtime.
 
-### Milestone 9: ByteSize MVP
+### Milestone 9: ByteSize MVP - functional slice выполнен
 
 Цель: выделить размеры памяти из контекстных числовых литералов в отдельный
 nominal type и связать его с существующим Memory MVP.
 
-Планируемый bounded slice:
+Реализовано:
 
 - `ByteSize` и integer literals `b`, `kb`, `mb`, `gb`;
 - overflow-checked parser representation;
@@ -351,9 +351,10 @@ nominal type и связать его с существующим Memory MVP.
 - formatter, highlighting, diagnostics, codegen и native e2e;
 - отдельный небольшой showcase и RU/EN пользовательская документация.
 
-До реализации нужно зафиксировать signed/unsigned representation, множители
-единиц и допустимость отрицательных/нулевых значений. `allow grow`, `allow drop`,
-`memory.child` и `memory.static` не входят в этот milestone.
+Контракт зафиксирован: signed `i64` bytes, бинарные множители, отрицательные
+промежуточные значения и runtime rejection для non-positive Memory capacity.
+`allow grow`, `allow drop`, `memory.child` и `memory.static` не входят в этот
+milestone.
 
 ### Milestone 10: Angle MVP
 
@@ -395,7 +396,7 @@ vector slice до матриц или transform framework.
 
 ### Milestone 12: переходные поверхности
 
-После ByteSize, Angle и Vector MVP нужно закрыть формы, которые сейчас выглядят
+После завершения ByteSize, Angle и Vector MVP нужно закрыть формы, которые сейчас выглядят
 частично реализованными:
 
 - принять отдельное решение по `on interrupt`: runtime contract либо явное

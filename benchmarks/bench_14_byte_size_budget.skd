@@ -1,0 +1,30 @@
+fn calculate_capacity(ByteSize payload) returns ByteSize {
+    return payload + 1kb
+}
+
+new ByteSize payload = 2kb
+new ByteSize capacity = calculate_capacity(payload)
+new ByteSize List checkpoints = [payload, capacity]
+new Int checkpoint_count = 0
+
+iterate checkpoints as checkpoint {
+    if checkpoint >= payload {
+        checkpoint_count++
+    }
+}
+
+Memory buffer_memory = memory(capacity) on error {
+    output("byte budget rejected")
+}
+
+place in buffer_memory {
+    new Text message = concat("ByteSize", " budget ready")
+    output(message)
+} on error {
+    output("byte budget overflow")
+}
+
+new Bool exact_capacity = capacity == 3kb
+output(exact_capacity)
+output(checkpoint_count)
+buffer_memory.clear()

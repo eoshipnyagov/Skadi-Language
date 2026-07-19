@@ -160,6 +160,14 @@
   - `Time` и `Duration` value-safe для struct/List/Task/Channel;
   - wall-clock, `Timer`, fractional literals и embedded backend отложены;
   - полный контракт: [Время и длительности](time-duration.md).
+- byte-size systems MVP - `Experimental / Runtime MVP`
+  - nominal type `ByteSize` проходит parser/semantic/C codegen;
+  - integer literals `b`, `kb`, `mb`, `gb` используют бинарные множители и проверяются на overflow;
+  - `ByteSize +/- ByteSize` и сравнения одинаковых типов работают без смешивания с `Int/Float`;
+  - `memory(...)` принимает `ByteSize` expression, а non-positive capacity отклоняется runtime;
+  - `ByteSize` value-safe для struct/List/Task/Channel;
+  - allocator policies, fractional units и dimensional algebra отложены;
+  - полный контракт: [Размеры памяти](byte-size.md).
 - memory model MVP surface - `Experimental / Partial`
   - frontend принимает `Memory name = memory(size)`, `place in memory { ... } on error { ... }` и `memory.clear()`;
   - semantic layer проверяет базовые escape / use-after-clear правила только для dynamic payload (`Text`, `List`, и struct-значений с такими полями);

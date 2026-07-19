@@ -78,9 +78,20 @@ Memory sensor_memory = memory(4kb)
 MVP-контракт:
 
 - `Memory` создаётся явно;
-- размер задаётся явно;
+- размер задаётся выражением nominal-типа `ByteSize`;
 - по умолчанию память fixed-capacity;
-- автоматического роста по умолчанию нет.
+- автоматического роста по умолчанию нет;
+- вычисленная нулевая или отрицательная capacity отклоняется runtime;
+- legacy-запись `memory(8 mb)` принимается только как compatibility-вход и
+  форматируется в canonical `memory(8mb)`.
+
+```skadi
+new ByteSize payload = 2kb
+new ByteSize capacity = payload + 512b
+Memory scratch_memory = memory(capacity)
+```
+
+Полный контракт типа: [Размеры памяти](../user/byte-size.md).
 
 ## 6. Ошибка создания `Memory`
 

@@ -41,10 +41,11 @@ Skadi -> lexer -> parser -> semantic -> C codegen -> host C compiler -> binary
 | `Char` | `char` |
 | `Text`, `Path` | managed `char*` runtime representation |
 | `Time`, `Duration` | nominal Skadi types lowered to `int64_t` nanoseconds |
+| `ByteSize` | nominal Skadi type lowered to signed `int64_t` bytes |
 | user struct | generated C `typedef struct` |
 
 Nominal semantic rules сохраняются до codegen: совпадающее C representation не
-разрешает неявно смешивать `Time/Duration` с `Int`.
+разрешает неявно смешивать `Time/Duration/ByteSize` с `Int`.
 
 ## Collections, text and I/O
 
@@ -103,6 +104,16 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
 - `sleep`/`delay` используют `Sleep` или retry вокруг `nanosleep`;
 - runtime failure имеет код `SC-RT-320`.
 
+## ByteSize runtime (`v1.2`, experimental)
+
+- literals `b`, `kb`, `mb`, `gb` вычисляются с бинарными множителями и
+  overflow-check'ятся до C codegen;
+- `ByteSize` lower'ится в signed `int64_t` bytes;
+- nominal arithmetic и comparisons проверяются semantic pass;
+- `memory(ByteSize)` вычисляет capacity один раз;
+- non-positive capacity отклоняется до преобразования signed значения к `size_t`;
+- structs, Lists, Task и Channel используют value-safe `int64_t` representation.
+
 ## Platform scope
 
 Release matrix проверяет generated C на:
@@ -123,7 +134,7 @@ roadmap, а не скрытым обещанием desktop C backend.
 - shared mutable state primitives;
 - Visual Core / Canvas runtime;
 - `allow grow/drop`, child/static Memory;
-- generic units algebra, `Timer`, `ByteSize`, `Angle`, vector/matrix layer;
+- generic units algebra, `Timer`, `Angle`, vector/matrix layer;
 - module aliases, re-exports и module-name imports.
 
 ## Инварианты generated C

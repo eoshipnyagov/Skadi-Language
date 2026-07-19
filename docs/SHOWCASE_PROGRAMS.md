@@ -1,6 +1,6 @@
 # Showcase-программы Skadi
 
-В этом разделе собраны 13 небольших showcase-программ.
+В этом разделе собраны 14 небольших showcase-программ.
 
 Их цель:
 
@@ -25,6 +25,7 @@
   <li><code>bench_11_task_channel_pipeline.skd</code><ul><li>Исполняемый showcase concurrency slice <code>v1.2</code>.</li><li>Покрытие: <code>Task</code>, <code>Task(Float)</code>, bounded <code>Channel(Reading)</code>, capacity-1 backpressure, struct messages, blocking <code>send/receive</code> и обязательный <code>wait</code>.</li></ul></li>
   <li><code>bench_12_systems_pipeline.skd</code><ul><li>Совместный systems showcase <code>v1.2</code>.</li><li>Покрытие: fixed-capacity <code>Memory</code>, <code>place in</code>, Task/Channel pipeline, thread-local runtime contexts и безопасная граница между region-owned данными и сообщениями.</li></ul></li>
   <li><code>bench_13_time_budget.skd</code><ul><li>Измерение небольшого time budget в <code>v1.2</code>.</li><li>Покрытие: <code>Time</code>, <code>Duration</code>, literals <code>ms/s</code>, <code>now</code>, <code>elapsed</code>, <code>sleep</code> и передача <code>Duration</code> через <code>Task(Duration)</code>.</li></ul></li>
+  <li><code>bench_14_byte_size_budget.skd</code><ul><li>Расчёт ёмкости Memory через nominal <code>ByteSize</code>.</li><li>Покрытие: literals <code>b/kb</code>, арифметика и сравнение <code>ByteSize</code>, <code>ByteSize List</code>, динамический <code>memory(ByteSize)</code>, <code>place in</code> и <code>clear</code>.</li></ul></li>
 </ol>
 
 ## Репозиторные входные данные
@@ -74,6 +75,7 @@ Pop-Location
 .\bench_11_task_channel_pipeline.exe
 .\bench_12_systems_pipeline.exe
 .\bench_13_time_budget.exe
+.\bench_14_byte_size_budget.exe
 ```
 
 Или через вспомогательные скрипты:

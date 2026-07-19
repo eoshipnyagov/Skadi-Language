@@ -19,7 +19,7 @@ This folder contains a local VS Code syntax-highlighting extension for Skadi.
 1. Build package:
    - `npx @vscode/vsce package --allow-missing-repository`
 2. Install in VS Code:
-   - `code --install-extension skadi-syntax-0.3.3.vsix`
+   - `code --install-extension skadi-syntax-0.3.4.vsix`
 
 ## File extensions and naming
 
@@ -38,7 +38,7 @@ This folder contains a local VS Code syntax-highlighting extension for Skadi.
 - core type names, constants, and canonical aliases (`Bool`, `Char`, `PI`, `TAU`, `EPSILON`)
 - builtins (`output`, `read`, `contains`, `len`, `slice`, `find`, `concat`, `args`, `fs.*`, math core)
 - member calls/access (`.push()`, `.pop()`, `.field`, and custom methods like `.inc()`)
-- struct literal field names and memory size units (`16kb`, `8mb`, ...)
+- struct literal field names, `ByteSize`, and memory size literals (`16kb`, `8mb`, ...)
 - `Time`, `Duration`, duration literals (`5ms`, `2s`, `3min`) and time builtins
 - label members, struct field declarations, and typed variable declarations
 - paired control forms like `on error`, `place in`, and `iterate ... as ...`

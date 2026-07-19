@@ -74,7 +74,7 @@ impl Formatter {
             }
             Statement::MemoryDecl {
                 name,
-                size_spec,
+                size,
                 on_error,
                 ..
             } => {
@@ -82,7 +82,7 @@ impl Formatter {
                 self.out.push_str("Memory ");
                 self.out.push_str(name);
                 self.out.push_str(" = memory(");
-                self.out.push_str(size_spec.trim());
+                self.out.push_str(&self.render_expression(size, 0));
                 self.out.push(')');
                 if let Some(on_error) = on_error {
                     self.out.push_str(" on error ");
@@ -517,6 +517,9 @@ impl Formatter {
             Expression::LiteralBool(value) => value.to_string(),
             Expression::LiteralString(value) => value.clone(),
             Expression::LiteralDuration {
+                magnitude, unit, ..
+            } => format!("{magnitude}{unit}"),
+            Expression::LiteralByteSize {
                 magnitude, unit, ..
             } => format!("{magnitude}{unit}"),
             Expression::ListLiteral(items) => format!(

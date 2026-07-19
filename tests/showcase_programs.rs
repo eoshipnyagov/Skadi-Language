@@ -169,3 +169,13 @@ fn showcase_time_budget_compiles() {
     assert!(c.contains("sk_time_elapsed(started_at)"));
     assert!(c.contains("sk_task_start(&measurement_task"));
 }
+
+#[test]
+fn showcase_byte_size_budget_compiles() {
+    let src = include_str!("../benchmarks/bench_14_byte_size_budget.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("int64_t calculate_capacity(int64_t payload)"));
+    assert!(c.contains("SkadiList_bytesize checkpoints"));
+    assert!(c.contains("int64_t buffer_memory_capacity = capacity"));
+    assert!(c.contains("buffer_memory_capacity <= 0 || !sk_mem_region_init"));
+}

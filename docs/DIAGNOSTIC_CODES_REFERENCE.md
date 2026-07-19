@@ -33,9 +33,10 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-PARSE-161..162` `local` prefix declaration contract errors
 
 ### Expression parser ranges
-- `SC-PARSE-201..216` expression grammar errors
+- `SC-PARSE-201..219` expression grammar errors
   - grouped expr / call args / list literal / index / struct literal issues
   - `SC-PARSE-216` invalid, fractional or overflowing Duration literal
+  - `SC-PARSE-219` invalid, fractional, unsupported or overflowing ByteSize literal
 
 ## 3. Semantic Codes (`SC-SEM-*`)
 

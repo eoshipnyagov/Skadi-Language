@@ -546,6 +546,19 @@ output(completed)
 Поддерживаются целые literals `ms`, `s`, `min`; обычный `Int` не преобразуется в
 `Duration` неявно. Полный контракт: [Время и длительности](time-duration.md).
 
+### `ByteSize`
+
+```skadi
+new ByteSize payload = 2kb
+new ByteSize capacity = payload + 512b
+Memory scratch_memory = memory(capacity)
+```
+
+`ByteSize` - отдельный nominal-тип количества байтов. Поддерживаются целые
+слитные literals `b`, `kb`, `mb`, `gb` с бинарными множителями. Значения можно
+складывать, вычитать и сравнивать между собой, но нельзя неявно смешивать с
+`Int/Float`. Полный контракт: [Размеры памяти](byte-size.md).
+
 ### `Memory`
 
 ```skadi
@@ -662,6 +675,7 @@ Showcase-программы:
 - `benchmarks/bench_11_task_channel_pipeline.skd`
 - `benchmarks/bench_12_systems_pipeline.skd`
 - `benchmarks/bench_13_time_budget.skd`
+- `benchmarks/bench_14_byte_size_budget.skd`
 
 Описание: [Showcase-программы](showcases.md)
 
@@ -679,5 +693,6 @@ Showcase-программы:
 - [Справочник CLI/TUI](cli-reference.md) - команды CLI и TUI
 - [Многопоточность](concurrency.md) - Task/Channel, lifecycle и платформы
 - [Время и длительности](time-duration.md) - `Time`, `Duration`, unit literals и runtime
+- [Размеры памяти](byte-size.md) - `ByteSize`, бинарные unit literals и `memory(ByteSize)`
 - [Статус синтаксиса](syntax-status.md) - точный срез текущего синтаксиса
 - [Покрытие тестами](../internal/test-coverage.md) - что реально покрыто тестами

@@ -89,6 +89,7 @@ def main() -> int:
         "Channel",
         "Time",
         "Duration",
+        "ByteSize",
         "place in",
         "stopping",
         "iterate",
