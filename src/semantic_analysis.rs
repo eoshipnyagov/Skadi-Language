@@ -1900,12 +1900,7 @@ fn analyze_statement(
             Ok(())
         }
         Statement::FunctionDef {
-            name,
-            params,
-            body,
-            returns: _,
-            uses_returns_keyword: _,
-            ..
+            name, params, body, ..
         } => {
             let mut fn_scope = scope.clone();
             let mut fn_memory_state = MemoryState::default();

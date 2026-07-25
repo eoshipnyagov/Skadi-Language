@@ -415,15 +415,113 @@ vector slice до матриц или transform framework.
 - не превращать module aliases, indexing `on error` и расширенный concurrency API
   в неявные обязательства этой линии.
 
-### Следующая release-линия
+### Следующий спринт: v1.2 Distribution & Release Candidate
 
-Installer/uninstaller, release binaries, package/version identity, changelog,
-GitHub Releases и формальный release tag переносятся в следующую версию. Там же
-отдельно планируются distribution smoke tests через установленный `skadi-cli`, а
-не через запуск workspace с Cargo.
+Цель: превратить завершённую функциональную линию в воспроизводимый
+дистрибутив, который устанавливается без клонирования репозитория и без Rust.
+Первая контрольная версия — `v1.2.0-rc.1`; после проверки тех же артефактов
+выпускается `v1.2.0`.
 
-`Timer`, wall-clock/calendar API, общая dimensional algebra и operator overloading
-не должны автоматически входить в текущую линию.
+Обязательный scope:
+
+- синхронизировать package/version identity в Cargo metadata, `skadi-cli`,
+  TUI, документации и generated site;
+- полностью обновить корневой `README.md` под фактический `v1.2`: статус,
+  реализованные Memory/Task/Channel/Time/ByteSize/Angle/Vector slices,
+  installation quick start, CLI/TUI workflow, ссылки на HTML-документацию и
+  честные experimental/deferred границы;
+- сохранить `skadi-cli` как установленное имя команды на этом release cycle;
+- добавить `CHANGELOG.md` и краткую миграцию `v1.1 -> v1.2`;
+- собирать versioned release archives для Windows, Linux и macOS;
+- публиковать SHA-256 checksum manifest рядом с артефактами;
+- добавить user-local installer и uninstaller для PowerShell и POSIX shell;
+- добавить tag-driven GitHub Actions workflow, который сначала создаёт draft
+  Release и не обходит обычные quality gates;
+- запускать distribution smoke tests из чистого временного HOME/PATH через
+  установленный бинарник: `new`, `check`, `format`, `build`, `run`, `doctor`,
+  `target list`;
+- документировать ручную/offline установку из скачанного архива.
+
+#### Контракт release-артефактов
+
+Release workflow определяет платформу по Rust target и публикует однозначно
+названные архивы:
+
+- Windows x86-64: MSVC binary в `.zip`;
+- Linux x86-64 и ARM64: по возможности статические `musl` binaries в
+  `.tar.gz`, чтобы CLI не зависел от версии glibc конкретного дистрибутива;
+- macOS Intel и Apple Silicon: отдельные binaries или один проверенный universal
+  binary в `.tar.gz`.
+
+Каждый архив содержит `skadi-cli`, license/readme fragment и version metadata.
+Checksum проверяется installer-ом до распаковки. Замена существующей версии
+выполняется через временный файл и atomic rename, чтобы не оставлять частично
+установленный бинарник.
+
+#### Windows installer
+
+`install.ps1`:
+
+- определяет архитектуру и запрошенную версию;
+- скачивает release archive и checksum manifest;
+- по умолчанию устанавливает в
+  `%LOCALAPPDATA%\Programs\Skadi\bin\skadi-cli.exe`;
+- идемпотентно добавляет этот каталог в пользовательский `PATH`, не требуя
+  Administrator;
+- поддерживает явные `-Version`, `-InstallDir` и повторный запуск для обновления;
+- после установки запускает `skadi-cli --version` и `skadi-cli doctor`.
+
+`uninstall.ps1` удаляет только файлы, записанные installation manifest, и только
+добавленную installer-ом запись `PATH`. Пользовательские проекты и конфигурация
+не удаляются.
+
+#### Linux installer
+
+`install.sh` определяет `uname -s`/`uname -m`, выбирает `musl` artifact и по
+умолчанию устанавливает `skadi-cli` в `~/.local/bin`. Это подходит для обычных
+glibc-дистрибутивов, Alpine, WSL и других Linux-систем на поддержанной
+архитектуре.
+
+Если `~/.local/bin` отсутствует в `PATH`, installer либо добавляет отдельный
+маркированный блок в профиль поддержанного shell, либо при `--no-modify-path`
+печатает точную команду для ручной настройки. `--system` использует
+`/usr/local/bin` и запрашивает `sudo` только для операции копирования.
+`uninstall.sh` использует installation manifest и снимает только собственные
+изменения.
+
+#### macOS installer
+
+Тот же POSIX installer выбирает Intel/Apple Silicon artifact и устанавливает его
+в `~/.local/bin` или `/usr/local/bin` при `--system`. На RC binaries могут быть
+без Apple notarization: installer не должен молча отключать Gatekeeper или
+удалять quarantine attributes. Ограничение и ручной путь запуска документируются
+явно; signing/notarization включается только при наличии доверенных release
+credentials.
+
+#### Внешний C toolchain
+
+Installer устанавливает сам Skadi toolchain, но не устанавливает системный C
+compiler без согласия пользователя. `check`, `format` и TUI не требуют C
+compiler; `build` и `run` требуют host toolchain. Финальный `doctor` должен
+давать platform-specific подсказки:
+
+- Windows: MSVC Build Tools или MinGW;
+- macOS: Xcode Command Line Tools;
+- Linux: GCC/Clang через обнаруженный package manager (`apt`, `dnf`, `pacman`,
+  `zypper`, `apk`).
+
+Release acceptance:
+
+- installer работает без Rust и checkout репозитория;
+- checksum mismatch всегда останавливает установку;
+- повторная установка обновляет бинарник идемпотентно;
+- uninstall не удаляет пользовательские данные;
+- установленный `skadi-cli` проходит полный smoke flow на Windows, Linux и
+  macOS;
+- корневой README и HTML-документация описывают именно опубликованную версию.
+
+`Timer`, wall-clock/calendar API, общая dimensional algebra, operator overloading,
+TOML editor и новые TUI-функции не входят в distribution sprint.
 
 Полный future contract: [Systems Additions MVP](systems-additions-mvp.md).
 
