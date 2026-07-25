@@ -11,6 +11,8 @@ BUILD = ROOT / ".docs-build"
 
 
 ROUTE_MAP = [
+    ("user/installation", "SKADI_INSTALLATION_RU.md"),
+    ("user/v1-2-migration", "SKADI_V1_2_MIGRATION_RU.md"),
     ("user/getting-started", "SKADI_GETTING_STARTED_RU.md"),
     ("user/cli-quick-start", "SKADI_CLI_QUICK_START_RU.md"),
     ("user/cli-reference", "SKADI_CLI_REFERENCE_RU.md"),
@@ -133,12 +135,14 @@ def make_user_index_ru() -> str:
 Этот раздел предназначен для тех, кто пишет программы на Skadi и работает с
 `skadi-cli` и `skadi-cli tui`.
 
-Стабильная пользовательская база соответствует `v1.1`; текущая разработка
-`v1.2` добавляет исполняемые experimental Memory, Task/Channel и Time/Duration
-tracks поверх неё.
+Текущая распространяемая линия — `v1.2.0-rc.1`. Она наследует stable base
+`v1.1` и добавляет experimental Memory, Task/Channel, Time/Duration, ByteSize,
+Angle и Vector tracks.
 
 ## Основные страницы
 
+- [Установка](installation.md)
+- [Переход с v1.1 на v1.2](v1-2-migration.md)
 - [Начало работы](getting-started.md)
 - [Быстрый старт CLI](cli-quick-start.md)
 - [Справочник CLI/TUI](cli-reference.md)
@@ -160,11 +164,14 @@ def make_user_index_en() -> str:
 This section is for people writing programs in Skadi and using `skadi-cli` and
 `skadi-cli tui`.
 
-The stable user-facing base corresponds to `v1.1`; current `v1.2` development
-adds experimental systems tracks on top of it.
+The current distributed line is `v1.2.0-rc.1`. It builds on the stable `v1.1`
+base and adds experimental Memory, Task/Channel, Time/Duration, ByteSize, Angle,
+and Vector tracks.
 
 ## Main pages
 
+- [Installation](installation.en.md)
+- [Migrating from v1.1](v1-2-migration.en.md)
 - [Getting Started](getting-started.en.md)
 - [CLI Quick Start](cli-quick-start.en.md)
 - [CLI/TUI Reference](cli-reference.en.md)

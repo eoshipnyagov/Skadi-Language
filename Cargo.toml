@@ -1,12 +1,28 @@
 [package]
-name = "v01"
-version = "0.1.0"
-edition = "2024"
+name = "skadi-compiler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
 
 [workspace]
 members = ["tools/skadi-cli"]
 resolver = "3"
 
-# Modules definitions will be managed by src/lib.rs instead of a formal library block.
+[workspace.package]
+version = "1.2.0-rc.1"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/eoshipnyagov/Skadi-Language"
+
+[lib]
+name = "v01"
+path = "src/lib.rs"
+
+[[bin]]
+name = "skadi-compiler"
+path = "src/main.rs"
+
 [dependencies]
 # No external dependencies needed at this time for core compiler logic.

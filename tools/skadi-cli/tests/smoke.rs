@@ -93,7 +93,10 @@ fn tui_help_and_smoke_mode_work() {
     );
     let help_out = stdout_text(&help);
     assert!(help_out.contains("skadi tui"));
-    assert!(help_out.contains("Full-screen interactive workflow for Skadi v1.1."));
+    assert!(help_out.contains(concat!(
+        "Full-screen interactive workflow for Skadi v",
+        env!("CARGO_PKG_VERSION")
+    )));
 
     let smoke = run_cli(&temp, &["tui", "--smoke-test"]);
     assert!(

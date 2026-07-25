@@ -9,10 +9,10 @@ use std::env;
 
 fn help_text() -> String {
     [
-        "skadi-cli v1.1",
-        "Canonical CLI workflow for Skadi v1.1.",
+        concat!("skadi-cli v", env!("CARGO_PKG_VERSION")),
+        "Canonical CLI workflow for Skadi v1.2.",
         "Usage:",
-        "  skadi <command> [args]",
+        "  skadi-cli <command> [args]",
         "",
         "Commands:",
         "  new <name>         Create a new Skadi project",
@@ -24,6 +24,10 @@ fn help_text() -> String {
         "  tui                Full-screen interactive workflow",
         "  format [--check] [path ...]  Format Skadi source files",
         "  doctor             Verify toolchain environment",
+        "",
+        "Options:",
+        "  -V, --version      Print release version",
+        "  -h, --help         Show this help",
     ]
     .join("\n")
 }
@@ -49,11 +53,15 @@ fn main() {
         "tui" => commands::tui_cmd::run(&args[2..]),
         "format" => commands::format_cmd::run(&args[2..]),
         "doctor" => commands::doctor_cmd::run(&args[2..]),
+        "--version" | "-V" => {
+            println!("skadi-cli {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
         "help" | "--help" | "-h" => {
             print_help();
             Ok(())
         }
-        _ => Err(format!("Unknown command: {cmd}. Use 'skadi help'.")),
+        _ => Err(format!("unknown command: {cmd}. Use 'skadi-cli help'.")),
     };
 
     if let Err(err) = result {
@@ -67,10 +75,12 @@ mod tests {
     use super::help_text;
 
     #[test]
-    fn help_text_mentions_v1_1_and_format_status() {
+    fn help_text_mentions_release_identity_and_format_status() {
         let help = help_text();
-        assert!(help.contains("skadi-cli v1.1"));
-        assert!(help.contains("Canonical CLI workflow for Skadi v1.1."));
+        assert!(help.contains(concat!("skadi-cli v", env!("CARGO_PKG_VERSION"))));
+        assert!(help.contains("Canonical CLI workflow for Skadi v1.2."));
+        assert!(help.contains("skadi-cli <command> [args]"));
+        assert!(help.contains("-V, --version"));
         assert!(help.contains("format [--check] [path ...]  Format Skadi source files"));
         assert!(help.contains("tui                Full-screen interactive workflow"));
     }

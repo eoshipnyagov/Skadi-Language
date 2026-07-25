@@ -20,6 +20,17 @@ def skadi_blocks(text: str) -> list[str]:
 
 def main() -> int:
     errors: list[str] = []
+    cargo_toml = read(ROOT / "Cargo.toml")
+    version_match = re.search(
+        r"(?ms)^\[workspace\.package\]\s+.*?^version\s*=\s*\"([^\"]+)\"",
+        cargo_toml,
+    )
+    if version_match is None:
+        errors.append("Cargo.toml does not define [workspace.package] version")
+        release_version = ""
+    else:
+        release_version = version_match.group(1)
+
     markdown_files = [ROOT / "README.md"]
     markdown_files.extend((ROOT / "docs").glob("*.md"))
     markdown_files.extend((ROOT / "docs-en").glob("*.md"))
@@ -37,6 +48,7 @@ def main() -> int:
         "obsolete pending remote matrix wording": re.compile(
             r"оста[её]тся experimental до успешной проверки dedicated TSan"
         ),
+        "obsolete CLI product identity": re.compile(r"skadi-cli(?:\s+|`?\s*)v1\.1", re.I),
     }
 
     for path in markdown_files:
@@ -51,6 +63,38 @@ def main() -> int:
         source_path = find_ru_source(source)
         if not source_path.is_file():
             errors.append(f"missing RU source for route '{route}': {source}")
+
+    required_user_routes = {"user/installation", "user/v1-2-migration"}
+    actual_routes = {route for route, _ in ROUTE_MAP}
+    for route in sorted(required_user_routes - actual_routes):
+        errors.append(f"missing required release documentation route '{route}'")
+
+    current_version_docs = [
+        ROOT / "README.md",
+        ROOT / "tools" / "skadi-cli" / "README.md",
+        ROOT / "docs" / "SKADI_INSTALLATION_RU.md",
+        ROOT / "docs-en" / "SKADI_INSTALLATION_EN.md",
+        ROOT / "docs" / "SKADI_V1_2_MIGRATION_RU.md",
+        ROOT / "docs-en" / "SKADI_V1_2_MIGRATION_EN.md",
+    ]
+    if release_version:
+        for path in current_version_docs:
+            if release_version not in read(path):
+                errors.append(
+                    f"{path.relative_to(ROOT)} does not mention current release "
+                    f"version '{release_version}'"
+                )
+
+    required_release_files = [
+        ROOT / "install" / "install.ps1",
+        ROOT / "install" / "uninstall.ps1",
+        ROOT / "install" / "install.sh",
+        ROOT / "install" / "uninstall.sh",
+        ROOT / ".github" / "workflows" / "release.yml",
+    ]
+    for path in required_release_files:
+        if not path.is_file():
+            errors.append(f"missing release file: {path.relative_to(ROOT)}")
 
     user_sources = {ROOT / "README.md"}
     user_sources.update(

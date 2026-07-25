@@ -74,6 +74,12 @@ jobs:
       - name: Run workspace tests except codegen_e2e
         run: cargo test --workspace -q -- --skip e2e_
 
+      - name: Test release tooling
+        shell: bash
+        run: |
+          python -m unittest scripts/release/test_package_release.py -v
+          bash -n install/install.sh install/uninstall.sh scripts/release/test_install_unix.sh
+
       - name: Check docs consistency
         run: python scripts/check_docs_consistency.py
 

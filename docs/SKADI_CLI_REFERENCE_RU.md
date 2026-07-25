@@ -1,15 +1,16 @@
 # Skadi: Справочник CLI/TUI (RU)
 
-Справочник по `skadi-cli` для Skadi `v1.1`.
+Справочник по `skadi-cli` для Skadi `v1.2.0-rc.1`.
 
 Роль этого документа: быть справочником по командам, режимам и поведению
 `skadi-cli` и `skadi-cli tui`. Для первого входа удобнее начать с quick start.
 
-Быстрый старт: [Быстрый старт CLI](cli-quick-start.md)  
+Быстрый старт: [Быстрый старт CLI](cli-quick-start.md).
+
 Полный гайд по языку: [Начало работы](getting-started.md)
 
 Если вы работаете прямо из исходников, те же команды можно запускать через
-`cargo run --manifest-path tools/skadi-cli/Cargo.toml -- ...`.
+`cargo run -p skadi-cli -- ...`.
 
 ## 1. Роль `skadi-cli`
 
@@ -26,6 +27,14 @@
 Для ручной повседневной работы `skadi-cli tui` тоже считается полноценным поддерживаемым путём.
 
 ## 2. Команды
+
+### `--version`
+
+Печатает точную версию установленного toolchain:
+
+```powershell
+skadi-cli --version
+```
 
 ### `new <name>`
 
@@ -212,7 +221,7 @@ Linux / WSL / macOS:
 
 ## 6. TUI
 
-`skadi-cli tui` в `v1.1` сфокусирован на работе с проектом:
+`skadi-cli tui` сфокусирован на работе с проектом:
 
 - обзор проекта;
 - diagnostics;

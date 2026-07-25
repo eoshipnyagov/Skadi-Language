@@ -176,13 +176,29 @@ pub fn shell_probe_hint() -> &'static str {
     }
 }
 
-pub fn os_install_hint() -> &'static str {
-    if cfg!(windows) {
-        "Windows: install MinGW-w64 (gcc) or Visual Studio Build Tools (cl)."
-    } else if cfg!(target_os = "macos") {
-        "macOS: install Xcode Command Line Tools: xcode-select --install"
+fn linux_install_hint_with(mut available: impl FnMut(&str) -> bool) -> &'static str {
+    if available("apt") || available("apt-get") {
+        "Linux/WSL (apt): sudo apt install build-essential clang"
+    } else if available("dnf") {
+        "Linux (dnf): sudo dnf group install \"Development Tools\""
+    } else if available("pacman") {
+        "Linux (pacman): sudo pacman -S base-devel clang"
+    } else if available("zypper") {
+        "Linux (zypper): sudo zypper install -t pattern devel_basis"
+    } else if available("apk") {
+        "Linux (apk): sudo apk add build-base clang"
     } else {
-        "Linux/WSL: install build-essential (gcc) or clang (for example: sudo apt install build-essential clang)."
+        "Linux: install GCC or Clang with your system package manager."
+    }
+}
+
+pub fn os_install_hint() -> String {
+    if cfg!(windows) {
+        "Windows: install MinGW-w64 (gcc) or Visual Studio Build Tools (cl).".to_string()
+    } else if cfg!(target_os = "macos") {
+        "macOS: install Xcode Command Line Tools: xcode-select --install".to_string()
+    } else {
+        linux_install_hint_with(detect_compiler).to_string()
     }
 }
 
@@ -203,7 +219,7 @@ pub fn target_hint(triple: &str) -> &'static str {
 mod tests {
     use std::path::Path;
 
-    use super::{candidate_invocations, single_compiler_invocation};
+    use super::{candidate_invocations, linux_install_hint_with, single_compiler_invocation};
 
     #[test]
     fn host_order_starts_with_gcc_clang() {
@@ -243,6 +259,15 @@ mod tests {
             xs.iter()
                 .all(|invocation| invocation.args.iter().any(|arg| arg == "-pthread"))
         );
+    }
+
+    #[test]
+    fn linux_install_hint_follows_detected_package_manager() {
+        let hint = linux_install_hint_with(|program| program == "pacman");
+        assert!(hint.contains("pacman -S base-devel"));
+
+        let fallback = linux_install_hint_with(|_| false);
+        assert!(fallback.contains("system package manager"));
     }
 
     #[test]

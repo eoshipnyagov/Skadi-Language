@@ -579,7 +579,7 @@ pub fn run_doctor() -> Result<DoctorReport, ActionError> {
     Ok(DoctorReport {
         host_candidates: host_statuses,
         host_ready,
-        host_install_hint: os_install_hint().to_string(),
+        host_install_hint: os_install_hint(),
         shell_probe_hint: shell_probe_hint().to_string(),
         targets,
     })

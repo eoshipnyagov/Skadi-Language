@@ -63,7 +63,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
 fn print_help() {
     println!("skadi tui");
-    println!("Full-screen interactive workflow for Skadi v1.1.");
+    println!(
+        "Full-screen interactive workflow for Skadi v{}.",
+        env!("CARGO_PKG_VERSION")
+    );
     println!();
     println!("Keys:");
     println!("  q              Quit");

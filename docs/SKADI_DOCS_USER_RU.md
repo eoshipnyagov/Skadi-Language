@@ -2,11 +2,10 @@
 
 Этот документ собирает пользовательские материалы по текущему Skadi.
 
-Стабильная пользовательская база сейчас соответствует `v1.1`: CLI/TUI,
-formatter, diagnostics, math core, I/O и showcase workflow. Текущая разработка
-`v1.2` добавляет experimental systems tracks; они описаны в справочнике языка и
-статусе синтаксиса. Memory, Task/Channel, Time/Duration, ByteSize, Angle и Vec2/Vec3/Vec4 уже
-имеют исполняемый runtime MVP, но пока не объявлены stable API.
+Текущая распространяемая линия — `v1.2.0-rc.1`. Она наследует стабильную базу
+`v1.1` и добавляет experimental systems tracks. Memory, Task/Channel,
+Time/Duration, ByteSize, Angle и Vec2/Vec3/Vec4 уже имеют исполняемый runtime
+MVP, но пока не объявлены stable API.
 
 Эти материалы теперь можно поддерживать не только как Markdown-файлы, но и как
 HTML-сайт документации.
@@ -22,6 +21,14 @@ HTML-сайт документации.
 - [Внутренние документы разработки](../internal/index.md)
 
 ## 1. С чего начинать
+
+- [Установка](installation.md)
+  - готовые архивы и установщики для Windows, Linux и macOS;
+  - проверка SHA-256, обновление, офлайн-установка и удаление.
+
+- [Переход с v1.1 на v1.2](v1-2-migration.md)
+  - совместимость проектов;
+  - новые experimental поверхности и проверки после обновления.
 
 - [Начало работы](getting-started.md)
   - первый вход в язык;

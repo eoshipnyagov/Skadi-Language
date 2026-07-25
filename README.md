@@ -10,9 +10,9 @@ Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
 
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
 
-The current stable base is the `v1.1` toolchain surface. Active development is
-focused on the `v1.2` experimental systems/math layer: executable Memory,
-Task/Channel, Time/Duration, ByteSize, and Angle MVPs.
+The current distributed line is `v1.2.0-rc.1`. It builds on the stable `v1.1`
+toolchain surface and includes experimental Memory, Task/Channel,
+Time/Duration, ByteSize, Angle, and vector MVPs.
 
 The long-term design direction is broader:
 
@@ -42,6 +42,8 @@ The repository includes:
 - relative path imports, `local`/`hide`, and qualified `module.symbol` access,
 - experimental Memory MVP work for `v1.2`,
 - experimental native Task/Channel runtime for `v1.2`,
+- experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
+- deterministic release archives and user-local installers,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,
@@ -283,7 +285,7 @@ Channel(SensorData) sensors = channel(8)
 Task sensor_task = run sensor_loop(sensors)
 
 loop {
-    new data = sensors.receive()
+    new SensorData data = sensors.receive()
     draw_status(canvas, data)
     screen.present()
 }
@@ -440,7 +442,31 @@ The goal is to make the language real enough to test syntax, semantics, diagnost
 
 ## Quick Start
 
-If `skadi-cli` is already on your `PATH`:
+Install the `v1.2.0-rc.1` release candidate first.
+
+Windows PowerShell:
+
+```powershell
+$installer = Join-Path $env:TEMP "skadi-install.ps1"
+Invoke-WebRequest `
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/install.ps1 `
+  -OutFile $installer
+& $installer -Version 1.2.0-rc.1
+```
+
+Linux or macOS:
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/install.sh \
+  | sh -s -- --version 1.2.0-rc.1
+```
+
+The installer verifies the release SHA-256 and installs `skadi-cli` without
+requiring Rust. A host C compiler is still required for `build` and `run`;
+`skadi-cli doctor` reports the available toolchains.
+
+Then, from a working directory:
 
 ```bash
 skadi-cli new hello_skadi
@@ -482,6 +508,8 @@ skadi-cli target list
 User-facing docs:
 
 - [User docs](docs/SKADI_DOCS_USER_RU.md)
+- [Installation](docs/SKADI_INSTALLATION_RU.md)
+- [Migration from v1.1 to v1.2](docs/SKADI_V1_2_MIGRATION_RU.md)
 - [Getting Started](docs/SKADI_GETTING_STARTED_RU.md)
 - [CLI Quick Start](docs/SKADI_CLI_QUICK_START_RU.md)
 - [CLI Reference](docs/SKADI_CLI_REFERENCE_RU.md)
@@ -537,6 +565,8 @@ The repository already includes:
 - experimental nominal Time/Duration runtime for `v1.2`,
 - experimental nominal ByteSize and dynamic Memory capacity for `v1.2`,
 - experimental nominal Angle and `deg/rad` math integration for `v1.2`,
+- experimental Vec2/Vec3/Vec4 values and vector math for `v1.2`,
+- release archives and installers for Windows, Linux, and macOS,
 - showcase programs,
 - regression tests,
 - RU/EN documentation scaffolding,

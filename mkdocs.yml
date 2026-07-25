@@ -41,6 +41,8 @@ plugins:
             Пользовательские документы: User Docs
             Внутренние документы: Internal Docs
             Обзор: Overview
+            Установка: Installation
+            Переход с v1.1 на v1.2: Migrating from v1.1 to v1.2
             Начало работы: Getting Started
             Быстрый старт CLI: CLI Quick Start
             Справочник CLI/TUI: CLI/TUI Reference
@@ -107,6 +109,8 @@ nav:
   - Главная: index.md
   - Пользовательские документы:
       - Обзор: user/index.md
+      - Установка: user/installation.md
+      - Переход с v1.1 на v1.2: user/v1-2-migration.md
       - Начало работы: user/getting-started.md
       - Быстрый старт CLI: user/cli-quick-start.md
       - Справочник CLI/TUI: user/cli-reference.md
