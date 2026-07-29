@@ -6,7 +6,7 @@ The project follows Semantic Versioning for compiler and CLI releases. Language
 surfaces explicitly marked experimental can still evolve between minor
 versions.
 
-## [1.2.0-rc.1] - 2026-07-25
+## [1.2.0-rc.1] - 2026-07-29
 
 ### Added
 

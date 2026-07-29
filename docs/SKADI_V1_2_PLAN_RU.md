@@ -415,7 +415,31 @@ vector slice до матриц или transform framework.
 - не превращать module aliases, indexing `on error` и расширенный concurrency API
   в неявные обязательства этой линии.
 
-### Следующий спринт: v1.2 Distribution & Release Candidate
+### Завершённый спринт: v1.2 Distribution & Release Candidate
+
+Статус на 2026-07-29: выполнен. `v1.2.0-rc.1` зафиксирован annotated tag,
+собран в draft prerelease и прошёл основной CI, Docs Site и отдельный release
+gate.
+
+Подтверждённые release targets:
+
+- `x86_64-pc-windows-msvc`;
+- `x86_64-unknown-linux-musl`;
+- `aarch64-unknown-linux-musl`;
+- `x86_64-apple-darwin`;
+- `aarch64-apple-darwin`.
+
+Для каждого target проверены versioned archive, SHA-256, установка, повторное
+обновление, `new/check/format/build/run/doctor/target list` и удаление. Итоговый
+payload draft release дополнительно скачан обратно и независимо проверен по
+`SHA256SUMS`.
+
+Release evidence:
+
+- [dry-run release matrix](https://github.com/eoshipnyagov/Skadi-Language/actions/runs/30462279701);
+- [tag release matrix](https://github.com/eoshipnyagov/Skadi-Language/actions/runs/30462719830);
+- [tag CI](https://github.com/eoshipnyagov/Skadi-Language/actions/runs/30462719856);
+- [tag Docs Site](https://github.com/eoshipnyagov/Skadi-Language/actions/runs/30462719893).
 
 Цель: превратить завершённую функциональную линию в воспроизводимый
 дистрибутив, который устанавливается без клонирования репозитория и без Rust.
