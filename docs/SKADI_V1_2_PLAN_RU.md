@@ -448,6 +448,15 @@ vector slice до матриц или transform framework.
 3. timeout surface обсуждается только после стабилизации существующих границ;
 4. `select`, task groups и implicit async runtime не входят в ближайший slice.
 
+Параллельный tooling checkpoint:
+
+1. выделить structured analysis facts из compiler core без дублирования правил
+   в TUI;
+2. показать ownership/resource lifecycle, Task/Channel и Memory state;
+3. добавить explain-chain для diagnostics и incomplete `when`;
+4. подготовить source mapping/debug probes для первого Skadi-level debugger;
+5. сохранить общий engine для CLI, TUI, CI и будущего LSP.
+
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 
 Статус на 2026-07-29: выполнен. `v1.2.0-rc.1` зафиксирован annotated tag,

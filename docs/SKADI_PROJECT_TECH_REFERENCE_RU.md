@@ -166,6 +166,16 @@ Full-screen `ratatui`/`crossterm` application: dashboard, diagnostics,
 build/run, doctor, project bootstrap, config editor и help. Долгие actions пока
 синхронны; shell-out к собственным CLI-командам не используется.
 
+Целевое развитие TUI - не перенос semantic logic в event loop, а представление
+общего structured analysis engine. Тот же набор facts должен обслуживать CLI,
+TUI, CI и будущий LSP. Планируемые views: ownership/resource lifecycle,
+Task/Channel state, Memory regions, explain-chain diagnostics и source-level
+debugger.
+
+Первый debugger строится поверх C pipeline через source mapping, compiler
+probes и Skadi type metadata. GDB/LLDB допустимы как нижний native layer;
+собственный machine debugger не является целью.
+
 ## 5. Реализованные уровни языка
 
 ### Stable base `v1.1`

@@ -17,6 +17,27 @@ When documents disagree, use this order:
 A draft is design intent, not a syntax promise. A lexer token is not a language
 feature by itself.
 
+## Architecture understanding synchronized on 2026-07-30
+
+- Skadi is an integrated official environment, not only parser grammar plus
+  unrelated libraries.
+- Its official layers are Language Core, Systems Core, Domain Core, and
+  Platform Backends.
+- Canvas remains a Domain Core teaching and prototyping surface, but it must not
+  grow into a complete GUI, media framework, or game engine.
+- The language should teach resource management. Scope, copy, `view`, `direct`,
+  `move`, cleanup, Memory, and Task/Channel behavior must be visible through
+  diagnostics and tooling.
+- `when / is` is the strict Skadi `switch / case`: evaluate once, never fall
+  through, reject duplicates, and eventually check exhaustiveness.
+- TUI is a first-class client of a shared analysis/debug engine, not a second
+  implementation of compiler rules.
+- The first debugger is Skadi-level: source mapping, probes, breakpoints,
+  locals, and runtime views over the C pipeline. A custom machine debugger is
+  not planned.
+- Experimental ideas may end as `Rejected`; compatibility begins only after a
+  surface is promoted to stable/canonical.
+
 ## Current classification
 
 | Area | Current state |
@@ -95,5 +116,12 @@ remain future.
 6. Grow Canvas with events, text/images, and additional presenters.
 7. Resolve remaining lexer-only reservations and package/module ergonomics.
 
+In parallel, the tooling track should add structured analysis facts,
+ownership/resource explain chains, Task/Channel/Memory TUI views, and then
+source mapping plus debug probes for the first breakpoint/step/locals workflow.
+The same engine must serve CLI, TUI, future LSP, and CI.
+
 Every new form must update parser, semantic, codegen/runtime, formatter,
 highlighting, quick reference, syntax status, and positive/negative/e2e tests.
+Forms that create lifecycle, blocking, or ownership facts must also update the
+structured analysis consumers.

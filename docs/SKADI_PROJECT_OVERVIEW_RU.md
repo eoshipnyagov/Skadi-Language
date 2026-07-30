@@ -1,6 +1,6 @@
 # Обзор проекта Skadi
 
-Дата обновления: 2026-07-29
+Дата обновления: 2026-07-30
 
 ## 1. Что это за репозиторий
 
@@ -26,6 +26,8 @@
 - strict Memory MVP как experimental `v1.2` systems layer;
 - Task/Channel runtime MVP как experimental `v1.2` systems layer;
 - Time/Duration, ByteSize, Angle и bounded Vector runtime MVP;
+- typed periodic host Interrupt и строгий `on interrupt` context;
+- portable headless Canvas v0 и Win32 presenter;
 - showcase-программы и набор регрессионных тестов;
 - HTML-сайт документации на базе `MkDocs` с RU/EN user reference;
 - release archives и installers для Windows, Linux и macOS.
@@ -122,12 +124,13 @@ GitHub Pages.
 
 ## 9. Что пока не стоит считать завершённым продуктовым слоем
 
-- module-name imports, aliases и re-exports поверх стабильных path-imports;
+- module-name imports и re-exports поверх path-imports с рабочими aliases;
 - автоматическая reclamation по `allow drop` и полный lifetime calculus;
 - cancellation блокирующих Channel operations, timeout, `select`, task groups;
 - Canvas events, text/images, transforms и non-Windows presenters;
 - systems additions;
-- законченная семантика выполнения для `on interrupt`.
+- hardware/RTOS backend для `on interrupt` поверх готового host periodic MVP;
+- structured analysis engine, lifecycle views и Skadi-level debugger в TUI.
 
 ## 10. Навигация по документам
 

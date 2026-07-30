@@ -31,6 +31,28 @@
 Draft описывает направление мысли, но не является обещанием синтаксиса.
 Зарезервированный token также не является реализованной конструкцией.
 
+### Синхронизация архитектурного понимания 2026-07-30
+
+Зафиксированы следующие решения:
+
+- Skadi рассматривается как цельная официальная среда, а не только parser
+  grammar плюс несвязанные библиотеки;
+- официальные слои: Language Core, Systems Core, Domain Core и Platform
+  Backends;
+- Canvas остаётся Domain Core и учебной/прототипной поверхностью, но не должен
+  превращаться в полный GUI/media framework;
+- язык должен обучать управлению ресурсами: scope, copy, `view`, `direct`,
+  `move`, cleanup, Memory и Task/Channel должны быть видимы в diagnostics;
+- `when / is` является строгой формой `switch / case`: single evaluation, no
+  fallthrough, duplicate-case diagnostics и будущая exhaustiveness-проверка;
+- TUI является first-class интерфейсом к analysis/debug engine, а не отдельной
+  реализацией compiler logic;
+- первый debugger должен быть Skadi-level: source mapping, probes, breakpoints,
+  locals и runtime views поверх C pipeline; собственный machine debugger не
+  планируется;
+- experimental идеи могут завершаться статусом `Rejected`; совместимость не
+  требует сохранять неудачную поверхность до stable/canonical статуса.
+
 ## 3. Состояние внутренних документов
 
 | Документ или группа | Роль сейчас | Состояние | Что учитывать |
@@ -217,6 +239,17 @@ backend и embedded display adapter.
 7. Canvas events, text/images и следующие presentation backends.
 8. Module/package ergonomics.
 
+### Параллельный tooling-трек
+
+Tooling развивается параллельно runtime-очереди, не копируя semantic logic в
+TUI:
+
+1. structured analysis facts и explain-chain для ownership/resource lifecycle;
+2. incomplete `when`, blocking operations, Task/Channel/Memory analysis;
+3. TUI views ресурсов, задач, каналов и регионов;
+4. source mapping/debug probes и первый breakpoint/step/locals workflow;
+5. общий engine для CLI, TUI, будущего LSP и CI.
+
 ### Осознанно не надо добавлять без отдельного design decision
 
 - generics ради самих generics;
@@ -225,6 +258,9 @@ backend и embedded display adapter.
 - implicit async runtime;
 - скрытый shared mutable state;
 - большую dimensional-units систему до практического embedded/use-case.
+- полный GUI/media/game framework внутри Canvas Core;
+- собственный machine-code debugger вместо source-level интеграции с готовыми
+  native toolchains.
 
 ## 7. Правило дальнейшей синхронизации
 
@@ -237,6 +273,8 @@ backend и embedded display adapter.
 - syntax status;
 - positive/negative/e2e tests;
 - token/construct и test coverage matrices.
+- structured analysis/TUI/LSP consumers, если новая форма создаёт lifecycle,
+  blocking или ownership facts.
 
 Если слой отсутствует, форма получает явный статус `Compatibility`,
 `Reserved` или `Future`, а не расплывчатое «поддерживается частично».

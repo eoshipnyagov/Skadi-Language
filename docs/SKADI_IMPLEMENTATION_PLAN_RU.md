@@ -4,7 +4,7 @@
 
 Исходный план: 2026-05-20
 
-Последняя сверка статусов: 2026-07-19
+Последняя сверка статусов: 2026-07-30
 
 Документ сохраняет историю этапов. Текущая release-линия и открытые решения
 ведутся в [плане v1.2](v1-2-plan.md).
@@ -254,6 +254,51 @@ Reference:
 Ближайший runtime slice: cancellation blocking Channel operations через
 существующие `stop`/`close` boundaries без преждевременного добавления `select`.
 
+## Отдельный трек - analysis-first TUI и Skadi-level debugger
+
+Статус: planned; развивается параллельно runtime backlog и использует тот же
+compiler/action pipeline, что CLI и CI.
+
+Архитектурное правило: static analyzer не должен жить внутри rendering/event
+loop TUI. Compiler core возвращает структурированные facts, а CLI, TUI,
+будущий LSP и CI являются разными клиентами одного analysis engine.
+
+### Фаза A - структурированный анализ
+
+- стабильные source spans и identifiers для statements/values/resources;
+- facts по creation/copy/borrow/move/close и scope cleanup;
+- incomplete `when`, unreachable code и необработанные danger paths;
+- потенциально blocking operations и interrupt-context violations;
+- Task lifecycle, Channel wait и очевидные циклы ожидания;
+- Memory escape, use-after-clear и дорогие implicit copies;
+- explain-chain от причины до места пользовательского действия.
+
+### Фаза B - представление в TUI
+
+- отдельные views для diagnostics, ownership/resources, Tasks/Channels и Memory;
+- история выбранного значения или ресурса;
+- места automatic cleanup и раннего `.close()`;
+- blocking/capacity state без зависимости только от цвета;
+- экспорт тех же результатов в machine-readable CLI output для CI/LSP.
+
+### Фаза C - первый отладчик
+
+- debug build с mapping `Skadi source -> generated C/runtime`;
+- compiler-inserted debug probes и метаданные известных Skadi-типов;
+- breakpoints по `.skd`, continue, step, locals и call stack;
+- runtime views для Task, Channel, Memory и linear resources;
+- GDB/LLDB могут подключаться как нижний native layer, но TUI не должен
+  показывать пользователю generated C как основную модель.
+
+Перед LLVM или вторым backend нужен typed intermediate representation, чтобы
+analysis/debug facts не зависели от строкового C-emitter. Собственный machine
+debugger, register engine и object-file debugger не входят в цель: Skadi строит
+source-level UX поверх существующих native toolchains.
+
+Критерий успеха первой итерации: пользователь может выбрать diagnostic или
+resource в TUI и получить короткое точное объяснение его lifecycle и следующего
+действия без чтения generated C.
+
 ## Реестр рисков
 
 1. Contract drift между lexer token kinds и parser expectations.  
@@ -267,6 +312,9 @@ Reference:
 
 4. Дрейф синтаксиса от целей читаемости.  
 Митигация: использовать `docs/SKADI_STYLE_PRINCIPLES.md` как review baseline.
+
+5. Привязка анализа и отладки к C-emitter.
+Митигация: вводить typed IR и structured analysis facts до расширения debugger.
 
 ## Рабочие правила
 
