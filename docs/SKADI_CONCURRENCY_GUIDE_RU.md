@@ -264,6 +264,45 @@ Owning declaration `Channel(T) name = channel(N)` нужно размещать 
 Owner канала должен жить дольше всех задач, которым канал передан; все такие
 задачи нужно `wait` до выхода из scope owner.
 
+## Закрытие канала
+
+Только owning binding может вызвать `close`. После закрытия новые сообщения не
+принимаются, но уже поставленные в очередь сообщения читаются до исчерпания:
+
+```skadi
+Channel(Int) values = channel(4)
+values.send(7)
+values.close()
+
+new Int value = 0
+value = values.receive() on error {
+    output("channel drained")
+}
+```
+
+`send ... on error` сообщает о закрытом канале. `try_send` не блокирует и
+возвращает `Bool`: `false` означает закрытие, заполнение очереди или занятый
+механизм синхронизации.
+
+## Периодические interrupts на host
+
+Host MVP предоставляет типизированный периодический источник:
+
+```skadi
+Channel(Int) ticks = channel(8)
+Interrupt timer = interrupts.periodic(10ms)
+
+on interrupt timer {
+    ticks.try_send(1)
+}
+```
+
+Handler работает в строгом interrupt context. В нём запрещены allocation,
+blocking operations, I/O, `sleep/delay`, `wait/stop`, управление ресурсами и
+обычные пользовательские вызовы. Первый разрешённый bridge в normal context —
+`Channel.try_send`. Windows и POSIX backend имитируют interrupt системным
+периодическим потоком; это не hardware IRQ и не hard real-time гарантия.
+
 ## Ошибки и взаимные блокировки
 
 Compiler предотвращает потерю handle и небезопасную передачу данных, но не может
@@ -345,9 +384,9 @@ latency и deterministic allocation, необходимых для серьёз�
 - thread pool, work stealing и async/await;
 - detached tasks;
 - hard kill;
-- channel close, timeout, `select`, `try_send`, `try_receive`;
+- channel timeout, `select`, `try_receive`;
 - отмена блокирующего I/O или channel operation;
-- timer, `sleep`/`delay` и периодический scheduler;
+- general-purpose timer/scheduler beyond typed host `interrupts.periodic`;
 - affinity, priority и stack-size configuration;
 - RTOS, ESP32 и bare-metal backend;
 - гарантии hard real-time.

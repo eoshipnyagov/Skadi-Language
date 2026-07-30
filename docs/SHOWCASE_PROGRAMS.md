@@ -1,6 +1,6 @@
 # Showcase-программы Skadi
 
-В этом разделе собраны 16 небольших showcase-программ.
+В этом разделе собраны 17 небольших showcase-программ.
 
 Их цель:
 
@@ -28,7 +28,17 @@
   <li><code>bench_14_byte_size_budget.skd</code><ul><li>Расчёт ёмкости Memory через nominal <code>ByteSize</code>.</li><li>Покрытие: literals <code>b/kb</code>, арифметика и сравнение <code>ByteSize</code>, <code>ByteSize List</code>, динамический <code>memory(ByteSize)</code>, <code>place in</code> и <code>clear</code>.</li></ul></li>
   <li><code>bench_15_angle_navigation.skd</code><ul><li>Расчёт направления через nominal <code>Angle</code>.</li><li>Покрытие: integer/fractional literals <code>deg/rad</code>, angle/scalar arithmetic, <code>sin</code>, <code>cos</code>, <code>atan2</code>, <code>rad_to_deg</code> и <code>Angle List</code>.</li></ul></li>
   <li><code>bench_16_vector_navigation.skd</code><ul><li>Навигационный расчёт с встроенными векторами.</li><li>Покрытие: <code>Vec2/Vec3/Vec4</code>, components, vector/scalar arithmetic, <code>normalize</code>, <code>distance</code>, <code>length</code> и <code>cross</code>.</li></ul></li>
+  <li><code>bench_17_canvas_palette.skd</code><ul><li>Детерминированная headless-сцена Canvas v0.</li><li>Покрытие: <code>Color</code>, <code>color_hex</code>, 16-цветная терминальная палитра, <code>Rect</code>, <code>Canvas</code>, clipping, alpha blending, прямоугольники, окружности и framebuffer checksum.</li></ul></li>
 </ol>
+
+## Фокусные примеры memory и ownership
+
+Помимо release showcase-набора, тесты компилируют и запускают:
+
+- `examples/memory/positive/06_extended_regions.skd` — `allow grow/drop`,
+  child и static regions;
+- `examples/ownership/01_move_canvas_factory.skd` — factory return и передача
+  Canvas owner через `move`.
 
 ## Репозиторные входные данные
 
@@ -80,6 +90,7 @@ Pop-Location
 .\bench_14_byte_size_budget.exe
 .\bench_15_angle_navigation.exe
 .\bench_16_vector_navigation.exe
+.\bench_17_canvas_palette.exe
 ```
 
 Или через вспомогательные скрипты:
@@ -108,6 +119,7 @@ Pop-Location
 - Если вызов компилятора завершается ошибкой, скрипт завершается с ненулевым кодом и сообщает, какие showcase-программы не прошли.
 - Для `bench_01` и `bench_08` smoke-скрипты временно меняют рабочую директорию на `benchmarks/showcase-data/tree_fixture`.
 - Для `bench_02` и `bench_03` smoke-скрипты используют `benchmarks/showcase-data/sample_weather.txt`.
+- `bench_17` остаётся headless и поэтому безопасно проверяет software Canvas в CI без открытия окна.
 - В `v1.1` проверка showcase-программ остаётся CLI/script-driven, но теперь опирается на репозиторные fixture-данные.
 - `skadi-cli tui` можно использовать внутри showcase-проекта для ручного `check`, `build` и `run`, но отдельного браузера showcase-программ в TUI пока нет.
 

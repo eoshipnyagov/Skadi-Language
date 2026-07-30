@@ -59,7 +59,7 @@
 
 Задачи:
 
-- реализовать precedence table из `docs/legacy/Skadi_design.txt`;
+- реализовать precedence table из раннего design-контракта;
 - добавить prefix/infix parsing для arithmetic/comparison/logical operators;
 - поддержать grouped expressions и variable references.
 
@@ -131,13 +131,14 @@
 
 - пересмотреть `v1` scope языка и явно сократить несущественные фичи для MVP;
 - разрешить overlap в syntax/model (`one canonical style per feature in v1`);
-- заново подтвердить семантику memory model (`allow drop`, chunk budgeting) перед более глубокой реализацией;
+- поддерживать принятый bounded Memory contract: segmented `allow grow`,
+  declarative `allow drop`, child/root-static regions и явные ограничения;
 - держать `docs/SKADI_MEMORY_MODEL_DRAFT_RU.md` как активную reference-точку по memory/lifetime design, пока не зафиксирован более узкий MVP contract;
 - держать `docs/SKADI_TASK_MODEL_DRAFT_RU.md` как активную reference-точку по task/channel/concurrency design, пока не зафиксирован более узкий MVP contract;
-- держать `docs/SKADI_VISUAL_CORE_DRAFT_RU.md` как активную reference-точку по будущему Canvas/Visual Core, пока не зафиксирован более узкий MVP contract;
+- держать `docs/SKADI_VISUAL_CORE_DRAFT_RU.md` как широкий future reference, а принятый Canvas v0 фиксировать отдельным MVP contract;
 - держать `docs/SKADI_SYSTEMS_ADDITIONS_DRAFT_RU.md` как активную reference-точку по будущему time/units/resource/context/policy design, пока не зафиксирован более узкий MVP contract;
 - использовать `docs/SKADI_MEMORY_MODEL_MVP_CONTRACT_RU.md` и `docs/SKADI_TASK_MODEL_MVP_CONTRACT_RU.md` как ближайшие implementation contracts для parser/semantic/runtime planning;
-- использовать `docs/SKADI_VISUAL_CORE_MVP_CONTRACT_RU.md` как ближайший future implementation contract для visual-layer planning;
+- использовать `docs/SKADI_VISUAL_CORE_MVP_CONTRACT_RU.md` как принятый executable contract для Canvas v0 и основу следующих visual-layer итераций;
 - использовать `docs/SKADI_SYSTEMS_ADDITIONS_MVP_CONTRACT_RU.md` как ближайший future implementation contract для time/units/resource/context/policy planning;
 - заморозить урезанный `Skadi Core v1` и жёстко привязать compiler milestones к нему;
 - синхронизировать syntax decisions с `docs/SKADI_STYLE_PRINCIPLES.md`;
@@ -236,13 +237,22 @@ Reference:
 Реализовано и закреплено тестами:
 
 - Memory MVP: region runtime, `place in`, `clear`, базовые escape- и lifecycle-проверки;
+- segmented growth, child/root-static regions и bounded ownership transfer
+  через `view`/`direct`/`move`;
 - Task/Channel runtime MVP: `run`, `wait`, `stop`, `stopping`, bounded FIFO и передача результатов;
 - Win32 и pthread backend, многопоточные stress/e2e и обязательный TSan gate в Linux CI;
 - относительные path-imports, `local`/`hide`, direct-import-only visibility и `module.symbol`;
 - каноническое ключевое слово `returns` для типизированных функций.
-- nominal `Time/Duration`, unit literals и monotonic Win32/POSIX runtime.
+- nominal `Time/Duration`, unit literals и monotonic Win32/POSIX runtime;
+- `ByteSize`, `Angle` и bounded `Vec2/Vec3/Vec4` end-to-end;
+- typed host Interrupt и Canvas v0 с Win32/headless backend;
+- переходные формы закрыты compatibility policy или hard diagnostics;
+- Windows/Linux/macOS archives, installers, checksums и release workflow;
+- `v1.2.0-rc.1` опубликован как draft prerelease.
 
 Открытые задачи и границы текущего этапа ведутся в `docs/SKADI_V1_2_PLAN_RU.md`.
+Ближайший runtime slice: cancellation blocking Channel operations через
+существующие `stop`/`close` boundaries без преждевременного добавления `select`.
 
 ## Реестр рисков
 

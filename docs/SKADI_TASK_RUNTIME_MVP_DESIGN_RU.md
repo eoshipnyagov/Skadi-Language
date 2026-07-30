@@ -1,7 +1,7 @@
 # Skadi v1.2: Task Runtime MVP Design
 
-Дата: 2026-07-12
-Статус: approved design target / implementation contract.
+Дата: 2026-07-29
+Статус: implemented experimental runtime design; historical implementation ledger.
 
 ## 1. Назначение
 

@@ -2,8 +2,8 @@
 // Goal: keep many Skadi surfaces visible in one frontend-valid file.
 
 label ErrorCode {
-    Ok
-    InvalidScale
+    Ok = 0
+    InvalidScale = 1
 }
 
 danger fn parse_scale(Text raw_text) returns Float {

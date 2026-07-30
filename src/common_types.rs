@@ -10,6 +10,7 @@ pub enum TokenKind {
     KeywordFn,           // fn
     KeywordStruct,       // struct
     KeywordLabel,        // label
+    KeywordTag,          // tag
     KeywordIf,           // if
     KeywordElse,         // else
     KeywordWhen,         // when
@@ -23,13 +24,13 @@ pub enum TokenKind {
     KeywordPass,         // pass
     KeywordReturn,       // return
     KeywordNew,          // new
-    KeywordFixed,        // fixed (or const)
-    KeywordConst,        // const
+    KeywordConstant,     // constant
     KeywordHide,         // hide
     KeywordLocal,        // local
     KeywordMy,           // my
     KeywordDirect,       // direct
-    KeywordAllowDrop,    // allow drop
+    KeywordView,         // view
+    KeywordMove,         // move
     KeywordOnError,      // on error
     KeywordOnInterrupt,  // on interrupt
     KeywordOnErrorBlock, // Used for the block context (on error { ... })

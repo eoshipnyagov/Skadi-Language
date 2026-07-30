@@ -95,6 +95,11 @@ const SHOWCASE_CASES: &[ShowcaseCase] = &[
         source: "benchmarks/bench_16_vector_navigation.skd",
         extra_flags: &["-lm"],
     },
+    ShowcaseCase {
+        name: "bench_17_canvas_palette",
+        source: "benchmarks/bench_17_canvas_palette.skd",
+        extra_flags: &[],
+    },
 ];
 
 fn find_c_compiler() -> Option<&'static str> {

@@ -35,6 +35,30 @@ impl Program {
 pub struct FunctionParam {
     pub name: String,
     pub param_type: Option<String>,
+    pub borrow: BorrowMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BorrowMode {
+    #[default]
+    Value,
+    DirectMutable,
+    View,
+    Move,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MemoryKind {
+    #[default]
+    Dynamic,
+    Child,
+    Static,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LabelVariant {
+    pub name: String,
+    pub discriminant: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -73,13 +97,16 @@ pub enum Statement {
     VarDecl {
         name: String,
         value: Box<Expression>,
-        is_fixed: bool,
+        is_constant: bool,
         declared_type: Option<String>,
         loc: Location,
     },
     MemoryDecl {
         name: String,
         size: Box<Expression>,
+        kind: MemoryKind,
+        allow_grow: bool,
+        allow_drop: bool,
         on_error: Option<Box<BlockStatement>>,
         loc: Location,
     },
@@ -149,6 +176,12 @@ pub enum Statement {
         loc: Location,
     },
     LabelDecl {
+        name: String,
+        variants: Vec<LabelVariant>,
+        is_local: bool,
+        loc: Location,
+    },
+    TagDecl {
         name: String,
         variants: Vec<String>,
         is_local: bool,
@@ -268,6 +301,9 @@ pub enum Expression {
         index: Box<Expression>,
     },
     VariableReference(String), // Usage of a defined variable name
+    DirectBorrow(String),
+    ViewBorrow(String),
+    Move(String),
     MemberAccess {
         base: String,
         field: String,

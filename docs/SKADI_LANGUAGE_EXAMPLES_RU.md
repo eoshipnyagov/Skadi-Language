@@ -158,6 +158,25 @@ Math core и константы `PI`, `TAU`, `E`, `EPSILON` входят в stab
 Nominal `Angle` и literals `deg/rad` относятся к experimental `v1.2`; полный
 контракт описан на странице [Углы](angle.md).
 
+## Canvas v0 (`v1.2`, experimental)
+
+```skadi
+Canvas frame = canvas(64, 48)
+new Color background = color_hex("#1d1f21", 255)
+new Rect panel = rect(4.0, 4.0, 56.0, 40.0)
+new Vec2 center = {x = 32.0, y = 24.0}
+
+frame.clear(background)
+frame.fill_rect(panel, Color.terminal_blue)
+frame.circle(center, 12.0, Color.terminal_bright_yellow)
+output(frame.checksum())
+```
+
+Этот пример работает без окна и подходит для тестов. На Windows кадр можно
+показать через `Window window = windows.open(...)` и
+`window.present(direct frame)`. API, палитра и resource rules описаны на
+странице [Canvas и Visual Core](canvas.md).
+
 ## Векторы (`v1.2`, experimental)
 
 ```skadi

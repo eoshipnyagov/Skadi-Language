@@ -102,3 +102,24 @@ for (i = 0; i < 10; i++) {
 
     assert_eq!(formatted, expected);
 }
+
+#[test]
+fn formats_view_and_direct_borrows_distinctly() {
+    let source = r#"
+fn inspect(view Canvas frame)returns Int{
+return frame.checksum()
+}
+fn clear(direct Canvas frame){
+frame.clear(Color.black)
+}
+Canvas frame=canvas(8,8)
+new Int checksum=inspect(view frame)
+clear(direct frame)
+"#;
+
+    let formatted = format_source(source).expect("format should support view borrows");
+    assert!(formatted.contains("fn inspect(view Canvas frame) returns Int"));
+    assert!(formatted.contains("inspect(view frame)"));
+    assert!(formatted.contains("fn clear(direct Canvas frame)"));
+    assert!(formatted.contains("clear(direct frame)"));
+}

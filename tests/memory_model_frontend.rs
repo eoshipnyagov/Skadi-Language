@@ -14,6 +14,17 @@ fn parse_err(src: &str) -> String {
     parse_program(&tokens).expect_err("parse should fail")
 }
 
+fn semantic_ok(src: &str) -> v01::ast_nodes::Program {
+    let program = parse_ok(src);
+    semantic_analyze(&program).expect("semantic analysis should pass");
+    program
+}
+
+fn semantic_err(src: &str) -> String {
+    let program = parse_ok(src);
+    semantic_analyze(&program).expect_err("semantic analysis should fail")
+}
+
 #[test]
 fn parser_accepts_memory_declaration_place_in_and_clear() {
     let src = r#"
@@ -71,6 +82,95 @@ arena.clear()
         program.statements[2],
         Statement::MemoryClear { .. }
     ));
+}
+
+#[test]
+fn parser_and_formatter_cover_memory_policies_child_and_static_regions() {
+    let source = r#"
+Memory root_memory = memory(8kb, allow grow, allow drop)
+place in root_memory {
+    Memory child_memory = memory.child(2kb, allow drop)
+}
+Memory fixed_memory = memory.static(4kb, allow drop)
+"#;
+    let program = parse_ok(source);
+    semantic_analyze(&program).expect("extended Memory surface should be valid");
+    let formatted = v01::formatter::format_source(source).expect("format Memory policies");
+    assert!(formatted.contains("memory(8kb, allow grow, allow drop)"));
+    assert!(formatted.contains("memory.child(2kb, allow drop)"));
+    assert!(formatted.contains("memory.static(4kb, allow drop)"));
+}
+
+#[test]
+fn semantic_rejects_invalid_child_static_and_growth_combinations() {
+    let child_without_parent = semantic_err("Memory child_memory = memory.child(1kb)");
+    assert!(
+        child_without_parent.contains("only inside 'place in <parent>"),
+        "{child_without_parent}"
+    );
+
+    let growing_child = semantic_err(
+        r#"
+Memory root_memory = memory(8kb)
+place in root_memory {
+    Memory child_memory = memory.child(1kb, allow grow)
+}
+"#,
+    );
+    assert!(
+        growing_child.contains("cannot use 'allow grow'"),
+        "{growing_child}"
+    );
+
+    let dynamic_static_size = semantic_err(
+        r#"
+new ByteSize capacity = 4kb
+Memory fixed_memory = memory.static(capacity)
+"#,
+    );
+    assert!(
+        dynamic_static_size.contains("compile-time ByteSize literal"),
+        "{dynamic_static_size}"
+    );
+
+    let local_static = semantic_err(
+        r#"
+fn prepare() {
+    Memory local_memory = memory.static(1kb)
+}
+"#,
+    );
+    assert!(
+        local_static.contains("allowed only at program root"),
+        "{local_static}"
+    );
+}
+
+#[test]
+fn codegen_lowers_memory_policies_to_distinct_runtime_initializers() {
+    let program = semantic_ok(
+        r#"
+Memory root_memory = memory(8kb, allow grow, allow drop)
+place in root_memory {
+    Memory child_memory = memory.child(2kb, allow drop)
+    place in child_memory {
+        new Text message = concat("child", "-region")
+        output(message)
+    }
+}
+Memory fixed_memory = memory.static(4kb, allow drop)
+"#,
+    );
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_mem_region_init(root_memory"), "{c}");
+    assert!(c.contains("true, true"), "{c}");
+    assert!(
+        c.contains("sk_mem_region_init_child(child_memory, sk_mem_current()"),
+        "{c}"
+    );
+    assert!(c.contains("static unsigned char fixed_memory_buffer[4096]"));
+    assert!(c.contains("sk_mem_region_init_external(fixed_memory"));
+    assert!(c.contains("sk_mem_region_destroy(root_memory)"));
 }
 
 #[test]

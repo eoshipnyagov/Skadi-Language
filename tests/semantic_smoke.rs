@@ -75,20 +75,17 @@ on error {
 }
 
 #[test]
-fn semantic_rejects_on_interrupt_without_runtime_binding() {
+fn semantic_rejects_untyped_on_interrupt_target() {
     let src = r#"
 on interrupt timer0 {
-    new x = 1
+    pass
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
-    let err = semantic_analyze(&program).expect_err("on interrupt must fail before codegen");
+    let err = semantic_analyze(&program).expect_err("untyped interrupt target must fail");
     assert!(err.contains("SC-SEM-040"), "{err}");
-    assert!(
-        err.contains("reserved for a future platform runtime"),
-        "{err}"
-    );
+    assert!(err.contains("owning Interrupt capability"), "{err}");
 }
 
 #[test]
@@ -153,8 +150,8 @@ x = parse_value(x) on error {
 fn semantic_allows_return_error_with_errorcode_label() {
     let src = r#"
 label ErrorCode {
-    Ok
-    ZeroDivision
+    Ok = 0
+    ZeroDivision = 1
 }
 
 danger fn parse_value(bool x) Int {
@@ -170,8 +167,8 @@ danger fn parse_value(bool x) Int {
 fn semantic_allows_qualified_return_error_variant() {
     let src = r#"
 label ErrorCode {
-    Ok
-    ZeroDivision
+    Ok = 0
+    ZeroDivision = 1
 }
 
 danger fn parse_value(bool x) Int {
@@ -187,8 +184,8 @@ danger fn parse_value(bool x) Int {
 fn semantic_rejects_unknown_return_error_code() {
     let src = r#"
 label ErrorCode {
-    Ok
-    ZeroDivision
+    Ok = 0
+    ZeroDivision = 1
 }
 
 danger fn parse_value(bool x) Int {
@@ -206,8 +203,8 @@ danger fn parse_value(bool x) Int {
 fn semantic_rejects_errorcode_without_ok_first() {
     let src = r#"
 label ErrorCode {
-    ZeroDivision
-    Ok
+    ZeroDivision = 1
+    Ok = 0
 }
 
 danger fn parse_value(bool x) Int {
@@ -217,7 +214,7 @@ danger fn parse_value(bool x) Int {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
-    assert!(err.contains("must start with 'Ok'"));
+    assert!(err.contains("must start with 'Ok = 0'"));
 }
 
 #[test]
@@ -1011,8 +1008,8 @@ x = parse_value(x) on error {
 fn semantic_errorcode_contract_diagnostic_snapshot() {
     let src = r#"
 label ErrorCode {
-    ZeroDivision
-    Ok
+    ZeroDivision = 1
+    Ok = 0
 }
 
 danger fn parse_value(bool x) Int {
@@ -1024,7 +1021,7 @@ danger fn parse_value(bool x) Int {
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.starts_with("Semantic error:"));
     assert!(err.contains("[SC-SEM-051]"));
-    assert!(err.contains("label ErrorCode must start with 'Ok' variant."));
+    assert!(err.contains("label ErrorCode must start with 'Ok = 0' variant."));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::ast_nodes::{BlockStatement, Expression, Program, Statement};
+use crate::ast_nodes::{BlockStatement, BorrowMode, Expression, Program, Statement};
 use crate::builtins::{Builtin, builtin_from_name};
 
 struct FunctionContext {
@@ -19,6 +19,7 @@ struct PlaceContext {
 struct CodegenState {
     next_label_id: usize,
     function_returns: HashMap<String, String>,
+    interrupt_handler_index: usize,
 }
 
 impl CodegenState {
@@ -299,6 +300,7 @@ fn statements_use_vector(statements: &[Statement]) -> bool {
         | Statement::ContinueStatement { .. }
         | Statement::PassStatement { .. }
         | Statement::LabelDecl { .. }
+        | Statement::TagDecl { .. }
         | Statement::MemoryClear { .. }
         | Statement::StopTask { .. }
         | Statement::ReturnError { .. } => false,
@@ -314,113 +316,231 @@ fn emit_thread_local_support(out: &mut String) {
 }
 
 fn emit_memory_runtime(out: &mut String) {
-    out.push_str("typedef struct SkMemoryRegion {\n");
-    out.push_str("    unsigned char *buffer;\n");
-    out.push_str("    size_t capacity;\n");
-    out.push_str("    size_t offset;\n");
-    out.push_str("    bool failed;\n");
-    out.push_str("} SkMemoryRegion;\n\n");
-    out.push_str("typedef union {\n");
-    out.push_str("    long double long_double_value;\n");
-    out.push_str("    void *pointer_value;\n");
-    out.push_str("    int64_t integer_value;\n");
-    out.push_str("} SkMemoryAlignment;\n\n");
-    out.push_str("typedef struct SkAllocHeader {\n");
-    out.push_str("    uint32_t magic;\n");
-    out.push_str("    SkMemoryRegion *owner_region;\n");
-    out.push_str("    size_t size;\n");
-    out.push_str("    SkMemoryAlignment alignment;\n");
-    out.push_str("} SkAllocHeader;\n\n");
-    out.push_str("#define SK_ALLOC_MAGIC 0x534B4144u\n\n");
-    out.push_str("static SK_THREAD_LOCAL SkMemoryRegion *sk_active_region = NULL;\n\n");
-    out.push_str("static size_t sk_mem_align_up(size_t value, size_t alignment) {\n");
-    out.push_str("    size_t rem = value % alignment;\n");
-    out.push_str("    return rem == 0 ? value : (value + (alignment - rem));\n");
-    out.push_str("}\n\n");
-    out.push_str("static SkAllocHeader* sk_header_from_ptr(const void *ptr) {\n");
-    out.push_str("    if (!ptr) return NULL;\n");
-    out.push_str("    SkAllocHeader *header = ((SkAllocHeader*)ptr) - 1;\n");
-    out.push_str("    if (header->magic != SK_ALLOC_MAGIC) return NULL;\n");
-    out.push_str("    return header;\n");
-    out.push_str("}\n\n");
-    out.push_str("static SkMemoryRegion* sk_mem_set_active(SkMemoryRegion *region) {\n");
-    out.push_str("    SkMemoryRegion *previous = sk_active_region;\n");
-    out.push_str("    sk_active_region = region;\n");
-    out.push_str("    return previous;\n");
-    out.push_str("}\n\n");
-    out.push_str("static SkMemoryRegion* sk_mem_current(void) {\n");
-    out.push_str("    return sk_active_region;\n");
-    out.push_str("}\n\n");
-    out.push_str("static void sk_mem_clear_failure(SkMemoryRegion *region) {\n");
-    out.push_str("    if (region) region->failed = false;\n");
-    out.push_str("}\n\n");
-    out.push_str("static bool sk_mem_failed(SkMemoryRegion *region) {\n");
-    out.push_str("    return region && region->failed;\n");
-    out.push_str("}\n\n");
-    out.push_str("static void sk_mem_panic(const char *message) {\n");
-    out.push_str("    fprintf(stderr, \"Skadi memory runtime error: %s\\n\", message ? message : \"unknown\");\n");
-    out.push_str("    exit(1);\n");
-    out.push_str("}\n\n");
-    out.push_str("static bool sk_mem_region_init(SkMemoryRegion *region, size_t capacity) {\n");
-    out.push_str("    if (!region) return false;\n");
-    out.push_str("    region->buffer = NULL;\n");
-    out.push_str("    region->capacity = capacity;\n");
-    out.push_str("    region->offset = 0;\n");
-    out.push_str("    region->failed = false;\n");
-    out.push_str("    if (capacity == 0) return true;\n");
-    out.push_str("    region->buffer = (unsigned char*)malloc(capacity);\n");
-    out.push_str("    return region->buffer != NULL;\n");
-    out.push_str("}\n\n");
-    out.push_str("static void sk_mem_region_clear(SkMemoryRegion *region) {\n");
-    out.push_str("    if (!region) return;\n");
-    out.push_str("    region->offset = 0;\n");
-    out.push_str("    region->failed = false;\n");
-    out.push_str("}\n\n");
-    out.push_str("static void* sk_alloc_bytes_in(SkMemoryRegion *region, size_t size) {\n");
-    out.push_str("    size_t total = sizeof(SkAllocHeader) + size;\n");
-    out.push_str("    if (region) {\n");
     out.push_str(
-        "        size_t start = sk_mem_align_up(region->offset, sizeof(SkMemoryAlignment));\n",
+        r#"typedef union {
+    long double long_double_value;
+    void *pointer_value;
+    int64_t integer_value;
+} SkMemoryAlignment;
+
+typedef struct SkMemoryChunk {
+    unsigned char *buffer;
+    size_t capacity;
+    size_t offset;
+    bool owns_buffer;
+    struct SkMemoryChunk *next;
+} SkMemoryChunk;
+
+typedef struct SkMemoryRegion {
+    SkMemoryChunk first;
+    SkMemoryChunk *current;
+    bool failed;
+    bool allow_grow;
+    bool allow_drop;
+} SkMemoryRegion;
+
+typedef struct SkAllocHeader {
+    uint32_t magic;
+    SkMemoryRegion *owner_region;
+    size_t size;
+    SkMemoryAlignment alignment;
+} SkAllocHeader;
+
+#define SK_ALLOC_MAGIC 0x534B4144u
+
+static SK_THREAD_LOCAL SkMemoryRegion *sk_active_region = NULL;
+
+static size_t sk_mem_align_up(size_t value, size_t alignment) {
+    size_t rem = value % alignment;
+    return rem == 0 ? value : (value + (alignment - rem));
+}
+
+static SkAllocHeader* sk_header_from_ptr(const void *ptr) {
+    if (!ptr) return NULL;
+    SkAllocHeader *header = ((SkAllocHeader*)ptr) - 1;
+    if (header->magic != SK_ALLOC_MAGIC) return NULL;
+    return header;
+}
+
+static SkMemoryRegion* sk_mem_set_active(SkMemoryRegion *region) {
+    SkMemoryRegion *previous = sk_active_region;
+    sk_active_region = region;
+    return previous;
+}
+
+static SkMemoryRegion* sk_mem_current(void) {
+    return sk_active_region;
+}
+
+static void sk_mem_clear_failure(SkMemoryRegion *region) {
+    if (region) region->failed = false;
+}
+
+static bool sk_mem_failed(SkMemoryRegion *region) {
+    return region && region->failed;
+}
+
+static void sk_mem_panic(const char *message) {
+    fprintf(stderr, "Skadi memory runtime error: %s\n", message ? message : "unknown");
+    exit(1);
+}
+
+static bool sk_mem_region_init_external(
+    SkMemoryRegion *region,
+    unsigned char *buffer,
+    size_t capacity,
+    bool owns_buffer,
+    bool allow_grow,
+    bool allow_drop
+) {
+    if (!region || !buffer || capacity == 0) return false;
+    memset(region, 0, sizeof(*region));
+    region->first.buffer = buffer;
+    region->first.capacity = capacity;
+    region->first.owns_buffer = owns_buffer;
+    region->current = &region->first;
+    region->allow_grow = allow_grow;
+    region->allow_drop = allow_drop;
+    return true;
+}
+
+static bool sk_mem_region_init(
+    SkMemoryRegion *region,
+    size_t capacity,
+    bool allow_grow,
+    bool allow_drop
+) {
+    if (!region || capacity == 0) return false;
+    unsigned char *buffer = (unsigned char*)malloc(capacity);
+    if (!buffer) return false;
+    return sk_mem_region_init_external(
+        region, buffer, capacity, true, allow_grow, allow_drop
     );
-    out.push_str("        if (!region->buffer || start + total > region->capacity) {\n");
-    out.push_str("            region->failed = true;\n");
-    out.push_str("            return NULL;\n");
-    out.push_str("        }\n");
-    out.push_str("        SkAllocHeader *header = (SkAllocHeader*)(region->buffer + start);\n");
-    out.push_str("        header->magic = SK_ALLOC_MAGIC;\n");
-    out.push_str("        header->owner_region = region;\n");
-    out.push_str("        header->size = size;\n");
-    out.push_str("        region->offset = start + total;\n");
-    out.push_str("        return (void*)(header + 1);\n");
-    out.push_str("    }\n");
-    out.push_str("    SkAllocHeader *header = (SkAllocHeader*)malloc(total);\n");
-    out.push_str("    if (!header) return NULL;\n");
-    out.push_str("    header->magic = SK_ALLOC_MAGIC;\n");
-    out.push_str("    header->owner_region = NULL;\n");
-    out.push_str("    header->size = size;\n");
-    out.push_str("    return (void*)(header + 1);\n");
-    out.push_str("}\n\n");
-    out.push_str("static void* sk_alloc_bytes(size_t size) {\n");
-    out.push_str("    return sk_alloc_bytes_in(sk_mem_current(), size);\n");
-    out.push_str("}\n\n");
-    out.push_str("static char* sk_text_alloc(size_t size) {\n");
-    out.push_str("    return (char*)sk_alloc_bytes(size + 1);\n");
-    out.push_str("}\n\n");
-    out.push_str("static char* sk_text_dup(const char *s) {\n");
-    out.push_str("    const char *src = s ? s : \"\";\n");
-    out.push_str("    size_t n = strlen(src);\n");
-    out.push_str("    char *out = sk_text_alloc(n);\n");
-    out.push_str("    if (!out) return NULL;\n");
-    out.push_str("    memcpy(out, src, n);\n");
-    out.push_str("    out[n] = '\\0';\n");
-    out.push_str("    return out;\n");
-    out.push_str("}\n\n");
-    out.push_str("static void sk_free_text(void *ptr) {\n");
-    out.push_str("    SkAllocHeader *header = sk_header_from_ptr(ptr);\n");
-    out.push_str("    if (!header) return;\n");
-    out.push_str("    if (header->owner_region) return;\n");
-    out.push_str("    free(header);\n");
-    out.push_str("}\n\n");
+}
+
+static void sk_mem_region_release_growth(SkMemoryRegion *region) {
+    if (!region) return;
+    SkMemoryChunk *chunk = region->first.next;
+    while (chunk) {
+        SkMemoryChunk *next = chunk->next;
+        if (chunk->owns_buffer) free(chunk->buffer);
+        free(chunk);
+        chunk = next;
+    }
+    region->first.next = NULL;
+    region->current = &region->first;
+}
+
+static void sk_mem_region_clear(SkMemoryRegion *region) {
+    if (!region) return;
+    sk_mem_region_release_growth(region);
+    region->first.offset = 0;
+    region->failed = false;
+}
+
+static void sk_mem_region_destroy(SkMemoryRegion *region) {
+    if (!region) return;
+    if (sk_active_region == region) sk_active_region = NULL;
+    sk_mem_region_release_growth(region);
+    if (region->first.owns_buffer) free(region->first.buffer);
+    memset(region, 0, sizeof(*region));
+}
+
+static SkMemoryChunk* sk_mem_grow(SkMemoryRegion *region, size_t minimum) {
+    if (!region || !region->allow_grow) return NULL;
+    size_t capacity = region->first.capacity;
+    if (capacity < minimum) capacity = minimum;
+    while (capacity < minimum || capacity < region->current->capacity * 2) {
+        if (capacity > SIZE_MAX / 2) {
+            capacity = minimum;
+            break;
+        }
+        capacity *= 2;
+    }
+    SkMemoryChunk *chunk = (SkMemoryChunk*)calloc(1, sizeof(*chunk));
+    if (!chunk) return NULL;
+    chunk->buffer = (unsigned char*)malloc(capacity);
+    if (!chunk->buffer) {
+        free(chunk);
+        return NULL;
+    }
+    chunk->capacity = capacity;
+    chunk->owns_buffer = true;
+    region->current->next = chunk;
+    region->current = chunk;
+    return chunk;
+}
+
+static void* sk_alloc_bytes_in(SkMemoryRegion *region, size_t size) {
+    if (size > SIZE_MAX - sizeof(SkAllocHeader)) return NULL;
+    size_t total = sizeof(SkAllocHeader) + size;
+    if (region) {
+        SkMemoryChunk *chunk = region->current;
+        size_t start = sk_mem_align_up(chunk->offset, sizeof(SkMemoryAlignment));
+        if (!chunk->buffer || start > chunk->capacity || total > chunk->capacity - start) {
+            chunk = sk_mem_grow(region, total + sizeof(SkMemoryAlignment));
+            if (!chunk) {
+                region->failed = true;
+                return NULL;
+            }
+            start = 0;
+        }
+        SkAllocHeader *header = (SkAllocHeader*)(chunk->buffer + start);
+        header->magic = SK_ALLOC_MAGIC;
+        header->owner_region = region;
+        header->size = size;
+        chunk->offset = start + total;
+        return (void*)(header + 1);
+    }
+    SkAllocHeader *header = (SkAllocHeader*)malloc(total);
+    if (!header) return NULL;
+    header->magic = SK_ALLOC_MAGIC;
+    header->owner_region = NULL;
+    header->size = size;
+    return (void*)(header + 1);
+}
+
+static bool sk_mem_region_init_child(
+    SkMemoryRegion *child,
+    SkMemoryRegion *parent,
+    size_t capacity,
+    bool allow_drop
+) {
+    if (!child || !parent || capacity == 0) return false;
+    unsigned char *buffer = (unsigned char*)sk_alloc_bytes_in(parent, capacity);
+    if (!buffer) return false;
+    return sk_mem_region_init_external(
+        child, buffer, capacity, false, false, allow_drop
+    );
+}
+
+static void* sk_alloc_bytes(size_t size) {
+    return sk_alloc_bytes_in(sk_mem_current(), size);
+}
+
+static char* sk_text_alloc(size_t size) {
+    return (char*)sk_alloc_bytes(size + 1);
+}
+
+static char* sk_text_dup(const char *s) {
+    const char *src = s ? s : "";
+    size_t n = strlen(src);
+    char *out = sk_text_alloc(n);
+    if (!out) return NULL;
+    memcpy(out, src, n);
+    out[n] = '\0';
+    return out;
+}
+
+static void sk_free_text(void *ptr) {
+    SkAllocHeader *header = sk_header_from_ptr(ptr);
+    if (!header) return;
+    if (header->owner_region) return;
+    free(header);
+}
+
+"#,
+    );
 }
 
 fn emit_list_helpers_for(out: &mut String, c_ty: &str, suffix: &str) {
@@ -907,6 +1027,9 @@ fn expression_uses_task_surface(expr: &Expression) -> bool {
             .values()
             .any(|value| expression_uses_task_surface(value)),
         Expression::VariableReference(_)
+        | Expression::DirectBorrow(_)
+        | Expression::ViewBorrow(_)
+        | Expression::Move(_)
         | Expression::MemberAccess { .. }
         | Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
@@ -1045,7 +1168,8 @@ fn statement_uses_task_surface(stmt: &Statement) -> bool {
         | Statement::BreakStatement { .. }
         | Statement::ContinueStatement { .. }
         | Statement::PassStatement { .. }
-        | Statement::LabelDecl { .. } => false,
+        | Statement::LabelDecl { .. }
+        | Statement::TagDecl { .. } => false,
     }
 }
 
@@ -1535,6 +1659,7 @@ fn emit_channel_runtime(out: &mut String) {
     out.push_str("    size_t head;\n");
     out.push_str("    size_t tail;\n");
     out.push_str("    size_t count;\n");
+    out.push_str("    bool closed;\n");
     out.push_str("#if defined(_WIN32)\n");
     out.push_str("    CRITICAL_SECTION lock;\n");
     out.push_str("    CONDITION_VARIABLE not_empty;\n");
@@ -1574,19 +1699,27 @@ fn emit_channel_runtime(out: &mut String) {
     out.push_str("#endif\n");
     out.push_str("    return channel;\n");
     out.push_str("}\n\n");
-    out.push_str("static void sk_channel_send_raw(SkChannel *channel, const void *value) {\n");
+    out.push_str("static bool sk_channel_send_raw(SkChannel *channel, const void *value) {\n");
     out.push_str("    if (!channel || !value) sk_channel_panic(\"SC-RT-313\", \"invalid channel send state\");\n");
     out.push_str("#if defined(_WIN32)\n");
     out.push_str("    EnterCriticalSection(&channel->lock);\n");
-    out.push_str("    while (channel->count == channel->capacity) {\n");
+    out.push_str("    while (channel->count == channel->capacity && !channel->closed) {\n");
     out.push_str("        if (!SleepConditionVariableCS(&channel->not_full, &channel->lock, INFINITE)) sk_channel_panic(\"SC-RT-313\", \"channel send wait failed\");\n");
     out.push_str("    }\n");
     out.push_str("#else\n");
     out.push_str("    if (pthread_mutex_lock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel send lock failed\");\n");
-    out.push_str("    while (channel->count == channel->capacity) {\n");
+    out.push_str("    while (channel->count == channel->capacity && !channel->closed) {\n");
     out.push_str("        if (pthread_cond_wait(&channel->not_full, &channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel send wait failed\");\n");
     out.push_str("    }\n");
     out.push_str("#endif\n");
+    out.push_str("    if (channel->closed) {\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("        LeaveCriticalSection(&channel->lock);\n");
+    out.push_str("#else\n");
+    out.push_str("        pthread_mutex_unlock(&channel->lock);\n");
+    out.push_str("#endif\n");
+    out.push_str("        return false;\n");
+    out.push_str("    }\n");
     out.push_str("    memcpy(channel->buffer + (channel->tail * channel->element_size), value, channel->element_size);\n");
     out.push_str("    channel->tail = (channel->tail + 1) % channel->capacity;\n");
     out.push_str("    channel->count += 1;\n");
@@ -1596,20 +1729,29 @@ fn emit_channel_runtime(out: &mut String) {
     out.push_str("#else\n");
     out.push_str("    if (pthread_cond_signal(&channel->not_empty) != 0 || pthread_mutex_unlock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel send notification failed\");\n");
     out.push_str("#endif\n");
+    out.push_str("    return true;\n");
     out.push_str("}\n\n");
-    out.push_str("static void sk_channel_receive_raw(SkChannel *channel, void *out_value) {\n");
+    out.push_str("static bool sk_channel_receive_raw(SkChannel *channel, void *out_value) {\n");
     out.push_str("    if (!channel || !out_value) sk_channel_panic(\"SC-RT-313\", \"invalid channel receive state\");\n");
     out.push_str("#if defined(_WIN32)\n");
     out.push_str("    EnterCriticalSection(&channel->lock);\n");
-    out.push_str("    while (channel->count == 0) {\n");
+    out.push_str("    while (channel->count == 0 && !channel->closed) {\n");
     out.push_str("        if (!SleepConditionVariableCS(&channel->not_empty, &channel->lock, INFINITE)) sk_channel_panic(\"SC-RT-313\", \"channel receive wait failed\");\n");
     out.push_str("    }\n");
     out.push_str("#else\n");
     out.push_str("    if (pthread_mutex_lock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel receive lock failed\");\n");
-    out.push_str("    while (channel->count == 0) {\n");
+    out.push_str("    while (channel->count == 0 && !channel->closed) {\n");
     out.push_str("        if (pthread_cond_wait(&channel->not_empty, &channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel receive wait failed\");\n");
     out.push_str("    }\n");
     out.push_str("#endif\n");
+    out.push_str("    if (channel->count == 0 && channel->closed) {\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("        LeaveCriticalSection(&channel->lock);\n");
+    out.push_str("#else\n");
+    out.push_str("        pthread_mutex_unlock(&channel->lock);\n");
+    out.push_str("#endif\n");
+    out.push_str("        return false;\n");
+    out.push_str("    }\n");
     out.push_str("    memcpy(out_value, channel->buffer + (channel->head * channel->element_size), channel->element_size);\n");
     out.push_str("    channel->head = (channel->head + 1) % channel->capacity;\n");
     out.push_str("    channel->count -= 1;\n");
@@ -1619,11 +1761,61 @@ fn emit_channel_runtime(out: &mut String) {
     out.push_str("#else\n");
     out.push_str("    if (pthread_cond_signal(&channel->not_full) != 0 || pthread_mutex_unlock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel receive notification failed\");\n");
     out.push_str("#endif\n");
+    out.push_str("    return true;\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_channel_try_send_raw(SkChannel *channel, const void *value) {\n");
+    out.push_str("    if (!channel || !value) return false;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    if (!TryEnterCriticalSection(&channel->lock)) return false;\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_mutex_trylock(&channel->lock) != 0) return false;\n");
+    out.push_str("#endif\n");
+    out.push_str("    if (channel->closed || channel->count == channel->capacity) {\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("        LeaveCriticalSection(&channel->lock);\n");
+    out.push_str("#else\n");
+    out.push_str("        pthread_mutex_unlock(&channel->lock);\n");
+    out.push_str("#endif\n");
+    out.push_str("        return false;\n");
+    out.push_str("    }\n");
+    out.push_str("    memcpy(channel->buffer + (channel->tail * channel->element_size), value, channel->element_size);\n");
+    out.push_str("    channel->tail = (channel->tail + 1) % channel->capacity;\n");
+    out.push_str("    channel->count += 1;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    WakeConditionVariable(&channel->not_empty);\n");
+    out.push_str("    LeaveCriticalSection(&channel->lock);\n");
+    out.push_str("#else\n");
+    out.push_str("    pthread_cond_signal(&channel->not_empty);\n");
+    out.push_str("    pthread_mutex_unlock(&channel->lock);\n");
+    out.push_str("#endif\n");
+    out.push_str("    return true;\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_channel_close(SkChannel *channel) {\n");
+    out.push_str("    if (!channel) return false;\n");
+    out.push_str("    bool changed = false;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    EnterCriticalSection(&channel->lock);\n");
+    out.push_str("    changed = !channel->closed;\n");
+    out.push_str("    if (changed) {\n");
+    out.push_str("        channel->closed = true;\n");
+    out.push_str("        WakeAllConditionVariable(&channel->not_empty);\n");
+    out.push_str("        WakeAllConditionVariable(&channel->not_full);\n");
+    out.push_str("    }\n");
+    out.push_str("    LeaveCriticalSection(&channel->lock);\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_mutex_lock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel close lock failed\");\n");
+    out.push_str("    changed = !channel->closed;\n");
+    out.push_str("    if (changed) {\n");
+    out.push_str("        channel->closed = true;\n");
+    out.push_str("        pthread_cond_broadcast(&channel->not_empty);\n");
+    out.push_str("        pthread_cond_broadcast(&channel->not_full);\n");
+    out.push_str("    }\n");
+    out.push_str("    if (pthread_mutex_unlock(&channel->lock) != 0) sk_channel_panic(\"SC-RT-313\", \"channel close unlock failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("    return changed;\n");
     out.push_str("}\n\n");
     out.push_str("static void sk_channel_destroy(SkChannel *channel) {\n");
-    out.push_str(
-        "    if (!channel) sk_channel_panic(\"SC-RT-313\", \"invalid channel destroy state\");\n",
-    );
+    out.push_str("    if (!channel) return;\n");
     out.push_str("#if defined(_WIN32)\n");
     out.push_str("    DeleteCriticalSection(&channel->lock);\n");
     out.push_str("#else\n");
@@ -1631,6 +1823,12 @@ fn emit_channel_runtime(out: &mut String) {
     out.push_str("#endif\n");
     out.push_str("    free(channel->buffer);\n");
     out.push_str("    free(channel);\n");
+    out.push_str("}\n\n");
+    out.push_str("static SkChannel* sk_channel_move(SkChannel **source) {\n");
+    out.push_str("    if (!source) return NULL;\n");
+    out.push_str("    SkChannel *result = *source;\n");
+    out.push_str("    *source = NULL;\n");
+    out.push_str("    return result;\n");
     out.push_str("}\n\n");
 }
 
@@ -1642,8 +1840,28 @@ fn emit_channel_typed_wrapper(out: &mut String, skadi_type: &str) {
     out.push_str("(SkChannel *channel, ");
     out.push_str(&c_type);
     out.push_str(" value) {\n");
-    out.push_str("    sk_channel_send_raw(channel, &value);\n");
-    out.push_str("    return 0;\n");
+    out.push_str("    return sk_channel_send_raw(channel, &value) ? 0 : 1;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_channel_send_or_panic_");
+    out.push_str(&suffix);
+    out.push_str("(SkChannel *channel, ");
+    out.push_str(&c_type);
+    out.push_str(" value) {\n");
+    out.push_str("    if (!sk_channel_send_raw(channel, &value)) sk_channel_panic(\"SC-RT-314\", \"send on closed channel requires 'on error'\");\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_channel_try_send_");
+    out.push_str(&suffix);
+    out.push_str("(SkChannel *channel, ");
+    out.push_str(&c_type);
+    out.push_str(" value) {\n");
+    out.push_str("    return sk_channel_try_send_raw(channel, &value);\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_channel_try_receive_");
+    out.push_str(&suffix);
+    out.push_str("(SkChannel *channel, ");
+    out.push_str(&c_type);
+    out.push_str(" *out) {\n");
+    out.push_str("    return sk_channel_receive_raw(channel, out);\n");
     out.push_str("}\n\n");
     out.push_str("static ");
     out.push_str(&c_type);
@@ -1653,7 +1871,7 @@ fn emit_channel_typed_wrapper(out: &mut String, skadi_type: &str) {
     out.push_str("    ");
     out.push_str(&c_type);
     out.push_str(" value;\n");
-    out.push_str("    sk_channel_receive_raw(channel, &value);\n");
+    out.push_str("    if (!sk_channel_receive_raw(channel, &value)) sk_channel_panic(\"SC-RT-314\", \"receive on drained closed channel requires 'on error'\");\n");
     out.push_str("    return value;\n");
     out.push_str("}\n\n");
 }
@@ -1791,8 +2009,11 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
     let needs_math_runtime = program_uses_math_runtime(program);
-    let needs_vector_runtime = statements_use_vector(&program.statements);
+    let needs_visual_runtime = program_uses_visual_runtime(program);
+    let needs_window_runtime = program_uses_window_runtime(program);
+    let needs_vector_runtime = statements_use_vector(&program.statements) || needs_visual_runtime;
     let needs_time_runtime = program_uses_time_runtime(program);
+    let needs_interrupt_runtime = program_uses_interrupt_runtime(program);
     let needs_task_runtime = statement_list_uses_task_surface(&program.statements);
     let needs_channel_runtime = statement_list_uses_deferred_task_surface(&program.statements);
     let task_entries = collect_task_entries(program);
@@ -1812,6 +2033,8 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         || needs_task_runtime
         || needs_channel_runtime
         || needs_time_runtime
+        || needs_interrupt_runtime
+        || needs_visual_runtime
     {
         out.push_str("#include <stddef.h>\n");
         out.push_str("#include <stdlib.h>\n");
@@ -1825,6 +2048,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         || needs_args_runtime
         || needs_memory_runtime
         || needs_channel_runtime
+        || needs_visual_runtime
     {
         out.push_str("#include <string.h>\n\n");
     }
@@ -1832,22 +2056,34 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         out.push_str("#include <math.h>\n\n");
         emit_math_runtime(&mut out);
     }
-    if needs_task_runtime || needs_channel_runtime || needs_time_runtime {
+    if needs_task_runtime || needs_channel_runtime || needs_time_runtime || needs_interrupt_runtime
+    {
         out.push_str("#if defined(_WIN32)\n");
         out.push_str("#include <windows.h>\n");
         out.push_str("#else\n");
-        if needs_task_runtime || needs_channel_runtime {
+        if needs_task_runtime || needs_channel_runtime || needs_interrupt_runtime {
             out.push_str("#include <pthread.h>\n");
         }
-        if needs_time_runtime {
+        if needs_time_runtime || needs_interrupt_runtime {
             out.push_str("#include <errno.h>\n");
             out.push_str("#include <time.h>\n");
         }
         out.push_str("#endif\n\n");
     }
+    if needs_window_runtime
+        && !(needs_task_runtime
+            || needs_channel_runtime
+            || needs_time_runtime
+            || needs_interrupt_runtime)
+    {
+        out.push_str("#if defined(_WIN32)\n#include <windows.h>\n#endif\n\n");
+    }
     if needs_vector_runtime {
         emit_vector_declarations(&mut out);
         emit_vector_runtime(&mut out, needs_math_runtime);
+    }
+    if needs_visual_runtime {
+        emit_visual_runtime(&mut out, needs_window_runtime);
     }
     if needs_time_runtime {
         emit_time_runtime(&mut out);
@@ -1860,6 +2096,9 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     }
     if needs_channel_runtime {
         emit_channel_runtime(&mut out);
+    }
+    if needs_interrupt_runtime {
+        emit_interrupt_runtime(&mut out);
     }
     if needs_fs_list || needs_fs_is_dir || needs_fs_join {
         out.push_str("#include <dirent.h>\n");
@@ -1881,9 +2120,12 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     if needs_io_runtime {
         emit_io_runtime(&mut out, needs_args_runtime);
     }
-    emit_error_code_enum(program, &mut out);
+    emit_nominal_enums(program, &mut out);
     if needs_channel_runtime {
         emit_channel_typed_wrappers(&mut out, &struct_names, needs_vector_runtime);
+    }
+    if needs_interrupt_runtime {
+        emit_interrupt_handlers(program, &mut out, &mut codegen_state);
     }
 
     if needs_task_runtime {
@@ -1898,6 +2140,7 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         }
     }
     emit_struct_methods(program, &mut out, &mut codegen_state);
+    codegen_state.interrupt_handler_index = 0;
 
     if needs_args_runtime {
         out.push_str("int main(int argc, char **argv) {\n");
@@ -1931,6 +2174,39 @@ pub fn transpile_program_to_c(program: &Program) -> String {
 }
 
 fn emit_top_level_cleanup(program: &Program, out: &mut String) {
+    for stmt in program.statements.iter().rev() {
+        if let Statement::VarDecl {
+            name,
+            declared_type: Some(declared_type),
+            ..
+        } = stmt
+            && normalize_type_token(declared_type) == "Interrupt"
+        {
+            out.push_str("    sk_interrupt_destroy(");
+            out.push_str(name);
+            out.push_str(");\n");
+        }
+    }
+    for resource_type in ["Window", "Canvas"] {
+        for stmt in program.statements.iter().rev() {
+            if let Statement::VarDecl {
+                name,
+                declared_type: Some(declared_type),
+                ..
+            } = stmt
+                && normalize_type_token(declared_type) == resource_type
+            {
+                out.push_str("    ");
+                out.push_str(if resource_type == "Window" {
+                    "sk_window_destroy(&"
+                } else {
+                    "sk_canvas_destroy(&"
+                });
+                out.push_str(name);
+                out.push_str(");\n");
+            }
+        }
+    }
     for stmt in program.statements.iter().rev() {
         let Statement::VarDecl {
             name,
@@ -1970,6 +2246,13 @@ fn emit_top_level_cleanup(program: &Program, out: &mut String) {
 
         if matches!(dt, "Text" | "Path") && expression_returns_owned_text(value) {
             out.push_str("    sk_free_text((void*)");
+            out.push_str(name);
+            out.push_str(");\n");
+        }
+    }
+    for stmt in program.statements.iter().rev() {
+        if let Statement::MemoryDecl { name, .. } = stmt {
+            out.push_str("    sk_mem_region_destroy(");
             out.push_str(name);
             out.push_str(");\n");
         }
@@ -2624,23 +2907,849 @@ fn program_uses_args_runtime(program: &Program) -> bool {
     program.statements.iter().any(stmt_uses_args)
 }
 
-fn emit_error_code_enum(program: &Program, out: &mut String) {
+fn emit_nominal_enums(program: &Program, out: &mut String) {
     for stmt in &program.statements {
-        if let Statement::LabelDecl { name, variants, .. } = stmt
-            && name == "ErrorCode"
-            && !variants.is_empty()
-        {
-            out.push_str("typedef enum ErrorCode {\n");
-            for (i, v) in variants.iter().enumerate() {
-                if i == 0 {
-                    out.push_str(&format!("    ErrorCode_{} = 0,\n", v));
-                } else {
-                    out.push_str(&format!("    ErrorCode_{} = {},\n", v, i));
+        match stmt {
+            Statement::LabelDecl { name, variants, .. } if !variants.is_empty() => {
+                out.push_str("typedef enum ");
+                out.push_str(name);
+                out.push_str(" {\n");
+                for variant in variants {
+                    out.push_str(&format!(
+                        "    {}_{} = {},\n",
+                        name, variant.name, variant.discriminant
+                    ));
+                }
+                out.push_str("} ");
+                out.push_str(name);
+                out.push_str(";\n\n");
+            }
+            Statement::TagDecl { name, variants, .. } if !variants.is_empty() => {
+                out.push_str("typedef enum ");
+                out.push_str(name);
+                out.push_str(" {\n");
+                for (index, variant) in variants.iter().enumerate() {
+                    out.push_str(&format!("    {}_{} = {},\n", name, variant, index));
+                }
+                out.push_str("} ");
+                out.push_str(name);
+                out.push_str(";\n\n");
+            }
+            _ => {}
+        }
+    }
+}
+
+fn emit_interrupt_runtime(out: &mut String) {
+    out.push_str("typedef void (*SkInterruptHandler)(void *context);\n\n");
+    out.push_str("typedef struct {\n");
+    out.push_str("    int64_t period_ns;\n");
+    out.push_str("    SkInterruptHandler handler;\n");
+    out.push_str("    void *context;\n");
+    out.push_str("    bool started;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    HANDLE thread;\n");
+    out.push_str("    volatile LONG stopping;\n");
+    out.push_str("#else\n");
+    out.push_str("    pthread_t thread;\n");
+    out.push_str("    pthread_mutex_t lock;\n");
+    out.push_str("    bool stopping;\n");
+    out.push_str("#endif\n");
+    out.push_str("} SkInterrupt;\n\n");
+    out.push_str("static void sk_interrupt_panic(const char *message) {\n");
+    out.push_str("    fprintf(stderr, \"Runtime error: [SC-RT-320] %s\\n\", message);\n");
+    out.push_str("    exit(1);\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_interrupt_is_stopping(SkInterrupt *interrupt) {\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    return InterlockedCompareExchange(&interrupt->stopping, 0, 0) != 0;\n");
+    out.push_str("#else\n");
+    out.push_str("    bool stopping;\n");
+    out.push_str("    if (pthread_mutex_lock(&interrupt->lock) != 0) sk_interrupt_panic(\"interrupt lock failed\");\n");
+    out.push_str("    stopping = interrupt->stopping;\n");
+    out.push_str("    if (pthread_mutex_unlock(&interrupt->lock) != 0) sk_interrupt_panic(\"interrupt unlock failed\");\n");
+    out.push_str("    return stopping;\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_interrupt_sleep(int64_t duration_ns) {\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    DWORD millis = (DWORD)((duration_ns + 999999LL) / 1000000LL);\n");
+    out.push_str("    Sleep(millis > 0 ? millis : 1);\n");
+    out.push_str("#else\n");
+    out.push_str("    struct timespec request;\n");
+    out.push_str("    request.tv_sec = (time_t)(duration_ns / 1000000000LL);\n");
+    out.push_str("    request.tv_nsec = (long)(duration_ns % 1000000000LL);\n");
+    out.push_str("    while (nanosleep(&request, &request) != 0 && errno == EINTR) {}\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("static DWORD WINAPI sk_interrupt_thread_main(LPVOID opaque) {\n");
+    out.push_str("#else\n");
+    out.push_str("static void* sk_interrupt_thread_main(void *opaque) {\n");
+    out.push_str("#endif\n");
+    out.push_str("    SkInterrupt *interrupt = (SkInterrupt*)opaque;\n");
+    out.push_str("    while (!sk_interrupt_is_stopping(interrupt)) {\n");
+    out.push_str("        sk_interrupt_sleep(interrupt->period_ns);\n");
+    out.push_str("        if (!sk_interrupt_is_stopping(interrupt)) interrupt->handler(interrupt->context);\n");
+    out.push_str("    }\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    return 0;\n");
+    out.push_str("#else\n");
+    out.push_str("    return NULL;\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
+    out.push_str("static SkInterrupt* sk_interrupt_periodic(int64_t period_ns) {\n");
+    out.push_str("    if (period_ns <= 0) sk_interrupt_panic(\"periodic interrupt duration must be positive\");\n");
+    out.push_str("    SkInterrupt *interrupt = (SkInterrupt*)calloc(1, sizeof(SkInterrupt));\n");
+    out.push_str("    if (!interrupt) sk_interrupt_panic(\"interrupt allocation failed\");\n");
+    out.push_str("    interrupt->period_ns = period_ns;\n");
+    out.push_str("#if !defined(_WIN32)\n");
+    out.push_str("    if (pthread_mutex_init(&interrupt->lock, NULL) != 0) { free(interrupt); sk_interrupt_panic(\"interrupt mutex initialization failed\"); }\n");
+    out.push_str("#endif\n");
+    out.push_str("    return interrupt;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_interrupt_bind(SkInterrupt *interrupt, SkInterruptHandler handler, void *context) {\n");
+    out.push_str("    if (!interrupt || !handler || interrupt->started) sk_interrupt_panic(\"invalid or duplicate interrupt binding\");\n");
+    out.push_str("    interrupt->handler = handler;\n");
+    out.push_str("    interrupt->context = context;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    interrupt->thread = CreateThread(NULL, 0, sk_interrupt_thread_main, interrupt, 0, NULL);\n");
+    out.push_str(
+        "    if (!interrupt->thread) sk_interrupt_panic(\"interrupt thread creation failed\");\n",
+    );
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_create(&interrupt->thread, NULL, sk_interrupt_thread_main, interrupt) != 0) sk_interrupt_panic(\"interrupt thread creation failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("    interrupt->started = true;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_interrupt_destroy(SkInterrupt *interrupt) {\n");
+    out.push_str("    if (!interrupt) return;\n");
+    out.push_str("    if (interrupt->started) {\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("        InterlockedExchange(&interrupt->stopping, 1);\n");
+    out.push_str("        WaitForSingleObject(interrupt->thread, INFINITE);\n");
+    out.push_str("        CloseHandle(interrupt->thread);\n");
+    out.push_str("#else\n");
+    out.push_str("        if (pthread_mutex_lock(&interrupt->lock) != 0) sk_interrupt_panic(\"interrupt stop lock failed\");\n");
+    out.push_str("        interrupt->stopping = true;\n");
+    out.push_str("        if (pthread_mutex_unlock(&interrupt->lock) != 0) sk_interrupt_panic(\"interrupt stop unlock failed\");\n");
+    out.push_str("        if (pthread_join(interrupt->thread, NULL) != 0) sk_interrupt_panic(\"interrupt join failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("    }\n");
+    out.push_str("#if !defined(_WIN32)\n");
+    out.push_str("    pthread_mutex_destroy(&interrupt->lock);\n");
+    out.push_str("#endif\n");
+    out.push_str("    free(interrupt->context);\n");
+    out.push_str("    free(interrupt);\n");
+    out.push_str("}\n\n");
+    out.push_str("static SkInterrupt* sk_interrupt_move(SkInterrupt **source) {\n");
+    out.push_str("    if (!source) return NULL;\n");
+    out.push_str("    SkInterrupt *result = *source;\n");
+    out.push_str("    *source = NULL;\n");
+    out.push_str("    return result;\n");
+    out.push_str("}\n\n");
+}
+
+fn emit_visual_runtime(out: &mut String, needs_window_runtime: bool) {
+    out.push_str(
+        r##"typedef struct { uint8_t r; uint8_t g; uint8_t b; uint8_t a; } SkColor;
+typedef struct { double x; double y; double width; double height; } SkRect;
+typedef struct {
+    int64_t width;
+    int64_t height;
+    uint32_t *pixels;
+} SkCanvas;
+
+static void sk_visual_panic(const char *message) {
+    fprintf(stderr, "Runtime error: [SC-RT-330] %s\n", message);
+    exit(1);
+}
+
+static SkColor sk_color(int64_t r, int64_t g, int64_t b, int64_t a) {
+    if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 || a < 0 || a > 255) {
+        sk_visual_panic("color components must be in 0..255");
+    }
+    return (SkColor){(uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)a};
+}
+
+static int sk_hex_digit(char value) {
+    if (value >= '0' && value <= '9') return value - '0';
+    if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+    if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+    return -1;
+}
+
+static SkColor sk_color_hex(const char *text, int64_t alpha) {
+    if (!text) sk_visual_panic("color_hex expects rrggbb or #rrggbb text");
+    if (text[0] == '#') text += 1;
+    if (strlen(text) != 6) sk_visual_panic("color_hex expects exactly six hexadecimal digits");
+    int digits[6];
+    for (int index = 0; index < 6; ++index) {
+        digits[index] = sk_hex_digit(text[index]);
+        if (digits[index] < 0) sk_visual_panic("color_hex contains a non-hexadecimal digit");
+    }
+    return sk_color(
+        digits[0] * 16 + digits[1],
+        digits[2] * 16 + digits[3],
+        digits[4] * 16 + digits[5],
+        alpha
+    );
+}
+
+#define Color_terminal_black ((SkColor){29, 31, 33, 255})
+#define Color_terminal_red ((SkColor){204, 102, 102, 255})
+#define Color_terminal_green ((SkColor){181, 189, 104, 255})
+#define Color_terminal_yellow ((SkColor){240, 198, 116, 255})
+#define Color_terminal_blue ((SkColor){129, 162, 190, 255})
+#define Color_terminal_magenta ((SkColor){178, 148, 187, 255})
+#define Color_terminal_cyan ((SkColor){138, 190, 183, 255})
+#define Color_terminal_white ((SkColor){197, 200, 198, 255})
+#define Color_terminal_bright_black ((SkColor){102, 102, 102, 255})
+#define Color_terminal_bright_red ((SkColor){213, 78, 83, 255})
+#define Color_terminal_bright_green ((SkColor){185, 202, 74, 255})
+#define Color_terminal_bright_yellow ((SkColor){231, 197, 71, 255})
+#define Color_terminal_bright_blue ((SkColor){122, 166, 218, 255})
+#define Color_terminal_bright_magenta ((SkColor){195, 151, 216, 255})
+#define Color_terminal_bright_cyan ((SkColor){112, 192, 177, 255})
+#define Color_terminal_bright_white ((SkColor){234, 234, 234, 255})
+#define Color_black Color_terminal_black
+#define Color_red Color_terminal_red
+#define Color_green Color_terminal_green
+#define Color_yellow Color_terminal_yellow
+#define Color_blue Color_terminal_blue
+#define Color_magenta Color_terminal_magenta
+#define Color_cyan Color_terminal_cyan
+#define Color_white Color_terminal_bright_white
+#define Color_transparent ((SkColor){0, 0, 0, 0})
+
+static SkRect sk_rect(double x, double y, double width, double height) {
+    return (SkRect){x, y, width, height};
+}
+
+static int64_t sk_visual_round(double value) {
+    return (int64_t)(value >= 0.0 ? value + 0.5 : value - 0.5);
+}
+
+static uint32_t sk_color_pack(SkColor color) {
+    return ((uint32_t)color.a << 24) | ((uint32_t)color.r << 16)
+        | ((uint32_t)color.g << 8) | (uint32_t)color.b;
+}
+
+static SkColor sk_color_unpack(uint32_t value) {
+    return (SkColor){
+        (uint8_t)((value >> 16) & 255),
+        (uint8_t)((value >> 8) & 255),
+        (uint8_t)(value & 255),
+        (uint8_t)((value >> 24) & 255)
+    };
+}
+
+static SkCanvas sk_canvas_create(int64_t width, int64_t height) {
+    if (width <= 0 || height <= 0 || (uint64_t)width > SIZE_MAX / sizeof(uint32_t)
+        || (uint64_t)height > SIZE_MAX / ((size_t)width * sizeof(uint32_t))) {
+        sk_visual_panic("canvas dimensions must be positive and fit addressable memory");
+    }
+    SkCanvas canvas = {width, height, NULL};
+    canvas.pixels = (uint32_t*)calloc((size_t)width * (size_t)height, sizeof(uint32_t));
+    if (!canvas.pixels) sk_visual_panic("canvas framebuffer allocation failed");
+    return canvas;
+}
+
+static void sk_canvas_destroy(SkCanvas *canvas) {
+    if (!canvas) return;
+    free(canvas->pixels);
+    canvas->pixels = NULL;
+    canvas->width = 0;
+    canvas->height = 0;
+}
+
+static SkCanvas sk_canvas_move(SkCanvas *source) {
+    if (!source) {
+        SkCanvas empty = {0};
+        return empty;
+    }
+    SkCanvas result = *source;
+    source->width = 0;
+    source->height = 0;
+    source->pixels = NULL;
+    return result;
+}
+
+static void sk_canvas_blend_pixel(SkCanvas *canvas, int64_t x, int64_t y, SkColor source) {
+    if (!canvas || !canvas->pixels || x < 0 || y < 0 || x >= canvas->width || y >= canvas->height) return;
+    size_t index = (size_t)y * (size_t)canvas->width + (size_t)x;
+    if (source.a == 255) {
+        canvas->pixels[index] = sk_color_pack(source);
+        return;
+    }
+    if (source.a == 0) return;
+    SkColor target = sk_color_unpack(canvas->pixels[index]);
+    uint32_t alpha = source.a;
+    uint32_t inverse = 255 - alpha;
+    SkColor blended = {
+        (uint8_t)((source.r * alpha + target.r * inverse + 127) / 255),
+        (uint8_t)((source.g * alpha + target.g * inverse + 127) / 255),
+        (uint8_t)((source.b * alpha + target.b * inverse + 127) / 255),
+        (uint8_t)(alpha + (target.a * inverse + 127) / 255)
+    };
+    canvas->pixels[index] = sk_color_pack(blended);
+}
+
+static int64_t sk_canvas_clear(SkCanvas *canvas, SkColor color) {
+    if (!canvas || !canvas->pixels) sk_visual_panic("clear requires a live Canvas");
+    uint32_t packed = sk_color_pack(color);
+    size_t count = (size_t)canvas->width * (size_t)canvas->height;
+    for (size_t index = 0; index < count; ++index) canvas->pixels[index] = packed;
+    return 0;
+}
+
+static int64_t sk_canvas_pixel(SkCanvas *canvas, Vec2 position, SkColor color) {
+    sk_canvas_blend_pixel(canvas, sk_visual_round(position.x), sk_visual_round(position.y), color);
+    return 0;
+}
+
+static int64_t sk_canvas_line(SkCanvas *canvas, Vec2 from, Vec2 to, SkColor color) {
+    int64_t x0 = sk_visual_round(from.x), y0 = sk_visual_round(from.y);
+    int64_t x1 = sk_visual_round(to.x), y1 = sk_visual_round(to.y);
+    int64_t dx = x1 >= x0 ? x1 - x0 : x0 - x1;
+    int64_t sx = x0 < x1 ? 1 : -1;
+    int64_t dy_abs = y1 >= y0 ? y1 - y0 : y0 - y1;
+    int64_t dy = -dy_abs;
+    int64_t sy = y0 < y1 ? 1 : -1;
+    int64_t error = dx + dy;
+    for (;;) {
+        sk_canvas_blend_pixel(canvas, x0, y0, color);
+        if (x0 == x1 && y0 == y1) break;
+        int64_t doubled = 2 * error;
+        if (doubled >= dy) { error += dy; x0 += sx; }
+        if (doubled <= dx) { error += dx; y0 += sy; }
+    }
+    return 0;
+}
+
+static int64_t sk_canvas_fill_rect(SkCanvas *canvas, SkRect area, SkColor color) {
+    if (area.width <= 0.0 || area.height <= 0.0) return 0;
+    int64_t left = sk_visual_round(area.x);
+    int64_t top = sk_visual_round(area.y);
+    int64_t right = sk_visual_round(area.x + area.width) - 1;
+    int64_t bottom = sk_visual_round(area.y + area.height) - 1;
+    for (int64_t y = top; y <= bottom; ++y)
+        for (int64_t x = left; x <= right; ++x)
+            sk_canvas_blend_pixel(canvas, x, y, color);
+    return 0;
+}
+
+static int64_t sk_canvas_rect(SkCanvas *canvas, SkRect area, SkColor color) {
+    if (area.width <= 0.0 || area.height <= 0.0) return 0;
+    int64_t left = sk_visual_round(area.x);
+    int64_t top = sk_visual_round(area.y);
+    int64_t right = sk_visual_round(area.x + area.width) - 1;
+    int64_t bottom = sk_visual_round(area.y + area.height) - 1;
+    for (int64_t x = left; x <= right; ++x) {
+        sk_canvas_blend_pixel(canvas, x, top, color);
+        sk_canvas_blend_pixel(canvas, x, bottom, color);
+    }
+    for (int64_t y = top; y <= bottom; ++y) {
+        sk_canvas_blend_pixel(canvas, left, y, color);
+        sk_canvas_blend_pixel(canvas, right, y, color);
+    }
+    return 0;
+}
+
+static void sk_canvas_circle_octants(SkCanvas *canvas, int64_t cx, int64_t cy, int64_t x, int64_t y, SkColor color) {
+    sk_canvas_blend_pixel(canvas, cx + x, cy + y, color);
+    sk_canvas_blend_pixel(canvas, cx + y, cy + x, color);
+    sk_canvas_blend_pixel(canvas, cx - y, cy + x, color);
+    sk_canvas_blend_pixel(canvas, cx - x, cy + y, color);
+    sk_canvas_blend_pixel(canvas, cx - x, cy - y, color);
+    sk_canvas_blend_pixel(canvas, cx - y, cy - x, color);
+    sk_canvas_blend_pixel(canvas, cx + y, cy - x, color);
+    sk_canvas_blend_pixel(canvas, cx + x, cy - y, color);
+}
+
+static int64_t sk_canvas_circle(SkCanvas *canvas, Vec2 center, double radius, SkColor color) {
+    if (radius < 0.0) sk_visual_panic("circle radius cannot be negative");
+    int64_t cx = sk_visual_round(center.x), cy = sk_visual_round(center.y);
+    int64_t x = sk_visual_round(radius), y = 0, error = 1 - x;
+    while (x >= y) {
+        sk_canvas_circle_octants(canvas, cx, cy, x, y, color);
+        ++y;
+        if (error < 0) error += 2 * y + 1;
+        else { --x; error += 2 * (y - x) + 1; }
+    }
+    return 0;
+}
+
+static int64_t sk_canvas_fill_circle(SkCanvas *canvas, Vec2 center, double radius, SkColor color) {
+    if (radius < 0.0) sk_visual_panic("fill_circle radius cannot be negative");
+    int64_t cx = sk_visual_round(center.x), cy = sk_visual_round(center.y);
+    int64_t r = sk_visual_round(radius);
+    int64_t radius_squared = r * r;
+    for (int64_t y = -r; y <= r; ++y)
+        for (int64_t x = -r; x <= r; ++x)
+            if (x * x + y * y <= radius_squared)
+                sk_canvas_blend_pixel(canvas, cx + x, cy + y, color);
+    return 0;
+}
+
+static int64_t sk_canvas_checksum(const SkCanvas *canvas) {
+    if (!canvas || !canvas->pixels) sk_visual_panic("checksum requires a live Canvas");
+    uint64_t hash = 1469598103934665603ULL;
+    size_t bytes = (size_t)canvas->width * (size_t)canvas->height * sizeof(uint32_t);
+    const unsigned char *data = (const unsigned char*)canvas->pixels;
+    for (size_t index = 0; index < bytes; ++index) {
+        hash ^= data[index];
+        hash *= 1099511628211ULL;
+    }
+    return (int64_t)(hash & 0x7fffffffffffffffULL);
+}
+
+"##,
+    );
+    if !needs_window_runtime {
+        return;
+    }
+    out.push_str(
+        r##"typedef struct {
+    bool open;
+    int64_t width;
+    int64_t height;
+#if defined(_WIN32)
+    HWND hwnd;
+    BITMAPINFO bitmap;
+#endif
+} SkWindow;
+
+#if defined(_WIN32)
+static LRESULT CALLBACK sk_window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+    SkWindow *window = (SkWindow*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+    if (message == WM_NCCREATE) {
+        CREATESTRUCTA *create = (CREATESTRUCTA*)lparam;
+        window = (SkWindow*)create->lpCreateParams;
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)window);
+        window->hwnd = hwnd;
+    }
+    if (message == WM_CLOSE) {
+        if (window) window->open = false;
+        DestroyWindow(hwnd);
+        return 0;
+    }
+    if (message == WM_DESTROY) {
+        if (window) { window->open = false; window->hwnd = NULL; }
+        return 0;
+    }
+    return DefWindowProcA(hwnd, message, wparam, lparam);
+}
+#endif
+
+static SkWindow sk_window_open(const char *title, int64_t width, int64_t height) {
+    if (width <= 0 || height <= 0) sk_visual_panic("window dimensions must be positive");
+    SkWindow window = {true, width, height
+#if defined(_WIN32)
+        , NULL, {0}
+#endif
+    };
+#if defined(_WIN32)
+    static bool class_registered = false;
+    const char *class_name = "SkadiCanvasWindow";
+    HINSTANCE instance = GetModuleHandleA(NULL);
+    if (!class_registered) {
+        WNDCLASSA klass = {0};
+        klass.lpfnWndProc = sk_window_proc;
+        klass.hInstance = instance;
+        klass.lpszClassName = class_name;
+        klass.hCursor = LoadCursor(NULL, IDC_ARROW);
+        if (!RegisterClassA(&klass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+            sk_visual_panic("Win32 window class registration failed");
+        class_registered = true;
+    }
+    RECT bounds = {0, 0, (LONG)width, (LONG)height};
+    AdjustWindowRect(&bounds, WS_OVERLAPPEDWINDOW, FALSE);
+    HWND hwnd = CreateWindowExA(
+        0, class_name, title ? title : "Skadi Canvas", WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, bounds.right - bounds.left, bounds.bottom - bounds.top,
+        NULL, NULL, instance, &window
+    );
+    if (!hwnd) sk_visual_panic("Win32 window creation failed");
+    window.hwnd = hwnd;
+    window.bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    window.bitmap.bmiHeader.biWidth = (LONG)width;
+    window.bitmap.bmiHeader.biHeight = -(LONG)height;
+    window.bitmap.bmiHeader.biPlanes = 1;
+    window.bitmap.bmiHeader.biBitCount = 32;
+    window.bitmap.bmiHeader.biCompression = BI_RGB;
+    ShowWindow(hwnd, SW_SHOW);
+    UpdateWindow(hwnd);
+#else
+    (void)title;
+    sk_visual_panic("windows.open is available only on the Win32 backend");
+#endif
+    return window;
+}
+
+static int64_t sk_window_present(SkWindow *window, const SkCanvas *canvas) {
+    if (!window || !canvas || !canvas->pixels) sk_visual_panic("present requires live Window and Canvas");
+    if (window->width != canvas->width || window->height != canvas->height)
+        sk_visual_panic("Window and Canvas dimensions must match");
+#if defined(_WIN32)
+    MSG message;
+    while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&message);
+        DispatchMessageA(&message);
+    }
+    if (!window->open || !window->hwnd) return 1;
+    HDC dc = GetDC(window->hwnd);
+    if (!dc) sk_visual_panic("Win32 device context acquisition failed");
+    StretchDIBits(
+        dc, 0, 0, (int)window->width, (int)window->height,
+        0, 0, (int)canvas->width, (int)canvas->height,
+        canvas->pixels, &window->bitmap, DIB_RGB_COLORS, SRCCOPY
+    );
+    ReleaseDC(window->hwnd, dc);
+#endif
+    return 0;
+}
+
+static bool sk_window_is_open(SkWindow *window) {
+#if defined(_WIN32)
+    MSG message;
+    while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&message);
+        DispatchMessageA(&message);
+    }
+#endif
+    return window && window->open;
+}
+
+static int64_t sk_window_close(SkWindow *window) {
+    if (!window || !window->open) return 1;
+    window->open = false;
+#if defined(_WIN32)
+    if (window->hwnd) DestroyWindow(window->hwnd);
+    window->hwnd = NULL;
+#endif
+    return 0;
+}
+
+static void sk_window_destroy(SkWindow *window) {
+    if (!window) return;
+    sk_window_close(window);
+}
+
+static SkWindow sk_window_move(SkWindow *source) {
+    if (!source) {
+        SkWindow empty = {0};
+        return empty;
+    }
+    SkWindow result = *source;
+    memset(source, 0, sizeof(*source));
+    return result;
+}
+
+"##,
+    );
+}
+
+fn program_uses_interrupt_runtime(program: &Program) -> bool {
+    program.statements.iter().any(|statement| {
+        matches!(
+            statement,
+            Statement::VarDecl {
+                declared_type: Some(declared_type),
+                ..
+            } if normalize_type_token(declared_type) == "Interrupt"
+        ) || matches!(
+            statement,
+            Statement::OnBlock { trigger, .. } if trigger == "interrupt"
+        )
+    })
+}
+
+fn program_uses_visual_runtime(program: &Program) -> bool {
+    fn visual_type(raw: &str) -> bool {
+        matches!(
+            normalize_type_token(raw).as_str(),
+            "Color" | "Rect" | "Canvas" | "Window"
+        )
+    }
+
+    fn statement_uses_visual(statement: &Statement) -> bool {
+        match statement {
+            Statement::VarDecl {
+                declared_type,
+                value,
+                ..
+            } => {
+                declared_type.as_deref().map(visual_type).unwrap_or(false)
+                    || matches!(
+                        value.as_ref(),
+                        Expression::Call { name, .. }
+                            if matches!(
+                                name.as_str(),
+                                "color" | "color_hex" | "rect" | "canvas" | "windows.open"
+                            )
+                    )
+            }
+            Statement::FunctionDef {
+                params,
+                returns,
+                body,
+                ..
+            } => {
+                params
+                    .iter()
+                    .filter_map(|param| param.param_type.as_deref())
+                    .any(visual_type)
+                    || returns.as_deref().map(visual_type).unwrap_or(false)
+                    || body.statements.iter().any(statement_uses_visual)
+            }
+            Statement::StructDecl {
+                fields, methods, ..
+            } => {
+                fields.iter().any(|field| visual_type(&field.field_type))
+                    || methods
+                        .iter()
+                        .any(|method| method.body.statements.iter().any(statement_uses_visual))
+            }
+            Statement::IfStatement {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.statements.iter().any(statement_uses_visual)
+                    || else_block
+                        .as_deref()
+                        .map(|block| block.statements.iter().any(statement_uses_visual))
+                        .unwrap_or(false)
+            }
+            Statement::WhenBlock {
+                cases, else_block, ..
+            } => {
+                cases
+                    .iter()
+                    .any(|(_, block)| block.statements.iter().any(statement_uses_visual))
+                    || else_block
+                        .as_deref()
+                        .map(|block| block.statements.iter().any(statement_uses_visual))
+                        .unwrap_or(false)
+            }
+            Statement::ForLoop { body, .. }
+            | Statement::WhileLoop { body, .. }
+            | Statement::LoopStatement { body, .. }
+            | Statement::OnBlock { body, .. } => body.statements.iter().any(statement_uses_visual),
+            Statement::PlaceIn { body, on_error, .. } => {
+                body.statements.iter().any(statement_uses_visual)
+                    || on_error
+                        .as_deref()
+                        .map(|block| block.statements.iter().any(statement_uses_visual))
+                        .unwrap_or(false)
+            }
+            Statement::DangerAssignOnError { on_error, .. }
+            | Statement::DangerCallOnError { on_error, .. }
+            | Statement::ListPopOnError { on_error, .. } => {
+                on_error.statements.iter().any(statement_uses_visual)
+            }
+            Statement::BlockStatement { statements, .. }
+            | Statement::OnErrorBlock { statements, .. } => {
+                statements.iter().any(statement_uses_visual)
+            }
+            Statement::ExpressionStatement { expr, .. } => matches!(
+                expr.as_ref(),
+                Expression::Call { name, .. }
+                    if name.split_once('.').map(|(_, method)| {
+                        matches!(
+                            method,
+                            "clear"
+                                | "pixel"
+                                | "line"
+                                | "rect"
+                                | "fill_rect"
+                                | "circle"
+                                | "fill_circle"
+                                | "checksum"
+                                | "present"
+                                | "is_open"
+                                | "close"
+                        )
+                    }).unwrap_or(false)
+            ),
+            _ => false,
+        }
+    }
+
+    program.statements.iter().any(statement_uses_visual)
+}
+
+fn program_uses_window_runtime(program: &Program) -> bool {
+    fn window_type(raw: &str) -> bool {
+        normalize_type_token(raw) == "Window"
+    }
+
+    fn statement_uses_window(statement: &Statement) -> bool {
+        match statement {
+            Statement::VarDecl {
+                declared_type,
+                value,
+                ..
+            } => {
+                declared_type.as_deref().map(window_type).unwrap_or(false)
+                    || matches!(
+                        value.as_ref(),
+                        Expression::Call { name, .. } if name == "windows.open"
+                    )
+            }
+            Statement::FunctionDef {
+                params,
+                returns,
+                body,
+                ..
+            } => {
+                params
+                    .iter()
+                    .filter_map(|param| param.param_type.as_deref())
+                    .any(window_type)
+                    || returns.as_deref().map(window_type).unwrap_or(false)
+                    || body.statements.iter().any(statement_uses_window)
+            }
+            Statement::StructDecl {
+                fields, methods, ..
+            } => {
+                fields.iter().any(|field| window_type(&field.field_type))
+                    || methods
+                        .iter()
+                        .any(|method| method.body.statements.iter().any(statement_uses_window))
+            }
+            Statement::IfStatement {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.statements.iter().any(statement_uses_window)
+                    || else_block
+                        .as_deref()
+                        .map(|block| block.statements.iter().any(statement_uses_window))
+                        .unwrap_or(false)
+            }
+            Statement::WhenBlock {
+                cases, else_block, ..
+            } => {
+                cases
+                    .iter()
+                    .any(|(_, block)| block.statements.iter().any(statement_uses_window))
+                    || else_block
+                        .as_deref()
+                        .map(|block| block.statements.iter().any(statement_uses_window))
+                        .unwrap_or(false)
+            }
+            Statement::ForLoop { body, .. }
+            | Statement::WhileLoop { body, .. }
+            | Statement::LoopStatement { body, .. }
+            | Statement::OnBlock { body, .. } => body.statements.iter().any(statement_uses_window),
+            Statement::PlaceIn { body, on_error, .. } => {
+                body.statements.iter().any(statement_uses_window)
+                    || on_error
+                        .as_deref()
+                        .map(|block| block.statements.iter().any(statement_uses_window))
+                        .unwrap_or(false)
+            }
+            Statement::DangerAssignOnError { on_error, .. }
+            | Statement::DangerCallOnError { on_error, .. }
+            | Statement::ListPopOnError { on_error, .. } => {
+                on_error.statements.iter().any(statement_uses_window)
+            }
+            Statement::BlockStatement { statements, .. }
+            | Statement::OnErrorBlock { statements, .. } => {
+                statements.iter().any(statement_uses_window)
+            }
+            _ => false,
+        }
+    }
+
+    program.statements.iter().any(statement_uses_window)
+}
+
+fn collect_interrupt_channels(block: &BlockStatement, channels: &mut Vec<String>) {
+    for statement in &block.statements {
+        match statement {
+            Statement::ExpressionStatement { expr, .. } => {
+                if let Expression::Call { name, .. } = expr.as_ref()
+                    && let Some((channel, "try_send")) = name.split_once('.')
+                    && !channels.iter().any(|existing| existing == channel)
+                {
+                    channels.push(channel.to_string());
                 }
             }
-            out.push_str("} ErrorCode;\n\n");
-            break;
+            Statement::IfStatement {
+                then_block,
+                else_block,
+                ..
+            } => {
+                collect_interrupt_channels(then_block, channels);
+                if let Some(else_block) = else_block {
+                    collect_interrupt_channels(else_block, channels);
+                }
+            }
+            _ => {}
         }
+    }
+}
+
+fn emit_interrupt_handlers(program: &Program, out: &mut String, state: &mut CodegenState) {
+    let top_level_types: HashMap<String, String> = program
+        .statements
+        .iter()
+        .filter_map(|statement| match statement {
+            Statement::VarDecl {
+                name,
+                declared_type: Some(declared_type),
+                ..
+            } => Some((name.clone(), declared_type.clone())),
+            _ => None,
+        })
+        .collect();
+
+    for (index, statement) in program
+        .statements
+        .iter()
+        .filter(|statement| {
+            matches!(
+                statement,
+                Statement::OnBlock { trigger, .. } if trigger == "interrupt"
+            )
+        })
+        .enumerate()
+    {
+        let Statement::OnBlock { body, .. } = statement else {
+            continue;
+        };
+        let mut channels = Vec::new();
+        collect_interrupt_channels(body, &mut channels);
+        out.push_str(&format!("typedef struct SkInterruptContext_{index} {{\n"));
+        for channel in &channels {
+            out.push_str("    SkChannel *");
+            out.push_str(channel);
+            out.push_str(";\n");
+        }
+        out.push_str(&format!("}} SkInterruptContext_{index};\n\n"));
+        out.push_str(&format!(
+            "static void sk_interrupt_handler_{index}(void *opaque) {{\n"
+        ));
+        out.push_str(&format!(
+            "    SkInterruptContext_{index} *context = (SkInterruptContext_{index}*)opaque;\n"
+        ));
+        let mut declared = HashMap::new();
+        for channel in &channels {
+            out.push_str("    SkChannel *");
+            out.push_str(channel);
+            out.push_str(" = context->");
+            out.push_str(channel);
+            out.push_str(";\n");
+            if let Some(declared_type) = top_level_types.get(channel) {
+                declared.insert(channel.clone(), declared_type.clone());
+            }
+        }
+        emit_block(body, out, 1, &mut declared, None, None, state);
+        out.push_str("}\n\n");
     }
 }
 
@@ -2666,7 +3775,20 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
             if i > 0 {
                 out.push_str(", ");
             }
-            out.push_str(&map_skadi_type_to_c(p.param_type.as_deref()));
+            let c_type = map_skadi_type_to_c(p.param_type.as_deref());
+            match p.borrow {
+                BorrowMode::Value => out.push_str(&c_type),
+                BorrowMode::DirectMutable => {
+                    out.push_str(&c_type);
+                    out.push_str(" *");
+                }
+                BorrowMode::View => {
+                    out.push_str("const ");
+                    out.push_str(&c_type);
+                    out.push_str(" *");
+                }
+                BorrowMode::Move => out.push_str(&c_type),
+            }
             out.push(' ');
             out.push_str(&p.name);
         }
@@ -2681,10 +3803,16 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
         let mut declared: HashMap<String, String> = params
             .iter()
             .map(|p| {
-                (
-                    p.name.clone(),
-                    p.param_type.clone().unwrap_or_else(|| "Int".to_string()),
-                )
+                (p.name.clone(), {
+                    let base = p.param_type.clone().unwrap_or_else(|| "Int".to_string());
+                    match p.borrow {
+                        BorrowMode::Value => base,
+                        BorrowMode::Move => format!("{base}@owned"),
+                        BorrowMode::DirectMutable | BorrowMode::View => {
+                            format!("{base}@direct")
+                        }
+                    }
+                })
             })
             .collect();
         let fn_ctx = FunctionContext {
@@ -2692,6 +3820,7 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
             return_type: returns.clone(),
         };
         emit_block(body, out, 1, &mut declared, Some(&fn_ctx), None, state);
+        emit_move_parameter_cleanup(out, 1, params);
         emit_default_return_tail(out, 1, returns.as_deref(), *is_danger);
         out.push_str("}\n");
     }
@@ -2732,13 +3861,145 @@ fn emit_block(
             out.push_str(");\n");
         }
     }
+    for resource_type in ["Window", "Canvas"] {
+        for stmt in block.statements.iter().rev() {
+            if let Statement::VarDecl {
+                name,
+                declared_type: Some(declared_type),
+                ..
+            } = stmt
+                && normalize_type_token(declared_type) == resource_type
+            {
+                out.push_str(&"    ".repeat(indent));
+                out.push_str(if resource_type == "Window" {
+                    "sk_window_destroy(&"
+                } else {
+                    "sk_canvas_destroy(&"
+                });
+                out.push_str(name);
+                out.push_str(");\n");
+            }
+        }
+    }
+    for stmt in block.statements.iter().rev() {
+        if let Statement::VarDecl {
+            name,
+            declared_type: Some(declared_type),
+            ..
+        } = stmt
+            && normalize_type_token(declared_type) == "Interrupt"
+        {
+            out.push_str(&"    ".repeat(indent));
+            out.push_str("sk_interrupt_destroy(");
+            out.push_str(name);
+            out.push_str(");\n");
+        }
+    }
+    for stmt in block.statements.iter().rev() {
+        if let Statement::MemoryDecl { name, .. } = stmt {
+            out.push_str(&"    ".repeat(indent));
+            out.push_str("sk_mem_region_destroy(");
+            out.push_str(name);
+            out.push_str(");\n");
+        }
+    }
+}
+
+fn emit_move_parameter_cleanup(
+    out: &mut String,
+    indent: usize,
+    params: &[crate::ast_nodes::FunctionParam],
+) {
+    let pad = "    ".repeat(indent);
+    for param in params
+        .iter()
+        .rev()
+        .filter(|param| param.borrow == BorrowMode::Move)
+    {
+        let param_type = param.param_type.as_deref().unwrap_or("Int");
+        let normalized = normalize_type_token(param_type);
+        out.push_str(&pad);
+        match normalized.as_str() {
+            "Canvas" => {
+                out.push_str("sk_canvas_destroy(&");
+                out.push_str(&param.name);
+                out.push_str(");\n");
+            }
+            "Window" => {
+                out.push_str("sk_window_destroy(&");
+                out.push_str(&param.name);
+                out.push_str(");\n");
+            }
+            "Interrupt" => {
+                out.push_str("sk_interrupt_destroy(");
+                out.push_str(&param.name);
+                out.push_str(");\n");
+            }
+            _ if channel_elem_from_decl(&normalized).is_some() => {
+                out.push_str("sk_channel_destroy(");
+                out.push_str(&param.name);
+                out.push_str(");\n");
+            }
+            _ => {}
+        }
+    }
 }
 
 fn emit_owned_channel_cleanup(out: &mut String, pad: &str, declared: &HashMap<String, String>) {
+    let mut memory_names = declared
+        .iter()
+        .filter_map(|(name, declared_type)| {
+            (declared_type == "Memory@owned").then_some(name.as_str())
+        })
+        .collect::<Vec<_>>();
+    memory_names.sort_unstable();
+    for memory_name in memory_names.into_iter().rev() {
+        out.push_str(pad);
+        out.push_str("sk_mem_region_destroy(");
+        out.push_str(memory_name);
+        out.push_str(");\n");
+    }
+    for resource_type in ["Window", "Canvas"] {
+        let mut resources = declared
+            .iter()
+            .filter_map(|(name, declared_type)| {
+                (declared_type.ends_with("@owned")
+                    && normalize_type_token(declared_type) == resource_type)
+                    .then_some(name.as_str())
+            })
+            .collect::<Vec<_>>();
+        resources.sort_unstable();
+        for resource in resources.into_iter().rev() {
+            out.push_str(pad);
+            out.push_str(if resource_type == "Window" {
+                "sk_window_destroy(&"
+            } else {
+                "sk_canvas_destroy(&"
+            });
+            out.push_str(resource);
+            out.push_str(");\n");
+        }
+    }
+    let mut interrupt_names = declared
+        .iter()
+        .filter_map(|(name, declared_type)| {
+            (declared_type.ends_with("@owned")
+                && normalize_type_token(declared_type) == "Interrupt")
+                .then_some(name.as_str())
+        })
+        .collect::<Vec<_>>();
+    interrupt_names.sort_unstable();
+    for interrupt_name in interrupt_names.into_iter().rev() {
+        out.push_str(pad);
+        out.push_str("sk_interrupt_destroy(");
+        out.push_str(interrupt_name);
+        out.push_str(");\n");
+    }
     let mut channel_names: Vec<&str> = declared
         .iter()
         .filter_map(|(name, declared_type)| {
-            declared_type.ends_with("@owned").then_some(name.as_str())
+            (declared_type.ends_with("@owned") && channel_elem_from_decl(declared_type).is_some())
+                .then_some(name.as_str())
         })
         .collect();
     channel_names.sort_unstable();
@@ -2796,6 +4057,9 @@ fn emit_statement(
         Statement::MemoryDecl {
             name,
             size,
+            kind,
+            allow_grow,
+            allow_drop,
             on_error,
             ..
         } => {
@@ -2816,14 +4080,48 @@ fn emit_statement(
             out.push_str("_capacity = ");
             out.push_str(&size_expr);
             out.push_str(";\n");
+            if *kind == crate::ast_nodes::MemoryKind::Static {
+                out.push_str(&pad);
+                out.push_str("static unsigned char ");
+                out.push_str(name);
+                out.push_str("_buffer[");
+                out.push_str(&size_expr);
+                out.push_str("];\n");
+            }
             out.push_str(&pad);
             out.push_str("if (");
             out.push_str(name);
-            out.push_str("_capacity <= 0 || !sk_mem_region_init(");
+            out.push_str("_capacity <= 0 || !");
+            out.push_str(match kind {
+                crate::ast_nodes::MemoryKind::Dynamic => "sk_mem_region_init(",
+                crate::ast_nodes::MemoryKind::Child => "sk_mem_region_init_child(",
+                crate::ast_nodes::MemoryKind::Static => "sk_mem_region_init_external(",
+            });
             out.push_str(name);
-            out.push_str(", (size_t)");
+            out.push_str(", ");
+            if *kind == crate::ast_nodes::MemoryKind::Child {
+                out.push_str("sk_mem_current(), ");
+            } else if *kind == crate::ast_nodes::MemoryKind::Static {
+                out.push_str(name);
+                out.push_str("_buffer, ");
+            }
+            out.push_str("(size_t)");
             out.push_str(name);
-            out.push_str("_capacity)) {\n");
+            out.push_str("_capacity, ");
+            match kind {
+                crate::ast_nodes::MemoryKind::Dynamic => {
+                    out.push_str(if *allow_grow { "true, " } else { "false, " });
+                    out.push_str(if *allow_drop { "true" } else { "false" });
+                }
+                crate::ast_nodes::MemoryKind::Child => {
+                    out.push_str(if *allow_drop { "true" } else { "false" });
+                }
+                crate::ast_nodes::MemoryKind::Static => {
+                    out.push_str("false, false, ");
+                    out.push_str(if *allow_drop { "true" } else { "false" });
+                }
+            }
+            out.push_str(")) {\n");
             if let Some(on_error) = on_error {
                 let mut inner = declared.clone();
                 emit_block(
@@ -2841,7 +4139,7 @@ fn emit_statement(
             }
             out.push_str(&pad);
             out.push_str("}\n");
-            declared.insert(name.clone(), "Memory".to_string());
+            declared.insert(name.clone(), "Memory@owned".to_string());
         }
         Statement::Assignment { target, value, .. } => {
             let expr = if let Expression::StructConstruction { fields } = value.as_ref() {
@@ -2850,7 +4148,17 @@ fn emit_statement(
                 emit_expr(value, declared)
             };
             out.push_str(&pad);
-            out.push_str(target);
+            if declared
+                .get(target)
+                .map(|ty| ty.ends_with("@direct"))
+                .unwrap_or(false)
+            {
+                out.push_str("(*");
+                out.push_str(target);
+                out.push(')');
+            } else {
+                out.push_str(target);
+            }
             out.push_str(" = ");
             out.push_str(&expr);
             out.push_str(";\n");
@@ -2861,7 +4169,17 @@ fn emit_statement(
             ..
         } => {
             out.push_str(&pad);
-            out.push_str(target);
+            if declared
+                .get(target)
+                .map(|ty| ty.ends_with("@direct"))
+                .unwrap_or(false)
+            {
+                out.push_str("(*");
+                out.push_str(target);
+                out.push(')');
+            } else {
+                out.push_str(target);
+            }
             if *is_increment {
                 out.push_str(" += 1;\n");
             } else {
@@ -2877,6 +4195,13 @@ fn emit_statement(
             out.push_str(&pad);
             if object == "my" {
                 out.push_str("my->");
+            } else if declared
+                .get(object)
+                .map(|ty| ty.ends_with("@direct"))
+                .unwrap_or(false)
+            {
+                out.push_str(object);
+                out.push_str("->");
             } else {
                 out.push_str(object);
                 out.push('.');
@@ -3028,6 +4353,12 @@ fn emit_statement(
             out.push_str(name);
             out.push_str(" */\n");
         }
+        Statement::TagDecl { name, .. } => {
+            out.push_str(&pad);
+            out.push_str("/* tag ");
+            out.push_str(name);
+            out.push_str(" */\n");
+        }
         Statement::StructDecl { name, .. } => {
             out.push_str(&pad);
             out.push_str("/* struct ");
@@ -3035,10 +4366,43 @@ fn emit_statement(
             out.push_str(" lowered as typedef above */\n");
         }
         Statement::OnBlock { trigger, .. } => {
+            if trigger != "interrupt" {
+                out.push_str(&pad);
+                out.push_str("/* unsupported on ");
+                out.push_str(trigger);
+                out.push_str(" */\n");
+                return;
+            }
+            let Statement::OnBlock {
+                target: Some(target),
+                body,
+                ..
+            } = stmt
+            else {
+                return;
+            };
+            let index = state.interrupt_handler_index;
+            state.interrupt_handler_index += 1;
+            let mut channels = Vec::new();
+            collect_interrupt_channels(body, &mut channels);
             out.push_str(&pad);
-            out.push_str("/* on ");
-            out.push_str(trigger);
-            out.push_str(" TODO(v1): runtime binding */\n");
+            out.push_str(&format!(
+                "SkInterruptContext_{index} *sk_interrupt_context_{index} = (SkInterruptContext_{index}*)calloc(1, sizeof(SkInterruptContext_{index}));\n"
+            ));
+            out.push_str(&pad);
+            out.push_str(&format!(
+                "if (!sk_interrupt_context_{index}) sk_interrupt_panic(\"interrupt context allocation failed\");\n"
+            ));
+            for channel in channels {
+                out.push_str(&pad);
+                out.push_str(&format!(
+                    "sk_interrupt_context_{index}->{channel} = {channel};\n"
+                ));
+            }
+            out.push_str(&pad);
+            out.push_str(&format!(
+                "sk_interrupt_bind({target}, sk_interrupt_handler_{index}, sk_interrupt_context_{index});\n"
+            ));
         }
         Statement::DangerAssignOnError {
             target,
@@ -3047,6 +4411,33 @@ fn emit_statement(
             on_error,
             ..
         } => {
+            if let Some((channel, "receive")) = call_name.split_once('.')
+                && let Some(element) = declared
+                    .get(channel)
+                    .and_then(|declared_type| channel_elem_from_decl(declared_type))
+            {
+                out.push_str(&pad);
+                out.push_str("if (!sk_channel_try_receive_");
+                out.push_str(&channel_type_suffix(element));
+                out.push('(');
+                out.push_str(channel);
+                out.push_str(", &");
+                out.push_str(target);
+                out.push_str(")) {\n");
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str("}\n");
+                return;
+            }
             out.push_str(&pad);
             out.push_str("/* TODO(v1): danger call lowering */\n");
             out.push_str(&pad);
@@ -3084,6 +4475,97 @@ fn emit_statement(
             on_error,
             ..
         } => {
+            if let Some((window, method @ ("present" | "close"))) = call_name.split_once('.')
+                && let Some(window_type) = declared.get(window)
+                && normalize_type_token(window_type.strip_suffix("@direct").unwrap_or(window_type))
+                    == "Window"
+            {
+                let receiver = if window_type.ends_with("@direct") {
+                    window.to_string()
+                } else {
+                    format!("&{window}")
+                };
+                out.push_str(&pad);
+                out.push_str("if (");
+                out.push_str(if method == "present" {
+                    "sk_window_present"
+                } else {
+                    "sk_window_close"
+                });
+                out.push('(');
+                out.push_str(&receiver);
+                for arg in args {
+                    out.push_str(", ");
+                    out.push_str(&emit_expr(arg, declared));
+                }
+                out.push_str(") != 0) {\n");
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str("}\n");
+                return;
+            }
+            if let Some((channel, "close")) = call_name.split_once('.')
+                && declared
+                    .get(channel)
+                    .and_then(|declared_type| channel_elem_from_decl(declared_type))
+                    .is_some()
+                && args.is_empty()
+            {
+                out.push_str(&pad);
+                out.push_str("if (!sk_channel_close(");
+                out.push_str(channel);
+                out.push_str(")) {\n");
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str("}\n");
+                return;
+            }
+            if let Some((channel, "send")) = call_name.split_once('.')
+                && let Some(element) = declared
+                    .get(channel)
+                    .and_then(|declared_type| channel_elem_from_decl(declared_type))
+                && args.len() == 1
+            {
+                out.push_str(&pad);
+                out.push_str("if (sk_channel_send_");
+                out.push_str(&channel_type_suffix(element));
+                out.push('(');
+                out.push_str(channel);
+                out.push_str(", ");
+                out.push_str(&emit_expr(&args[0], declared));
+                out.push_str(") != 0) {\n");
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str("}\n");
+                return;
+            }
             out.push_str(&pad);
             out.push_str("/* TODO(v1): danger call lowering */\n");
             out.push_str(&pad);
@@ -3486,6 +4968,7 @@ fn emit_statement(
         Statement::VarDecl {
             name,
             value,
+            is_constant,
             declared_type,
             ..
         } => {
@@ -3653,6 +5136,9 @@ fn emit_statement(
                 && let Expression::StructConstruction { fields } = value.as_ref()
             {
                 out.push_str(&pad);
+                if *is_constant {
+                    out.push_str("const ");
+                }
                 out.push_str(&map_skadi_type_to_c(Some(dt)));
                 out.push(' ');
                 out.push_str(name);
@@ -3662,16 +5148,24 @@ fn emit_statement(
                 declared.insert(name.clone(), dt.to_string());
                 return;
             }
+            if *is_constant {
+                out.push_str("const ");
+            }
             out.push_str(&map_skadi_type_to_c(effective_type.as_deref()));
             out.push(' ');
             out.push_str(name);
             out.push_str(" = ");
             out.push_str(&emit_expr(value, declared));
             out.push_str(";\n");
-            declared.insert(
-                name.clone(),
-                effective_type.unwrap_or_else(|| "Int".to_string()),
-            );
+            let mut tracked_type = effective_type.unwrap_or_else(|| "Int".to_string());
+            if matches!(
+                normalize_type_token(&tracked_type).as_str(),
+                "Canvas" | "Window" | "Interrupt"
+            ) || channel_elem_from_decl(&tracked_type).is_some()
+            {
+                tracked_type.push_str("@owned");
+            }
+            declared.insert(name.clone(), tracked_type);
         }
         Statement::BlockStatement { statements, .. }
         | Statement::OnErrorBlock { statements, .. } => {
@@ -3706,9 +5200,14 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "Float" | "f64" => "double".to_string(),
         "Angle" => "double".to_string(),
         "Vec2" | "Vec3" | "Vec4" => normalized.to_string(),
+        "Color" => "SkColor".to_string(),
+        "Rect" => "SkRect".to_string(),
+        "Canvas" => "SkCanvas".to_string(),
+        "Window" => "SkWindow".to_string(),
         "bool" | "Bool" => "bool".to_string(),
         "char" | "Char" => "char".to_string(),
         "Memory" => "SkMemoryRegion*".to_string(),
+        "Interrupt" => "SkInterrupt*".to_string(),
         "Text" | "Path" => "const char*".to_string(),
         other => other.to_string(),
     }
@@ -3726,6 +5225,10 @@ fn emit_return_expr(
 }
 
 fn normalize_type_token(raw: &str) -> String {
+    let raw = raw
+        .strip_suffix("@owned")
+        .or_else(|| raw.strip_suffix("@direct"))
+        .unwrap_or(raw);
     if let Some(inner) = raw.strip_prefix("Task(").and_then(|s| s.strip_suffix(')')) {
         return format!("Task({})", normalize_type_token(inner.trim()));
     }
@@ -3936,6 +5439,14 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::LiteralDuration { nanoseconds, .. } => nanoseconds.to_string(),
         Expression::LiteralByteSize { bytes, .. } => bytes.to_string(),
         Expression::LiteralAngle { radians, .. } => format!("{radians:.17}"),
+        Expression::VariableReference(name)
+            if declared
+                .get(name)
+                .map(|ty| ty.ends_with("@direct"))
+                .unwrap_or(false) =>
+        {
+            format!("(*{name})")
+        }
         Expression::VariableReference(name) => match name.as_str() {
             "PI" => "M_PI".to_string(),
             "TAU" => "(2.0 * M_PI)".to_string(),
@@ -3943,9 +5454,60 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             "EPSILON" => "1e-9".to_string(),
             _ => name.clone(),
         },
+        Expression::DirectBorrow(name) => {
+            if declared
+                .get(name)
+                .map(|ty| ty.ends_with("@direct"))
+                .unwrap_or(false)
+            {
+                name.clone()
+            } else {
+                format!("&{name}")
+            }
+        }
+        Expression::ViewBorrow(name) => {
+            if declared
+                .get(name)
+                .map(|ty| ty.ends_with("@direct"))
+                .unwrap_or(false)
+            {
+                name.clone()
+            } else {
+                format!("&{name}")
+            }
+        }
+        Expression::Move(name) => {
+            let resource_type = declared
+                .get(name)
+                .map(|ty| normalize_type_token(ty))
+                .unwrap_or_default();
+            match resource_type.as_str() {
+                "Canvas" => format!("sk_canvas_move(&{name})"),
+                "Window" => format!("sk_window_move(&{name})"),
+                "Interrupt" => format!("sk_interrupt_move(&{name})"),
+                _ if channel_elem_from_decl(&resource_type).is_some() => {
+                    format!("sk_channel_move(&{name})")
+                }
+                _ => name.clone(),
+            }
+        }
         Expression::MemberAccess { base, field } => {
             if base == "my" {
                 format!("my->{}", field)
+            } else if declared
+                .get(base)
+                .map(|ty| ty.ends_with("@direct"))
+                .unwrap_or(false)
+            {
+                format!("{}->{}", base, field)
+            } else if !declared.contains_key(base)
+                && base
+                    .chars()
+                    .next()
+                    .map(|ch| ch.is_ascii_uppercase())
+                    .unwrap_or(false)
+            {
+                format!("{}_{}", base, field)
             } else {
                 format!("{}.{}", base, field)
             }
@@ -3975,6 +5537,91 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             format!("{}.data[{}]", base_rendered, index_rendered)
         }
         Expression::Call { name, args } => {
+            if name == "color" && args.len() == 4 {
+                return format!(
+                    "sk_color({}, {}, {}, {})",
+                    emit_expr(&args[0], declared),
+                    emit_expr(&args[1], declared),
+                    emit_expr(&args[2], declared),
+                    emit_expr(&args[3], declared)
+                );
+            }
+            if name == "color_hex" && args.len() == 2 {
+                return format!(
+                    "sk_color_hex({}, {})",
+                    emit_expr(&args[0], declared),
+                    emit_expr(&args[1], declared)
+                );
+            }
+            if name == "rect" && args.len() == 4 {
+                return format!(
+                    "sk_rect({}, {}, {}, {})",
+                    emit_expr(&args[0], declared),
+                    emit_expr(&args[1], declared),
+                    emit_expr(&args[2], declared),
+                    emit_expr(&args[3], declared)
+                );
+            }
+            if name == "canvas" && args.len() == 2 {
+                return format!(
+                    "sk_canvas_create({}, {})",
+                    emit_expr(&args[0], declared),
+                    emit_expr(&args[1], declared)
+                );
+            }
+            if name == "windows.open" && args.len() == 3 {
+                return format!(
+                    "sk_window_open({}, {}, {})",
+                    emit_expr(&args[0], declared),
+                    emit_expr(&args[1], declared),
+                    emit_expr(&args[2], declared)
+                );
+            }
+            if let Some((receiver_name, method)) = name.split_once('.')
+                && let Some(receiver_type) = declared.get(receiver_name)
+                && matches!(
+                    normalize_type_token(
+                        receiver_type
+                            .strip_suffix("@direct")
+                            .unwrap_or(receiver_type)
+                    )
+                    .as_str(),
+                    "Canvas" | "Window"
+                )
+            {
+                let receiver = if receiver_type.ends_with("@direct") {
+                    receiver_name.to_string()
+                } else {
+                    format!("&{receiver_name}")
+                };
+                let rendered_args = args
+                    .iter()
+                    .map(|arg| emit_expr(arg, declared))
+                    .collect::<Vec<_>>();
+                let function = match method {
+                    "clear" => "sk_canvas_clear",
+                    "pixel" => "sk_canvas_pixel",
+                    "line" => "sk_canvas_line",
+                    "rect" => "sk_canvas_rect",
+                    "fill_rect" => "sk_canvas_fill_rect",
+                    "circle" => "sk_canvas_circle",
+                    "fill_circle" => "sk_canvas_fill_circle",
+                    "checksum" => "sk_canvas_checksum",
+                    "present" => "sk_window_present",
+                    "is_open" => "sk_window_is_open",
+                    "close" => "sk_window_close",
+                    _ => "",
+                };
+                if !function.is_empty() {
+                    if rendered_args.is_empty() {
+                        return format!("{function}({receiver})");
+                    }
+                    return format!("{function}({}, {})", receiver, rendered_args.join(", "));
+                }
+            }
+            if name == "interrupts.periodic" && args.len() == 1 {
+                return format!("sk_interrupt_periodic({})", emit_expr(&args[0], declared));
+            }
             if let Some((channel_name, method)) = name.split_once('.')
                 && let Some(channel_element) = declared
                     .get(channel_name)
@@ -3983,7 +5630,15 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 let suffix = channel_type_suffix(channel_element);
                 if method == "send" && args.len() == 1 {
                     return format!(
-                        "sk_channel_send_{}({}, {})",
+                        "(sk_channel_send_or_panic_{}({}, {}), 0)",
+                        suffix,
+                        channel_name,
+                        emit_expr(&args[0], declared)
+                    );
+                }
+                if method == "try_send" && args.len() == 1 {
+                    return format!(
+                        "sk_channel_try_send_{}({}, {})",
                         suffix,
                         channel_name,
                         emit_expr(&args[0], declared)
@@ -3991,6 +5646,9 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 }
                 if method == "receive" && args.is_empty() {
                     return format!("sk_channel_receive_{}({})", suffix, channel_name);
+                }
+                if method == "close" && args.is_empty() {
+                    return format!("(sk_channel_close({}) ? 0 : 1)", channel_name);
                 }
             }
             if let Some(builtin) = builtin_from_name(name) {

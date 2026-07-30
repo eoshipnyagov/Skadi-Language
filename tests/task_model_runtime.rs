@@ -390,3 +390,121 @@ fn task_function_can_be_restarted_with_a_fresh_handle_in_a_loop() {
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "15");
 }
+
+#[test]
+fn closed_channel_drains_and_reports_fallible_operations_end_to_end() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping Channel close e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = r#"
+Channel(Int) values = channel(2)
+values.send(7)
+values.close()
+
+new Int first = 0
+first = values.receive() on error {
+    output("unexpected")
+}
+
+output(first)
+
+new Int second = 0
+second = values.receive() on error {
+    output("drained")
+}
+
+values.send(9) on error {
+    output("closed")
+}
+
+new Bool accepted = values.try_send(11)
+output(accepted)
+"#;
+    let tokens = lex(source).expect("lex Channel close source");
+    let program = parse_program(&tokens).expect("parse Channel close source");
+    semantic_analyze(&program).expect("semantic Channel close source");
+    ensure_codegen_supported(&program).expect("Channel close should reach codegen");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "Channel close binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout)
+            .lines()
+            .collect::<Vec<_>>(),
+        ["7", "drained", "closed", "false"]
+    );
+}
+
+#[test]
+fn closed_channel_operations_enter_on_error_handlers_end_to_end() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping closed Channel handler e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = r#"
+Channel(Int) values = channel(2)
+values.close()
+
+values.send(7) on error {
+    output("closed-send")
+}
+
+values.close() on error {
+    output("closed-close")
+}
+"#;
+    let tokens = lex(source).expect("lex closed Channel handler source");
+    let program = parse_program(&tokens).expect("parse closed Channel handler source");
+    semantic_analyze(&program).expect("semantic closed Channel handler source");
+    ensure_codegen_supported(&program).expect("closed Channel handlers should reach codegen");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "closed Channel handler binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("closed-send"), "{stdout}");
+    assert!(stdout.contains("closed-close"), "{stdout}");
+}
+
+#[test]
+fn periodic_interrupt_bridges_to_normal_context_through_try_send() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping Interrupt runtime e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = r#"
+Channel(Int) ticks = channel(8)
+Interrupt timer = interrupts.periodic(5ms)
+
+on interrupt timer {
+    ticks.try_send(1)
+}
+
+sleep(25ms)
+new Int tick = ticks.receive()
+output(tick)
+"#;
+    let tokens = lex(source).expect("lex Interrupt source");
+    let program = parse_program(&tokens).expect("parse Interrupt source");
+    semantic_analyze(&program).expect("semantic Interrupt source");
+    ensure_codegen_supported(&program).expect("Interrupt should reach codegen");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "Interrupt binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "1");
+}

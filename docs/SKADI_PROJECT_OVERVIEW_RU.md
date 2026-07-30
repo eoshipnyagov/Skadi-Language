@@ -1,6 +1,6 @@
 # Обзор проекта Skadi
 
-Дата обновления: 2026-06-21
+Дата обновления: 2026-07-29
 
 ## 1. Что это за репозиторий
 
@@ -25,23 +25,25 @@
 - math/core срез `v1.1`;
 - strict Memory MVP как experimental `v1.2` systems layer;
 - Task/Channel runtime MVP как experimental `v1.2` systems layer;
+- Time/Duration, ByteSize, Angle и bounded Vector runtime MVP;
 - showcase-программы и набор регрессионных тестов;
-- HTML-сайт документации на базе `MkDocs` с каркасом RU/EN.
+- HTML-сайт документации на базе `MkDocs` с RU/EN user reference;
+- release archives и installers для Windows, Linux и macOS.
 
 ## 3. Как теперь устроена документация
 
 Пользовательские документы:
 
-- [Пользовательские документы](SKADI_DOCS_USER_RU.md)
+- [Пользовательские документы](../user/index.md)
 
 Внутренние документы разработки языка и компилятора:
 
-- [Внутренние документы разработки](SKADI_DOCS_INTERNAL_RU.md)
+- [Внутренние документы разработки](index.md)
 
 Если нужен быстрый маршрут без выбора:
 
-- начать с [пользовательских документов](SKADI_DOCS_USER_RU.md), если цель писать программы на Skadi;
-- начать с [внутренних документов](SKADI_DOCS_INTERNAL_RU.md), если цель развивать язык, компилятор или runtime-контракты.
+- начать с [пользовательских документов](../user/index.md), если цель писать программы на Skadi;
+- начать с [внутренних документов](index.md), если цель развивать язык, компилятор или runtime-контракты.
 
 ## 4. Ключевые точки входа в код
 
@@ -82,8 +84,8 @@ scripts\open_docs.ps1
 ```
 
 Если нужен git-hosted вариант публикации, для этого уже подготовлен
-workflow [docs-pages.yml](.github/workflows/docs-pages.yml), который собирает
-`site/` и публикует его через GitHub Pages.
+workflow `docs-pages.yml`, который собирает `site/` и публикует его через
+GitHub Pages.
 
 ## 7. Что считать стабильной частью `v1.1`
 
@@ -101,29 +103,33 @@ workflow [docs-pages.yml](.github/workflows/docs-pages.yml), который со
 
 `v1.2` развивается поверх stable base `v1.1`.
 
-- Memory MVP уже проходит parser/semantic/codegen/runtime путь для strict fixed-capacity surface.
+- Memory runtime проходит parser/semantic/codegen/runtime путь для fixed,
+  segmented-growing, child и root-static regions.
+- `view`/`direct` borrows и `move` ownership transfer работают для текущих
+  linear resources.
 - Task/Channel MVP проходит parser/semantic/codegen/runtime путь: native `run/wait`,
-  cooperative `stop/stopping` и bounded blocking Channel работают на Win32/pthread.
+  cooperative `stop/stopping`, bounded blocking Channel, `try_send` и
+  close/drain работают на Win32/pthread.
 - Time/Duration MVP проходит parser/semantic/codegen/runtime путь: nominal-типы,
   literals `ms/s/min` и monotonic Win32/POSIX runtime исполняются end-to-end.
 - Dedicated TSan и GCC/Clang/MinGW/MSVC jobs в remote CI проходят; systems API
   остаётся experimental из-за незамороженных контрактов, а не отсутствия backend.
 
 Пользовательский контракт и практические шаблоны собраны в
-[руководстве по многопоточности](concurrency.md).
+[руководстве по многопоточности](../user/concurrency.md).
 
-Подробная рамка находится в [Плане v1.2](SKADI_V1_2_PLAN_RU.md).
+Подробная рамка находится в [Плане v1.2](v1-2-plan.md).
 
 ## 9. Что пока не стоит считать завершённым продуктовым слоем
 
 - module-name imports, aliases и re-exports поверх стабильных path-imports;
-- расширенные memory policies: `allow grow`, `allow drop`, `memory.child`, `memory.static`;
-- расширенный concurrency surface: `close`, cancellation, timeout, `select`, task groups;
-- visual core;
+- автоматическая reclamation по `allow drop` и полный lifetime calculus;
+- cancellation блокирующих Channel operations, timeout, `select`, task groups;
+- Canvas events, text/images, transforms и non-Windows presenters;
 - systems additions;
 - законченная семантика выполнения для `on interrupt`.
 
 ## 10. Навигация по документам
 
-- [Пользовательские документы](SKADI_DOCS_USER_RU.md) - пользовательская документация
-- [Внутренние документы разработки](SKADI_DOCS_INTERNAL_RU.md) - внутренняя документация разработки
+- [Пользовательские документы](../user/index.md) - пользовательская документация
+- [Внутренние документы разработки](index.md) - внутренняя документация разработки

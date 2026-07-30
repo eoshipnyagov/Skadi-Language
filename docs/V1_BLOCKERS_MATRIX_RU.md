@@ -66,7 +66,8 @@
 
 1. Согласовать потоковую модель `read/write`
 - Сейчас: практичный `read(path)` / `write(path, data)` + `args()`.
-- Дальше: спроектировать плавный переход к stream API.
+- Historical note: stream API обсуждался как возможное развитие, но `v1.1/v1.2`
+  сознательно стабилизируют текущую I/O модель и не обещают stream redesign.
 
 2. Диагностики и коды ошибок
 - Статус: закрыто для frontend/toolchain-контракта.
@@ -76,7 +77,7 @@
 3. Расширение e2e-наборов "витринных" программ
 - Статус: закрыто и продолжает расширяться вместе с языком.
 - Поддерживаемая матрица включает 16 showcase-программ, Memory, Task/Channel,
-  Time/Duration, ByteSize и Angle scenarios.
+  Time/Duration, ByteSize, Angle и Vector scenarios.
 
 ## Close-out P0
 

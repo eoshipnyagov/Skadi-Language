@@ -1,9 +1,9 @@
 # Math/Vector Core: реализованная база и backlog 1.x
 
-Статус: базовый math slice реализован в `v1.1`; Angle MVP реализован в `v1.2`,
-следующим math-oriented milestone выбран Vector MVP
+Статус: базовый math slice реализован в `v1.1`; Angle и bounded Vector MVP
+реализованы в `v1.2`; остальное является backlog
 
-Дата: 2026-07-19
+Дата: 2026-07-29
 Контекст: направление gamedev/embedded после стабилизации текущего systems layer.
 
 Условные обозначения:

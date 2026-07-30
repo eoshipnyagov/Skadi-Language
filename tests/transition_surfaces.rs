@@ -100,11 +100,15 @@ fn origin() Point {
 }
 
 #[test]
-fn on_interrupt_is_parseable_but_explicitly_not_compilable() {
-    let program = parse_ok("on interrupt timer0 {\n    pass\n}\n");
-    let err = semantic_analyze(&program).expect_err("on interrupt must not reach codegen");
-    assert!(err.contains("SC-SEM-040"), "{err}");
-    assert!(err.contains("future platform runtime"), "{err}");
+fn typed_periodic_interrupt_reaches_host_codegen() {
+    let program = parse_ok(
+        "Channel(Int) ticks = channel(2)\nInterrupt timer0 = interrupts.periodic(10ms)\non interrupt timer0 {\n    ticks.try_send(1)\n}\n",
+    );
+    semantic_analyze(&program).expect("typed interrupt should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_interrupt_periodic(10000000"));
+    assert!(c.contains("sk_interrupt_bind(timer0"));
+    assert!(c.contains("sk_channel_try_send_Int(ticks, 1)"));
 }
 
 #[test]

@@ -2,7 +2,7 @@
 
 ## Статус
 
-Дата сверки: 2026-07-19
+Дата сверки: 2026-07-29
 
 Stable base `v1.1` и experimental systems slices `v1.2` проходят общий pipeline:
 
@@ -76,14 +76,26 @@ Math core понижается через `math.h` и generated helper expressio
 
 ## Memory runtime (`v1.2`, experimental)
 
-- `Memory name = memory(size)` создаёт fixed-capacity region;
+- `Memory name = memory(size)` создаёт fixed-capacity region по умолчанию;
+- `allow grow` добавляет новые chunks без `realloc` существующих buffers;
+- `allow drop` сохраняется как явный policy bit, но не запускает скрытую
+  reclamation живых значений;
+- `memory.child(size)` получает fixed storage из активного parent-region;
+- `memory.static(<literal>)` использует root-only static buffer;
 - `place in` переключает thread-local active region;
 - trailing `on error` обрабатывает overflow;
 - `clear` сбрасывает region;
 - semantic pass проверяет capability, escape и use-after-clear rules;
-- runtime одинаково используется обычным кодом и native tasks без global race.
+- runtime одинаково используется обычным кодом и native tasks без global race;
+- dynamic/growth storage освобождается автоматически текущим scope owner.
 
-`allow grow`, `allow drop`, child/static allocators не lower'ятся как supported API.
+## Ownership transfer (`v1.2`, experimental)
+
+- `move` lower'ится для `Canvas`, `Window`, `Interrupt` и owning `Channel`;
+- move-helper извлекает handle и обнуляет moved-from binding;
+- owning параметры освобождают ресурс на normal fallthrough;
+- early return освобождает только оставшихся текущих owners;
+- `return move resource` переносит handle вызывающему коду без double cleanup.
 
 ## Task/Channel runtime (`v1.2`, experimental)
 
@@ -136,6 +148,21 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
 - `cross` генерируется только для `Vec3`;
 - Lists, Task и Channel используют value-safe struct representation.
 
+## Canvas runtime (`v1.2`, experimental)
+
+- `Color` lower'ится в RGBA8 struct, `Rect` — в четыре `double`;
+- `Canvas` является owning software framebuffer и освобождается
+  детерминированно при выходе из scope;
+- `clear/pixel/line/rect/fill_rect/circle/fill_circle` lower'ятся в небольшой
+  allocation-free rasterizer с source-over alpha blending и clipping;
+- `checksum` даёт deterministic headless regression seam;
+- `Window` является отдельным linear resource;
+- `windows.open` и `present(direct canvas)` используют Win32/GDI backend;
+- headless Canvas не включает Window runtime, а Windows toolchain добавляет
+  `gdi32` только для соответствующего target path;
+- `Color`/`Rect` value-safe, `Canvas`/`Window` запрещены в Task/Channel и
+  передаются функциям только через explicit borrow.
+
 ## Platform scope
 
 Release matrix проверяет generated C на:
@@ -150,14 +177,15 @@ roadmap, а не скрытым обещанием desktop C backend.
 
 ## Не реализовано в backend
 
-- полноценный `on interrupt` runtime;
+- hardware interrupt backends поверх periodic host MVP;
 - wall-clock/calendar/timezone API;
-- task groups, `select`, channel close/timeout/cancellation;
+- task groups, `select`, channel timeout/cancellation;
 - shared mutable state primitives;
-- Visual Core / Canvas runtime;
-- `allow grow/drop`, child/static Memory;
+- Canvas events, text/images, transforms, Matrix2D и non-Windows presenters;
+- automatic `allow drop` reclamation и user drop hooks;
+- перенос ownership для самого `Memory` и `Task`;
 - generic units algebra, `Timer`, matrices, SIMD lowering, swizzles и расширенная vector algebra;
-- module aliases, re-exports и module-name imports.
+- re-exports и module-name imports.
 
 ## Инварианты generated C
 

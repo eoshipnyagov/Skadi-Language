@@ -40,7 +40,9 @@ The repository includes:
 - formatter,
 - math/core support for `v1.1`,
 - relative path imports, `local`/`hide`, and qualified `module.symbol` access,
-- experimental Memory MVP work for `v1.2`,
+- experimental fixed/growing/child/root-static Memory runtime for `v1.2`,
+- explicit `view`/`direct` borrows and `move` ownership transfer for current
+  linear resources,
 - experimental native Task/Channel runtime for `v1.2`,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
 - deterministic release archives and user-local installers,

@@ -27,6 +27,10 @@ Status: implemented and covered by parser, semantic, codegen, and CLI pipeline t
 - `local struct` is supported.
 - `local label` is supported.
 
+This contract covers symbol isolation. Only `label ErrorCode` currently has a
+complete value/runtime lowering contract; general labels remain a separate
+language-design gap.
+
 ## 5. Hidden field access
 
 - `hide` fields are accessible only through methods of the same struct.

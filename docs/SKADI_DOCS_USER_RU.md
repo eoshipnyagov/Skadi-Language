@@ -1,107 +1,53 @@
-# Skadi: Пользовательская документация (RU)
+# Пользовательская документация Skadi
 
-Этот документ собирает пользовательские материалы по текущему Skadi.
+Текущая распространяемая версия — `v1.2.0-rc.1`: stable base `v1.1` плюс
+experimental, но исполняемые Memory, Task/Channel, Time/Duration, ByteSize,
+Angle и Vector MVP.
 
-Текущая распространяемая линия — `v1.2.0-rc.1`. Она наследует стабильную базу
-`v1.1` и добавляет experimental systems tracks. Memory, Task/Channel,
-Time/Duration, ByteSize, Angle и Vec2/Vec3/Vec4 уже имеют исполняемый runtime
-MVP, но пока не объявлены stable API.
+## 1. Начать
 
-Эти материалы теперь можно поддерживать не только как Markdown-файлы, но и как
-HTML-сайт документации.
+- [Быстрый старт](getting-started.md) — идея языка, установка, первый проект.
+- [Установка](installation.md) — Windows, Linux, macOS, checksums и uninstall.
+- [Переход с v1.1](v1-2-migration.md) — совместимость и новые systems types.
 
-Сюда входят документы для:
+## 2. Пользоваться toolchain
 
-- нового пользователя языка;
-- автора программ на Skadi;
-- пользователя `skadi-cli` и `skadi-cli tui`.
+- [Справочник CLI/TUI](cli-reference.md) — важные команды, полный перечень,
+  diagnostics, targets, TUI и planned work.
+- [Короткий CLI-рецепт](cli-quick-start.md) — минимальная последовательность
+  команд без языкового руководства.
 
-Внутренние документы по разработке языка и компилятора вынесены отдельно:
+## 3. Найти форму языка
 
-- [Внутренние документы разработки](../internal/index.md)
+- [Быстрая справка](language-quick-reference.md) — полная таблица syntax,
+  types, constants, builtins, statuses и future reservations.
+- [Полная справка](language-reference.md) — тематический каталог.
+- [Как писать и чего избегать](practices.md) — канонический стиль и антипримеры.
 
-## 1. С чего начинать
+## 4. Изучить по темам
 
-- [Установка](installation.md)
-  - готовые архивы и установщики для Windows, Linux и macOS;
-  - проверка SHA-256, обновление, офлайн-установка и удаление.
+- [Типы и выражения](language-basics.md)
+- [Ветвления и циклы](control-flow.md)
+- [Функции и ошибки](functions-errors.md)
+- [Struct, Text и List](data-model.md)
+- [Модули](modules.md)
+- [I/O и файлы](io-files.md)
+- [Математика](math.md)
+- [Memory](memory.md)
+- [Владение и передача ресурсов](ownership.md)
+- [Task и Channel](concurrency.md)
+- [Time/Duration](time-duration.md)
+- [ByteSize](byte-size.md)
+- [Angle](angle.md)
+- [Vectors](vectors.md)
 
-- [Переход с v1.1 на v1.2](v1-2-migration.md)
-  - совместимость проектов;
-  - новые experimental поверхности и проверки после обновления.
+## 5. Платформы, будущее и примеры
 
-- [Начало работы](getting-started.md)
-  - первый вход в язык;
-  - базовый путь `написал -> check -> format -> build -> run`;
-  - практическая база без лишней теории.
-
-- [Быстрый старт CLI](cli-quick-start.md)
-  - быстрый старт по `skadi-cli`;
-  - первая проверка окружения;
-  - новый проект, `check`, `build`, `run`, `tui`.
-
-## 2. Основные справочники
-
-- [Справочник языка](language-reference.md)
-  - справочник по синтаксису, типам, builtins и текущим контрактам языка.
-
-- [Короткие примеры](language-examples.md)
-  - небольшие рецепты по операторам, ошибкам, структурам, модулям, I/O, math и systems surface.
-
-- [Время и длительности](time-duration.md)
-  - `Time`, `Duration`, unit literals, monotonic runtime и допустимая арифметика.
-
-- [Размеры памяти](byte-size.md)
-  - `ByteSize`, бинарные unit literals, арифметика и `memory(ByteSize)`.
-
-- [Углы](angle.md)
-  - `Angle`, literals `deg/rad`, nominal arithmetic и math integration.
-
-- [Векторы](vectors.md)
-  - `Vec2`, `Vec3`, `Vec4`, component access, bounded arithmetic и vector math.
-
-- [Справочник CLI/TUI](cli-reference.md)
-  - справочник по командам `skadi-cli` и возможностям `skadi-cli tui`.
-
-- [Многопоточность](concurrency.md)
-  - `Task`, `Channel(T)`, lifecycle, несколько workers и повторный запуск;
-  - текущие desktop backends, ограничения и roadmap ESP32/RTOS.
-
-- [Статус синтаксиса](syntax-status.md)
-  - точный срез того, что реально поддерживается сейчас.
-
-## 3. Стиль и практическое использование
-
-- [Skadi для AI и vibe coding](ai-guide.md)
-  - быстрый operational guide для нейросетей и AI-assisted codegen;
-  - что писать, чего не выдумывать, как держаться в рамках реального Skadi.
-
-- [Showcase-программы](showcases.md)
-  - витринные программы;
-  - реальные небольшие сценарии на текущем языке.
-
-- [Style Guide v1](../internal/style-guide-v1.md)
-  - стиль написания кода на уровне пользователя.
-
-- [Каноническая матрица синтаксиса](../internal/syntax-canonical-matrix.md)
-  - каноничные формы записи для `v1`.
-
-## 4. Что читать в типичных ситуациях
-
-Если нужно просто начать:
-
-- [Начало работы](getting-started.md)
-
-Если нужно быстро разобраться с командами:
-
-- [Быстрый старт CLI](cli-quick-start.md)
-
-Если нужна точная форма синтаксиса:
-
-- [Справочник языка](language-reference.md)
-- [Статус синтаксиса](syntax-status.md)
-
-Если нужны примеры живого кода:
-
+- [Embedded status](embedded.md)
+- [Canvas / Visual Core](canvas.md)
 - [Короткие примеры](language-examples.md)
 - [Showcase-программы](showcases.md)
+- [Skadi для AI-assisted разработки](ai-guide.md)
+
+Внутренние compiler contracts, historical plans и design drafts находятся в
+[разделе разработки](../internal/index.md).

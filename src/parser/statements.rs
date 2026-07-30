@@ -3,8 +3,8 @@
 // File: src/parser/statements.rs
 // ----------------------------------------------------------------
 use crate::ast_nodes::{
-    BlockStatement, Expression, ForLoopStyle, FunctionParam, LegacyForParts, Location,
-    ScopeManager, Statement, StructField, StructMethod,
+    BlockStatement, BorrowMode, Expression, ForLoopStyle, FunctionParam, LabelVariant,
+    LegacyForParts, Location, MemoryKind, ScopeManager, Statement, StructField, StructMethod,
 };
 use crate::common_types::{Token, TokenKind};
 
@@ -110,12 +110,17 @@ fn parse_parenthesized_type_name(tokens: &[Token], start: usize) -> Option<(Stri
         return None;
     }
     let base = tokens[start].lexeme.as_str();
-    if base != "Task" && base != "Channel" {
+    if base != "Task"
+        && base != "Channel"
+        && base != "Interrupt"
+        && base != "Canvas"
+        && base != "Window"
+    {
         return None;
     }
     if start + 1 >= tokens.len() || tokens[start + 1].lexeme != "(" {
-        return if base == "Task" {
-            Some(("Task".to_string(), start + 1))
+        return if matches!(base, "Task" | "Interrupt" | "Canvas" | "Window") {
+            Some((base.to_string(), start + 1))
         } else {
             None
         };
@@ -291,17 +296,36 @@ fn parse_function_declaration_inner(
                 continue;
             }
 
-            if let Some((param_type, name_index)) = parse_type_name_at(tokens, current_index)
+            let mut borrow = BorrowMode::Value;
+            let mut type_index = current_index;
+            if tokens[type_index].kind() == TokenKind::KeywordConstant {
+                return Err(parse_err(
+                    "SC-PARSE-106",
+                    "'constant direct' parameters were replaced by 'view <Type> <name>'.",
+                ));
+            } else if tokens[type_index].kind() == TokenKind::KeywordDirect {
+                borrow = BorrowMode::DirectMutable;
+                type_index += 1;
+            } else if tokens[type_index].kind() == TokenKind::KeywordView {
+                borrow = BorrowMode::View;
+                type_index += 1;
+            } else if tokens[type_index].kind() == TokenKind::KeywordMove {
+                borrow = BorrowMode::Move;
+                type_index += 1;
+            }
+
+            if let Some((param_type, name_index)) = parse_type_name_at(tokens, type_index)
                 && name_index < tokens.len()
                 && tokens[name_index].kind() == TokenKind::Identifier
                 && (name_index + 1 >= tokens.len()
                     || tokens[name_index + 1].lexeme == ","
                     || tokens[name_index + 1].lexeme == ")")
-                && tokens[current_index].lexeme != tokens[name_index].lexeme
+                && tokens[type_index].lexeme != tokens[name_index].lexeme
             {
                 params.push(FunctionParam {
                     param_type: Some(param_type),
                     name: tokens[name_index].lexeme.clone(),
+                    borrow,
                 });
                 current_index = name_index + 1;
                 continue;
@@ -311,6 +335,7 @@ fn parse_function_declaration_inner(
                 params.push(FunctionParam {
                     param_type: None,
                     name: tokens[current_index].lexeme.clone(),
+                    borrow: BorrowMode::Value,
                 });
             }
             current_index += 1;
@@ -387,7 +412,7 @@ pub fn parse_local_prefixed_declaration(
     if start_index + 1 >= tokens.len() {
         return Err(parse_err(
             "SC-PARSE-161",
-            "local must prefix fn/struct/label.",
+            "local must prefix fn/struct/label/tag.",
         ));
     }
     match tokens[start_index + 1].kind() {
@@ -397,9 +422,11 @@ pub fn parse_local_prefixed_declaration(
             .map(|(stmt, consumed)| (stmt, consumed + 1)),
         TokenKind::KeywordLabel => parse_label_declaration_inner(tokens, start_index + 1, true)
             .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        TokenKind::KeywordTag => parse_tag_declaration_inner(tokens, start_index + 1, true)
+            .map(|(stmt, consumed)| (stmt, consumed + 1)),
         _ => Err(parse_err(
             "SC-PARSE-162",
-            "local may prefix only fn/struct/label declarations.",
+            "local may prefix only fn/struct/label/tag declarations.",
         )),
     }
 }
@@ -976,13 +1003,13 @@ pub fn parse_task_or_channel_declaration(
     else {
         return Err(parse_err(
             "SC-PARSE-175",
-            "expected Task or Channel declaration.",
+            "expected Task, Channel, or Interrupt declaration.",
         ));
     };
     if name_index >= tokens.len() || tokens[name_index].kind() != TokenKind::Identifier {
         return Err(parse_err(
             "SC-PARSE-176",
-            "Task/Channel declaration expected identifier name.",
+            "capability declaration expected identifier name.",
         ));
     }
     if name_index + 1 >= tokens.len()
@@ -991,7 +1018,7 @@ pub fn parse_task_or_channel_declaration(
     {
         return Err(parse_err(
             "SC-PARSE-177",
-            "Task/Channel declaration expected '=' after name.",
+            "capability declaration expected '=' after name.",
         ));
     }
     let mut cursor = name_index + 2;
@@ -1006,7 +1033,7 @@ pub fn parse_task_or_channel_declaration(
         Statement::VarDecl {
             name: tokens[name_index].lexeme.clone(),
             value: Box::new(value),
-            is_fixed: false,
+            is_constant: false,
             declared_type: Some(declared_type),
             loc,
         },
@@ -1031,7 +1058,19 @@ fn parse_call_expression(
             "danger call must start with function name.",
         ));
     }
-    if tokens[start + 1].lexeme != "(" {
+    let (call_name, open_index) = if start + 3 < end
+        && tokens[start + 1].lexeme == "."
+        && tokens[start + 2].kind() == TokenKind::Identifier
+        && tokens[start + 3].lexeme == "("
+    {
+        (
+            format!("{}.{}", tokens[start].lexeme, tokens[start + 2].lexeme),
+            start + 3,
+        )
+    } else {
+        (tokens[start].lexeme.clone(), start + 1)
+    };
+    if tokens[open_index].lexeme != "(" {
         return Err(parse_err(
             "SC-PARSE-134",
             "danger call expected '(' after function name.",
@@ -1041,11 +1080,10 @@ fn parse_call_expression(
         return Err(parse_err("SC-PARSE-135", "danger call expected ')'."));
     }
 
-    let call_name = tokens[start].lexeme.clone();
     let mut args = Vec::new();
-    let mut arg_start = start + 2;
+    let mut arg_start = open_index + 1;
     let mut depth = 0usize;
-    let mut i = start + 2;
+    let mut i = open_index + 1;
     while i < end - 1 {
         let t = &tokens[i];
         if t.lexeme == "(" {
@@ -1323,12 +1361,36 @@ pub fn parse_identifier_led_statement(
 }
 
 pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    parse_variable_declaration(tokens, start_index, false)
+}
+
+pub fn parse_constant_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    parse_variable_declaration(tokens, start_index, true)
+}
+
+fn parse_variable_declaration(
+    tokens: &[Token],
+    start_index: usize,
+    is_constant: bool,
+) -> ParseResult<Statement> {
     let loc = Location {
         line: tokens[start_index].line,
         column: tokens[start_index].col,
     };
-    if start_index >= tokens.len() || tokens[start_index].kind() != TokenKind::KeywordNew {
-        return Err(parse_err("SC-PARSE-137", "expected 'new' keyword."));
+    let expected = if is_constant {
+        TokenKind::KeywordConstant
+    } else {
+        TokenKind::KeywordNew
+    };
+    if start_index >= tokens.len() || tokens[start_index].kind() != expected {
+        return Err(parse_err(
+            "SC-PARSE-137",
+            if is_constant {
+                "expected 'constant' keyword."
+            } else {
+                "expected 'new' keyword."
+            },
+        ));
     }
     if start_index + 2 >= tokens.len() {
         return Err(parse_err(
@@ -1419,7 +1481,7 @@ pub fn parse_new_declaration(tokens: &[Token], start_index: usize) -> ParseResul
         Statement::VarDecl {
             name,
             value: Box::new(value),
-            is_fixed: false,
+            is_constant,
             declared_type,
             loc,
         },
@@ -1466,20 +1528,45 @@ pub fn parse_memory_declaration(tokens: &[Token], start_index: usize) -> ParseRe
             "Memory declaration expected memory(...) initializer.",
         ));
     }
-    if tokens[start_index + 4].lexeme != "(" {
+    let mut kind = MemoryKind::Dynamic;
+    let mut open_paren = start_index + 4;
+    if tokens.get(open_paren).map(|token| token.lexeme.as_str()) == Some(".") {
+        let Some(kind_token) = tokens.get(open_paren + 1) else {
+            return Err(parse_err(
+                "SC-PARSE-164",
+                "Memory declaration expected 'child' or 'static' after 'memory.'.",
+            ));
+        };
+        kind = match kind_token.lexeme.as_str() {
+            "child" => MemoryKind::Child,
+            "static" => MemoryKind::Static,
+            other => {
+                return Err(parse_err(
+                    "SC-PARSE-164",
+                    format!("unsupported Memory initializer 'memory.{other}'."),
+                ));
+            }
+        };
+        open_paren += 2;
+    }
+    if tokens.get(open_paren).map(|token| token.lexeme.as_str()) != Some("(") {
         return Err(parse_err(
             "SC-PARSE-164",
-            "Memory declaration expected '(' after memory.",
+            "Memory declaration expected '(' after memory initializer.",
         ));
     }
 
-    let mut cursor = start_index + 5;
+    let args_start = open_paren + 1;
+    let mut cursor = args_start;
     let mut depth = 1usize;
+    let mut first_comma = None;
     while cursor < tokens.len() && depth > 0 {
         if tokens[cursor].lexeme == "(" {
             depth += 1;
         } else if tokens[cursor].lexeme == ")" {
             depth -= 1;
+        } else if tokens[cursor].lexeme == "," && depth == 1 && first_comma.is_none() {
+            first_comma = Some(cursor);
         }
         cursor += 1;
     }
@@ -1490,14 +1577,57 @@ pub fn parse_memory_declaration(tokens: &[Token], start_index: usize) -> ParseRe
         ));
     }
     let close_paren = cursor - 1;
-    if start_index + 5 == close_paren {
+    let size_end = first_comma.unwrap_or(close_paren);
+    if args_start == size_end {
         return Err(parse_err(
             "SC-PARSE-166",
             "Memory declaration expected non-empty size inside memory(...).",
         ));
     }
-    let size =
-        super::expressions::parse_memory_size_expression(tokens, start_index + 5, close_paren)?;
+    let size = super::expressions::parse_memory_size_expression(tokens, args_start, size_end)?;
+
+    let mut allow_grow = false;
+    let mut allow_drop = false;
+    let mut policy_cursor = first_comma.map(|index| index + 1).unwrap_or(close_paren);
+    while policy_cursor < close_paren {
+        if tokens[policy_cursor].lexeme == "," {
+            policy_cursor += 1;
+            continue;
+        }
+        if policy_cursor + 1 >= close_paren
+            || tokens[policy_cursor].lexeme != "allow"
+            || !matches!(tokens[policy_cursor + 1].lexeme.as_str(), "grow" | "drop")
+        {
+            return Err(parse_err(
+                "SC-PARSE-166",
+                "Memory policy expected 'allow grow' or 'allow drop'.",
+            ));
+        }
+        match tokens[policy_cursor + 1].lexeme.as_str() {
+            "grow" if allow_grow => {
+                return Err(parse_err(
+                    "SC-PARSE-166",
+                    "duplicate Memory policy 'allow grow'.",
+                ));
+            }
+            "grow" => allow_grow = true,
+            "drop" if allow_drop => {
+                return Err(parse_err(
+                    "SC-PARSE-166",
+                    "duplicate Memory policy 'allow drop'.",
+                ));
+            }
+            "drop" => allow_drop = true,
+            _ => unreachable!(),
+        }
+        policy_cursor += 2;
+        if policy_cursor < close_paren && tokens[policy_cursor].lexeme != "," {
+            return Err(parse_err(
+                "SC-PARSE-166",
+                "Memory policies must be separated by commas.",
+            ));
+        }
+    }
 
     let mut consumed_end = close_paren + 1;
     let mut on_error = None;
@@ -1520,6 +1650,9 @@ pub fn parse_memory_declaration(tokens: &[Token], start_index: usize) -> ParseRe
         Statement::MemoryDecl {
             name: tokens[start_index + 1].lexeme.clone(),
             size: Box::new(size),
+            kind,
+            allow_grow,
+            allow_drop,
             on_error,
             loc,
         },
@@ -1628,17 +1761,94 @@ fn parse_label_declaration_inner(
     if open >= tokens.len() || tokens[open].lexeme != "{" {
         return Err(parse_err("SC-PARSE-143", "label declaration expected '{'."));
     }
+    let close = find_block_end(tokens, open)?;
     let mut variants = Vec::new();
     let mut cursor = open + 1;
-    while cursor < tokens.len() && tokens[cursor].lexeme != "}" {
-        if tokens[cursor].kind() == TokenKind::Identifier {
-            variants.push(tokens[cursor].lexeme.clone());
+    while cursor < close {
+        if tokens[cursor].kind() == TokenKind::NewLine {
+            cursor += 1;
+            continue;
         }
-        cursor += 1;
+        if tokens[cursor].kind() != TokenKind::Identifier {
+            return Err(parse_err(
+                "SC-PARSE-143",
+                "label variant expected identifier name.",
+            ));
+        }
+        let name = tokens[cursor].lexeme.clone();
+        if cursor + 2 >= close
+            || tokens[cursor + 1].kind() != TokenKind::OpAssignment
+            || tokens[cursor + 1].lexeme != "="
+            || tokens[cursor + 2].kind() != TokenKind::TypeInt
+        {
+            return Err(parse_err(
+                "SC-PARSE-143",
+                format!(
+                    "label variant '{}' requires explicit integer discriminant.",
+                    name
+                ),
+            ));
+        }
+        let discriminant = tokens[cursor + 2].lexeme.parse::<i64>().map_err(|_| {
+            parse_err(
+                "SC-PARSE-143",
+                format!("label variant '{}' has invalid integer discriminant.", name),
+            )
+        })?;
+        variants.push(LabelVariant { name, discriminant });
+        cursor += 3;
     }
-    let close = find_block_end(tokens, open)?;
     Ok((
         Statement::LabelDecl {
+            name: tokens[start_index + 1].lexeme.clone(),
+            variants,
+            is_local,
+            loc,
+        },
+        close + 1 - start_index,
+    ))
+}
+
+pub fn parse_tag_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    parse_tag_declaration_inner(tokens, start_index, false)
+}
+
+fn parse_tag_declaration_inner(
+    tokens: &[Token],
+    start_index: usize,
+    is_local: bool,
+) -> ParseResult<Statement> {
+    let loc = Location {
+        line: tokens[start_index].line,
+        column: tokens[start_index].col,
+    };
+    if tokens.get(start_index).map(Token::kind) != Some(TokenKind::KeywordTag) {
+        return Err(parse_err("SC-PARSE-163", "expected 'tag' keyword."));
+    }
+    if tokens.get(start_index + 1).map(Token::kind) != Some(TokenKind::Identifier) {
+        return Err(parse_err(
+            "SC-PARSE-164",
+            "tag declaration expected identifier name.",
+        ));
+    }
+    let open = start_index + 2;
+    if tokens.get(open).map(|token| token.lexeme.as_str()) != Some("{") {
+        return Err(parse_err("SC-PARSE-165", "tag declaration expected '{'."));
+    }
+    let close = find_block_end(tokens, open)?;
+    let mut variants = Vec::new();
+    for token in &tokens[open + 1..close] {
+        if token.kind() == TokenKind::Identifier {
+            variants.push(token.lexeme.clone());
+        } else if token.kind() != TokenKind::NewLine {
+            return Err(parse_err(
+                "SC-PARSE-166",
+                "tag body accepts symbolic variant names only.",
+            ));
+        }
+    }
+    Ok((
+        Statement::TagDecl {
             name: tokens[start_index + 1].lexeme.clone(),
             variants,
             is_local,
@@ -1784,13 +1994,31 @@ fn parse_struct_method(
             current_index += 1;
             continue;
         }
-        if let Some((param_type, name_index)) = parse_type_name_at(tokens, current_index)
+        let mut borrow = BorrowMode::Value;
+        let mut type_index = current_index;
+        if tokens[type_index].kind() == TokenKind::KeywordConstant {
+            return Err(parse_err(
+                "SC-PARSE-156",
+                "'constant direct' parameters were replaced by 'view <Type> <name>'.",
+            ));
+        } else if tokens[type_index].kind() == TokenKind::KeywordDirect {
+            borrow = BorrowMode::DirectMutable;
+            type_index += 1;
+        } else if tokens[type_index].kind() == TokenKind::KeywordView {
+            borrow = BorrowMode::View;
+            type_index += 1;
+        } else if tokens[type_index].kind() == TokenKind::KeywordMove {
+            borrow = BorrowMode::Move;
+            type_index += 1;
+        }
+        if let Some((param_type, name_index)) = parse_type_name_at(tokens, type_index)
             && name_index < end
             && tokens[name_index].kind() == TokenKind::Identifier
         {
             params.push(FunctionParam {
                 param_type: Some(param_type),
                 name: tokens[name_index].lexeme.clone(),
+                borrow,
             });
             current_index = name_index + 1;
             continue;
@@ -1799,6 +2027,7 @@ fn parse_struct_method(
             params.push(FunctionParam {
                 param_type: None,
                 name: tokens[current_index].lexeme.clone(),
+                borrow: BorrowMode::Value,
             });
         }
         current_index += 1;

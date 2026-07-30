@@ -64,7 +64,32 @@ def main() -> int:
         if not source_path.is_file():
             errors.append(f"missing RU source for route '{route}': {source}")
 
-    required_user_routes = {"user/installation", "user/v1-2-migration"}
+    routed_source_names = {Path(source).name for _, source in ROUTE_MAP}
+    intentionally_unrouted = {"SKADI_DOCS_INTERNAL_RU.md", "SKADI_DOCS_USER_RU.md"}
+    for path in sorted((ROOT / "docs").glob("*.md")):
+        if path.name not in routed_source_names and path.name not in intentionally_unrouted:
+            errors.append(f"documentation source has no site route: {path.name}")
+
+    required_user_routes = {
+        "user/installation",
+        "user/v1-2-migration",
+        "user/getting-started",
+        "user/cli-reference",
+        "user/language-quick-reference",
+        "user/language-reference",
+        "user/language-basics",
+        "user/control-flow",
+        "user/functions-errors",
+        "user/data-model",
+        "user/modules",
+        "user/io-files",
+        "user/math",
+        "user/memory",
+        "user/concurrency",
+        "user/practices",
+        "user/embedded",
+        "user/canvas",
+    }
     actual_routes = {route for route, _ in ROUTE_MAP}
     for route in sorted(required_user_routes - actual_routes):
         errors.append(f"missing required release documentation route '{route}'")
@@ -118,12 +143,81 @@ def main() -> int:
                         f"{path.relative_to(ROOT)}: Skadi block {block_index}: {label}"
                     )
 
-    language_reference = read(ROOT / "docs" / "SKADI_LANGUAGE_REFERENCE_RU.md")
+    language_reference = read(
+        ROOT / "docs" / "SKADI_LANGUAGE_QUICK_REFERENCE_RU.md"
+    )
     builtin_source = read(ROOT / "src" / "builtins.rs")
     builtin_names = sorted(set(re.findall(r'name:\s*"([^"]+)"', builtin_source)))
     for name in builtin_names:
         if f"`{name}" not in language_reference:
-            errors.append(f"language reference does not mention builtin '{name}'")
+            errors.append(f"language quick reference does not mention builtin '{name}'")
+
+    required_language_forms = [
+        "new Type",
+        "ElementType List",
+        "danger fn",
+        "return error",
+        "on error",
+        "iterate",
+        "when",
+        "struct",
+        "hide",
+        "my.field",
+        'import "./math.skd"',
+        "Memory",
+        "place in",
+        "Task",
+        "run worker",
+        "wait work",
+        "Channel",
+        "stopping",
+        "Time",
+        "Duration",
+        "ByteSize",
+        "Angle",
+        "Vec2",
+        "Vec3",
+        "Vec4",
+        "PI",
+        "TAU",
+        "EPSILON",
+    ]
+    for form in required_language_forms:
+        if form not in language_reference:
+            errors.append(f"language quick reference does not mention '{form}'")
+
+    bilingual_core_routes = {
+        "user/getting-started",
+        "user/cli-quick-start",
+        "user/cli-reference",
+        "user/language-quick-reference",
+        "user/language-reference",
+        "user/language-basics",
+        "user/control-flow",
+        "user/functions-errors",
+        "user/data-model",
+        "user/modules",
+        "user/io-files",
+        "user/math",
+        "user/memory",
+        "user/concurrency",
+        "user/time-duration",
+        "user/byte-size",
+        "user/angle",
+        "user/vectors",
+        "user/practices",
+        "user/embedded",
+        "user/canvas",
+    }
+    route_sources = dict(ROUTE_MAP)
+    for route in sorted(bilingual_core_routes):
+        source = route_sources.get(route)
+        if source is None:
+            continue
+        base_name = Path(source).name
+        en_name = base_name.replace("_RU", "_EN")
+        if not (ROOT / "docs-en" / en_name).is_file():
+            errors.append(f"missing EN source for core route '{route}': {en_name}")
 
     syntax_status = read(ROOT / "docs" / "SKADI_SYNTAX_STATUS.md")
     required_surfaces = [

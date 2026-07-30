@@ -1,7 +1,9 @@
 # RFC: Skadi CLI (`skadi`) v0.1
 
 Date: 2026-05-25
-Status: Draft
+Status: Historical / implemented and superseded by the current CLI/TUI reference
+
+Current user contract: [Skadi CLI/TUI Reference](../user/cli-reference.md).
 
 ## Goal
 
@@ -47,9 +49,9 @@ entry = "src/main.skd"
 2. `check` calls compiler frontend. ✅
 3. `build` calls transpiler and system C compiler (host). ✅
 4. `run` wraps build+exec. ✅
-5. `target list` and `--target` mapping (host-only compile for now). ◑
-6. `tui` expanded from minimal wizard to full flow. ◑
-7. `format`, `doctor` production behavior. ◑
+5. `target list` and `--target` mapping. ✅
+6. `tui` expanded from minimal wizard to full project workflow. ✅
+7. `format`, `doctor` production behavior. ✅
 
 Current built-in target profiles:
 

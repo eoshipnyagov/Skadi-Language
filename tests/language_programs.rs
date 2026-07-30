@@ -50,8 +50,8 @@ current = queue.pop() on error {
 fn program_when_and_labels_with_danger() {
     let src = r#"
 label ErrorCode {
-    Ok
-    ZeroDivision
+    Ok = 0
+    ZeroDivision = 1
 }
 
 danger fn safe_div(Int a, Int b) Int {

@@ -1,9 +1,9 @@
 # Skadi v1.2 Plan (RU)
 
-Дата: 2026-07-19
-Статус: release hardening завершён; Memory, Task/Channel, Time/Duration,
-ByteSize и Angle slices исполняемы и остаются experimental API текущей линии
-`v1.2`.
+Дата: 2026-07-30
+Статус: release hardening и документационный checkpoint завершены; Memory,
+ownership, Task/Channel, Time/Duration, ByteSize, Angle, Vector, Interrupt и
+Canvas slices исполняемы и остаются experimental API текущей линии `v1.2`.
 
 ## 1. Идентичность релиза
 
@@ -41,18 +41,24 @@ Time/Duration как выражаются интервалы и monotonic-вре
 
 Memory model уже находится дальше, чем просто frontend experiment:
 
-- parser принимает `Memory`, `memory(size)`, `place in`, trailing `on error` и `clear`;
+- parser принимает `Memory`, `memory(size[, policies])`, `memory.child`,
+  `memory.static`, `place in`, trailing `on error` и `clear`;
 - semantic layer проверяет capability-like правила для `Memory`;
 - есть escape checks для region-owned dynamic payload;
 - запрещены заведомо опасные формы: `Memory` в struct, `Memory List`, copy/reassign handle, return local-region value;
-- C backend поддерживает strict fixed-capacity region runtime;
+- C backend поддерживает fixed-capacity baseline, segmented growth, child и
+  root-static regions;
 - memory examples и negative suite покрывают контракт.
 
 Ограничения:
 
-- `allow grow`, `allow drop`, `memory.child`, `memory.static` пока остаются design-level future surface;
-- allocator policy ещё не является широкой runtime-платформой;
-- взаимодействие с будущими Task/Channel runtime rules требует отдельной стабилизации.
+- `allow drop` является declarative policy без automatic reclamation;
+- `Memory` остаётся non-movable region capability;
+- embedded allocator backend и полный lifetime calculus отсутствуют.
+
+После исходного release-hardening scope также реализован bounded ownership
+transfer: `move` для `Canvas`, `Window`, `Interrupt` и owning `Channel`, включая
+function boundaries, factory returns, branch/loop analysis и cleanup lowering.
 
 ### Task/Channel partial runtime MVP
 
@@ -97,12 +103,12 @@ API, а не из-за отсутствующего backend.
 - async/await;
 - task groups;
 - `select`;
-- non-blocking channel API;
 - shared mutable state model;
-- `allow grow` / `allow drop` allocator policy;
-- child/static memory allocators as stable surface;
-- Visual Core runtime;
-- module-name imports, aliases и re-exports поверх реализованных path-imports.
+- automatic `allow drop` reclamation и user drop hooks;
+- child/static allocators как замороженный stable API;
+- Canvas events, text/images, transforms и дополнительные presenters;
+- module-name imports, packages и re-exports поверх реализованных path-imports
+  и aliases.
 
 Эти направления можно держать как drafts и future contracts, но не смешивать со стабильным обещанием `v1.2`.
 
@@ -324,7 +330,7 @@ macOS. Обнаруженные platform-specific расхождения исп�
 Remote compiler matrix для `Time/Duration` зелёная. Дальнейшая работа в текущей
 линии идёт в следующем порядке и не расширяется release-packaging задачами.
 
-### Milestone 8: документационная сверка
+### Milestone 8: документационная сверка - выполнен
 
 Цель: ещё раз сопоставить пользовательские и внутренние документы с фактическими
 parser, semantic, formatter, codegen, CLI и TUI contracts.
@@ -336,6 +342,9 @@ parser, semantic, formatter, codegen, CLI и TUI contracts.
 - примеры кода проходят текущий formatter/check flow;
 - RU/EN HTML-навигация и generated site собираются в strict mode;
 - historical/future документы не выглядят как обещание текущего runtime.
+
+Checkpoint 2026-07-30 дополнительно закрепил RU/EN ownership/Memory pages,
+strict HTML build, актуальные syntax/coverage matrices и подсветку новых форм.
 
 ### Milestone 9: ByteSize MVP - functional slice выполнен
 
@@ -404,7 +413,9 @@ vector slice до матриц или transform framework.
 После завершения ByteSize, Angle и Vector MVP закрыты формы, которые выглядели
 частично реализованными:
 
-- `on interrupt` остаётся parse/format future form, но получает обязательный `SC-SEM-040`;
+- `on interrupt` прошёл следующий отдельный host runtime slice с typed periodic
+  `Interrupt` и строгим interrupt-safe subset; hardware IRQ backend остаётся
+  future;
 - compound assignments десахарируются без потери левого операнда;
 - formatter канонизирует typed returns через `returns` и compound assignments через явную форму;
 - legacy typed-return syntax принимается с warning для compatibility;
@@ -414,6 +425,28 @@ vector slice до матриц или transform framework.
 - остаточные `Partial/Planned` пометки сверены с diagnostics и tests;
 - не превращать module aliases, indexing `on error` и расширенный concurrency API
   в неявные обязательства этой линии.
+
+### Milestone 13: Canvas, ownership и расширенные regions - выполнен
+
+Реализовано:
+
+- Canvas v0: portable headless rasterizer, Color/Rect, drawing primitives,
+  checksum и Win32 presenter;
+- call-scoped `view`/`direct` и explicit `move` для `Canvas`, `Window`,
+  `Interrupt` и owning `Channel`;
+- resource factory return, use-after-move, branch merge и loop diagnostics;
+- fixed baseline, segmented `allow grow`, child и root-static Memory regions;
+- `allow drop` сохранён только как experimental policy marker без implicit
+  reclamation;
+- native examples, formatter, VS Code/Pygments highlighting, RU/EN docs и
+  regression coverage.
+
+Следующий функциональный checkpoint:
+
+1. cancellation должна пробуждать blocking Channel send/receive;
+2. `stop`, `close` и drain semantics должны быть едины на Win32/pthread;
+3. timeout surface обсуждается только после стабилизации существующих границ;
+4. `select`, task groups и implicit async runtime не входят в ближайший slice.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 

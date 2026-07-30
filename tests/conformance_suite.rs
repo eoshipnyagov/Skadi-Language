@@ -42,8 +42,8 @@ loop {
 fn conformance_when_label_and_errorcode_family() {
     let src = r#"
 label ErrorCode {
-    Ok
-    Invalid
+    Ok = 0
+    Invalid = 1
 }
 danger fn parse_value(Int x) Int {
     if x < 0 {
@@ -102,18 +102,16 @@ new Text part = slice(t, 3, 7)
 }
 
 #[test]
-fn conformance_on_interrupt_is_explicitly_rejected() {
+fn conformance_interrupt_context_rejects_ordinary_io() {
     let src = r#"
-struct Sensor {
-    u8 address
-}
-on interrupt timer0 {
-    new Int ticks = 1
+Interrupt tick = interrupts.periodic(10ms)
+on interrupt tick {
+    output(1)
 }
 "#;
     let err = semantic_err(src);
     assert!(err.contains("SC-SEM-040"), "{err}");
-    assert!(err.contains("on interrupt"), "{err}");
+    assert!(err.contains("interrupt-safe"), "{err}");
 }
 
 #[test]
@@ -135,12 +133,12 @@ x = parse_value(x) on error {
 fn conformance_errorcode_must_start_with_ok() {
     let src = r#"
 label ErrorCode {
-    Invalid
-    Ok
+    Invalid = 1
+    Ok = 0
 }
 "#;
     let err = semantic_err(src);
-    assert!(err.contains("must start with 'Ok'"));
+    assert!(err.contains("must start with 'Ok = 0'"));
 }
 
 #[test]

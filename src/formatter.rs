@@ -1,5 +1,6 @@
 use crate::ast_nodes::{
-    BlockStatement, Expression, ForLoopStyle, FunctionParam, Program, Statement, StructMethod,
+    BlockStatement, BorrowMode, Expression, ForLoopStyle, FunctionParam, Program, Statement,
+    StructMethod,
 };
 use crate::lexer::lex;
 use crate::parser::parse_program;
@@ -55,15 +56,13 @@ impl Formatter {
             Statement::VarDecl {
                 name,
                 value,
-                is_fixed,
+                is_constant,
                 declared_type,
                 ..
             } => {
-                if *is_fixed {
-                    return Err("format does not support 'fixed' declarations yet.".to_string());
-                }
                 self.write_indent(indent);
-                self.out.push_str("new ");
+                self.out
+                    .push_str(if *is_constant { "constant " } else { "new " });
                 if let Some(declared_type) = declared_type {
                     self.out.push_str(declared_type);
                     self.out.push(' ');
@@ -75,14 +74,28 @@ impl Formatter {
             Statement::MemoryDecl {
                 name,
                 size,
+                kind,
+                allow_grow,
+                allow_drop,
                 on_error,
                 ..
             } => {
                 self.write_indent(indent);
                 self.out.push_str("Memory ");
                 self.out.push_str(name);
-                self.out.push_str(" = memory(");
+                self.out.push_str(" = ");
+                self.out.push_str(match kind {
+                    crate::ast_nodes::MemoryKind::Dynamic => "memory(",
+                    crate::ast_nodes::MemoryKind::Child => "memory.child(",
+                    crate::ast_nodes::MemoryKind::Static => "memory.static(",
+                });
                 self.out.push_str(&self.render_expression(size, 0));
+                if *allow_grow {
+                    self.out.push_str(", allow grow");
+                }
+                if *allow_drop {
+                    self.out.push_str(", allow drop");
+                }
                 self.out.push(')');
                 if let Some(on_error) = on_error {
                     self.out.push_str(" on error ");
@@ -281,6 +294,24 @@ impl Formatter {
             Statement::LabelDecl { name, variants, .. } => {
                 self.write_indent(indent);
                 self.out.push_str("label ");
+                self.out.push_str(name);
+                self.out.push_str(" {\n");
+                for (index, variant) in variants.iter().enumerate() {
+                    self.write_indent(indent + 1);
+                    self.out.push_str(&variant.name);
+                    self.out.push_str(" = ");
+                    self.out.push_str(&variant.discriminant.to_string());
+                    if index + 1 < variants.len() {
+                        self.out.push('\n');
+                    }
+                }
+                self.out.push('\n');
+                self.write_indent(indent);
+                self.out.push('}');
+            }
+            Statement::TagDecl { name, variants, .. } => {
+                self.write_indent(indent);
+                self.out.push_str("tag ");
                 self.out.push_str(name);
                 self.out.push_str(" {\n");
                 for (index, variant) in variants.iter().enumerate() {
@@ -493,8 +524,14 @@ impl Formatter {
         params
             .iter()
             .map(|param| {
+                let prefix = match param.borrow {
+                    BorrowMode::Value => "",
+                    BorrowMode::DirectMutable => "direct ",
+                    BorrowMode::View => "view ",
+                    BorrowMode::Move => "move ",
+                };
                 if let Some(param_type) = &param.param_type {
-                    format!("{param_type} {}", param.name)
+                    format!("{prefix}{param_type} {}", param.name)
                 } else {
                     param.name.clone()
                 }
@@ -547,6 +584,9 @@ impl Formatter {
                 format!("{}[{}]", base_text, self.render_expression(index, 0))
             }
             Expression::VariableReference(name) => name.clone(),
+            Expression::DirectBorrow(name) => format!("direct {name}"),
+            Expression::ViewBorrow(name) => format!("view {name}"),
+            Expression::Move(name) => format!("move {name}"),
             Expression::MemberAccess { base, field } => format!("{base}.{field}"),
             Expression::Call { name, args } => {
                 format!("{name}({})", self.render_arg_list(args))

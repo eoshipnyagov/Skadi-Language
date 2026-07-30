@@ -337,8 +337,8 @@ fn e2e_skadi_list_and_when_edge_build_and_run() {
 
     let src = r#"
 label ErrorCode {
-    Ok
-    EmptyQueue
+    Ok = 0
+    EmptyQueue = 1
 }
 
 new i32 List values = []

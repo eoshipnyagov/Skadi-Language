@@ -1,7 +1,7 @@
 # Skadi MVP: Контракт Task Model
 
-Дата: 2026-07-12
-Статус: experimental / partial runtime MVP.
+Дата: 2026-07-29
+Статус: реализованный experimental runtime MVP.
 
 ## 1. Назначение
 
@@ -268,7 +268,7 @@ registry, что противоречит явному lifecycle Skadi.
 
 ## 15.1. Текущий implementation status
 
-В репозитории уже реализован frontend slice:
+В репозитории реализован end-to-end runtime slice:
 
 - parser/AST принимают `Task`, `Task(T)`, `run`, `wait`, `stop`, `stopping`, `Channel(T)`, `channel(N)`, `send` и `receive`;
 - semantic layer проверяет lifecycle task handle, task-context для `stopping`, value-safe channel messages и запрет `Task` как обычного value-type;
@@ -285,7 +285,7 @@ registry, что противоречит явному lifecycle Skadi.
   использовать внутри таких блоков можно.
 
 Task/Channel runtime уже является исполняемым, но всё ещё experimental slice.
-Дальнейшее укрепление включает stress/sanitizer/CI matrix и showcase coverage;
+Stress, sanitizer/TSan, cross-platform CI matrix и showcase coverage выполнены;
 `close`, cancellation, timeout и `select` остаются будущими контрактами.
 
 Path-sensitive semantic pass принимает `wait` во всех ветках, отвергает cleanup
@@ -319,15 +319,16 @@ MVP task model не обещает:
 - общую сложную exception/cancellation model;
 - богатую систему неблокирующих channel-операций.
 
-## 18. Рекомендация для реализации
+## 18. Реализованный порядок и следующие расширения
 
-Практический порядок такой:
+MVP был реализован в таком порядке:
 
 1. Сначала зафиксировать syntax/AST surface: `run`, `wait`, `stop`, `stopping`, `Channel(T)`, `send`, `receive`.
 2. Затем определить semantic rules для task handle и task context.
 3. Затем зафиксировать ограничение на value-safe channel messages.
 4. Затем решить, как эта модель будет стыковаться с `Memory`.
-5. Только после этого обсуждать `try_send`, `try_receive`, `select`, task groups и event sugar.
+5. Следующим отдельным design step обсуждать `try_send`, `try_receive`, `select`,
+   task groups и event sugar.
 
 ## 19. Короткая формула MVP-контракта
 

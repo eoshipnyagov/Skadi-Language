@@ -1,6 +1,6 @@
 # Skadi: технический справочник проекта
 
-Дата сверки: 2026-07-19
+Дата сверки: 2026-07-29
 Состояние: stable toolchain base `v1.1` и experimental systems line `v1.2`
 
 Этот документ описывает фактическую архитектуру репозитория. Детали конкретного
@@ -72,7 +72,7 @@ Duration literals.
 - `statements.rs` разбирает declarations, control flow, structs, error flow,
   Memory и Task/Channel surface;
 - `expressions.rs` реализует precedence parsing, calls, indexing, list/struct
-  literals, `run/wait/stopping` и unit literals.
+  literals, `run/wait/stopping`, Duration, ByteSize и Angle unit literals.
 
 Parser diagnostics используют семейство `SC-PARSE-*`. Зарезервированные, но не
 реализованные формы должны завершаться явной parse error, а не частичным AST.
@@ -89,7 +89,8 @@ Semantic layer отвечает за:
 - Memory capability, lifetime, escape и use-after-clear rules;
 - линейный Task lifecycle и task-safe boundaries;
 - Channel value-safe payload и owner restrictions;
-- nominal `Time/Duration` arithmetic;
+- nominal `Time/Duration`, `ByteSize` и `Angle` arithmetic;
+- bounded `Vec2/Vec3/Vec4` construction, fields, arithmetic и math builtins;
 - style warnings для legacy/canonical forms.
 
 Ошибки относятся к `SC-SEM-*`; warning policy не превращает стиль в hard error.
@@ -115,10 +116,12 @@ runtime helpers. Реализованы:
 - structs, fields, methods и generated cleanup;
 - typed List, Text, filesystem и I/O runtime;
 - `math.h` lowering;
-- fixed-capacity Memory regions и thread-local active region;
+- fixed/growing/child/root-static Memory regions и thread-local active region;
+- explicit ownership transfer и typed cleanup для current linear resources;
 - Win32/pthread Task runtime и typed results;
 - bounded blocking Channel с mutex/condition variables;
-- monotonic Time/Duration runtime на Win32/POSIX.
+- monotonic Time/Duration runtime на Win32/POSIX;
+- nominal ByteSize/Angle lowering и bounded Vec2/Vec3/Vec4 helpers.
 
 Подробная карта representation находится в [границах Skadi -> C](to-c-scope.md).
 
@@ -176,14 +179,16 @@ build/run, doctor, project bootstrap, config editor и help. Долгие action
 
 ### Experimental line `v1.2`
 
-- strict fixed-capacity Memory MVP;
+- bounded Memory runtime с fixed/grow/child/static regions;
+- call-scoped `view`/`direct` и explicit resource `move`;
 - native Task/Channel MVP на Win32/pthread;
 - nominal Time/Duration и monotonic runtime;
 - реализованные bounded milestones: Time/Duration, ByteSize, Angle и Vec2/Vec3/Vec4;
-- следующий этап: закрытие переходных поверхностей текущего frontend.
+- переходные формы закрыты явными diagnostics и compatibility policy.
 
 Experimental означает незамороженный API, а не frontend-only scaffold: текущие
-Memory, Task/Channel, Time/Duration, ByteSize, Angle и Vector slices исполняются end-to-end.
+Memory, ownership, Task/Channel, Time/Duration, ByteSize, Angle и Vector slices
+исполняются end-to-end.
 
 ## 6. Test architecture
 
@@ -229,12 +234,16 @@ CI проверяет:
 
 Пока не являются текущей реализованной поверхностью:
 
-- полноценный `on interrupt` runtime;
-- module aliases/name imports/re-exports;
-- channel close/timeout/select, task groups и async/await;
+- hardware `on interrupt` backends;
+- module name imports/re-exports;
+- channel timeout/select, task groups и async/await;
 - shared mutable state model;
 - ESP32/FreeRTOS и другие embedded runtime backends;
-- Visual Core, Matrix2D, generic units и operator overloading;
-- installer/release packaging текущего development sprint.
+- Canvas events/text/images, Matrix2D, generic units и operator overloading;
+- package manager и dependency resolution;
+- готовый embedded/ESP32 runtime и flash workflow;
+- non-Windows и embedded Canvas presentation backends.
 
-Актуальный порядок работ фиксируется в [плане v1.2](v1-2-plan.md).
+Актуальный порядок работ фиксируется в [плане v1.2](v1-2-plan.md), а найденные
+расхождения между design-документами и реализацией собраны в
+[аудите внутренней документации](internal-docs-audit.md).

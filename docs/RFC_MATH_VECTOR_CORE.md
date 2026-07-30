@@ -1,12 +1,12 @@
-# RFC: Math + Vector Core (v1 target)
+# RFC: Math + Vector Core
 
-Status: Draft (proposed for v1 implementation scope)  
-Date: 2026-05-22  
+Status: Historical proposal; math core accepted in v1.1, bounded vectors implemented experimentally in v1.2
+Date: 2026-05-22
 Owner: Skadi core
 
 ## 1. Что уже есть в дизайне
 
-По `docs/legacy/Skadi_design.txt` уже зафиксировано:
+В раннем дизайне языка были зафиксированы:
 
 - составные типы `Vec2`, `Vec3`, `Vec4`,
 - базовая математика в ядре: `sin`, `cos`, `sqrt`, `abs`, `rand`, `PI`, `E`.
@@ -37,7 +37,7 @@ Owner: Skadi core
 - Реализация в transpile-to-C использует `math.h`/runtime helper-ы.
 - Для embedded/gamedev важен предсказуемый runtime без скрытых тяжелых абстракций.
 
-## 4. Минимальная реализация в компиляторе (план)
+## 4. Минимальная реализация в компиляторе (выполнено для math core)
 
 1. Parser/AST:
 
@@ -61,8 +61,12 @@ Owner: Skadi core
 - parser + semantic + codegen smoke,
 - минимум один e2e сценарий “игровой” математики.
 
-## 5. Отдельные решения на v1.1/v2
+## 5. Отдельные решения после bounded MVP
 
 - Финальный синтаксис Matrix2D (новый тип vs алиас над `List(List(T))`).
 - Оптимизированные SIMD/backend-specific lowering для `Vec*`.
+
+Фактический текущий контракт находится в пользовательских страницах
+[Математика](../user/math.md) и [Векторы](../user/vectors.md). Предложенная здесь
+`Matrix2D` не реализована.
 

@@ -2,8 +2,8 @@
 // Showcase: v1.1 math, structs, lists, methods, when, and danger/on error.
 
 label ErrorCode {
-    Ok
-    DivideByZero
+    Ok = 0
+    DivideByZero = 1
 }
 
 danger fn safe_speed(Float distance, Float seconds) returns Float {

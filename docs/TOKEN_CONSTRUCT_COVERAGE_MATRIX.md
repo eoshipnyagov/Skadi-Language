@@ -1,6 +1,6 @@
 # Token/Construct Coverage Matrix (current `develop`)
 
-Date: 2026-07-19
+Date: 2026-07-30
 Purpose: traceability across stable `v1.1` and experimental `v1.2` systems surface.
 
 Legend:
@@ -15,7 +15,8 @@ Legend:
 | `fn` | Y | Y | Y | Y | Y | core function path covered in smoke+e2e |
 | `danger fn` | Y | Y | Y | Y | Y | includes `return error` flow |
 | `struct` | Y | Y | P | P | P | lowering works for current subset; advanced cases pending |
-| `label` | Y | Y | Y | Y | Y | `ErrorCode` contract covered |
+| `label` | Y | Y | Y | Y | Y | explicit numeric discriminants; `ErrorCode` starts with `Ok = 0` |
+| `tag` | Y | Y | Y | Y | Y | symbolic nominal variants without user numeric contract |
 | `if` / `else` | Y | Y | Y | Y | Y | includes nested/branch checks |
 | `when` / `is` / `else` | Y | Y | Y | Y | Y | includes marker/invariant and e2e scenarios |
 | `for ... in ...` | Y | Y | Y | P | P | style-supported; lowering tied to list runtime shape |
@@ -29,26 +30,32 @@ Legend:
 | `new` | Y | Y | Y | Y | Y | scalar inference covered; composites require explicit type (`SC-SEM-020`) |
 | `my` | Y | Y | P | P | P | struct method subset covered |
 | `on error` | P (`on` token + parse pattern) | Y | Y | Y | Y | danger/list-pop contracts covered |
-| `on interrupt` | P (`on` + `interrupt`) | Y | Y (negative) | N | Y (negative) | explicit `SC-SEM-040`; no silent codegen |
+| `on interrupt` | P (`on` + `interrupt`) | Y | Y | Y | Y | typed periodic host Interrupt with strict handler subset |
+| `constant` | Y | Y | Y | Y | Y | immutable binding with assignment rejection |
 | `fixed` / `const` | Y | N | N | N | N | reserved/tokenized, statement parser rejects the form |
 | `hide` | Y | Y | Y | P | P | hidden-field access checks implemented; broader struct-lowering depth is ongoing |
 | `local` | Y | Y | Y | P | P | local visibility enforced in import pipeline via symbol isolation |
-| `direct` | Y | N | N | N | N | reserved/tokenized; deferred semantics |
-| `allow drop` | P (`allow` tokenized) | N | N | N | N | chunk-memory design deferred |
+| `direct` / `view` | Y | Y | Y | Y | Y | explicit mutable/read-only function borrow contract |
+| `move` | Y | Y | Y | Y | Y | explicit resource transfer, factory return, branch/loop checks |
+| `allow grow` / `allow drop` | P (policy words) | Y | Y | Y | Y | contextual only inside Memory initializer; drop is declarative |
 | `import "./... .skd"` | N (resolved in CLI pipeline pre-lex) | N (pre-merged) | N (pre-merged) | N (pre-merged) | Y | covered in `tools/skadi-cli` tests |
-| `import module_name` / alias | N | N | N | N | Y (negative) | deterministic diagnostic `[SC-MOD-001]` |
+| `import "./x.skd" as alias` | N (CLI pre-lex) | N | N | N | Y | local qualified alias rewrites to canonical module name |
+| `import module_name` | N | N | N | N | Y (negative) | deterministic diagnostic `[SC-MOD-001]` |
 | import public symbol collision | N | N | N | N | Y (negative) | deterministic diagnostics `[SC-MOD-002]` |
 | direct-import-only visibility | N | N | N | N | Y (negative) | deterministic diagnostics `[SC-MOD-003]` |
 | `and` / `or` / `xor` / `not` | Y | Y | Y | Y | P | operator paths covered; dense combo e2e can grow |
 | `div` / `mod` | Y | Y | Y | Y | P | covered in parser/semantic/smoke, moderate e2e density |
 | `true` / `false` | Y | Y | Y | Y | Y | bool pipelines covered |
-| `Memory` / `memory(size)` | Y | Y | Y | Y | Y | experimental fixed-capacity region runtime |
+| `Memory` / `memory(size)` | Y | Y | Y | Y | Y | fixed capacity by default, optional segmented growth |
+| `memory.child(size)` | P | Y | Y | Y | Y | fixed storage from active parent |
+| `memory.static(literal)` | P | Y | Y | Y | Y | root-only static buffer |
 | `place in` / trailing `on error` | Y | Y | Y | Y | Y | placement and overflow recovery covered |
 | `memory.clear()` | Y | Y | Y | Y | Y | use-after-clear and active-region rules covered |
 | `Task` / `Task(T)` / `run` | Y | Y | Y | Y | Y | experimental native Win32/pthread runtime |
 | `wait` / `stop` / `stopping` | Y | Y | Y | Y | Y | path-sensitive lifecycle and cooperative stop covered |
 | `Channel(T)` / `channel(N)` | Y | Y | Y | Y | Y | bounded blocking FIFO runtime |
 | `send` / `receive` | Y | Y | Y | Y | Y | value-safe payload and backpressure covered |
+| `try_send` / `close` | Y | Y | Y | Y | Y | fallible non-blocking send and owner-controlled close/drain |
 | `Time` / `Duration` | P (type identifiers) | Y | Y | Y | Y | experimental nominal value types |
 | `5ms` / `2s` / `3min` | P (number + adjacent unit) | Y | Y | Y | Y | integer and overflow-checked literals |
 | `now` / `elapsed` | P (identifiers) | Y | Y | Y | Y | monotonic clock runtime |
@@ -61,6 +68,9 @@ Legend:
 | Angle math integration | P (builtin identifiers) | Y | Y | Y | Y | `sin/cos/atan2`, conversions and scalar operations |
 | `Vec2` / `Vec3` / `Vec4` | P (type identifiers) | Y | Y | Y | Y | bounded f64 vector MVP |
 | Vector math integration | P (builtin identifiers) | Y | Y | Y | Y | dot/length/normalize/distance and Vec3 cross |
+| `Color` / `Rect` | P (type identifiers) | Y | Y | Y | Y | Canvas v0 value-safe visual types |
+| `Canvas` / drawing methods | P (type identifiers) | Y | Y | Y | Y | linear software framebuffer, primitives and checksum |
+| `Window` / `windows.open` / `present` | P (identifiers) | Y | Y | Y | P | Win32 presenter; compile/link shape tested without opening CI window |
 | ASCII Char literal `'a'` / escapes | Y | Y | Y | Y | Y | invalid/Unicode forms use `SC-PARSE-221` |
 
 ## 2. Operator / Form Matrix
@@ -76,7 +86,7 @@ Legend:
 | List literal `[ ... ]` | Y | Y | Y | Y | Y | multiple scalar families + struct list |
 | Struct literal `{field = ...}` | Y | Y | Y | P | P | stable subset covered |
 | `i++` / `i--` statement-only | P (lex as operators) | Y | Y | Y | Y | statement-only behavior enforced and covered end-to-end |
-| `break` / `continue` / `pass` | P (lex as identifiers today) | Y | Y | Y | Y | loop-scope semantics and lowering covered end-to-end |
+| `break` / `continue` / `pass` | Y | Y | Y | Y | Y | loop-scope semantics and lowering covered end-to-end |
 
 ## 3. Coverage Sources
 
@@ -93,10 +103,12 @@ Legend:
 - ByteSize frontend/runtime: `tests/byte_size_model.rs`, `benchmarks/bench_14_byte_size_budget.skd`
 - Angle frontend/runtime: `tests/angle_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_15_angle_navigation.skd`
 - Vector frontend/runtime: `tests/vector_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_16_vector_navigation.skd`
+- Canvas frontend/runtime/showcase: `tests/canvas_model.rs`, `tests/showcase_programs.rs`, `tests/showcase_builds.rs`, `benchmarks/bench_17_canvas_palette.skd`
 - Transition surfaces and Char literals: `tests/transition_surfaces.rs`, `tests/codegen_e2e.rs`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
 
 ## 4. Synchronization rules
 
-1. Keep experimental `fixed/const/direct/allow drop` forms explicitly separated from the stable surface.
+1. Keep reserved `fixed/const` separated from implemented `constant`, `view`,
+   `direct`, `move`, and contextual Memory policies.
 2. Keep this matrix synchronized with the [Test Coverage Matrix](test-coverage.md) after each feature merge.

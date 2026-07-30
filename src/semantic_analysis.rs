@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast_nodes::{
-    BlockStatement, Expression, ForLoopStyle, FunctionParam, Program, Statement,
+    BlockStatement, BorrowMode, Expression, ForLoopStyle, FunctionParam, LabelVariant, Program,
+    Statement,
 };
 use crate::builtins::{Builtin, builtin_arity, builtin_from_name};
 use crate::diagnostics::{DiagnosticKind, format_diagnostic};
@@ -20,11 +21,18 @@ enum ValueType {
     Vec2,
     Vec3,
     Vec4,
+    Color,
+    Rect,
+    Canvas,
+    Window,
     Memory,
+    Interrupt,
     Task(Option<Box<ValueType>>),
     Channel(Box<ValueType>),
     List(Box<ValueType>),
     Struct(String),
+    Label(String),
+    Tag(String),
     Unknown,
 }
 
@@ -34,6 +42,7 @@ struct FunctionSig {
     return_type: Option<ValueType>,
     has_explicit_return: bool,
     param_types: Vec<ValueType>,
+    param_borrows: Vec<BorrowMode>,
 }
 
 #[derive(Clone)]
@@ -48,6 +57,7 @@ struct FnContext {
 struct MemoryBinding {
     is_external: bool,
     is_cleared: bool,
+    parent: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -57,6 +67,46 @@ struct TaskBinding {
     stopped: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResourceLifecycle {
+    Open,
+    MaybeClosed,
+    Closed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OwnershipState {
+    Owned,
+    MaybeMoved,
+    Moved,
+}
+
+impl OwnershipState {
+    fn merge(self, other: Self) -> Self {
+        if self == other {
+            self
+        } else {
+            Self::MaybeMoved
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct OwnershipBinding {
+    state: OwnershipState,
+    moved_to: Option<String>,
+}
+
+impl ResourceLifecycle {
+    fn merge(self, other: Self) -> Self {
+        if self == other {
+            self
+        } else {
+            Self::MaybeClosed
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct MemoryState {
     active_memory: Option<String>,
@@ -64,6 +114,177 @@ struct MemoryState {
     variable_memory: HashMap<String, String>,
     tasks: HashMap<String, TaskBinding>,
     channels: HashMap<String, ValueType>,
+    channel_owners: HashSet<String>,
+    resource_lifecycles: HashMap<String, ResourceLifecycle>,
+    ownership: HashMap<String, OwnershipBinding>,
+    interrupt_owners: HashSet<String>,
+    constants: HashSet<String>,
+    views: HashSet<String>,
+    labels: HashMap<String, HashSet<String>>,
+    tags: HashMap<String, HashSet<String>>,
+}
+
+fn is_movable_resource(ty: &ValueType) -> bool {
+    matches!(
+        ty,
+        ValueType::Canvas | ValueType::Window | ValueType::Interrupt | ValueType::Channel(_)
+    )
+}
+
+fn requires_explicit_resource_mode(ty: &ValueType) -> bool {
+    matches!(
+        ty,
+        ValueType::Canvas | ValueType::Window | ValueType::Interrupt
+    )
+}
+
+fn merge_ownership_states(
+    target: &mut MemoryState,
+    branches: &[&MemoryState],
+    original: &MemoryState,
+) {
+    for (name, original_binding) in &original.ownership {
+        let mut branch_bindings = branches
+            .iter()
+            .map(|branch| branch.ownership.get(name).unwrap_or(original_binding));
+        let first = branch_bindings.next().unwrap_or(original_binding);
+        let merged = branch_bindings.fold(first.state, |state, binding| state.merge(binding.state));
+        let moved_to = branches
+            .iter()
+            .filter_map(|branch| branch.ownership.get(name))
+            .find_map(|binding| binding.moved_to.clone())
+            .or_else(|| original_binding.moved_to.clone());
+        target.ownership.insert(
+            name.clone(),
+            OwnershipBinding {
+                state: merged,
+                moved_to,
+            },
+        );
+    }
+}
+
+fn require_owned_resource(state: &MemoryState, name: &str) -> Result<(), String> {
+    match state.ownership.get(name) {
+        Some(OwnershipBinding {
+            state: OwnershipState::Moved,
+            moved_to,
+        }) => Err(sem_err(
+            SEM_INVALID_CONTEXT,
+            format!(
+                "resource '{}' was moved{} and is no longer available.",
+                name,
+                moved_to
+                    .as_deref()
+                    .map(|target| format!(" to '{target}'"))
+                    .unwrap_or_default()
+            ),
+        )),
+        Some(OwnershipBinding {
+            state: OwnershipState::MaybeMoved,
+            ..
+        }) => Err(sem_err(
+            SEM_INVALID_CONTEXT,
+            format!(
+                "resource '{}' is available only on some control-flow paths after a move; move it after the branch or keep all uses inside each branch.",
+                name
+            ),
+        )),
+        _ => Ok(()),
+    }
+}
+
+fn mark_resource_moved(
+    state: &mut MemoryState,
+    name: &str,
+    destination: impl Into<String>,
+) -> Result<(), String> {
+    require_owned_resource(state, name)?;
+    let Some(binding) = state.ownership.get_mut(name) else {
+        return Err(sem_err(
+            SEM_INVALID_CONTEXT,
+            format!("'move {}' requires an owning resource binding.", name),
+        ));
+    };
+    binding.state = OwnershipState::Moved;
+    binding.moved_to = Some(destination.into());
+    Ok(())
+}
+
+fn ensure_loop_preserves_ownership(
+    stmt: &Statement,
+    original: &MemoryState,
+    body: &MemoryState,
+) -> Result<(), String> {
+    for (name, original_binding) in &original.ownership {
+        let body_state = body
+            .ownership
+            .get(name)
+            .map(|binding| binding.state)
+            .unwrap_or(original_binding.state);
+        if body_state != original_binding.state {
+            return Err(err_at_code(
+                stmt,
+                SEM_INVALID_CONTEXT,
+                format!(
+                    "resource '{}' cannot be moved from a repeating loop body; create the owner inside the iteration, return immediately, or move it after the loop.",
+                    name
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn merge_resource_lifecycles(
+    target: &mut MemoryState,
+    branches: &[&MemoryState],
+    original: &MemoryState,
+) {
+    for (name, original_state) in &original.resource_lifecycles {
+        let mut branch_states = branches.iter().map(|branch| {
+            branch
+                .resource_lifecycles
+                .get(name)
+                .copied()
+                .unwrap_or(*original_state)
+        });
+        let first = branch_states.next().unwrap_or(*original_state);
+        let merged = branch_states.fold(first, ResourceLifecycle::merge);
+        target.resource_lifecycles.insert(name.clone(), merged);
+    }
+    merge_ownership_states(target, branches, original);
+}
+
+fn require_open_resource(state: &MemoryState, name: &str, operation: &str) -> Result<(), String> {
+    require_owned_resource(state, name)?;
+    match state.resource_lifecycles.get(name) {
+        Some(ResourceLifecycle::MaybeClosed) => Err(sem_err(
+            SEM_INVALID_CONTEXT,
+            format!(
+                "resource '{}' may be closed before '{}'; handle the operation with 'on error' or restructure the control flow.",
+                name, operation
+            ),
+        )),
+        Some(ResourceLifecycle::Closed) => Err(sem_err(
+            SEM_INVALID_CONTEXT,
+            format!(
+                "resource '{}' is already closed before '{}'; handle the operation with 'on error'.",
+                name, operation
+            ),
+        )),
+        _ => Ok(()),
+    }
+}
+
+fn read_only_binding_kind(state: &MemoryState, name: &str) -> Option<&'static str> {
+    if state.views.contains(name) {
+        Some("view parameter")
+    } else if state.constants.contains(name) {
+        Some("constant binding")
+    } else {
+        None
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -109,6 +330,7 @@ fn statement_loc(stmt: &Statement) -> Option<(u32, u32)> {
         | Statement::ContinueStatement { loc }
         | Statement::PassStatement { loc }
         | Statement::LabelDecl { loc, .. }
+        | Statement::TagDecl { loc, .. }
         | Statement::StructDecl { loc, .. }
         | Statement::OnBlock { loc, .. }
         | Statement::DangerAssignOnError { loc, .. }
@@ -147,7 +369,8 @@ fn err_at_code(stmt: &Statement, code: &'static str, msg: String) -> String {
 
 pub fn semantic_analyze(program: &Program) -> Result<(), String> {
     let mut functions: HashMap<String, FunctionSig> = HashMap::new();
-    let mut labels: HashMap<String, Vec<String>> = HashMap::new();
+    let mut labels: HashMap<String, Vec<LabelVariant>> = HashMap::new();
+    let mut tags: HashMap<String, Vec<String>> = HashMap::new();
     let mut structs: HashMap<String, StructInfo> = HashMap::new();
     let task_context_functions = collect_task_context_functions(&program.statements);
 
@@ -166,11 +389,38 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 let return_ty = parse_type_name(return_name);
                 ensure_memory_type_allowed(stmt, &return_ty, "function return type", false)?;
                 ensure_task_type_allowed(stmt, &return_ty, "function return type", false)?;
-                ensure_channel_type_allowed(stmt, &return_ty, "function return type", false)?;
+                ensure_channel_type_allowed(
+                    stmt,
+                    &return_ty,
+                    "function return type",
+                    matches!(return_ty, ValueType::Channel(_)),
+                )?;
             }
             for param in params {
                 if let Some(param_name) = param.param_type.as_deref() {
                     let param_ty = parse_type_name(param_name);
+                    if requires_explicit_resource_mode(&param_ty)
+                        && param.borrow == BorrowMode::Value
+                    {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "resource parameter '{}' must use 'direct', 'view', or 'move'.",
+                                param.name
+                            ),
+                        ));
+                    }
+                    if param.borrow == BorrowMode::Move && !is_movable_resource(&param_ty) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "'move' parameter '{}' requires an owning resource type, got {:?}.",
+                                param.name, param_ty
+                            ),
+                        ));
+                    }
                     ensure_memory_type_allowed(
                         stmt,
                         &param_ty,
@@ -210,6 +460,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                         .or(Some(ValueType::Int)),
                     has_explicit_return: returns.is_some(),
                     param_types: params.iter().map(param_type_or_default).collect(),
+                    param_borrows: params.iter().map(|param| param.borrow).collect(),
                 },
             );
         }
@@ -223,6 +474,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             if !*is_local
                 && (functions.contains_key(name)
                     || labels.contains_key(name)
+                    || tags.contains_key(name)
                     || structs.contains_key(name))
             {
                 return Err(err_at_code(
@@ -236,6 +488,30 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             }
             labels.insert(name.clone(), variants.clone());
         }
+        if let Statement::TagDecl {
+            name,
+            variants,
+            is_local,
+            ..
+        } = stmt
+        {
+            if !*is_local
+                && (functions.contains_key(name)
+                    || labels.contains_key(name)
+                    || tags.contains_key(name)
+                    || structs.contains_key(name))
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_REDECLARATION,
+                    format!(
+                        "top-level symbol collision for '{}'. use distinct names or qualification.",
+                        name
+                    ),
+                ));
+            }
+            tags.insert(name.clone(), variants.clone());
+        }
         if let Statement::StructDecl {
             name,
             fields,
@@ -247,6 +523,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             if !*is_local
                 && (functions.contains_key(name)
                     || labels.contains_key(name)
+                    || tags.contains_key(name)
                     || structs.contains_key(name))
             {
                 return Err(err_at_code(
@@ -285,12 +562,34 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                         stmt,
                         &return_ty,
                         "struct method return type",
-                        false,
+                        matches!(return_ty, ValueType::Channel(_)),
                     )?;
                 }
                 for param in &m.params {
                     if let Some(param_name) = param.param_type.as_deref() {
                         let param_ty = parse_type_name(param_name);
+                        if requires_explicit_resource_mode(&param_ty)
+                            && param.borrow == BorrowMode::Value
+                        {
+                            return Err(err_at_code(
+                                stmt,
+                                SEM_INVALID_CONTEXT,
+                                format!(
+                                    "resource parameter '{}' must use 'direct', 'view', or 'move'.",
+                                    param.name
+                                ),
+                            ));
+                        }
+                        if param.borrow == BorrowMode::Move && !is_movable_resource(&param_ty) {
+                            return Err(err_at_code(
+                                stmt,
+                                SEM_INVALID_CONTEXT,
+                                format!(
+                                    "'move' parameter '{}' requires an owning resource type, got {:?}.",
+                                    param.name, param_ty
+                                ),
+                            ));
+                        }
                         ensure_memory_type_allowed(
                             stmt,
                             &param_ty,
@@ -322,6 +621,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                             .or(Some(ValueType::Int)),
                         has_explicit_return: m.returns.is_some(),
                         param_types: m.params.iter().map(param_type_or_default).collect(),
+                        param_borrows: m.params.iter().map(|param| param.borrow).collect(),
                     },
                 );
             }
@@ -336,7 +636,16 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         }
     }
 
-    // User-defined struct types may be declared after functions. Resolve function
+    let nominal_types: HashMap<String, ValueType> = labels
+        .keys()
+        .map(|name| (name.clone(), ValueType::Label(name.clone())))
+        .chain(
+            tags.keys()
+                .map(|name| (name.clone(), ValueType::Tag(name.clone()))),
+        )
+        .collect();
+
+    // User-defined nominal types may be declared after functions. Resolve function
     // signatures again once the complete struct table is available.
     for stmt in &program.statements {
         if let Statement::FunctionDef {
@@ -349,7 +658,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         {
             sig.return_type = returns
                 .as_deref()
-                .map(|name| parse_declared_type_name(name, &structs))
+                .map(|name| parse_declared_type_name(name, &structs, &nominal_types))
                 .or(Some(ValueType::Int));
             sig.param_types = params
                 .iter()
@@ -357,23 +666,53 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                     param
                         .param_type
                         .as_deref()
-                        .map(|name| parse_declared_type_name(name, &structs))
+                        .map(|name| parse_declared_type_name(name, &structs, &nominal_types))
                         .unwrap_or(ValueType::Int)
                 })
                 .collect();
         }
     }
 
-    validate_error_code_label(&labels)?;
+    validate_nominal_sets(&labels, &tags)?;
+    let label_names: HashMap<String, Vec<String>> = labels
+        .iter()
+        .map(|(name, variants)| {
+            (
+                name.clone(),
+                variants
+                    .iter()
+                    .map(|variant| variant.name.clone())
+                    .collect(),
+            )
+        })
+        .collect();
 
     let mut scope: HashMap<String, ValueType> = HashMap::new();
-    let mut memory_state = MemoryState::default();
+    let mut memory_state = MemoryState {
+        labels: labels
+            .iter()
+            .map(|(name, variants)| {
+                (
+                    name.clone(),
+                    variants
+                        .iter()
+                        .map(|variant| variant.name.clone())
+                        .collect(),
+                )
+            })
+            .collect(),
+        tags: tags
+            .iter()
+            .map(|(name, variants)| (name.clone(), variants.iter().cloned().collect()))
+            .collect(),
+        ..MemoryState::default()
+    };
     analyze_statements(
         &program.statements,
         &mut scope,
         &mut memory_state,
         &functions,
-        &labels,
+        &label_names,
         &structs,
         &task_context_functions,
         None,
@@ -428,6 +767,11 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 | "Vec2"
                 | "Vec3"
                 | "Vec4"
+                | "Color"
+                | "Rect"
+                | "Canvas"
+                | "Window"
+                | "Interrupt"
                 | "Bool"
                 | "Char"
                 | "bool"
@@ -706,12 +1050,208 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
         }
     }
 
+    fn merge_warning_states(
+        target: &mut HashMap<String, ResourceLifecycle>,
+        branches: &[&HashMap<String, ResourceLifecycle>],
+        original: &HashMap<String, ResourceLifecycle>,
+    ) {
+        for (name, original_state) in original {
+            let mut states = branches
+                .iter()
+                .map(|branch| branch.get(name).copied().unwrap_or(*original_state));
+            let first = states.next().unwrap_or(*original_state);
+            target.insert(name.clone(), states.fold(first, ResourceLifecycle::merge));
+        }
+    }
+
+    fn visit_lifecycle_warnings(
+        statements: &[Statement],
+        states: &mut HashMap<String, ResourceLifecycle>,
+        out: &mut Vec<String>,
+    ) {
+        for statement in statements {
+            match statement {
+                Statement::VarDecl {
+                    name,
+                    declared_type: Some(declared_type),
+                    ..
+                } if declared_type == "Window" || declared_type.starts_with("Channel(") => {
+                    states.insert(name.clone(), ResourceLifecycle::Open);
+                }
+                Statement::ExpressionStatement { expr, .. } => {
+                    if let Expression::Call { name, .. } = expr.as_ref()
+                        && let Some((resource, "close")) = name.split_once('.')
+                        && states.contains_key(resource)
+                    {
+                        states.insert(resource.to_string(), ResourceLifecycle::Closed);
+                    }
+                }
+                Statement::DangerCallOnError {
+                    call_name,
+                    on_error,
+                    loc,
+                    ..
+                } => {
+                    if let Some((resource, operation)) = call_name.split_once('.')
+                        && states.get(resource) == Some(&ResourceLifecycle::Closed)
+                        && matches!(operation, "present" | "send" | "receive" | "close")
+                    {
+                        out.push(format!(
+                            "style warning at line {}, col {}: resource '{}' is already closed; '{}.{}' is guaranteed to enter its 'on error' handler.",
+                            loc.line, loc.column, resource, resource, operation
+                        ));
+                    }
+                    if let Some((resource, "close")) = call_name.split_once('.')
+                        && states.contains_key(resource)
+                    {
+                        states.insert(resource.to_string(), ResourceLifecycle::Closed);
+                    }
+                    let mut handler_states = states.clone();
+                    visit_lifecycle_warnings(&on_error.statements, &mut handler_states, out);
+                }
+                Statement::DangerAssignOnError { on_error, .. }
+                | Statement::ListPopOnError { on_error, .. } => {
+                    let mut handler_states = states.clone();
+                    visit_lifecycle_warnings(&on_error.statements, &mut handler_states, out);
+                }
+                Statement::IfStatement {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    let original = states.clone();
+                    let mut then_states = original.clone();
+                    visit_lifecycle_warnings(&then_block.statements, &mut then_states, out);
+                    let mut branches = Vec::new();
+                    if !block_guarantees_termination(then_block) {
+                        branches.push(then_states);
+                    }
+                    if let Some(else_block) = else_block {
+                        let mut else_states = original.clone();
+                        visit_lifecycle_warnings(&else_block.statements, &mut else_states, out);
+                        if !block_guarantees_termination(else_block) {
+                            branches.push(else_states);
+                        }
+                    } else {
+                        branches.push(original.clone());
+                    }
+                    if !branches.is_empty() {
+                        let refs = branches.iter().collect::<Vec<_>>();
+                        merge_warning_states(states, &refs, &original);
+                    }
+                }
+                Statement::WhenBlock {
+                    cases, else_block, ..
+                } => {
+                    let original = states.clone();
+                    let mut branches = Vec::new();
+                    for (_, block) in cases {
+                        let mut case_states = original.clone();
+                        visit_lifecycle_warnings(&block.statements, &mut case_states, out);
+                        if !block_guarantees_termination(block) {
+                            branches.push(case_states);
+                        }
+                    }
+                    if let Some(else_block) = else_block {
+                        let mut else_states = original.clone();
+                        visit_lifecycle_warnings(&else_block.statements, &mut else_states, out);
+                        if !block_guarantees_termination(else_block) {
+                            branches.push(else_states);
+                        }
+                    } else {
+                        branches.push(original.clone());
+                    }
+                    if !branches.is_empty() {
+                        let refs = branches.iter().collect::<Vec<_>>();
+                        merge_warning_states(states, &refs, &original);
+                    }
+                }
+                Statement::ForLoop { body, .. }
+                | Statement::WhileLoop { body, .. }
+                | Statement::LoopStatement { body, .. } => {
+                    let original = states.clone();
+                    let mut body_states = original.clone();
+                    visit_lifecycle_warnings(&body.statements, &mut body_states, out);
+                    merge_warning_states(states, &[&original, &body_states], &original);
+                }
+                Statement::FunctionDef { body, .. } => {
+                    let mut function_states = HashMap::new();
+                    visit_lifecycle_warnings(&body.statements, &mut function_states, out);
+                }
+                Statement::StructDecl { methods, .. } => {
+                    for method in methods {
+                        let mut method_states = HashMap::new();
+                        visit_lifecycle_warnings(&method.body.statements, &mut method_states, out);
+                    }
+                }
+                Statement::BlockStatement { statements, .. }
+                | Statement::OnErrorBlock { statements, .. } => {
+                    visit_lifecycle_warnings(statements, states, out);
+                }
+                Statement::PlaceIn { body, on_error, .. } => {
+                    visit_lifecycle_warnings(&body.statements, states, out);
+                    if let Some(on_error) = on_error {
+                        let mut handler_states = states.clone();
+                        visit_lifecycle_warnings(&on_error.statements, &mut handler_states, out);
+                    }
+                }
+                Statement::MemoryDecl {
+                    on_error: Some(on_error),
+                    ..
+                } => {
+                    let mut handler_states = states.clone();
+                    visit_lifecycle_warnings(&on_error.statements, &mut handler_states, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
     let mut warnings = Vec::new();
     visit_statements(&program.statements, &user_types, &mut warnings);
+    visit_lifecycle_warnings(&program.statements, &mut HashMap::new(), &mut warnings);
     warnings
 }
 
-fn validate_error_code_label(labels: &HashMap<String, Vec<String>>) -> Result<(), String> {
+fn validate_nominal_sets(
+    labels: &HashMap<String, Vec<LabelVariant>>,
+    tags: &HashMap<String, Vec<String>>,
+) -> Result<(), String> {
+    for (name, variants) in labels {
+        let mut variant_names = HashSet::new();
+        let mut discriminants = HashSet::new();
+        for variant in variants {
+            if !variant_names.insert(&variant.name) {
+                return Err(sem_err(
+                    SEM_ERRORCODE_RULE,
+                    format!(
+                        "label '{}' contains duplicate variant '{}'.",
+                        name, variant.name
+                    ),
+                ));
+            }
+            if !discriminants.insert(variant.discriminant) {
+                return Err(sem_err(
+                    SEM_ERRORCODE_RULE,
+                    format!(
+                        "label '{}' contains duplicate discriminant {}.",
+                        name, variant.discriminant
+                    ),
+                ));
+            }
+        }
+    }
+    for (name, variants) in tags {
+        let mut names = HashSet::new();
+        for variant in variants {
+            if !names.insert(variant) {
+                return Err(sem_err(
+                    SEM_ERRORCODE_RULE,
+                    format!("tag '{}' contains duplicate variant '{}'.", name, variant),
+                ));
+            }
+        }
+    }
     if let Some(error_codes) = labels.get("ErrorCode") {
         if error_codes.is_empty() {
             return Err(sem_err(
@@ -719,10 +1259,10 @@ fn validate_error_code_label(labels: &HashMap<String, Vec<String>>) -> Result<()
                 "label ErrorCode must define at least one variant.".to_string(),
             ));
         }
-        if error_codes[0] != "Ok" {
+        if error_codes[0].name != "Ok" || error_codes[0].discriminant != 0 {
             return Err(sem_err(
                 SEM_ERRORCODE_RULE,
-                "label ErrorCode must start with 'Ok' variant.".to_string(),
+                "label ErrorCode must start with 'Ok = 0' variant.".to_string(),
             ));
         }
     }
@@ -736,6 +1276,7 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "bool" | "Bool" => ValueType::Bool,
         "char" | "Char" => ValueType::Char,
         "Memory" => ValueType::Memory,
+        "Interrupt" => ValueType::Interrupt,
         "Text" | "Path" => ValueType::Text,
         "Time" => ValueType::Time,
         "Duration" => ValueType::Duration,
@@ -744,6 +1285,10 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "Vec2" => ValueType::Vec2,
         "Vec3" => ValueType::Vec3,
         "Vec4" => ValueType::Vec4,
+        "Color" => ValueType::Color,
+        "Rect" => ValueType::Rect,
+        "Canvas" => ValueType::Canvas,
+        "Window" => ValueType::Window,
         _ => ValueType::Unknown,
     }
 }
@@ -765,6 +1310,126 @@ fn parse_type_name(name: &str) -> ValueType {
         return ValueType::List(Box::new(parse_type_name(elem.trim())));
     }
     parse_primitive_type_name(name)
+}
+
+fn interrupt_safe_expression(expr: &Expression) -> bool {
+    match expr {
+        Expression::LiteralInt(_)
+        | Expression::LiteralFloat(_)
+        | Expression::LiteralBool(_)
+        | Expression::LiteralChar(_)
+        | Expression::LiteralDuration { .. }
+        | Expression::LiteralByteSize { .. }
+        | Expression::LiteralAngle { .. } => true,
+        Expression::VariableReference(name) => {
+            matches!(name.as_str(), "PI" | "TAU" | "E" | "EPSILON")
+        }
+        Expression::MemberAccess { .. } => true,
+        Expression::BinaryOp { left, right, .. } => {
+            interrupt_safe_expression(left)
+                && right
+                    .as_deref()
+                    .map(interrupt_safe_expression)
+                    .unwrap_or(true)
+        }
+        Expression::Call { name, args } => {
+            matches!(
+                name.as_str(),
+                "abs"
+                    | "min"
+                    | "max"
+                    | "clamp"
+                    | "floor"
+                    | "ceil"
+                    | "round"
+                    | "sin"
+                    | "cos"
+                    | "atan2"
+                    | "sqrt"
+                    | "root"
+                    | "deg_to_rad"
+                    | "rad_to_deg"
+            ) && args.iter().all(interrupt_safe_expression)
+        }
+        Expression::LiteralString(_)
+        | Expression::ListLiteral(_)
+        | Expression::Index { .. }
+        | Expression::DirectBorrow(_)
+        | Expression::ViewBorrow(_)
+        | Expression::Move(_)
+        | Expression::RunTask { .. }
+        | Expression::WaitTask { .. }
+        | Expression::Stopping
+        | Expression::StructConstruction { .. } => false,
+    }
+}
+
+fn validate_interrupt_block(
+    block: &BlockStatement,
+    memory_state: &MemoryState,
+) -> Result<(), String> {
+    for statement in &block.statements {
+        match statement {
+            Statement::PassStatement { .. } => {}
+            Statement::ExpressionStatement { expr, .. } => {
+                let Expression::Call { name, args } = expr.as_ref() else {
+                    return Err(sem_err(
+                        SEM_INVALID_CONTEXT,
+                        "interrupt handler permits only Channel.try_send statements and finite branching."
+                            .to_string(),
+                    ));
+                };
+                let Some((channel, method)) = name.split_once('.') else {
+                    return Err(sem_err(
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "call '{}' is not interrupt-safe; use Channel.try_send as the normal-context bridge.",
+                            name
+                        ),
+                    ));
+                };
+                if method != "try_send"
+                    || !memory_state.channels.contains_key(channel)
+                    || args.len() != 1
+                    || !interrupt_safe_expression(&args[0])
+                {
+                    return Err(sem_err(
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "call '{}' is not interrupt-safe; only Channel.try_send with a non-allocating value expression is allowed.",
+                            name
+                        ),
+                    ));
+                }
+            }
+            Statement::IfStatement {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                if !interrupt_safe_expression(condition) {
+                    return Err(sem_err(
+                        SEM_INVALID_CONTEXT,
+                        "interrupt condition must be a non-allocating scalar expression."
+                            .to_string(),
+                    ));
+                }
+                validate_interrupt_block(then_block, memory_state)?;
+                if let Some(else_block) = else_block {
+                    validate_interrupt_block(else_block, memory_state)?;
+                }
+            }
+            _ => {
+                return Err(sem_err(
+                    SEM_INVALID_CONTEXT,
+                    "operation is forbidden in interrupt context: handlers cannot allocate, block, perform I/O, manage tasks/resources, or call ordinary functions."
+                        .to_string(),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
@@ -797,6 +1462,9 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
                 }
             }
             Expression::VariableReference(_)
+            | Expression::DirectBorrow(_)
+            | Expression::ViewBorrow(_)
+            | Expression::Move(_)
             | Expression::MemberAccess { .. }
             | Expression::WaitTask { .. }
             | Expression::Stopping
@@ -912,7 +1580,8 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
                 | Statement::BreakStatement { .. }
                 | Statement::ContinueStatement { .. }
                 | Statement::PassStatement { .. }
-                | Statement::LabelDecl { .. } => {}
+                | Statement::LabelDecl { .. }
+                | Statement::TagDecl { .. } => {}
             }
         }
     }
@@ -927,6 +1596,37 @@ fn builtin_constant_type(name: &str) -> Option<ValueType> {
         "PI" | "TAU" | "E" | "EPSILON" => Some(ValueType::Float),
         _ => None,
     }
+}
+
+fn is_color_constant(name: &str) -> bool {
+    matches!(
+        name,
+        "black"
+            | "red"
+            | "green"
+            | "yellow"
+            | "blue"
+            | "magenta"
+            | "cyan"
+            | "white"
+            | "transparent"
+            | "terminal_black"
+            | "terminal_red"
+            | "terminal_green"
+            | "terminal_yellow"
+            | "terminal_blue"
+            | "terminal_magenta"
+            | "terminal_cyan"
+            | "terminal_white"
+            | "terminal_bright_black"
+            | "terminal_bright_red"
+            | "terminal_bright_green"
+            | "terminal_bright_yellow"
+            | "terminal_bright_blue"
+            | "terminal_bright_magenta"
+            | "terminal_bright_cyan"
+            | "terminal_bright_white"
+    )
 }
 
 fn is_numeric_type(ty: &ValueType) -> bool {
@@ -1073,7 +1773,56 @@ fn validate_call_args(
             ),
         ));
     }
-    for (arg, expected_ty) in args.iter().zip(sig.param_types.iter().cloned()) {
+    for ((arg, expected_ty), borrow) in args
+        .iter()
+        .zip(sig.param_types.iter().cloned())
+        .zip(sig.param_borrows.iter().copied())
+    {
+        match (borrow, arg) {
+            (
+                BorrowMode::Value,
+                Expression::DirectBorrow(_) | Expression::ViewBorrow(_) | Expression::Move(_),
+            ) => {
+                return Err(sem_err(
+                    SEM_ARG_TYPE,
+                    format!(
+                        "value parameter of '{}' must not use 'view', 'direct', or 'move' at call site.",
+                        name
+                    ),
+                ));
+            }
+            (BorrowMode::DirectMutable, Expression::DirectBorrow(_)) => {}
+            (BorrowMode::View, Expression::ViewBorrow(_)) => {}
+            (BorrowMode::Move, Expression::Move(_)) => {}
+            (BorrowMode::DirectMutable, _) => {
+                return Err(sem_err(
+                    SEM_ARG_TYPE,
+                    format!(
+                        "mutable borrowed parameter of '{}' requires explicit 'direct <identifier>' argument.",
+                        name
+                    ),
+                ));
+            }
+            (BorrowMode::View, _) => {
+                return Err(sem_err(
+                    SEM_ARG_TYPE,
+                    format!(
+                        "read-only borrowed parameter of '{}' requires explicit 'view <identifier>' argument.",
+                        name
+                    ),
+                ));
+            }
+            (BorrowMode::Move, _) => {
+                return Err(sem_err(
+                    SEM_ARG_TYPE,
+                    format!(
+                        "owning parameter of '{}' requires explicit 'move <identifier>' argument.",
+                        name
+                    ),
+                ));
+            }
+            _ => {}
+        }
         let actual_ty =
             infer_expression_type(arg, scope, memory_state, functions, structs, fn_ctx)?;
         if !can_assign(&expected_ty, &actual_ty) {
@@ -1108,7 +1857,11 @@ fn resolve_function_name<'a>(
     None
 }
 
-fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -> ValueType {
+fn parse_declared_type_name(
+    name: &str,
+    structs: &HashMap<String, StructInfo>,
+    nominal_types: &HashMap<String, ValueType>,
+) -> ValueType {
     let resolve_struct_name = |raw: &str| -> Option<String> {
         if structs.contains_key(raw) {
             return Some(raw.to_string());
@@ -1125,6 +1878,7 @@ fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -
         return ValueType::Task(Some(Box::new(parse_declared_type_name(
             inner.trim(),
             structs,
+            nominal_types,
         ))));
     }
     if name == "Task" {
@@ -1134,7 +1888,11 @@ fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -
         .strip_prefix("Channel(")
         .and_then(|s| s.strip_suffix(')'))
     {
-        return ValueType::Channel(Box::new(parse_declared_type_name(inner.trim(), structs)));
+        return ValueType::Channel(Box::new(parse_declared_type_name(
+            inner.trim(),
+            structs,
+            nominal_types,
+        )));
     }
     if let Some(elem) = name.strip_suffix(" List") {
         let elem = elem.trim();
@@ -1147,6 +1905,12 @@ fn parse_declared_type_name(name: &str, structs: &HashMap<String, StructInfo>) -
         return ValueType::List(Box::new(parsed_elem));
     }
     let parsed = parse_type_name(name);
+    if parsed == ValueType::Unknown {
+        let short = name.rsplit('.').next().unwrap_or(name);
+        if let Some(nominal) = nominal_types.get(short) {
+            return nominal.clone();
+        }
+    }
     if parsed == ValueType::Unknown
         && let Some(resolved_struct) = resolve_struct_name(name)
     {
@@ -1195,7 +1959,7 @@ fn is_value_safe_channel_message(ty: &ValueType, structs: &HashMap<String, Struc
                     .all(|field_ty| is_value_safe_channel_message(field_ty, structs))
             })
             .unwrap_or(false),
-        ValueType::List(_) => false,
+        ValueType::List(_) | ValueType::Canvas | ValueType::Window | ValueType::Interrupt => false,
         _ => true,
     }
 }
@@ -1217,7 +1981,11 @@ fn is_task_safe_boundary_type(
         | ValueType::Angle
         | ValueType::Vec2
         | ValueType::Vec3
-        | ValueType::Vec4 => true,
+        | ValueType::Vec4
+        | ValueType::Color
+        | ValueType::Rect
+        | ValueType::Label(_)
+        | ValueType::Tag(_) => true,
         ValueType::Struct(name) => structs
             .get(name)
             .map(|info| {
@@ -1229,7 +1997,13 @@ fn is_task_safe_boundary_type(
         ValueType::Channel(inner) => allow_channel && is_value_safe_channel_message(inner, structs),
         // Lists have mutable backing storage in the current runtime. Passing their
         // representation by value would create a cross-task mutable alias.
-        ValueType::List(_) | ValueType::Memory | ValueType::Task(_) | ValueType::Unknown => false,
+        ValueType::List(_)
+        | ValueType::Memory
+        | ValueType::Interrupt
+        | ValueType::Canvas
+        | ValueType::Window
+        | ValueType::Task(_)
+        | ValueType::Unknown => false,
     }
 }
 
@@ -1427,6 +2201,9 @@ fn analyze_statement(
         Statement::MemoryDecl {
             name,
             size,
+            kind,
+            allow_grow,
+            allow_drop: _,
             on_error,
             ..
         } => {
@@ -1458,12 +2235,63 @@ fn analyze_statement(
                     ),
                 ));
             }
+            match kind {
+                crate::ast_nodes::MemoryKind::Child => {
+                    if memory_state.active_memory.is_none() {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_MEMORY_RULE,
+                            "memory.child(size) is allowed only inside 'place in <parent> { ... }'."
+                                .to_string(),
+                        ));
+                    }
+                    if *allow_grow {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_MEMORY_RULE,
+                            "child Memory has fixed capacity borrowed from its parent and cannot use 'allow grow'."
+                                .to_string(),
+                        ));
+                    }
+                }
+                crate::ast_nodes::MemoryKind::Static => {
+                    if fn_ctx.is_some() {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_MEMORY_RULE,
+                            "memory.static(size) is allowed only at program root so its buffer cannot be aliased by recursive or concurrent function calls."
+                                .to_string(),
+                        ));
+                    }
+                    if !matches!(size.as_ref(), Expression::LiteralByteSize { bytes, .. } if *bytes > 0)
+                    {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_MEMORY_RULE,
+                            "memory.static(size) requires a positive compile-time ByteSize literal."
+                                .to_string(),
+                        ));
+                    }
+                    if *allow_grow {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_MEMORY_RULE,
+                            "static Memory has fixed capacity and cannot use 'allow grow'."
+                                .to_string(),
+                        ));
+                    }
+                }
+                crate::ast_nodes::MemoryKind::Dynamic => {}
+            }
             scope.insert(name.clone(), ValueType::Memory);
             memory_state.memories.insert(
                 name.clone(),
                 MemoryBinding {
                     is_external: false,
                     is_cleared: false,
+                    parent: (*kind == crate::ast_nodes::MemoryKind::Child)
+                        .then(|| memory_state.active_memory.clone())
+                        .flatten(),
                 },
             );
             if let Some(on_error) = on_error {
@@ -1486,6 +2314,7 @@ fn analyze_statement(
         Statement::VarDecl {
             name,
             value,
+            is_constant,
             declared_type,
             ..
         } => {
@@ -1518,7 +2347,13 @@ fn analyze_statement(
                 fn_ctx.as_ref(),
             )?;
             let final_ty = if let Some(tn) = declared_type {
-                let declared = parse_declared_type_name(tn, structs);
+                let declared = if memory_state.labels.contains_key(tn) {
+                    ValueType::Label(tn.clone())
+                } else if memory_state.tags.contains_key(tn) {
+                    ValueType::Tag(tn.clone())
+                } else {
+                    parse_declared_type_name(tn, structs, &HashMap::new())
+                };
                 validate_expression_for_target(
                     &declared,
                     value,
@@ -1575,6 +2410,10 @@ fn analyze_statement(
                         | ValueType::Vec2
                         | ValueType::Vec3
                         | ValueType::Vec4
+                        | ValueType::Color
+                        | ValueType::Rect
+                        | ValueType::Canvas
+                        | ValueType::Window
                         | ValueType::Memory
                         | ValueType::Task(_)
                         | ValueType::Channel(_)
@@ -1587,6 +2426,23 @@ fn analyze_statement(
                     format!(
                         "explicit type required for composite declaration '{}': inferred {:?}. use 'new <Type> {} = ...'.",
                         name, final_ty, name
+                    ),
+                ));
+            }
+            if is_movable_resource(&final_ty)
+                && matches!(
+                    value.as_ref(),
+                    Expression::VariableReference(_)
+                        | Expression::DirectBorrow(_)
+                        | Expression::ViewBorrow(_)
+                )
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "resource declaration '{}' would copy ownership; use 'move <identifier>' or create a new resource.",
+                        name
                     ),
                 ));
             }
@@ -1603,6 +2459,27 @@ fn analyze_statement(
                 "variable declaration value",
                 matches!(final_ty, ValueType::Channel(_)),
             )?;
+            if *is_constant
+                && matches!(
+                    final_ty,
+                    ValueType::List(_)
+                        | ValueType::Memory
+                        | ValueType::Interrupt
+                        | ValueType::Canvas
+                        | ValueType::Window
+                        | ValueType::Task(_)
+                        | ValueType::Channel(_)
+                )
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "constant binding '{}' requires a value type; mutable capability {:?} is not allowed.",
+                        name, final_ty
+                    ),
+                ));
+            }
             let source_memory = infer_expression_memory_provenance(
                 value,
                 &final_ty,
@@ -1620,6 +2497,9 @@ fn analyze_statement(
                 }
             });
             scope.insert(name.clone(), final_ty);
+            if *is_constant {
+                memory_state.constants.insert(name.clone());
+            }
             let final_ty = scope.get(name).cloned().unwrap_or(ValueType::Unknown);
             if matches!(final_ty, ValueType::Channel(_)) && in_loop {
                 return Err(err_at_code(
@@ -1651,6 +2531,32 @@ fn analyze_statement(
                 memory_state
                     .channels
                     .insert(name.clone(), (**elem_ty).clone());
+                memory_state.channel_owners.insert(name.clone());
+            }
+            if is_movable_resource(&final_ty) {
+                memory_state.ownership.insert(
+                    name.clone(),
+                    OwnershipBinding {
+                        state: OwnershipState::Owned,
+                        moved_to: None,
+                    },
+                );
+            }
+            if matches!(final_ty, ValueType::Window | ValueType::Channel(_)) {
+                let lifecycle = match value.as_ref() {
+                    Expression::Move(source) => memory_state
+                        .resource_lifecycles
+                        .get(source)
+                        .copied()
+                        .unwrap_or(ResourceLifecycle::Open),
+                    _ => ResourceLifecycle::Open,
+                };
+                memory_state
+                    .resource_lifecycles
+                    .insert(name.clone(), lifecycle);
+            }
+            if final_ty == ValueType::Interrupt {
+                memory_state.interrupt_owners.insert(name.clone());
             }
             record_task_effects_in_expr(stmt, value, scope, memory_state)?;
             assign_memory_provenance(memory_state, name, &final_ty, source_memory, structs);
@@ -1667,6 +2573,13 @@ fn analyze_statement(
                     ),
                 ));
             };
+            if let Some(kind) = read_only_binding_kind(memory_state, target) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!("{} '{}' cannot be reassigned.", kind, target),
+                ));
+            }
             if target_ty == ValueType::Memory {
                 return Err(err_at_code(
                     stmt,
@@ -1683,6 +2596,19 @@ fn analyze_statement(
                     SEM_TASK_CAPABILITY,
                     format!(
                         "illegal Task/Channel value usage: '{}' cannot be reassigned or copied as a regular value.",
+                        target
+                    ),
+                ));
+            }
+            if matches!(
+                target_ty,
+                ValueType::Canvas | ValueType::Window | ValueType::Interrupt
+            ) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "resource capability '{}' cannot be reassigned or copied; pass it with 'direct' instead.",
                         target
                     ),
                 ));
@@ -1744,6 +2670,13 @@ fn analyze_statement(
                     ),
                 ));
             };
+            if let Some(kind) = read_only_binding_kind(memory_state, target) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!("{} '{}' cannot be modified.", kind, target),
+                ));
+            }
             match target_ty {
                 ValueType::Int | ValueType::Float => Ok(()),
                 other => Err(err_at_code(
@@ -1762,6 +2695,15 @@ fn analyze_statement(
             value,
             ..
         } => {
+            if object != "my"
+                && let Some(kind) = read_only_binding_kind(memory_state, object)
+            {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    format!("{} '{}' cannot be modified.", kind, object),
+                ));
+            }
             let owner_ty = if object == "my" {
                 let Some(ctx) = fn_ctx.as_ref() else {
                     return Err(err_at_code(
@@ -1902,17 +2844,55 @@ fn analyze_statement(
         Statement::FunctionDef {
             name, params, body, ..
         } => {
+            let Some(sig) = functions.get(name) else {
+                return Err(sem_err(
+                    SEM_INTERNAL,
+                    format!("internal error: missing function signature for '{}'.", name),
+                ));
+            };
             let mut fn_scope = scope.clone();
-            let mut fn_memory_state = MemoryState::default();
-            for p in params {
-                let pty = param_type_or_default(p);
+            let mut fn_memory_state = MemoryState {
+                labels: memory_state.labels.clone(),
+                tags: memory_state.tags.clone(),
+                ..MemoryState::default()
+            };
+            for (index, p) in params.iter().enumerate() {
+                let pty = sig
+                    .param_types
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| param_type_or_default(p));
                 fn_scope.insert(p.name.clone(), pty.clone());
+                if p.borrow == BorrowMode::View {
+                    fn_memory_state.views.insert(p.name.clone());
+                }
+                if p.borrow == BorrowMode::Move && is_movable_resource(&pty) {
+                    fn_memory_state.ownership.insert(
+                        p.name.clone(),
+                        OwnershipBinding {
+                            state: OwnershipState::Owned,
+                            moved_to: None,
+                        },
+                    );
+                    if matches!(pty, ValueType::Window | ValueType::Channel(_)) {
+                        fn_memory_state
+                            .resource_lifecycles
+                            .insert(p.name.clone(), ResourceLifecycle::Open);
+                    }
+                    if matches!(pty, ValueType::Channel(_)) {
+                        fn_memory_state.channel_owners.insert(p.name.clone());
+                    }
+                    if pty == ValueType::Interrupt {
+                        fn_memory_state.interrupt_owners.insert(p.name.clone());
+                    }
+                }
                 if pty == ValueType::Memory {
                     fn_memory_state.memories.insert(
                         p.name.clone(),
                         MemoryBinding {
                             is_external: true,
                             is_cleared: false,
+                            parent: None,
                         },
                     );
                 }
@@ -1922,12 +2902,6 @@ fn analyze_statement(
                         .insert(p.name.clone(), (**elem_ty).clone());
                 }
             }
-            let Some(sig) = functions.get(name) else {
-                return Err(sem_err(
-                    SEM_INTERNAL,
-                    format!("internal error: missing function signature for '{}'.", name),
-                ));
-            };
             let local_ctx = FnContext {
                 is_danger: sig.is_danger,
                 return_type: sig.return_type.clone(),
@@ -1978,8 +2952,9 @@ fn analyze_statement(
                     "if condition must be bool.".to_string(),
                 ));
             }
+            let original_memory_state = memory_state.clone();
             let mut then_scope = scope.clone();
-            let mut then_memory_state = memory_state.clone();
+            let mut then_memory_state = original_memory_state.clone();
             analyze_block(
                 then_block,
                 &mut then_scope,
@@ -1991,6 +2966,7 @@ fn analyze_statement(
                 fn_ctx.clone(),
                 in_loop,
             )?;
+            let then_terminates = block_guarantees_termination(then_block);
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
                 let mut else_memory_state = memory_state.clone();
@@ -2005,6 +2981,31 @@ fn analyze_statement(
                     fn_ctx.clone(),
                     in_loop,
                 )?;
+                let else_terminates = block_guarantees_termination(else_block);
+                match (then_terminates, else_terminates) {
+                    (false, false) => merge_resource_lifecycles(
+                        memory_state,
+                        &[&then_memory_state, &else_memory_state],
+                        &original_memory_state,
+                    ),
+                    (false, true) => merge_resource_lifecycles(
+                        memory_state,
+                        &[&then_memory_state],
+                        &original_memory_state,
+                    ),
+                    (true, false) => merge_resource_lifecycles(
+                        memory_state,
+                        &[&else_memory_state],
+                        &original_memory_state,
+                    ),
+                    (true, true) => {}
+                }
+            } else if !then_terminates {
+                merge_resource_lifecycles(
+                    memory_state,
+                    &[&then_memory_state, &original_memory_state],
+                    &original_memory_state,
+                );
             }
             Ok(())
         }
@@ -2024,8 +3025,9 @@ fn analyze_statement(
                         .to_string(),
                 ));
             }
+            let original_memory_state = memory_state.clone();
             let mut loop_scope = scope.clone();
-            let mut loop_memory_state = memory_state.clone();
+            let mut loop_memory_state = original_memory_state.clone();
             if let Some(init) = initialization {
                 if let Expression::VariableReference(name) = init.as_ref() {
                     let inferred_item_ty = if let Some(coll) = condition {
@@ -2095,7 +3097,16 @@ fn analyze_statement(
                 task_context_functions,
                 fn_ctx,
                 true,
-            )
+            )?;
+            if !block_guarantees_termination(body) {
+                ensure_loop_preserves_ownership(stmt, &original_memory_state, &loop_memory_state)?;
+            }
+            merge_resource_lifecycles(
+                memory_state,
+                &[&original_memory_state, &loop_memory_state],
+                &original_memory_state,
+            );
+            Ok(())
         }
         Statement::WhenBlock {
             when_expression,
@@ -2103,6 +3114,7 @@ fn analyze_statement(
             else_block,
             ..
         } => {
+            let original_memory_state = memory_state.clone();
             let when_ty = infer_expression_type(
                 when_expression,
                 scope,
@@ -2111,6 +3123,7 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
+            let mut branch_states = Vec::new();
             for (case_exprs, block) in cases {
                 for expr in case_exprs {
                     let case_ty = infer_expression_type(
@@ -2133,7 +3146,7 @@ fn analyze_statement(
                     }
                 }
                 let mut case_scope = scope.clone();
-                let mut case_memory_state = memory_state.clone();
+                let mut case_memory_state = original_memory_state.clone();
                 analyze_block(
                     block,
                     &mut case_scope,
@@ -2145,10 +3158,13 @@ fn analyze_statement(
                     fn_ctx.clone(),
                     in_loop,
                 )?;
+                if !block_guarantees_termination(block) {
+                    branch_states.push(case_memory_state);
+                }
             }
             if let Some(else_block) = else_block {
                 let mut else_scope = scope.clone();
-                let mut else_memory_state = memory_state.clone();
+                let mut else_memory_state = original_memory_state.clone();
                 analyze_block(
                     else_block,
                     &mut else_scope,
@@ -2160,6 +3176,15 @@ fn analyze_statement(
                     fn_ctx.clone(),
                     in_loop,
                 )?;
+                if !block_guarantees_termination(else_block) {
+                    branch_states.push(else_memory_state);
+                }
+            } else {
+                branch_states.push(original_memory_state.clone());
+            }
+            if !branch_states.is_empty() {
+                let refs = branch_states.iter().collect::<Vec<_>>();
+                merge_resource_lifecycles(memory_state, &refs, &original_memory_state);
             }
             Ok(())
         }
@@ -2181,8 +3206,9 @@ fn analyze_statement(
                     "while condition must be bool.".to_string(),
                 ));
             }
+            let original_memory_state = memory_state.clone();
             let mut while_scope = scope.clone();
-            let mut while_memory_state = memory_state.clone();
+            let mut while_memory_state = original_memory_state.clone();
             analyze_block(
                 body,
                 &mut while_scope,
@@ -2193,11 +3219,21 @@ fn analyze_statement(
                 task_context_functions,
                 fn_ctx,
                 true,
-            )
+            )?;
+            if !block_guarantees_termination(body) {
+                ensure_loop_preserves_ownership(stmt, &original_memory_state, &while_memory_state)?;
+            }
+            merge_resource_lifecycles(
+                memory_state,
+                &[&original_memory_state, &while_memory_state],
+                &original_memory_state,
+            );
+            Ok(())
         }
         Statement::LoopStatement { body, .. } => {
+            let original_memory_state = memory_state.clone();
             let mut local_scope = scope.clone();
-            let mut local_memory_state = memory_state.clone();
+            let mut local_memory_state = original_memory_state.clone();
             analyze_block(
                 body,
                 &mut local_scope,
@@ -2208,7 +3244,16 @@ fn analyze_statement(
                 task_context_functions,
                 fn_ctx,
                 true,
-            )
+            )?;
+            if !block_guarantees_termination(body) {
+                ensure_loop_preserves_ownership(stmt, &original_memory_state, &local_memory_state)?;
+            }
+            merge_resource_lifecycles(
+                memory_state,
+                &[&original_memory_state, &local_memory_state],
+                &original_memory_state,
+            );
+            Ok(())
         }
         Statement::BreakStatement { .. } | Statement::ContinueStatement { .. } => {
             if !in_loop {
@@ -2352,7 +3397,7 @@ fn analyze_statement(
                     ),
                 ));
             }
-            let Some(binding) = memory_state.memories.get_mut(memory_name) else {
+            if !memory_state.memories.contains_key(memory_name) {
                 return Err(err_at_code(
                     stmt,
                     SEM_MEMORY_RULE,
@@ -2361,11 +3406,37 @@ fn analyze_statement(
                         memory_name
                     ),
                 ));
-            };
-            binding.is_cleared = true;
+            }
+            let mut cleared = HashSet::from([memory_name.clone()]);
+            loop {
+                let before = cleared.len();
+                for (name, binding) in &memory_state.memories {
+                    if binding
+                        .parent
+                        .as_ref()
+                        .map(|parent| cleared.contains(parent))
+                        .unwrap_or(false)
+                    {
+                        cleared.insert(name.clone());
+                    }
+                }
+                if cleared.len() == before {
+                    break;
+                }
+            }
+            for name in cleared {
+                if let Some(binding) = memory_state.memories.get_mut(&name) {
+                    binding.is_cleared = true;
+                }
+            }
             Ok(())
         }
-        Statement::OnBlock { trigger, .. } => {
+        Statement::OnBlock {
+            trigger,
+            target,
+            body,
+            ..
+        } => {
             if trigger == "error" {
                 return Err(
                     err_at_code(
@@ -2377,12 +3448,48 @@ fn analyze_statement(
                 );
             }
             if trigger == "interrupt" {
-                return Err(err_at_code(
-                    stmt,
-                    SEM_INVALID_CONTEXT,
-                    "unsupported context: 'on interrupt ... { ... }' is reserved for a future platform runtime and cannot be compiled in v1.2."
-                        .to_string(),
-                ));
+                if fn_ctx.is_some() || in_loop || memory_state.active_memory.is_some() {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "on interrupt registration is allowed only at project top level in the host MVP."
+                            .to_string(),
+                    ));
+                }
+                let Some(target) = target.as_deref() else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "on interrupt requires an Interrupt capability identifier.".to_string(),
+                    ));
+                };
+                if scope.get(target) != Some(&ValueType::Interrupt)
+                    || !memory_state.interrupt_owners.contains(target)
+                {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "on interrupt target '{}' must be an owning Interrupt capability.",
+                            target
+                        ),
+                    ));
+                }
+                validate_interrupt_block(body, memory_state)?;
+                let mut handler_scope = scope.clone();
+                let mut handler_state = memory_state.clone();
+                analyze_block(
+                    body,
+                    &mut handler_scope,
+                    &mut handler_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx,
+                    false,
+                )?;
+                return Ok(());
             }
             Err(err_at_code(
                 stmt,
@@ -2442,6 +3549,48 @@ fn analyze_statement(
             on_error,
             ..
         } => {
+            if let Some((channel, "receive")) = call_name.split_once('.')
+                && let Some(element_ty) = memory_state.channels.get(channel).cloned()
+            {
+                require_owned_resource(memory_state, channel)?;
+                if !args.is_empty() {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_CHANNEL_RULE,
+                        "Channel.receive() does not accept arguments.".to_string(),
+                    ));
+                }
+                let Some(target_ty) = scope.get(target) else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_USE_BEFORE_DEF,
+                        format!("use-before-definition: '{}' is not defined.", target),
+                    ));
+                };
+                if !can_assign(target_ty, &element_ty) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_CHANNEL_RULE,
+                        format!(
+                            "channel receive target mismatch: '{}' expects {:?}, channel carries {:?}.",
+                            target, target_ty, element_ty
+                        ),
+                    ));
+                }
+                let mut on_error_scope = scope.clone();
+                let mut on_error_memory_state = memory_state.clone();
+                return analyze_block(
+                    on_error,
+                    &mut on_error_scope,
+                    &mut on_error_memory_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx,
+                    in_loop,
+                );
+            }
             if builtin_from_name(call_name).is_some() {
                 return Err(err_at_code(
                     stmt,
@@ -2512,6 +3661,161 @@ fn analyze_statement(
             on_error,
             ..
         } => {
+            if let Some((window, method @ ("present" | "close"))) = call_name.split_once('.')
+                && matches!(scope.get(window), Some(ValueType::Window))
+            {
+                require_owned_resource(memory_state, window)?;
+                if memory_state.views.contains(window) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "view parameter '{}' cannot call mutating method '{}'.",
+                            window, method
+                        ),
+                    ));
+                }
+                if method == "close" {
+                    if !args.is_empty() {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            "Window.close() does not accept arguments.".to_string(),
+                        ));
+                    }
+                    if !memory_state.resource_lifecycles.contains_key(window) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "only owning Window binding may close '{}'; borrowed window parameters cannot close their owner.",
+                                window
+                            ),
+                        ));
+                    }
+                    memory_state
+                        .resource_lifecycles
+                        .insert(window.to_string(), ResourceLifecycle::Closed);
+                } else {
+                    if !matches!(args.as_slice(), [Expression::DirectBorrow(_)]) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_ARG_TYPE,
+                            "Window.present requires explicit 'direct <Canvas>' borrow."
+                                .to_string(),
+                        ));
+                    }
+                    let actual_ty = infer_expression_type(
+                        &args[0],
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
+                    if actual_ty != ValueType::Canvas {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_ARG_TYPE,
+                            format!("Window.present expects Canvas, got {:?}.", actual_ty),
+                        ));
+                    }
+                }
+                let mut on_error_scope = scope.clone();
+                let mut on_error_memory_state = memory_state.clone();
+                return analyze_block(
+                    on_error,
+                    &mut on_error_scope,
+                    &mut on_error_memory_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx,
+                    in_loop,
+                );
+            }
+            if let Some((channel, "close")) = call_name.split_once('.')
+                && memory_state.channels.contains_key(channel)
+            {
+                require_owned_resource(memory_state, channel)?;
+                if !args.is_empty() {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_CHANNEL_RULE,
+                        "Channel.close() does not accept arguments.".to_string(),
+                    ));
+                }
+                if !memory_state.channel_owners.contains(channel) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_CHANNEL_RULE,
+                        format!(
+                            "only owning Channel binding may close '{}'; borrowed channel parameters cannot close their owner.",
+                            channel
+                        ),
+                    ));
+                }
+                memory_state
+                    .resource_lifecycles
+                    .insert(channel.to_string(), ResourceLifecycle::Closed);
+                let mut on_error_scope = scope.clone();
+                let mut on_error_memory_state = memory_state.clone();
+                return analyze_block(
+                    on_error,
+                    &mut on_error_scope,
+                    &mut on_error_memory_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx,
+                    in_loop,
+                );
+            }
+            if let Some((channel, "send")) = call_name.split_once('.')
+                && let Some(element_ty) = memory_state.channels.get(channel).cloned()
+            {
+                require_owned_resource(memory_state, channel)?;
+                if args.len() != 1 {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_CHANNEL_RULE,
+                        format!("Channel.send expects one argument, got {}.", args.len()),
+                    ));
+                }
+                let actual_ty = infer_expression_type(
+                    &args[0],
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
+                if !can_assign(&element_ty, &actual_ty) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_CHANNEL_RULE,
+                        format!(
+                            "channel send type mismatch: expected {:?}, got {:?}.",
+                            element_ty, actual_ty
+                        ),
+                    ));
+                }
+                let mut on_error_scope = scope.clone();
+                let mut on_error_memory_state = memory_state.clone();
+                return analyze_block(
+                    on_error,
+                    &mut on_error_scope,
+                    &mut on_error_memory_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx,
+                    in_loop,
+                );
+            }
             if builtin_from_name(call_name).is_some() {
                 return Err(err_at_code(
                     stmt,
@@ -2772,11 +4076,12 @@ fn analyze_statement(
                                 .to_string(),
                         ));
                     }
-                    if matches!(actual, ValueType::Channel(_)) {
+                    if is_movable_resource(&actual) && !matches!(expr.as_ref(), Expression::Move(_))
+                    {
                         return Err(err_at_code(
                             stmt,
-                            SEM_CHANNEL_RULE,
-                            "illegal Channel value usage: Channel handles cannot be returned from functions."
+                            SEM_INVALID_CONTEXT,
+                            "returning an owning resource requires explicit 'return move <identifier>'."
                                 .to_string(),
                         ));
                     }
@@ -2851,23 +4156,53 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
+            if let Expression::Call { name, .. } = expr.as_ref()
+                && let Some((resource, "close")) = name.split_once('.')
+                && memory_state.resource_lifecycles.contains_key(resource)
+            {
+                memory_state
+                    .resource_lifecycles
+                    .insert(resource.to_string(), ResourceLifecycle::Closed);
+            }
             record_task_effects_in_expr(stmt, expr, scope, memory_state)?;
             Ok(())
         }
         Statement::StructDecl { name, methods, .. } => {
             for m in methods {
                 let mut method_scope = scope.clone();
-                let mut method_memory_state = MemoryState::default();
+                let mut method_memory_state = MemoryState {
+                    labels: memory_state.labels.clone(),
+                    tags: memory_state.tags.clone(),
+                    ..MemoryState::default()
+                };
                 method_scope.insert("my".to_string(), ValueType::Struct(name.clone()));
                 for p in &m.params {
                     let pty = param_type_or_default(p);
                     method_scope.insert(p.name.clone(), pty.clone());
+                    if p.borrow == BorrowMode::View {
+                        method_memory_state.views.insert(p.name.clone());
+                    }
+                    if p.borrow == BorrowMode::Move && is_movable_resource(&pty) {
+                        method_memory_state.ownership.insert(
+                            p.name.clone(),
+                            OwnershipBinding {
+                                state: OwnershipState::Owned,
+                                moved_to: None,
+                            },
+                        );
+                        if matches!(pty, ValueType::Window | ValueType::Channel(_)) {
+                            method_memory_state
+                                .resource_lifecycles
+                                .insert(p.name.clone(), ResourceLifecycle::Open);
+                        }
+                    }
                     if pty == ValueType::Memory {
                         method_memory_state.memories.insert(
                             p.name.clone(),
                             MemoryBinding {
                                 is_external: true,
                                 is_cleared: false,
+                                parent: None,
                             },
                         );
                     }
@@ -2901,7 +4236,7 @@ fn analyze_statement(
             }
             Ok(())
         }
-        Statement::LabelDecl { .. } => Ok(()),
+        Statement::LabelDecl { .. } | Statement::TagDecl { .. } => Ok(()),
     }
 }
 
@@ -2983,12 +4318,27 @@ fn record_task_effects_in_expr(
             binding.waited = true;
             Ok(())
         }
-        Expression::RunTask { args, .. } | Expression::Call { args, .. } => {
+        Expression::Call { name, args } => {
             for arg in args {
-                record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+                if let Expression::Move(resource) = arg {
+                    mark_resource_moved(memory_state, resource, name.clone())?;
+                } else {
+                    record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+                }
             }
             Ok(())
         }
+        Expression::RunTask { call_name, args } => {
+            for arg in args {
+                if let Expression::Move(resource) = arg {
+                    mark_resource_moved(memory_state, resource, format!("task '{}'", call_name))?;
+                } else {
+                    record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+                }
+            }
+            Ok(())
+        }
+        Expression::Move(name) => mark_resource_moved(memory_state, name, "new owner"),
         Expression::BinaryOp { left, right, .. } => {
             record_task_effects_in_expr(stmt, left, scope, memory_state)?;
             if let Some(right) = right {
@@ -3013,6 +4363,8 @@ fn record_task_effects_in_expr(
             Ok(())
         }
         Expression::VariableReference(_)
+        | Expression::DirectBorrow(_)
+        | Expression::ViewBorrow(_)
         | Expression::MemberAccess { .. }
         | Expression::Stopping
         | Expression::LiteralInt(_)
@@ -3120,6 +4472,9 @@ fn apply_task_flow_expression(
         | Expression::LiteralByteSize { .. }
         | Expression::LiteralAngle { .. }
         | Expression::VariableReference(_)
+        | Expression::DirectBorrow(_)
+        | Expression::ViewBorrow(_)
+        | Expression::Move(_)
         | Expression::MemberAccess { .. }
         | Expression::Stopping => Ok(()),
     }
@@ -3495,7 +4850,8 @@ fn process_task_flow_statement(
         | Statement::MemoryClear { .. }
         | Statement::IncDec { .. }
         | Statement::PassStatement { .. }
-        | Statement::LabelDecl { .. } => Ok(states),
+        | Statement::LabelDecl { .. }
+        | Statement::TagDecl { .. } => Ok(states),
     }
 }
 
@@ -3595,6 +4951,7 @@ fn infer_expression_type(
             if let Some(ty) = builtin_constant_type(name) {
                 Ok(ty)
             } else {
+                require_owned_resource(memory_state, name)?;
                 if let Some(memory_name) = memory_state.variable_memory.get(name)
                     && memory_state
                         .memories
@@ -3621,7 +4978,71 @@ fn infer_expression_type(
                 })
             }
         }
+        Expression::DirectBorrow(name) => {
+            require_owned_resource(memory_state, name)?;
+            scope.get(name).cloned().ok_or_else(|| {
+                sem_err(
+                    SEM_USE_BEFORE_DEF,
+                    format!(
+                        "use-before-definition: '{}' is not defined for direct borrow.",
+                        name
+                    ),
+                )
+            })
+        }
+        Expression::ViewBorrow(name) => {
+            require_owned_resource(memory_state, name)?;
+            scope.get(name).cloned().ok_or_else(|| {
+                sem_err(
+                    SEM_USE_BEFORE_DEF,
+                    format!(
+                        "use-before-definition: '{}' is not defined for view borrow.",
+                        name
+                    ),
+                )
+            })
+        }
+        Expression::Move(name) => {
+            require_owned_resource(memory_state, name)?;
+            let ty = scope.get(name).cloned().ok_or_else(|| {
+                sem_err(
+                    SEM_USE_BEFORE_DEF,
+                    format!("use-before-definition: '{}' is not defined for move.", name),
+                )
+            })?;
+            if !is_movable_resource(&ty) {
+                return Err(sem_err(
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "'move {}' requires an owning resource, got {:?}; ordinary values are copied.",
+                        name, ty
+                    ),
+                ));
+            }
+            Ok(ty)
+        }
         Expression::MemberAccess { base, .. } => {
+            if let Expression::MemberAccess { field, .. } = expr {
+                if base == "Color" && is_color_constant(field) {
+                    return Ok(ValueType::Color);
+                }
+                if memory_state
+                    .labels
+                    .get(base)
+                    .map(|variants| variants.contains(field))
+                    .unwrap_or(false)
+                {
+                    return Ok(ValueType::Label(base.clone()));
+                }
+                if memory_state
+                    .tags
+                    .get(base)
+                    .map(|variants| variants.contains(field))
+                    .unwrap_or(false)
+                {
+                    return Ok(ValueType::Tag(base.clone()));
+                }
+            }
             let owner_ty = if base == "my" {
                 if let Some(ctx) = fn_ctx {
                     if let Some(self_name) = ctx.self_struct.as_ref() {
@@ -3639,6 +5060,7 @@ fn infer_expression_type(
                     ));
                 }
             } else {
+                require_owned_resource(memory_state, base)?;
                 if let Some(memory_name) = memory_state.variable_memory.get(base)
                     && memory_state
                         .memories
@@ -3739,6 +5161,104 @@ fn infer_expression_type(
             }
         }
         Expression::Call { name, args } => {
+            if let Some((receiver, _)) = name.split_once('.')
+                && scope.contains_key(receiver)
+            {
+                require_owned_resource(memory_state, receiver)?;
+            }
+            if matches!(name.as_str(), "color" | "color_hex" | "rect" | "canvas")
+                || name == "windows.open"
+            {
+                let (expected, result) = match name.as_str() {
+                    "color" => (
+                        vec![
+                            ValueType::Int,
+                            ValueType::Int,
+                            ValueType::Int,
+                            ValueType::Int,
+                        ],
+                        ValueType::Color,
+                    ),
+                    "color_hex" => (vec![ValueType::Text, ValueType::Int], ValueType::Color),
+                    "rect" => (
+                        vec![
+                            ValueType::Float,
+                            ValueType::Float,
+                            ValueType::Float,
+                            ValueType::Float,
+                        ],
+                        ValueType::Rect,
+                    ),
+                    "canvas" => (vec![ValueType::Int, ValueType::Int], ValueType::Canvas),
+                    _ => (
+                        vec![ValueType::Text, ValueType::Int, ValueType::Int],
+                        ValueType::Window,
+                    ),
+                };
+                if args.len() != expected.len() {
+                    return Err(sem_err(
+                        SEM_ARG_COUNT,
+                        format!(
+                            "visual builtin '{}' expects {} arguments, got {}.",
+                            name,
+                            expected.len(),
+                            args.len()
+                        ),
+                    ));
+                }
+                for (index, (arg, expected_ty)) in args.iter().zip(expected).enumerate() {
+                    let actual = infer_expression_type(
+                        arg,
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx,
+                    )?;
+                    if !can_assign(&expected_ty, &actual) {
+                        return Err(sem_err(
+                            SEM_ARG_TYPE,
+                            format!(
+                                "visual builtin '{}' argument {} expects {:?}, got {:?}.",
+                                name,
+                                index + 1,
+                                expected_ty,
+                                actual
+                            ),
+                        ));
+                    }
+                }
+                return Ok(result);
+            }
+            if name == "interrupts.periodic" {
+                if args.len() != 1 {
+                    return Err(sem_err(
+                        SEM_ARG_COUNT,
+                        format!(
+                            "interrupts.periodic expects one Duration argument, got {}.",
+                            args.len()
+                        ),
+                    ));
+                }
+                let duration_ty = infer_expression_type(
+                    &args[0],
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx,
+                )?;
+                if duration_ty != ValueType::Duration {
+                    return Err(sem_err(
+                        SEM_ARG_TYPE,
+                        format!(
+                            "interrupts.periodic expects Duration, got {:?}.",
+                            duration_ty
+                        ),
+                    ));
+                }
+                return Ok(ValueType::Interrupt);
+            }
             if name == "channel" {
                 if args.len() != 1 {
                     return Err(sem_err(
@@ -3766,7 +5286,113 @@ fn infer_expression_type(
                 return Ok(ValueType::Channel(Box::new(ValueType::Unknown)));
             }
             if let Some((base, method)) = name.split_once('.') {
-                if (method == "send" || method == "receive")
+                if let Some(receiver_ty) = scope.get(base) {
+                    if memory_state.views.contains(base)
+                        && (matches!(receiver_ty, ValueType::Canvas) && method != "checksum"
+                            || matches!(receiver_ty, ValueType::Window))
+                    {
+                        return Err(sem_err(
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "view parameter '{}' cannot call mutating method '{}'.",
+                                base, method
+                            ),
+                        ));
+                    }
+                    if matches!(receiver_ty, ValueType::Window)
+                        && matches!(method, "present" | "close")
+                    {
+                        if method == "close" && !memory_state.resource_lifecycles.contains_key(base)
+                        {
+                            return Err(sem_err(
+                                SEM_INVALID_CONTEXT,
+                                format!(
+                                    "only owning Window binding may close '{}'; borrowed window parameters cannot close their owner.",
+                                    base
+                                ),
+                            ));
+                        }
+                        require_open_resource(memory_state, base, method)?;
+                    }
+                    let expected = match (receiver_ty, method) {
+                        (ValueType::Canvas, "clear") => {
+                            Some((vec![ValueType::Color], ValueType::Int))
+                        }
+                        (ValueType::Canvas, "pixel") => {
+                            Some((vec![ValueType::Vec2, ValueType::Color], ValueType::Int))
+                        }
+                        (ValueType::Canvas, "line") => Some((
+                            vec![ValueType::Vec2, ValueType::Vec2, ValueType::Color],
+                            ValueType::Int,
+                        )),
+                        (ValueType::Canvas, "rect" | "fill_rect") => {
+                            Some((vec![ValueType::Rect, ValueType::Color], ValueType::Int))
+                        }
+                        (ValueType::Canvas, "circle" | "fill_circle") => Some((
+                            vec![ValueType::Vec2, ValueType::Float, ValueType::Color],
+                            ValueType::Int,
+                        )),
+                        (ValueType::Canvas, "checksum") => Some((vec![], ValueType::Int)),
+                        (ValueType::Window, "present") => {
+                            if !matches!(args.as_slice(), [Expression::DirectBorrow(_)]) {
+                                return Err(sem_err(
+                                    SEM_ARG_TYPE,
+                                    "Window.present requires explicit 'direct <Canvas>' borrow."
+                                        .to_string(),
+                                ));
+                            }
+                            Some((vec![ValueType::Canvas], ValueType::Int))
+                        }
+                        (ValueType::Window, "is_open") => Some((vec![], ValueType::Bool)),
+                        (ValueType::Window, "close") => Some((vec![], ValueType::Int)),
+                        _ => None,
+                    };
+                    if let Some((expected, result)) = expected {
+                        if args.len() != expected.len() {
+                            return Err(sem_err(
+                                SEM_ARG_COUNT,
+                                format!(
+                                    "visual method '{}.{}' expects {} arguments, got {}.",
+                                    base,
+                                    method,
+                                    expected.len(),
+                                    args.len()
+                                ),
+                            ));
+                        }
+                        for (index, (arg, expected_ty)) in args.iter().zip(expected).enumerate() {
+                            let actual = infer_expression_type(
+                                arg,
+                                scope,
+                                memory_state,
+                                functions,
+                                structs,
+                                fn_ctx,
+                            )?;
+                            if !can_assign(&expected_ty, &actual) {
+                                return Err(sem_err(
+                                    SEM_ARG_TYPE,
+                                    format!(
+                                        "visual method '{}.{}' argument {} expects {:?}, got {:?}.",
+                                        base,
+                                        method,
+                                        index + 1,
+                                        expected_ty,
+                                        actual
+                                    ),
+                                ));
+                            }
+                        }
+                        return Ok(result);
+                    }
+                    if matches!(receiver_ty, ValueType::Canvas | ValueType::Window) {
+                        return Err(sem_err(
+                            SEM_UNKNOWN_FUNCTION,
+                            format!("unknown visual method '{}.{}'.", base, method),
+                        ));
+                    }
+                }
+                if matches!(method, "send" | "receive" | "try_send" | "close")
                     && !memory_state.channels.contains_key(base)
                 {
                     let receiver_ty = scope.get(base).cloned().unwrap_or(ValueType::Unknown);
@@ -3781,13 +5407,26 @@ fn infer_expression_type(
                     }
                 }
                 if let Some(channel_elem_ty) = memory_state.channels.get(base).cloned() {
+                    if matches!(method, "send" | "receive" | "close") {
+                        if method == "close" && !memory_state.channel_owners.contains(base) {
+                            return Err(sem_err(
+                                SEM_CHANNEL_RULE,
+                                format!(
+                                    "only owning Channel binding may close '{}'; borrowed channel parameters cannot close their owner.",
+                                    base
+                                ),
+                            ));
+                        }
+                        require_open_resource(memory_state, base, method)?;
+                    }
                     return match method {
-                        "send" => {
+                        "send" | "try_send" => {
                             if args.len() != 1 {
                                 return Err(sem_err(
                                     SEM_CHANNEL_RULE,
                                     format!(
-                                        "send expects one message argument, got {}.",
+                                        "{} expects one message argument, got {}.",
+                                        method,
                                         args.len()
                                     ),
                                 ));
@@ -3827,7 +5466,11 @@ fn infer_expression_type(
                                     ),
                                 ));
                             }
-                            Ok(ValueType::Int)
+                            if method == "try_send" {
+                                Ok(ValueType::Bool)
+                            } else {
+                                Ok(ValueType::Int)
+                            }
                         }
                         "receive" => {
                             if !args.is_empty() {
@@ -3837,6 +5480,15 @@ fn infer_expression_type(
                                 ));
                             }
                             Ok(channel_elem_ty)
+                        }
+                        "close" => {
+                            if !args.is_empty() {
+                                return Err(sem_err(
+                                    SEM_CHANNEL_RULE,
+                                    format!("close expects no arguments, got {}.", args.len()),
+                                ));
+                            }
+                            Ok(ValueType::Int)
                         }
                         _ => Err(sem_err(
                             SEM_CHANNEL_RULE,
@@ -4469,6 +6121,9 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Vec3)
                     }
+                    Builtin::Color | Builtin::ColorHex => Ok(ValueType::Color),
+                    Builtin::Rect => Ok(ValueType::Rect),
+                    Builtin::Canvas => Ok(ValueType::Canvas),
                 };
             }
             if let Some((base, method)) = name.split_once('.') {
@@ -4627,6 +6282,18 @@ fn infer_expression_type(
                     SEM_TASK_RULE,
                     format!(
                         "danger fn '{}' cannot be used as task entry in the v1.2 runtime MVP.",
+                        call_name
+                    ),
+                ));
+            }
+            if args
+                .iter()
+                .any(|arg| matches!(arg, Expression::DirectBorrow(_) | Expression::ViewBorrow(_)))
+            {
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    format!(
+                        "call-scoped borrow cannot cross the task boundary in run '{}'.",
                         call_name
                     ),
                 ));
@@ -4946,7 +6613,10 @@ fn infer_expression_memory_provenance(
     }
 
     match expr {
-        Expression::VariableReference(name) => Ok(memory_state.variable_memory.get(name).cloned()),
+        Expression::VariableReference(name)
+        | Expression::DirectBorrow(name)
+        | Expression::ViewBorrow(name)
+        | Expression::Move(name) => Ok(memory_state.variable_memory.get(name).cloned()),
         Expression::MemberAccess { base, .. } => {
             Ok(memory_state.variable_memory.get(base).cloned())
         }

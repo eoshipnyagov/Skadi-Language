@@ -1,4 +1,4 @@
 label Status {
-    Ok
-    Error
+    Ok = 0
+    Error = 1
 }

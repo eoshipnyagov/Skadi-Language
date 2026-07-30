@@ -200,3 +200,15 @@ fn showcase_vector_navigation_compiles() {
     assert!(c.contains("sk_vec3_cross(east, north)"));
     assert!(c.contains("sk_vec4_normalize(weights)"));
 }
+
+#[test]
+fn showcase_canvas_palette_compiles() {
+    let src = include_str!("../benchmarks/bench_17_canvas_palette.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("sk_color_hex(\"#1d1f21\", 255)"));
+    assert!(c.contains("Color_terminal_bright_yellow"));
+    assert!(c.contains("sk_canvas_fill_rect(&frame"));
+    assert!(c.contains("sk_canvas_circle(&frame"));
+    assert!(c.contains("sk_canvas_checksum(&frame)"));
+    assert!(!c.contains("StretchDIBits"));
+}

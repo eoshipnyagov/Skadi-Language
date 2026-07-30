@@ -1,0 +1,14 @@
+fn finish(move Canvas frame) {
+    output(frame.checksum())
+}
+
+fn make_frame(Int width, Int height) returns Canvas {
+    Canvas frame = canvas(width, height)
+    new Vec2 center = {x = 16.0, y = 12.0}
+    frame.clear(Color.terminal_blue)
+    frame.circle(center, 8.0, Color.terminal_bright_yellow)
+    return move frame
+}
+
+Canvas preview = make_frame(32, 24)
+finish(move preview)

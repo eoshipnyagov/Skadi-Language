@@ -20,12 +20,15 @@ pub enum OutputKind {
     LinuxElf,
 }
 
-fn gnu_link_args(c: &str, out: &str, pthread: bool) -> Vec<String> {
+fn gnu_link_args(c: &str, out: &str, pthread: bool, windows: bool) -> Vec<String> {
     let mut args = vec![c.to_string(), "-o".to_string(), out.to_string()];
     if pthread {
         args.push("-pthread".to_string());
     }
     args.push("-lm".to_string());
+    if windows {
+        args.push("-lgdi32".to_string());
+    }
     args
 }
 
@@ -77,21 +80,26 @@ pub fn candidate_invocations(
             let mut xs = vec![
                 CompilerInvocation {
                     program: "gcc".to_string(),
-                    args: gnu_link_args(&c, &out, !cfg!(windows)),
+                    args: gnu_link_args(&c, &out, !cfg!(windows), cfg!(windows)),
                 },
                 CompilerInvocation {
                     program: "clang".to_string(),
-                    args: gnu_link_args(&c, &out, !cfg!(windows)),
+                    args: gnu_link_args(&c, &out, !cfg!(windows), cfg!(windows)),
                 },
                 CompilerInvocation {
                     program: "cc".to_string(),
-                    args: gnu_link_args(&c, &out, !cfg!(windows)),
+                    args: gnu_link_args(&c, &out, !cfg!(windows), cfg!(windows)),
                 },
             ];
             if cfg!(windows) {
                 xs.push(CompilerInvocation {
                     program: "cl".to_string(),
-                    args: vec!["/nologo".to_string(), c.clone(), format!("/Fe:{out}")],
+                    args: vec![
+                        "/nologo".to_string(),
+                        c.clone(),
+                        "gdi32.lib".to_string(),
+                        format!("/Fe:{out}"),
+                    ],
                 });
             }
             xs
@@ -99,17 +107,17 @@ pub fn candidate_invocations(
         "x86_64-w64-mingw32" => vec![
             CompilerInvocation {
                 program: "x86_64-w64-mingw32-gcc".to_string(),
-                args: gnu_link_args(&c, &out, false),
+                args: gnu_link_args(&c, &out, false, true),
             },
             CompilerInvocation {
                 program: "gcc".to_string(),
-                args: gnu_link_args(&c, &out, false),
+                args: gnu_link_args(&c, &out, false, true),
             },
         ],
         "x86_64-unknown-linux-gnu" => vec![
             CompilerInvocation {
                 program: "x86_64-linux-gnu-gcc".to_string(),
-                args: gnu_link_args(&c, &out, true),
+                args: gnu_link_args(&c, &out, true, false),
             },
             CompilerInvocation {
                 program: "clang".to_string(),
@@ -145,13 +153,19 @@ pub fn single_compiler_invocation(
             }
             CompilerInvocation {
                 program: "cl".to_string(),
-                args: vec!["/nologo".to_string(), c, format!("/Fe:{out}")],
+                args: vec![
+                    "/nologo".to_string(),
+                    c,
+                    "gdi32.lib".to_string(),
+                    format!("/Fe:{out}"),
+                ],
             }
         }
         other => {
             let pthread =
                 target == "x86_64-unknown-linux-gnu" || (target == "host" && !cfg!(windows));
-            let mut args = gnu_link_args(&c, &out, pthread);
+            let windows = target == "x86_64-w64-mingw32" || (target == "host" && cfg!(windows));
+            let mut args = gnu_link_args(&c, &out, pthread, windows);
             if target == "x86_64-unknown-linux-gnu" && other == "clang" {
                 args.insert(0, "--target=x86_64-unknown-linux-gnu".to_string());
             }
@@ -258,6 +272,16 @@ mod tests {
         assert!(
             xs.iter()
                 .all(|invocation| invocation.args.iter().any(|arg| arg == "-pthread"))
+        );
+    }
+
+    #[test]
+    fn windows_profile_links_canvas_backend_library() {
+        let xs = candidate_invocations("x86_64-w64-mingw32", Path::new("a.c"), Path::new("a.exe"))
+            .expect("Windows invocations should be available");
+        assert!(
+            xs.iter()
+                .all(|invocation| invocation.args.iter().any(|arg| arg == "-lgdi32"))
         );
     }
 

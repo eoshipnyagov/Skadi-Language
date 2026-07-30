@@ -75,8 +75,14 @@ Memory assets_memory = memory(capacity) on error {
 failure path, что и ошибка выделения: выполняется trailing `on error`, а без него
 runtime завершает программу диагностикой Memory.
 
-Этот slice не добавляет `allow grow`, `allow drop`, `memory.child` или
-`memory.static`.
+Расширенные Memory forms используют тот же nominal `ByteSize`:
+
+- `allow grow` принимает исходную `ByteSize` capacity как размер первого chunk;
+- `memory.child(size)` резервирует указанную ёмкость в parent-region;
+- `memory.static(size)` требует положительный compile-time `ByteSize` literal.
+
+`allow drop` не меняет арифметику `ByteSize` и в текущем runtime является
+только явным policy marker.
 
 ## Контейнеры и concurrency
 
@@ -100,6 +106,6 @@ new ByteSize List options = [2kb, capacity]
 - нет scalar multiplication/division;
 - нет автоматического форматирования `ByteSize` для `output`;
 - нет общей dimensional algebra;
-- allocator policies остаются отдельным Memory roadmap.
+- allocator policies описаны в отдельном Memory contract.
 
 Проверяемый showcase: `benchmarks/bench_14_byte_size_budget.skd`.

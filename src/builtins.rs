@@ -38,6 +38,10 @@ pub enum Builtin {
     Elapsed,
     Sleep,
     Delay,
+    Color,
+    ColorHex,
+    Rect,
+    Canvas,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,6 +51,7 @@ pub enum BuiltinCategory {
     CoreIo,
     Math,
     SystemsTime,
+    Visual,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -323,6 +328,34 @@ const BUILTIN_SPECS: &[BuiltinSpec] = &[
         name: "delay",
         arity: 1,
         category: BuiltinCategory::SystemsTime,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Color,
+        name: "color",
+        arity: 4,
+        category: BuiltinCategory::Visual,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::ColorHex,
+        name: "color_hex",
+        arity: 2,
+        category: BuiltinCategory::Visual,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Rect,
+        name: "rect",
+        arity: 4,
+        category: BuiltinCategory::Visual,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::Canvas,
+        name: "canvas",
+        arity: 2,
+        category: BuiltinCategory::Visual,
         enabled: true,
     },
 ];

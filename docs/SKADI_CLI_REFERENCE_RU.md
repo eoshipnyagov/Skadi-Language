@@ -1,172 +1,65 @@
-# Skadi: Справочник CLI/TUI (RU)
+# Справочник Skadi CLI и TUI
 
-Справочник по `skadi-cli` для Skadi `v1.2.0-rc.1`.
+`skadi-cli` — основной пользовательский toolchain Skadi `v1.2.0-rc.1`.
+Обычные команды предназначены для terminal/scripts/CI, а `tui` — для
+интерактивной работы.
 
-Роль этого документа: быть справочником по командам, режимам и поведению
-`skadi-cli` и `skadi-cli tui`. Для первого входа удобнее начать с quick start.
+## Самое важное
 
-Быстрый старт: [Быстрый старт CLI](cli-quick-start.md).
-
-Полный гайд по языку: [Начало работы](getting-started.md)
-
-Если вы работаете прямо из исходников, те же команды можно запускать через
-`cargo run -p skadi-cli -- ...`.
-
-## 1. Роль `skadi-cli`
-
-`skadi-cli` - основной пользовательский интерфейс проекта:
-
-- создаёт и инициализирует проекты;
-- проверяет код фронтендом Skadi;
-- собирает Skadi -> C -> исполняемый файл;
-- запускает программы;
-- форматирует `.skd`;
-- даёт интерактивный режим работы через TUI.
-
-Для скриптов и CI каноническая поверхность - обычные CLI-команды.  
-Для ручной повседневной работы `skadi-cli tui` тоже считается полноценным поддерживаемым путём.
-
-## 2. Команды
-
-### `--version`
-
-Печатает точную версию установленного toolchain:
-
-```powershell
-skadi-cli --version
-```
-
-### `new <name>`
-
-Создаёт новый проект:
+Новый проект:
 
 ```powershell
 skadi-cli new hello_skadi
+cd hello_skadi
+skadi-cli check
+skadi-cli run
 ```
 
-Создаёт:
-
-- `Skadi.toml`
-- `src/main.skd`
-- `.gitignore`
-
-### `init`
-
-Инициализирует проект в текущей директории:
-
-```powershell
-skadi-cli init
-```
-
-Полезно, если папка уже существует.
-
-### `check`
-
-Запускает фронтенд языка:
+Обычный цикл:
 
 ```powershell
 skadi-cli check
-```
-
-Покрывает:
-
-- lexing;
-- parsing;
-- semantic analysis.
-
-Не требует рабочего C-компилятора.
-
-### `build`
-
-Собирает проект до исполняемого файла для текущей машины:
-
-```powershell
-skadi-cli build
-skadi-cli build --target host --cc gcc
-```
-
-Флаги:
-
-- `--target <name>`
-- `--cc <compiler>`
-
-### `run`
-
-Собирает и запускает проект:
-
-```powershell
-skadi-cli run
-skadi-cli run --target host --cc clang
-```
-
-Стадии ошибки различаются явно:
-
-- фронтенд языка;
-- C-компилятор;
-- выполнение собранной программы.
-
-### `target list`
-
-Показывает доступные target:
-
-```powershell
-skadi-cli target list
-```
-
-### `format`
-
-Форматирует `.skd`:
-
-```powershell
 skadi-cli format
-skadi-cli format src/main.skd
-skadi-cli format --check
+skadi-cli build
+skadi-cli run
 ```
 
-Режимы:
-
-- `format` - переписывает файл в каноничный вид;
-- `format --check` - не меняет файл и завершается с ошибкой, если нужно форматирование.
-
-### `doctor`
-
-Проверяет окружение сборки:
+Проверка среды и интерактивный режим:
 
 ```powershell
 skadi-cli doctor
-```
-
-Полезен для:
-
-- первой настройки машины;
-- различения ошибок фронтенда и окружения;
-- проверки текущей целевой платформы.
-
-### `tui`
-
-Запускает full-screen интерфейс:
-
-```powershell
 skadi-cli tui
 ```
 
-## 3. Структура проекта
+## Команды
 
-Минимальный проект выглядит так:
+| Команда | Назначение | Нужен C compiler |
+|---|---|---:|
+| `new <name>` | Создать папку проекта, manifest и entry | Нет |
+| `init` | Инициализировать проект в текущей папке | Нет |
+| `check` | Imports, lexer, parser, semantic и warnings | Нет |
+| `format [--check] [path ...]` | Форматировать или проверить `.skd` | Нет |
+| `build [--target name] [--cc compiler]` | Собрать native binary | Да |
+| `run [--target name] [--cc compiler]` | Собрать и запустить | Да |
+| `doctor` | Проверить host/cross toolchains | Нет |
+| `target list` | Показать target profiles | Нет |
+| `tui` | Открыть full-screen project workflow | Зависит от action |
+| `--version` | Показать точную версию | Нет |
+| `--help` | Краткая встроенная справка | Нет |
+
+## Проект и manifest
 
 ```text
-hello_skadi/
+project/
   Skadi.toml
   src/
     main.skd
   build/
 ```
 
-Типичный `Skadi.toml`:
-
 ```toml
 [package]
-name = "hello_skadi"
+name = "project"
 version = "0.1.0"
 edition = "v1"
 
@@ -174,125 +67,118 @@ edition = "v1"
 entry = "src/main.skd"
 ```
 
-Поддерживаемые каноничные поля:
+Поддерживаются `name`, `version`, `edition`, `entry`. Config editor внутри TUI
+редактирует те же поля.
 
-- `name`
-- `version`
-- `edition`
-- `entry`
-
-## 4. Поведение команд
-
-### Что делает `check`
-
-- читает `Skadi.toml`;
-- находит `entry`;
-- запускает фронтенд Skadi;
-- показывает диагностические сообщения.
-
-### Что делает `build`
-
-- запускает фронтенд языка;
-- генерирует C;
-- вызывает выбранный C-компилятор;
-- кладёт артефакты в `build/`.
-
-### Что делает `run`
-
-- делает `build`;
-- запускает собранный бинарь;
-- отдаёт `stdout/stderr`.
-
-## 5. Выбор компилятора
-
-Если `--cc` не указан, используется стандартная цепочка перебора.
-
-Windows:
-
-- `gcc`
-- `clang`
-- `cl`
-
-Linux / WSL / macOS:
-
-- `gcc`
-- `clang`
-- `cc`
-
-## 6. TUI
-
-`skadi-cli tui` сфокусирован на работе с проектом:
-
-- обзор проекта;
-- diagnostics;
-- build/run;
-- doctor;
-- config editor;
-- bootstrap flow.
-
-### Основные клавиши
-
-- `q` - выход
-- `c` - check
-- `b` - build
-- `r` - run
-- `f` - format
-- `d` - doctor
-- `m` - config
-- `o` - open / switch project
-- `g` - создать отсутствующий `entry` из Config
-- `p` - обзор проекта
-- `e` - diagnostics
-- `h` - help
-- `Tab` / `Shift+Tab` - переключение экранов
-- `j` / `k` или стрелки - навигация
-
-### Что умеет Config view
-
-- редактировать `name`, `version`, `edition`, `entry`;
-- сохранять `Skadi.toml` клавишей `s`;
-- показывать `clean/modified` состояние манифеста;
-- хранить настройки сборки для текущего сеанса:
-
-  - `target`
-  - preferred `compiler`
-- создавать отсутствующий `entry` файл клавишей `g`.
-
-### Ограничения текущего TUI
-
-- нет отдельного браузера showcase-программ;
-- нет фоновых async-задач;
-- не является полноценным редактором исходников;
-- для автоматизации и CI каноническим остаётся обычный CLI.
-
-## 7. Рекомендуемый порядок работы
-
-### Только CLI
+## `new` и `init`
 
 ```powershell
-skadi-cli new hello_skadi
-cd hello_skadi
-skadi-cli check
-skadi-cli format
-skadi-cli build
-skadi-cli run
+skadi-cli new telemetry
+skadi-cli init
 ```
 
-### CLI и TUI
+`new` создаёт отдельную директорию. `init` работает в текущей и не требует
+пустой папки, но не должен затирать существующий проект.
+
+## `check`
 
 ```powershell
-skadi-cli new hello_skadi
-cd hello_skadi
+skadi-cli check
+```
+
+Команда не запускает C compiler. Ошибки сохраняют стадии и коды:
+`Lex`, `Parse`, `Semantic`, `SC-MOD-*`.
+
+## `format`
+
+```powershell
+skadi-cli format
+skadi-cli format src/main.skd
+skadi-cli format --check
+```
+
+Без путей форматируется entry текущего проекта. `--check` ничего не меняет и
+возвращает ненулевой exit code, если файл неканоничен.
+
+## `build` и `run`
+
+```powershell
+skadi-cli build
+skadi-cli build --target host --cc clang
+skadi-cli run --target host --cc gcc
+```
+
+Ошибки классифицируются по источнику:
+
+- Skadi frontend;
+- project/configuration;
+- generated C / toolchain;
+- runtime execution;
+- I/O.
+
+Артефакты находятся в `build/`. `run` передаёт stdout/stderr программы и
+сохраняет её exit status.
+
+## Targets и doctor
+
+```powershell
+skadi-cli target list
+skadi-cli doctor
+```
+
+`doctor` отдельно показывает readiness host compiler и cross-target candidates,
+а также actionable hints. Наличие target profile не означает готовый runtime:
+ESP32/FreeRTOS пока [запланирован](embedded.md), но не поддерживается end-to-end.
+
+## TUI
+
+```powershell
 skadi-cli tui
 ```
 
-Дальше внутри TUI:
+Экраны:
 
-- правим `Skadi.toml` через `m`;
-- при необходимости создаём `entry` через `g`;
-- гоняем `check`, `build`, `run`, `format`, `doctor`.
+- project dashboard;
+- diagnostics list/detail;
+- build/run output;
+- doctor/environment;
+- project bootstrap;
+- `Skadi.toml` config editor;
+- help.
 
-## 8. Для нового пользователя
+Клавиши:
 
-Если нужен не справочник по командам, а путь "как вообще начать писать на Skadi",
-смотри [Начало работы](getting-started.md).
+| Клавиша | Действие |
+|---|---|
+| `c`, `b`, `r`, `f`, `d` | check, build, run, format, doctor |
+| `p`, `e`, `m`, `h` | project, errors, manifest config, help |
+| `o` | Открыть другой проект |
+| `g` | Создать отсутствующий entry из Config |
+| `Tab`, `Shift+Tab` | Сменить экран/focus |
+| `j/k`, стрелки | Навигация |
+| `Enter` | Активировать |
+| `q` | Выход |
+
+TUI восстанавливает terminal state при выходе и показывает отдельный fallback
+для слишком узкого terminal. Actions пока синхронны; showcase browser и source
+editor отсутствуют.
+
+## Запуск из исходников
+
+Этот путь нужен только разработчикам toolchain:
+
+```powershell
+cargo run -p skadi-cli -- check
+```
+
+Установленному пользователю следует писать `skadi-cli check`.
+
+## Что запланировано
+
+- background task execution внутри TUI;
+- более подробные per-command help pages;
+- package/dependency commands после появления module/package model;
+- embedded build/flash workflow после утверждения platform runtime.
+
+Имена текущих команд являются стабильной automation surface; планируемые
+возможности не следует закладывать в scripts заранее.

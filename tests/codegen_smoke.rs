@@ -107,8 +107,8 @@ danger fn parse_value(Int x) Int {
 fn codegen_emits_error_enum_and_return_error() {
     let src = r#"
 label ErrorCode {
-    Ok
-    ZeroDivision
+    Ok = 0
+    ZeroDivision = 1
 }
 
 danger fn parse_value(Int x) Int {
@@ -128,8 +128,8 @@ danger fn parse_value(Int x) Int {
 fn codegen_emits_return_error_for_qualified_variant() {
     let src = r#"
 label ErrorCode {
-    Ok
-    ZeroDivision
+    Ok = 0
+    ZeroDivision = 1
 }
 
 danger fn parse_value(Int x) Int {
@@ -528,8 +528,8 @@ new char c = t[999]
 fn codegen_emits_when_and_danger_invariants() {
     let src = r#"
 label ErrorCode {
-    Ok
-    Bad
+    Ok = 0
+    Bad = 1
 }
 
 danger fn parse(Int x) Int {

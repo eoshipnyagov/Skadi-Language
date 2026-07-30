@@ -1,11 +1,12 @@
 # Skadi MVP: Контракт Memory Model
 
-Дата: 2026-06-04  
-Статус: рабочий MVP-контракт для реализации.
+Дата: 2026-07-29
+Статус: реализованный experimental runtime slice.
 
 ## 1. Назначение
 
-Этот документ фиксирует не полную желаемую memory model Skadi, а именно тот минимальный контракт, который можно брать в parser/semantic/runtime design ближайшей реализации.
+Этот документ фиксирует не полную желаемую memory model Skadi, а bounded
+контракт, уже реализованный в parser/semantic/C runtime текущей линии `v1.2`.
 
 Связанные документы:
 
@@ -22,12 +23,16 @@
 2. `return` как передача владения наружу;
 3. `Memory` как явный регион памяти;
 4. `place in Memory { ... }` как явное размещение;
-5. `memory(size)` как fixed-capacity регион;
+5. `memory(size)` как fixed-capacity регион по умолчанию;
 6. `on error` при невозможности создать `Memory`;
 7. `on error` при нехватке места внутри `place in`;
 8. `Memory.clear()` как уничтожение всего содержимого региона;
 9. упрощённое safety rule для возврата значений из `place in`;
-10. ограниченно разрешённое nested `place in` для отдельного scratch-region внутри result-region.
+10. ограниченно разрешённое nested `place in` для отдельного scratch-region внутри result-region;
+11. сегментированный рост через `allow grow`;
+12. явная политика `allow drop` без скрытого удаления живых значений;
+13. дочерний регион `memory.child(size)` внутри активного parent-region;
+14. статический корневой регион `memory.static(<literal>)`.
 
 ## 3. Scope lifetime по умолчанию
 
@@ -92,6 +97,27 @@ Memory scratch_memory = memory(capacity)
 ```
 
 Полный контракт типа: [Размеры памяти](../user/byte-size.md).
+
+Расширенные формы:
+
+```skadi
+Memory workspace_memory = memory(64kb, allow grow, allow drop)
+
+place in workspace_memory {
+    Memory frame_memory = memory.child(8kb, allow drop)
+}
+
+Memory packet_memory = memory.static(4kb)
+```
+
+- `allow grow` добавляет новые chunks и не перемещает ранее выданные данные;
+- ошибка роста остаётся обычным overflow активного `place in` и попадает в его
+  `on error`;
+- `allow drop` фиксирует разрешение владельца, но текущий runtime не удаляет
+  живые значения автоматически;
+- `memory.child` получает fixed-capacity буфер из активного parent-region;
+- `memory.static` требует положительный `ByteSize` literal, не поддерживает
+  рост и разрешён только на корневом уровне программы.
 
 ## 6. Ошибка создания `Memory`
 
@@ -279,17 +305,21 @@ MVP memory model обещает:
 - явную обработку out-of-memory;
 - явный `clear`;
 - базовую защиту от возврата значения из умершего региона.
-- `Memory` как special capability handle, а не как обычный storable value.
+- `Memory` как special capability handle, а не как обычный storable value;
+- segmented growth без `realloc` ранее выданных region allocations;
+- child-region с lifetime, ограниченным parent-region;
+- статический буфер без heap allocation для самого region storage;
+- автоматическое освобождение dynamic/growth storage текущим scope owner.
 
 ## 13. Что MVP пока не обещает
 
-MVP memory model не обещает:
+MVP memory model пока не обещает:
 
 - полноценный borrow checker;
 - общий lifetime calculus;
-- child memory;
-- `allow grow` как полноценно реализованную runtime-фичу;
-- `allow drop` как полноценно реализованную runtime-фичу;
+- автоматическое вытеснение или удаление данных по `allow drop`;
+- пользовательские drop hooks;
+- перенос владения самим `Memory` через `move`;
 - сложный escape analysis;
 - прозрачную региональную семантику для всех возможных value/reference edge cases.
 
@@ -306,14 +336,17 @@ Nested `place in` при этом не обещает:
 - special semantics для same-memory nesting;
 - дополнительную magic-логику поверх обычного active-region switch.
 
-## 14. Рекомендация для реализации
+## 14. Реализованный порядок
 
-Если брать этот контракт в работу, ближайший practical order такой:
+Bounded MVP был реализован в следующем порядке:
 
 1. Сначала зафиксировать syntax surface `Memory`, `memory(size)`, `place in`, `clear`.
 2. Затем определить, какие типы в MVP вообще считаются region-relevant.
 3. Затем реализовать semantic rule на возврат из `place in`.
-4. Только после этого обсуждать `allow grow`, `allow drop`, `memory.child`, `memory.static`.
+4. Добавить `allow grow` через новые chunks без invalidation.
+5. Добавить bounded `memory.child` и root-only `memory.static`.
+6. Принять `allow drop` как явный policy marker без магического runtime
+   reclamation.
 
 ## 15. Короткая формула MVP-контракта
 
@@ -323,6 +356,10 @@ Return transfers ownership.
 Memory owns groups of dynamic data.
 place in chooses the region.
 clear destroys the region contents.
+allow grow adds stable-address chunks.
+allow drop grants a policy but never deletes live values implicitly.
+child memory borrows fixed storage from its active parent.
+static memory uses a compile-time-sized root buffer.
 Returning from a dead region is forbidden.
 Nested place in is only for a shorter-lived scratch region inside a longer-lived result region.
 ```

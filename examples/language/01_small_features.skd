@@ -1,8 +1,8 @@
 // Compact, compile-checked examples of smaller stable language features.
 
 label ErrorCode {
-    Ok
-    InvalidValue
+    Ok = 0
+    InvalidValue = 1
 }
 
 danger fn positive_half(Int value) returns Int {

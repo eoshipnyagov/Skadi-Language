@@ -13,7 +13,13 @@ use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
 
-const IMPORT_CONTRACT_HINT: &str = "v1 import contract: only `import \"./relative_path.skd\"` is supported (no module-name import, no alias).";
+const IMPORT_CONTRACT_HINT: &str = "module contract: use `import \"./relative_path.skd\"` with an optional local `as alias`; module-name imports are not supported.";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ImportSpec {
+    path: String,
+    alias: Option<String>,
+}
 
 pub struct FrontendOutput {
     pub c_code: String,
@@ -133,9 +139,19 @@ fn load_source_recursive(
     let base_dir = abs.parent().unwrap_or(Path::new("."));
     let mut merged = String::new();
 
+    let mut aliases: Vec<(String, String)> = Vec::new();
     for line in source.lines() {
-        if let Some(import_path) = parse_import_line(line)? {
-            let import_abs = base_dir.join(import_path);
+        if let Some(import) = parse_import_line(line)? {
+            let import_abs = base_dir.join(&import.path);
+            if let Some(alias) = import.alias {
+                let canonical = import_abs
+                    .file_stem()
+                    .and_then(|value| value.to_str())
+                    .ok_or_else(|| {
+                        format!("invalid module filename '{}'.", import_abs.display())
+                    })?;
+                aliases.push((alias, canonical.to_string()));
+            }
             let imported = load_source_recursive(&import_abs, seen, stack, decl_index)?;
             if !imported.is_empty() {
                 merged.push_str(&imported);
@@ -145,7 +161,15 @@ fn load_source_recursive(
             }
             continue;
         }
-        merged.push_str(line);
+        let mut rewritten_line = line.to_string();
+        for (alias, canonical) in &aliases {
+            let alias_re = Regex::new(&format!(r"\b{}\.", regex::escape(alias)))
+                .map_err(|e| format!("internal import-alias regex error: {e}"))?;
+            rewritten_line = alias_re
+                .replace_all(&rewritten_line, format!("{canonical}."))
+                .to_string();
+        }
+        merged.push_str(&rewritten_line);
         merged.push('\n');
     }
 
@@ -165,8 +189,8 @@ fn collect_direct_imports(entry_abs: &Path) -> Result<HashSet<PathBuf>, String> 
     let base_dir = entry_abs.parent().unwrap_or(Path::new("."));
     let mut out: HashSet<PathBuf> = HashSet::new();
     for line in source.lines() {
-        if let Some(import_path) = parse_import_line(line)? {
-            let import_abs = fs::canonicalize(base_dir.join(import_path)).map_err(|e| {
+        if let Some(import) = parse_import_line(line)? {
+            let import_abs = fs::canonicalize(base_dir.join(import.path)).map_err(|e| {
                 format!(
                     "import path resolution failed for '{}': {e}. {}",
                     base_dir.display(),
@@ -189,7 +213,7 @@ fn index_public_top_level_declarations(
         .and_then(|s| s.to_str())
         .ok_or_else(|| format!("invalid module filename '{}'.", path.display()))?
         .to_string();
-    let decl_re = Regex::new(r"(?m)^\s*(fn|struct|label)\s+([A-Za-z_][A-Za-z0-9_]*)")
+    let decl_re = Regex::new(r"(?m)^\s*(fn|struct|label|tag)\s+([A-Za-z_][A-Za-z0-9_]*)")
         .map_err(|e| format!("internal declaration index regex error: {e}"))?;
     for caps in decl_re.captures_iter(source) {
         let Some(name_m) = caps.get(2) else {
@@ -292,7 +316,7 @@ fn rewrite_local_symbols(source: &str, path: &Path) -> Result<String, String> {
         .file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| format!("invalid module filename '{}'.", path.display()))?;
-    let decl_re = Regex::new(r"(?m)^\s*local\s+(fn|struct|label)\s+([A-Za-z_][A-Za-z0-9_]*)")
+    let decl_re = Regex::new(r"(?m)^\s*local\s+(fn|struct|label|tag)\s+([A-Za-z_][A-Za-z0-9_]*)")
         .map_err(|e| format!("internal local-symbol regex error: {e}"))?;
 
     let mut rewrites: Vec<(String, String)> = Vec::new();
@@ -314,12 +338,12 @@ fn rewrite_local_symbols(source: &str, path: &Path) -> Result<String, String> {
         out = word_re.replace_all(&out, mangled.as_str()).to_string();
     }
 
-    let local_kw_re = Regex::new(r"(?m)^(\s*)local\s+(fn|struct|label)\s+")
+    let local_kw_re = Regex::new(r"(?m)^(\s*)local\s+(fn|struct|label|tag)\s+")
         .map_err(|e| format!("internal local-kw regex error: {e}"))?;
     Ok(local_kw_re.replace_all(&out, "$1$2 ").to_string())
 }
 
-fn parse_import_line(line: &str) -> Result<Option<String>, String> {
+fn parse_import_line(line: &str) -> Result<Option<ImportSpec>, String> {
     let trimmed = line.trim();
     if trimmed.is_empty() || trimmed.starts_with("//") {
         return Ok(None);
@@ -328,13 +352,6 @@ fn parse_import_line(line: &str) -> Result<Option<String>, String> {
         return Ok(None);
     }
     let rest = trimmed["import ".len()..].trim();
-    if rest.starts_with('"') && rest.contains("\" as ") {
-        return Err(format!(
-            "import alias is not supported in v1: '{}'. {}",
-            line.trim(),
-            IMPORT_CONTRACT_HINT
-        ));
-    }
     if !rest.starts_with('"') {
         return Err(format!(
             "module-name import is not supported in v1: '{}'. {}",
@@ -342,14 +359,38 @@ fn parse_import_line(line: &str) -> Result<Option<String>, String> {
             IMPORT_CONTRACT_HINT
         ));
     }
-    if !(rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2) {
+    let Some(close_quote) = rest[1..].find('"').map(|index| index + 1) else {
         return Err(format!(
             "unsupported import syntax '{}'; expected: import \"./path/file.skd\". {}",
             line.trim(),
             IMPORT_CONTRACT_HINT
         ));
-    }
-    Ok(Some(rest[1..rest.len() - 1].to_string()))
+    };
+    let path = rest[1..close_quote].to_string();
+    let suffix = rest[close_quote + 1..].trim();
+    let alias = if suffix.is_empty() {
+        None
+    } else if let Some(alias) = suffix.strip_prefix("as ") {
+        let alias = alias.trim();
+        let valid = !alias.is_empty()
+            && alias.chars().enumerate().all(|(index, ch)| {
+                ch == '_' || ch.is_ascii_alphanumeric() && (index > 0 || !ch.is_ascii_digit())
+            });
+        if !valid {
+            return Err(format!(
+                "invalid import alias '{}'. {}",
+                alias, IMPORT_CONTRACT_HINT
+            ));
+        }
+        Some(alias.to_string())
+    } else {
+        return Err(format!(
+            "unsupported import syntax '{}'. {}",
+            line.trim(),
+            IMPORT_CONTRACT_HINT
+        ));
+    };
+    Ok(Some(ImportSpec { path, alias }))
 }
 
 pub fn compile_c_to_exe_detailed(
@@ -468,7 +509,7 @@ mod tests {
     #[test]
     fn parse_import_line_accepts_quoted_path() {
         let got = parse_import_line(r#"import "./lib.skd""#).expect("parse ok");
-        assert_eq!(got.as_deref(), Some("./lib.skd"));
+        assert_eq!(got.expect("import").path, "./lib.skd");
     }
 
     #[test]
@@ -478,9 +519,12 @@ mod tests {
     }
 
     #[test]
-    fn parse_import_line_rejects_alias_form() {
-        let err = parse_import_line(r#"import "./lib.skd" as lib"#).expect_err("must reject");
-        assert!(err.contains("import alias is not supported"));
+    fn parse_import_line_accepts_alias_form() {
+        let import = parse_import_line(r#"import "./lib.skd" as lib"#)
+            .expect("parse alias")
+            .expect("import");
+        assert_eq!(import.path, "./lib.skd");
+        assert_eq!(import.alias.as_deref(), Some("lib"));
     }
 
     #[test]
@@ -501,8 +545,8 @@ local struct Hidden {
 }
 
 local label State {
-    A
-    B
+    A = 0
+    B = 1
 }
 "#;
         let path = Path::new("mod_a.skd");
@@ -526,6 +570,25 @@ local label State {
         let merged = load_source_with_imports(&entry).expect("merge");
         assert!(merged.contains("fn helper() Int"));
         assert!(merged.contains("new Int x = helper()"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn import_alias_is_local_and_rewrites_to_canonical_module_name() {
+        let root = temp_case_dir("imports_alias");
+        let entry = root.join("main.skd");
+        let util = root.join("utility.skd");
+        fs::write(&util, "fn answer() Int {\n    return 42\n}\n").expect("write util");
+        fs::write(
+            &entry,
+            "import \"./utility.skd\" as short\nnew Int value = short.answer()\n",
+        )
+        .expect("write entry");
+
+        let merged = load_source_with_imports(&entry).expect("merge alias");
+        assert!(merged.contains("new Int value = utility.answer()"));
+        assert!(!merged.contains("short.answer()"));
 
         let _ = fs::remove_dir_all(root);
     }
@@ -873,14 +936,14 @@ local label State {
     }
 
     #[test]
-    fn negative_alias_import_fails_with_contract_diagnostic() {
+    fn invalid_alias_import_fails_with_contract_diagnostic() {
         let root = temp_case_dir("imports_neg_alias");
         let entry = root.join("main.skd");
-        fs::write(&entry, "import \"./lib.skd\" as lib\nnew Int x = 1\n").expect("write entry");
+        fs::write(&entry, "import \"./lib.skd\" as 123\nnew Int x = 1\n").expect("write entry");
 
         let err = compile_to_c(&entry).expect_err("compile must fail");
         assert!(err.contains("[SC-MOD-001]"));
-        assert!(err.contains("import alias is not supported"));
+        assert!(err.contains("invalid import alias"));
 
         let _ = fs::remove_dir_all(root);
     }
@@ -1087,7 +1150,7 @@ local label State {
         let entry = root.join("main.skd");
         fs::write(
             &shared,
-            "label ErrorCode {\n    Ok\n    ZeroDivision\n}\ndanger fn parse(Int x) Int {\n    return error shared.ZeroDivision\n}\n",
+            "label ErrorCode {\n    Ok = 0\n    ZeroDivision = 1\n}\ndanger fn parse(Int x) Int {\n    return error shared.ZeroDivision\n}\n",
         )
         .expect("write shared");
         fs::write(

@@ -27,6 +27,7 @@ fn parse_statement_at(
             statements::parse_when_statement(tokens, current_token_index, parser_scope)
         }
         TokenKind::KeywordLabel => statements::parse_label_declaration(tokens, current_token_index),
+        TokenKind::KeywordTag => statements::parse_tag_declaration(tokens, current_token_index),
         TokenKind::KeywordStruct => {
             statements::parse_struct_declaration(tokens, current_token_index)
         }
@@ -41,11 +42,18 @@ fn parse_statement_at(
         }
         TokenKind::KeywordReturn => statements::parse_return_statement(tokens, current_token_index),
         TokenKind::KeywordNew => statements::parse_new_declaration(tokens, current_token_index),
+        TokenKind::KeywordConstant => {
+            statements::parse_constant_declaration(tokens, current_token_index)
+        }
         TokenKind::Identifier if start_token.lexeme == "Memory" => {
             statements::parse_memory_declaration(tokens, current_token_index)
         }
         TokenKind::Identifier
-            if start_token.lexeme == "Task" || start_token.lexeme == "Channel" =>
+            if start_token.lexeme == "Task"
+                || start_token.lexeme == "Channel"
+                || start_token.lexeme == "Interrupt"
+                || start_token.lexeme == "Canvas"
+                || start_token.lexeme == "Window" =>
         {
             statements::parse_task_or_channel_declaration(tokens, current_token_index)
         }

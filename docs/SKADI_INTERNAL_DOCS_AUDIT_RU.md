@@ -1,0 +1,242 @@
+# Аудит внутренней документации Skadi
+
+Дата сверки: 2026-07-30  
+База сверки: ветка `develop`, release candidate `v1.2.0-rc.1`
+
+## 1. Зачем нужен этот документ
+
+Внутренняя документация Skadi содержит четыре разных вида материалов:
+
+1. фактические справочники по текущему компилятору;
+2. принятые контракты уже реализованных возможностей;
+3. исторические планы завершённых релизов;
+4. design drafts и future contracts.
+
+Их нельзя читать как документы одинаковой силы. Этот аудит фиксирует, чему
+доверять при разработке, где реализация уже ушла вперёд и какие решения ещё не
+приняты.
+
+## 2. Порядок источников истины
+
+При расхождении используйте следующий приоритет:
+
+1. тесты и фактическое поведение `lexer -> parser -> semantic -> codegen -> native`;
+2. [статус синтаксиса](../user/syntax-status.md) и
+   [быстрая справка](../user/language-quick-reference.md);
+3. текущие MVP-контракты;
+4. принятые контракты `v1`;
+5. release plans и historical close-out;
+6. drafts и RFC, которые ещё не получили статус `Accepted`.
+
+Draft описывает направление мысли, но не является обещанием синтаксиса.
+Зарезервированный token также не является реализованной конструкцией.
+
+## 3. Состояние внутренних документов
+
+| Документ или группа | Роль сейчас | Состояние | Что учитывать |
+|---|---|---|---|
+| Project Tech Reference | Фактическая архитектура | Актуализирован | Должен меняться вместе с compiler/CLI/runtime |
+| Project Overview | Короткий обзор репозитория | Актуализирован | Не заменяет технический справочник |
+| CLI Usage | Служебная карта entrypoints | Актуализирован | Пользовательский вход — команда `skadi-cli`, не путь crate |
+| CLI RFC v0.1 | История проектирования CLI | Historical / implemented | Не использовать как текущую CLI specification |
+| Skadi -> C Scope | Контракт backend | Действующий | Проверять после каждого нового runtime slice |
+| Test Coverage Matrix | Карта доказательств | Действующая, ручная | Даты и перечень showcase легко устаревают |
+| Token/Construct Matrix | Трассировка форм | Действующая, ручная | Не считать lexer-only token частью языка |
+| Diagnostics Style/Codes | Контракт сообщений | Действующий | `SC-CG` и `SC-CGEN` являются разными стадиями |
+| Text/List/on error/runtime memory v1 | Замороженная база | Historical accepted | Не расширять задним числом под `v1.2` |
+| Scope/Visibility v1.1 | Реализованный контракт | Accepted | Module aliases и re-export в него не входят |
+| Plans v1/v1.1 | История релиза | Historical | Не использовать как текущий backlog |
+| Plan v1.2 | Текущий release ledger | Living | Реализованные milestones остаются историей выполнения |
+| Memory MVP | Experimental runtime contract | Реализованный bounded runtime slice | Есть fixed/grow/child/static regions; полная lifetime theory из Draft не реализована |
+| Task/Channel MVP | Experimental runtime contract | Реализованный bounded MVP | Есть close/drain/try_send; нет async, select, timeout и task groups |
+| Time/Duration, ByteSize, Angle, Vector | Experimental user/runtime contracts | Реализованы end-to-end | API ещё не объявлен stable |
+| Systems Additions MVP | Смешанный implementation/future ledger | Частично реализован | Time/units готовы; resources, context и devices впереди |
+| Visual Core Draft/MVP | Draft + accepted Canvas v0 | Реализован experimental Canvas/Win32 slice | Events, text/images, transforms и дополнительные backend впереди |
+| Math/Vector RFC | Исторический proposal | Частично принят | Math реализован в `v1.1`, vectors в `v1.2`, Matrix2D отложен |
+
+## 4. Расхождения исходных идей и текущей реализации
+
+### Memory
+
+Исходная идея шире текущего runtime: scope ownership, явная передача владения,
+regions и policy-driven bounded allocation.
+
+Сейчас реализованы:
+
+- `Memory name = memory(ByteSize)`;
+- segmented growth через `allow grow` без invalidation старых allocations;
+- `allow drop` как честный policy marker без automatic reclamation;
+- `memory.child(ByteSize)` внутри активного parent-region;
+- root-only `memory.static(<ByteSize literal>)`;
+- `place in name { ... } on error { ... }`;
+- `name.clear()`;
+- проверки escape/use-after-clear для динамического payload;
+- thread-local active region;
+- `move` state machine для `Canvas`, `Window`, `Interrupt` и owning `Channel`;
+- explicit move в параметре, call site, binding и factory return.
+
+Пока нет полного lifetime calculus, first-class references, embedded allocator
+backend и автоматической стратегии reclamation для `allow drop`. `Memory`
+остаётся неперемещаемой region capability, а `Task` использует consume-through-
+`wait`.
+
+### Task и Channel
+
+Исходный draft допускает разные backends и дальнейшую structured concurrency.
+Текущий MVP использует native Win32/pthread threads, линейные owning handles,
+обязательный `wait`, cooperative `stop` и bounded FIFO channels с
+`send/receive/try_send/close` и drain-after-close.
+
+Пока нет scheduler abstraction, async/await, task groups, timeouts, `select`,
+отмены блокирующего `send/receive` и RTOS backend.
+
+### Systems types
+
+`Time/Duration`, `ByteSize`, `Angle` и `Vec2/Vec3/Vec4` уже реализованы
+end-to-end, хотя ранние drafts описывают их как будущие. Они остаются
+experimental не из-за отсутствия runtime, а потому что API ещё не заморожен.
+
+Разница с широким замыслом:
+
+- `Time` только monotonic; wall clock и calendar отсутствуют;
+- `Duration` имеет только целые `ms/s/min`;
+- `ByteSize` не является общей dimensional algebra;
+- `Angle` хранится в radians и временно принимает legacy numeric radians в
+  `sin/cos`;
+- vectors имеют фиксированные `f64` components без generics, SIMD contract,
+  swizzling и matrices.
+
+### Modules
+
+Реализация использует preprocessing относительных path-imports и правило
+direct-import-only. Это практический модульный слой, но ещё не package system.
+
+Не реализованы:
+
+- `import module_name`;
+- re-export;
+- package/dependency resolution;
+- отдельная module declaration.
+
+`import "./x.skd" as alias` и квалифицированные `alias.symbol` реализованы.
+
+### Error flow
+
+Текущий контракт намеренно уже универсальных exception/`Result` систем:
+
+- `danger fn`;
+- единый `label ErrorCode`, где первый вариант `Ok`;
+- `return error Code`;
+- обязательный `on error` на danger-вызове.
+
+Индексация остаётся fail-soft и не поддерживает `on error`. Ошибки I/O сейчас
+также не создают новый typed error abstraction.
+
+Ранний blockers-документ упоминал stream API как возможное продолжение
+`read/write`. Это не принятое обязательство: текущая линия сознательно
+стабилизирует небольшой синхронный I/O слой без stream redesign.
+
+### Label и tag
+
+Разрыв закрыт двумя явными nominal-сущностями:
+
+- `label Name { A = 0 B = 1 }` требует числовой дискриминант у каждого варианта;
+- `tag Name { A B }` задаёт символические варианты без пользовательских чисел;
+- `ErrorCode` остаётся специальным label-контрактом и начинается с `Ok = 0`.
+
+Parser, semantic, formatter, module visibility и C backend поддерживают обе
+формы end-to-end.
+
+### Interrupt и embedded
+
+Host MVP поддерживает `Interrupt tick = interrupts.periodic(Duration)` и
+`on interrupt tick { ... }` со строгим interrupt-safe подмножеством. Handler
+может выполнять конечные scalar-вычисления и `Channel.try_send`, но не blocking,
+allocation, I/O или task/resource management.
+
+Desktop target profiles и generated C не означают поддержку ESP32. До
+embedded-ready состояния не хватает:
+
+- target/toolchain profile для конкретной платформы;
+- runtime adapter для RTOS/bare metal;
+- allocation, time, task и I/O contracts без POSIX/Win32;
+- linker/flash workflow;
+- CI или hardware-in-the-loop gate.
+
+### Visual Core / Canvas
+
+Canvas-first immediate-mode модель перешла в experimental Canvas v0:
+
+- value types `Color`/`Rect`;
+- linear resources `Canvas`/`Window`;
+- software RGBA framebuffer и deterministic rasterizer;
+- line/rect/circle primitives, alpha blending и headless checksum;
+- Win32 presenter через `window.present(direct canvas)`.
+
+Пока отсутствуют events, text/images, transforms, `Matrix2D`, non-Windows window
+backend и embedded display adapter.
+
+## 5. Зарезервированные и переходные формы
+
+| Форма | Реальный статус | Решение |
+|---|---|---|
+| `fixed` / `const` | Lexer-only reservation | Не показывать как рабочее объявление; рабочая форма — `constant` |
+| `direct` / `view` | Реализованный borrow contract | Использовать для явной mutable/read-only передачи без владения |
+| `move` | Реализованный bounded ownership transfer | Использовать явно в signature, call site, binding и resource return |
+| `allow grow` / `allow drop` | Реализованы только как contextual Memory policies | Не превращать `allow` в общий modifier |
+| `on interrupt` | Host MVP для typed periodic Interrupt | Hardware IRQ backend остаётся future |
+| `for (init; cond; update)` | Parse/format compatibility + hard rejection | Не использовать в новом коде |
+| `fn name(...) Type` | Legacy compatibility | Formatter переводит в `returns Type` |
+| `for ... in ...` | Работает | Каноническая витринная форма всё ещё `iterate ... as ...` |
+| `bool` / `char` | Работают как aliases | В новом коде писать `Bool` / `Char` |
+
+## 6. Что ещё предстоит сделать
+
+### После checkpoint 2026-07-30
+
+- пользовательская и внутренняя RU/EN документация, syntax status, coverage
+  matrices и HTML-навигация синхронизированы;
+- Memory/ownership/Canvas surfaces остаются experimental и не требуют знания
+  расширенных policies в quick-start workflow;
+- перед финальным следующим release нужен повторный прогон на чистых
+  Windows/Linux/macOS окружениях;
+- переходные lexer-only tokens требуют отдельного решения: RFC, реализация или
+  удаление.
+
+### Следующая функциональная очередь
+
+1. Пробуждение blocking Channel operations при `stop`/`close` и единая
+   cancellation semantics на Win32/pthread.
+2. Timed Channel/Task operations на основе `Duration`; `select` обсуждать
+   только после стабилизации обычных blocking boundaries.
+3. Подключать Resource lifecycle для файлов, портов и device handles только
+   вместе с появлением соответствующих долгоживущих API.
+4. Hardware interrupt binding поверх готового host periodic/semantic MVP.
+5. Embedded target contract и первый ESP32/FreeRTOS spike.
+6. `Ring`/bounded `Pool` для явной `drop oldest` семантики.
+7. Canvas events, text/images и следующие presentation backends.
+8. Module/package ergonomics.
+
+### Осознанно не надо добавлять без отдельного design decision
+
+- generics ради самих generics;
+- decorators/annotations как универсальную метапрограмму;
+- operator overloading без жёсткой системной необходимости;
+- implicit async runtime;
+- скрытый shared mutable state;
+- большую dimensional-units систему до практического embedded/use-case.
+
+## 7. Правило дальнейшей синхронизации
+
+Любая новая языковая форма должна одновременно обновлять:
+
+- parser/semantic/codegen/runtime;
+- formatter;
+- VS Code и Pygments syntax highlighting;
+- quick reference и соответствующую подробную страницу;
+- syntax status;
+- positive/negative/e2e tests;
+- token/construct и test coverage matrices.
+
+Если слой отсутствует, форма получает явный статус `Compatibility`,
+`Reserved` или `Future`, а не расплывчатое «поддерживается частично».

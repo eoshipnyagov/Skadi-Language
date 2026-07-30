@@ -19,7 +19,8 @@ skadi-cli build
 
 ## Новые возможности
 
-- fixed-capacity `Memory`, `place in` и явный overflow boundary;
+- fixed/growing/child/root-static `Memory`, `place in` и явный overflow boundary;
+- call-scoped `view`/`direct` и explicit `move` для текущих linear resources;
 - native `Task`, `Task(T)`, `run`, `wait`, `stop`, `stopping`;
 - bounded `Channel(T)` с blocking `send/receive`;
 - nominal `Time`, `Duration`, `ByteSize` и `Angle`;

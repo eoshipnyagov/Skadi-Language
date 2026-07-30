@@ -29,7 +29,9 @@ fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
     for compiler in candidates {
         let mut command = Command::new(compiler);
         command.arg(c_path).arg("-o").arg(exe_path).arg("-lm");
-        if !cfg!(windows) {
+        if cfg!(windows) {
+            command.arg("-lgdi32");
+        } else {
             command.arg("-pthread");
         }
         let output = command.output();

@@ -6,8 +6,8 @@ use v01::parser::parse_program;
 fn parses_label_and_struct_top_level() {
     let src = r#"
 label Status {
-    Ok
-    Error
+    Ok = 0
+    Error = 1
 }
 
 struct Sensor {
@@ -21,8 +21,10 @@ struct Sensor {
     match &program.statements[0] {
         Statement::LabelDecl { name, variants, .. } => {
             assert_eq!(name, "Status");
-            assert!(variants.contains(&"Ok".to_string()));
-            assert!(variants.contains(&"Error".to_string()));
+            assert_eq!(variants[0].name, "Ok");
+            assert_eq!(variants[0].discriminant, 0);
+            assert_eq!(variants[1].name, "Error");
+            assert_eq!(variants[1].discriminant, 1);
         }
         _ => panic!("expected LabelDecl"),
     }
@@ -624,8 +626,8 @@ local fn helper(Int x) Int {
 }
 
 local label Status {
-    Ok
-    Error
+    Ok = 0
+    Error = 1
 }
 
 local struct S {
@@ -647,6 +649,25 @@ local struct S {
         program.statements[2],
         Statement::StructDecl { is_local: true, .. }
     ));
+}
+
+#[test]
+fn parses_symbolic_tag_declaration() {
+    let src = r#"
+tag Direction {
+    North
+    South
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    match &program.statements[0] {
+        Statement::TagDecl { name, variants, .. } => {
+            assert_eq!(name, "Direction");
+            assert_eq!(variants, &vec!["North".to_string(), "South".to_string()]);
+        }
+        _ => panic!("expected TagDecl"),
+    }
 }
 
 #[test]

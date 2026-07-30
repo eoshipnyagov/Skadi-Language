@@ -1,6 +1,6 @@
 # Skadi Showcase Programs
 
-This page collects 16 small showcase programs for the current Skadi toolchain.
+This page collects 17 small showcase programs for the current Skadi toolchain.
 
 They serve three roles:
 
@@ -48,6 +48,16 @@ They serve three roles:
 16. `bench_16_vector_navigation.skd`
     `Vec2/Vec3/Vec4` navigation with component access, vector/scalar arithmetic,
     normalization, distance, length, and `Vec3` cross product.
+17. `bench_17_canvas_palette.skd`
+    Headless Canvas v0 scene with color helpers, shape primitives, alpha
+    blending, clipping, and a deterministic framebuffer checksum.
+
+Focused native examples also cover:
+
+- `examples/memory/positive/06_extended_regions.skd` for grow/drop policies,
+  child regions, and static storage;
+- `examples/ownership/01_move_canvas_factory.skd` for resource factories and
+  explicit Canvas ownership transfer.
 
 ## Stable showcase fixtures
 

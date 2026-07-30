@@ -1,0 +1,12 @@
+Canvas frame = canvas(16, 16)
+new Color background = color_hex("#1d1f21", 255)
+new Rect panel = rect(1.0, 1.0, 14.0, 14.0)
+new Vec2 center = {x = 8.0, y = 8.0}
+
+frame.clear(background)
+frame.fill_rect(panel, Color.terminal_blue)
+frame.rect(rect(-2.0, -2.0, 8.0, 8.0), Color.terminal_green)
+frame.circle(center, 5.0, Color.terminal_bright_yellow)
+frame.fill_circle(center, 2.0, color(213, 78, 83, 192))
+
+output(frame.checksum())

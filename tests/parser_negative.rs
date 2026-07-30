@@ -1,5 +1,6 @@
 use v01::lexer::lex;
 use v01::parser::parse_program;
+use v01::semantic_analysis::semantic_analyze;
 
 fn parse_err(src: &str) -> String {
     let tokens = lex(src).expect("lex should succeed");
@@ -60,15 +61,18 @@ fn parser_rejects_iterate_without_block() {
 }
 
 #[test]
-fn parser_rejects_dotted_builtin_on_error_form() {
+fn dotted_builtin_on_error_reaches_semantic_danger_check() {
     let src = r#"
 new Text List xs = []
 xs = fs.list(".") on error {
     xs = []
 }
 "#;
-    let err = parse_err(src);
-    assert!(err.contains("SC-PARSE-134"));
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("dotted call should parse");
+    let err = semantic_analyze(&program).expect_err("non-danger builtin must fail");
+    assert!(err.contains("SC-SEM-040"), "{err}");
+    assert!(err.contains("fs.list"), "{err}");
 }
 
 #[test]

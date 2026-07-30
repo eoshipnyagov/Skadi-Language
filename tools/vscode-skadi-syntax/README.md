@@ -34,11 +34,13 @@ This folder contains a local VS Code syntax-highlighting extension for Skadi.
 - strings with `__var__` interpolation token highlighting
 - numbers
 - declarations (`fn`, `struct`, `label`) and better function signature coverage
-- control-flow and modifiers (`danger`, `new`, `on error`, `allow`, `drop`, `direct`, etc.)
+- control-flow and modifiers (`danger`, `new`, `on error`, `allow grow/drop`,
+  `direct`, `view`, `move`, etc.)
 - core type names, constants, and canonical aliases (`Bool`, `Char`, `PI`, `TAU`, `EPSILON`)
 - builtins (`output`, `read`, `contains`, `len`, `slice`, `find`, `concat`, `args`, `fs.*`, math core)
 - member calls/access (`.push()`, `.pop()`, `.field`, and custom methods like `.inc()`)
-- struct literal field names, `ByteSize`, and memory size literals (`16kb`, `8mb`, ...)
+- struct literal field names, `ByteSize`, memory size literals and
+  `memory.child`/`memory.static`
 - `Time`, `Duration`, duration literals (`5ms`, `2s`, `3min`) and time builtins
 - `Angle`, angle literals (`45deg`, `0.25rad`) and trigonometry integration
 - `Vec2`, `Vec3`, `Vec4`, component fields and vector math builtins

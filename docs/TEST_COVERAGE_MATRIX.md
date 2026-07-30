@@ -1,6 +1,6 @@
 # Матрица тестового покрытия (stable `v1.1` + experimental `v1.2`)
 
-Дата: 2026-07-19
+Дата: 2026-07-29
 Ответственный слой: Skadi core
 
 Этот файл фиксирует покрытие тестами для элементов языка в текущем Rust-прототипе.
@@ -76,10 +76,22 @@
     - time budget showcase `bench_13_time_budget.skd`
     - memory budget showcase `bench_14_byte_size_budget.skd`
     - angle navigation showcase `bench_15_angle_navigation.skd`
+    - vector navigation showcase `bench_16_vector_navigation.skd`
+    - headless Canvas palette showcase `bench_17_canvas_palette.skd`
   - showcase fixtures лежат в `benchmarks/showcase-data/` и используются в script/e2e smoke-path
 - experimental memory frontend coverage
-  - `tests/memory_model_frontend.rs` проверяет parser/semantic contract для `Memory`, `place in`, `clear`, escape rules и illegal `Memory` usage
-  - `tests/memory_model_examples.rs` проверяет self-contained positive examples, большой canonical example, native build/run path, style pitfalls и negative example suite из `examples/memory/`
+  - `tests/memory_model_frontend.rs` проверяет parser/formatter/semantic/codegen
+    contract для fixed/growing/child/root-static `Memory`, `place in`, `clear`,
+    policy errors, escape rules и illegal `Memory` usage
+  - `tests/memory_model_examples.rs` проверяет self-contained positive examples,
+    segmented growth, child/static native runtime, большой canonical example,
+    TLS isolation, style pitfalls и negative suite из `examples/memory/`
+- experimental ownership-transfer coverage
+  - `tests/canvas_model.rs` проверяет `move` parameter/call/return, use-after-
+    move, partial branch move, loop rejection, factory native execution и
+    `examples/ownership/01_move_canvas_factory.skd`
+  - `tests/systems_contract_frontend.rs` закрепляет Channel/Window/Interrupt
+    transfer и соответствующие C move/cleanup helpers
 - experimental task/channel frontend coverage
   - `tests/task_model_frontend.rs` проверяет parser/semantic contract для `Task`, `run`, `wait`, `stop`, `stopping`, `Channel(T)`, `channel(N)`, `send` и `receive`
   - тот же suite проверяет ignored-run hard error, all-path lifecycle,
@@ -123,6 +135,12 @@
     builtins, negative dimension/type rules, formatter, codegen и List/Task/Channel boundaries
   - `tests/codegen_e2e.rs` запускает vector math и zero normalization через native C
   - `bench_16_vector_navigation.skd` входит в native showcase gate
+- experimental Canvas coverage
+  - `tests/canvas_model.rs` проверяет constructors, палитру, drawing methods,
+    resource/borrow negative rules и разделение headless/Window runtime
+  - native headless scene закреплена deterministic framebuffer checksum
+  - Win32 presenter shape и `gdi32` link flags проверяются без открытия окна в CI
+  - `bench_17_canvas_palette.skd` входит в native showcase gate
 
 ## 2. Что покрыто частично / что ещё требует углубления
 
@@ -130,19 +148,19 @@
   - зафиксирована для `v1` как fail-soft (`List` index -> `0`, `Text` index -> `'\0'`)
   - codegen contract tests проверяют форму вспомогательных runtime helpers
 - transition surfaces
-  - `on interrupt` сохраняет parser/formatter coverage, но имеет обязательный negative semantic gate `SC-SEM-040`
+  - typed periodic `on interrupt` проходит semantic/codegen/runtime; hardware IRQ binding остаётся TODO
   - compound assignments проверяются от parser desugaring до C lowering
   - legacy typed returns принимаются с warning и formatter переводит их в `returns`
   - legacy C-style `for` сохраняет parser/formatter coverage, но имеет обязательный negative semantic gate `SC-SEM-040`
   - ASCII `Char` literals/escapes, invalid forms, typed List и native execution покрыты
   - untyped scalar declarations получают корректный C type; composite declarations без типа отклоняются с `SC-SEM-020`
-  - platform runtime binding для interrupts/events остаётся TODO
+  - platform hardware binding для interrupts/events остаётся TODO
 - task/channel backend/runtime
   - void и `Task(T)` run/wait, `stop`, `stopping` и bounded Channel реализованы через Win32/pthread backend
-  - `close`, timeout, cancellation, `select`, task groups и embedded APIs остаются TODO
+  - timeout, cancellation, `select`, task groups и embedded APIs остаются TODO
 - module ergonomics
   - относительный path-import и правила видимости покрыты полноценно
-  - module-name imports и aliases остаются TODO
+  - path import aliases реализованы; module-name imports и re-export остаются TODO
 
 ## 3. Политика для новых фич
 

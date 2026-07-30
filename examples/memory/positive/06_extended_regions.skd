@@ -1,0 +1,32 @@
+Memory workspace_memory = memory(128b, allow grow, allow drop) on error {
+    output("cannot create workspace memory")
+}
+
+place in workspace_memory {
+    new Text report = concat("Growing regions keep old values valid. ", "Drop is never implicit.")
+    output(report)
+
+    Memory frame_memory = memory.child(64b, allow drop) on error {
+        output("cannot reserve child memory")
+    }
+
+    place in frame_memory {
+        new Text frame_label = "temporary frame"
+        output(frame_label)
+    } on error {
+        output("child memory is full")
+    }
+} on error {
+    output("workspace memory is full")
+}
+
+Memory packet_memory = memory.static(256b) on error {
+    output("cannot initialize static memory")
+}
+
+place in packet_memory {
+    new Text packet = "bounded packet"
+    output(packet)
+} on error {
+    output("static memory is full")
+}

@@ -111,13 +111,13 @@ static volatile LONG sk_tls_ready = 0;
 static DWORD WINAPI sk_tls_worker(LPVOID unused) {
     (void)unused;
     SkMemoryRegion region;
-    if (!sk_mem_region_init(&region, 128)) return 2;
+    if (!sk_mem_region_init(&region, 128, false, false)) return 2;
     sk_mem_set_active(&region);
     InterlockedIncrement(&sk_tls_ready);
     while (InterlockedCompareExchange(&sk_tls_ready, 0, 0) < 2) Sleep(0);
     DWORD result = sk_mem_current() == &region ? 0 : 3;
     sk_mem_set_active(NULL);
-    free(region.buffer);
+    sk_mem_region_destroy(&region);
     return result;
 }
 
@@ -145,7 +145,7 @@ static int sk_tls_ready = 0;
 static void* sk_tls_worker(void *unused) {
     (void)unused;
     SkMemoryRegion region;
-    if (!sk_mem_region_init(&region, 128)) return (void*)2;
+    if (!sk_mem_region_init(&region, 128, false, false)) return (void*)2;
     sk_mem_set_active(&region);
 
     pthread_mutex_lock(&sk_tls_lock);
@@ -161,7 +161,7 @@ static void* sk_tls_worker(void *unused) {
 
     void *result = sk_mem_current() == &region ? 0 : (void*)3;
     sk_mem_set_active(NULL);
-    free(region.buffer);
+    sk_mem_region_destroy(&region);
     return result;
 }
 
@@ -196,6 +196,7 @@ fn positive_memory_examples_pass_frontend_and_codegen() {
         "examples/memory/positive/03_sensor_batch_external_memory.skd",
         "examples/memory/positive/04_explicit_recovery.skd",
         "examples/memory/positive/05_nested_scratch_inside_result_region.skd",
+        "examples/memory/positive/06_extended_regions.skd",
     ];
 
     for rel in examples {
@@ -240,6 +241,10 @@ fn positive_memory_examples_build_to_native_binaries() {
         (
             "mem_positive_05",
             "examples/memory/positive/05_nested_scratch_inside_result_region.skd",
+        ),
+        (
+            "mem_positive_06",
+            "examples/memory/positive/06_extended_regions.skd",
         ),
     ];
 
@@ -553,4 +558,50 @@ fn negative_memory_examples_fail_with_expected_diagnostics() {
             "expected marker '{marker}' for {rel}, got: {err}"
         );
     }
+}
+
+#[test]
+fn grow_static_and_child_regions_build_and_run() {
+    let Some(compiler) = find_c_compiler() else {
+        return;
+    };
+    let source = r#"
+Memory flexible_memory = memory(32b, allow grow, allow drop)
+place in flexible_memory {
+    new Text first = concat("a deliberately long ", "region allocation")
+    new Text second = concat(first, " that grows safely")
+    output(contains(second, "grows safely"))
+} on error {
+    output(false)
+}
+
+Memory fixed_memory = memory.static(2kb, allow drop)
+place in fixed_memory {
+    Memory child_memory = memory.child(512b, allow drop)
+    place in child_memory {
+        new Text child_text = concat("child", " region")
+        output(child_text)
+    } on error {
+        output("child overflow")
+    }
+} on error {
+    output("static overflow")
+}
+"#;
+    let run = compile_c_and_execute(
+        compiler,
+        &compile_program_to_c(source),
+        "memory_runtime_extended_regions",
+        &[],
+        None,
+    );
+    assert!(
+        run.status.success(),
+        "extended Memory runtime failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("true"), "{stdout}");
+    assert!(stdout.contains("child region"), "{stdout}");
+    assert!(!stdout.contains("overflow"), "{stdout}");
 }

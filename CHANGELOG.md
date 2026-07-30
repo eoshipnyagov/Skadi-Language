@@ -6,6 +6,26 @@ The project follows Semantic Versioning for compiler and CLI releases. Language
 surfaces explicitly marked experimental can still evolve between minor
 versions.
 
+## Unreleased
+
+### Added
+
+- Explicit `move` ownership transfer for Canvas, Window, Interrupt, and owning
+  Channel handles, including resource-returning factories and branch/loop
+  checks.
+- Segmented `allow grow`, declarative `allow drop`, child regions, and
+  root-only static Memory regions.
+- Focused native examples and RU/EN ownership documentation.
+
+### Safety
+
+- Moved-from bindings are statically unavailable and generated C transfers the
+  handle without double cleanup.
+- Growing regions never reallocate existing chunks.
+- `memory.static` is restricted to program root to avoid recursive/concurrent
+  aliasing of one static buffer.
+- `allow drop` never deletes live values implicitly.
+
 ## [1.2.0-rc.1] - 2026-07-29
 
 ### Added

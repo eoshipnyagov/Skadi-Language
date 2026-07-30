@@ -549,7 +549,7 @@ new Text event = events.receive()
     assert!(generated.contains("typedef struct {\n    unsigned char *buffer;"));
     assert!(generated.contains("SkChannel *events = sk_channel_create(4, sizeof(const char*))"));
     assert!(
-        generated.contains("sk_channel_send_Text(events, \"ready\")"),
+        generated.contains("sk_channel_send_or_panic_Text(events, \"ready\")"),
         "{generated}"
     );
     assert!(

@@ -19,7 +19,8 @@ the project and does not need to match the toolchain version.
 
 ## New capabilities
 
-- fixed-capacity `Memory`, `place in`, and an explicit overflow boundary;
+- fixed/growing/child/root-static `Memory`, `place in`, and an explicit overflow boundary;
+- call-scoped `view`/`direct` and explicit `move` for current linear resources;
 - native `Task`, `Task(T)`, `run`, `wait`, `stop`, and `stopping`;
 - bounded `Channel(T)` with blocking `send/receive`;
 - nominal `Time`, `Duration`, `ByteSize`, and `Angle`;

@@ -1,8 +1,16 @@
 # Skadi Memory Model (Draft RU)
 
-Дата: 2026-06-04
-Статус: draft / design reference
-Назначение: зафиксировать опорную модель памяти Skadi до полноценной реализации syntax/runtime/backend.
+Дата: 2026-07-30
+Статус: broad design reference; bounded subset implemented
+Назначение: хранить широкую опорную модель памяти за пределами текущего
+bounded runtime contract.
+
+!!! warning "Не спецификация текущего синтаксиса"
+    Рабочими являются только формы, перечисленные в Memory MVP Contract.
+    Например, старые draft-формы `fixed Memory ...` и `allow drop List(...)`
+    не являются синтаксисом текущего компилятора. Реализованы `move` для
+    текущих linear resources, segmented `allow grow`, declarative `allow drop`,
+    `memory.child` и root-only `memory.static`.
 
 Связанные рабочие документы:
 

@@ -1,6 +1,6 @@
 # Статус синтаксиса Skadi
 
-Дата: 2026-07-19
+Дата: 2026-07-30
 Назначение: единый точный срез того, какой синтаксис действительно работает в этом репозитории сейчас.
 
 ## Уровни статуса
@@ -8,6 +8,10 @@
 - `Stable` - реализовано, покрыто тестами, ожидается как рабочая часть языка.
 - `Partial` - реализовано с явными ограничениями или переходным поведением.
 - `Experimental` - реализуется как текущий `v1.2` track, но ещё не является stable runtime surface.
+- `Compatibility` - принимается для старого кода, но formatter или style policy
+  направляет к канонической форме.
+- `Reserved` - распознаётся только частью frontend и не является компилируемой
+  пользовательской поверхностью.
 - `Planned` - не входит в текущую рабочую поверхность этого репозитория.
 
 ## Базовые конструкции
@@ -29,7 +33,15 @@
 - `return error Code` - `Stable`
 - `pass` - `Stable`
 - выражение как statement, включая builtin-вызовы вроде `output("hello")` - `Stable`
-- `fixed` / `const`, `direct`, `allow drop` - `Reserved / Not implemented`
+- `direct Type name` / `direct value` - `Implemented / bounded mutable borrow`
+- `view Type name` / `view value` - `Implemented / bounded read-only borrow`
+- `move Type name` / `move value` / `return move value` -
+  `Implemented / bounded ownership transfer`
+  - применяется к `Canvas`, `Window`, `Interrupt` и owning `Channel`;
+  - старое имя после передачи недоступно;
+  - partial move после ветвления и move из повторяющегося loop диагностируются.
+- `constant direct` - `Removed`; parser указывает использовать `view`
+- `fixed` / `const` - `Reserved / Not implemented`
   - lexer распознаёт эти слова, но текущий statement parser намеренно не принимает формы;
   - они не должны использоваться в пользовательском коде.
 
@@ -74,7 +86,12 @@
 ## Структуры и методы
 
 - `struct Name { ... }` - `Stable`
-- `local struct Name { ... }` и `local label Name { ... }` - `Stable`
+- `local struct Name { ... }` - `Stable`
+- `label Name { A = 0 B = 1 }` и local-вариант - `Stable`
+  - каждый числовой дискриминант обязателен;
+  - `ErrorCode` начинается с `Ok = 0`.
+- `tag Name { A B }` и local-вариант - `Stable`
+  - символический nominal type без пользовательского числового контракта.
 - поля структуры - `Stable`
 - скрытые поля `hide Type field` - `Stable`
   - доступны только методам той же структуры;
@@ -90,12 +107,13 @@
 
 - path-import `import "./relative/path.skd"` - `Stable`
 - циклические и отсутствующие импорты диагностируются как `SC-MOD-001` - `Stable`
-- публичные `fn`, `struct` и `label` импортируются только напрямую - `Stable`
-- `local fn/struct/label` не экспортируются из файла - `Stable`
+- публичные `fn`, `struct`, `label` и `tag` импортируются только напрямую - `Stable`
+- `local fn/struct/label/tag` не экспортируются из файла - `Stable`
 - коллизии публичных символов диагностируются как `SC-MOD-002` - `Stable`
 - нарушение direct-import-only видимости диагностируется как `SC-MOD-003` - `Stable`
 - квалификация `module.symbol`, где `module` - имя файла без `.skd`, работает для функций, типов структур и вариантов `ErrorCode` - `Stable`
-- `import module_name` и `import "./x.skd" as alias` - `Planned`
+- `import "./x.skd" as alias` - `Stable`; alias локален текущему файлу
+- `import module_name` - `Planned`
 
 ## Builtins: Text / List / Filesystem / I/O
 
@@ -156,10 +174,12 @@
 
 ## Частично реализованное / переходное
 
-- `on interrupt ... { ... }` - `Partial`
-  - parse/format-level поддержка сохранена для future contract;
-  - semantic всегда выдаёт `SC-SEM-040`, поэтому форма не может молча попасть в codegen;
-  - runtime binding остаётся planned.
+- `Interrupt tick = interrupts.periodic(Duration)` - `Host MVP`
+- `on interrupt tick { ... }` - `Host MVP`
+  - регистрация разрешена владельцу на top level;
+  - handler допускает конечные scalar-вычисления и `Channel.try_send`;
+  - blocking, allocation, I/O, task/resource management и обычные вызовы запрещены;
+  - hardware IRQ backends остаются planned.
 - time/duration systems MVP - `Experimental / Runtime MVP`
   - nominal types `Time` и `Duration` проходят parser/semantic/C codegen;
   - integer literals `ms`, `s`, `min` проверяются на overflow;
@@ -193,11 +213,15 @@
   - matrices, generic/SIMD vectors, swizzling и operator overloading отложены;
   - полный контракт: [Векторы](vectors.md).
 - memory model MVP surface - `Experimental / Partial`
-  - frontend принимает `Memory name = memory(size)`, `place in memory { ... } on error { ... }` и `memory.clear()`;
+  - frontend принимает `Memory name = memory(size[, policies])`, `memory.child`,
+    `memory.static`, `place in memory { ... } on error { ... }` и `memory.clear()`;
   - semantic layer проверяет базовые escape / use-after-clear правила только для dynamic payload (`Text`, `List`, и struct-значений с такими полями);
   - `Memory` считается capability/resource handle, а не обычным storable value type;
-  - C backend уже lower'ит strict MVP surface в fixed-capacity region runtime и доводит её до `Skadi -> C -> native`;
-  - `allow grow`, `allow drop`, `memory.child`, `memory.static` остаются design-level future surface.
+  - `allow grow` использует segmented chunks без перемещения старых allocations;
+  - `allow drop` хранится как policy marker и не удаляет живые значения автоматически;
+  - child-region получает fixed storage из активного parent, static-region
+    требует literal capacity и разрешён только на program root;
+  - C backend доводит весь bounded surface до `Skadi -> C -> native`.
 - task/channel systems MVP - `Experimental / Runtime MVP`
   - parser принимает `Task`, `Task(T)`, `run worker(...)`, `wait task`, `stop task`, `stopping`, `Channel(T)`, `channel(N)`, `channel.send(value)` и `channel.receive()`;
   - semantic layer проверяет task handle lifecycle, запрет `Task` как обычного value-type, task-context для `stopping` и value-safe channel messages;
@@ -208,9 +232,20 @@
   - bounded `Channel(T)` работает через blocking FIFO `send/receive` на Win32/pthread;
   - mutable `List`, Memory/capability и region-owned значения не являются value-safe сообщениями;
   - owner declaration внутри loop и `place in` запрещён ради deterministic cleanup;
-  - `close`, timeout, `select` и отмена блокирующей channel operation отложены.
+  - owner может вызвать `close()`, после чего receiver дренирует очередь и получает fail-soft default;
+  - `try_send` возвращает `Bool` и не блокирует producer;
+  - timeout, `select` и отмена блокирующей channel operation отложены.
   - практические шаблоны и платформенный статус описаны в
     [руководстве по многопоточности](concurrency.md).
+- Canvas v0 - `Experimental / Runtime MVP`
+  - `Color` и `Rect` являются value-safe типами;
+  - `color`, `color_hex`, мягкие цветовые алиасы и 16 `Color.terminal_*` констант реализованы;
+  - `Canvas` является linear resource с software RGBA framebuffer;
+  - `clear`, `pixel`, `line`, `rect`, `fill_rect`, `circle`, `fill_circle` и `checksum` проходят semantic/C runtime;
+  - `Window` является отдельным linear resource, а `present` требует `direct Canvas`;
+  - первый Window backend реализован для Win32; headless Canvas остаётся переносимым;
+  - events, text/images, transforms, `Matrix2D` и остальные оконные backend отложены;
+  - полный контракт: [Canvas и Visual Core](canvas.md).
 - formatter coverage - `Partial`
   - ориентирован на текущий рабочий слой `v1.1` и экспериментальные формы `v1.2`, где это безопасно;
   - уже пригоден для повседневной работы, но продолжает развиваться вместе с синтаксисом.
@@ -218,7 +253,7 @@
 ## Сознательно отложенное
 
 - module-name imports и aliases поверх стабильного path-import контракта
-- visual core / canvas
+- расширение Canvas: events, text/images, transforms и дополнительные backends
 - systems additions track
 - более строгая модель ошибок индексации
 - async/background execution внутри TUI
@@ -227,3 +262,5 @@
 
 Этот файл фиксирует текущий реализованный контракт, а не вечную финальную форму языка.
 Для первого знакомства удобнее начинать с [Начало работы](getting-started.md).
+Полная компактная матрица находится в
+[быстрой справке по языку](language-quick-reference.md).

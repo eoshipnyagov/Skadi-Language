@@ -23,6 +23,7 @@ BENCHES=(
   "bench_14_byte_size_budget|benchmarks/bench_14_byte_size_budget.skd|.|"
   "bench_15_angle_navigation|benchmarks/bench_15_angle_navigation.skd|.|"
   "bench_16_vector_navigation|benchmarks/bench_16_vector_navigation.skd|.|"
+  "bench_17_canvas_palette|benchmarks/bench_17_canvas_palette.skd|.|"
 )
 
 build_bench() {

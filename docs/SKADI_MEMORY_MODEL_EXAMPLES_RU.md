@@ -1,7 +1,7 @@
 # Skadi Memory Model: Примеры и антипримеры
 
-Дата: 2026-06-06  
-Статус: рабочая опора для experimental frontend MVP.
+Дата: 2026-07-29
+Статус: примеры реализованного experimental frontend/runtime MVP.
 
 Связанные документы:
 
@@ -133,6 +133,20 @@ fn load_text(Memory assets_memory, Path path) returns LoadedText {
 - внешний `assets_memory` хранит то, что переживёт операцию;
 - внутренний `scratch_memory` обслуживает preview и промежуточные аллокации;
 - inner `on error` остаётся локальным и не ломает внешний region.
+
+### 3.7. Growing, child и static regions
+
+Файл:
+
+- `examples/memory/positive/06_extended_regions.skd`
+
+Что показывает:
+
+- `allow grow` на маленьком исходном регионе без invalidation старых значений;
+- `allow drop` как явный policy marker без скрытого удаления;
+- `memory.child` внутри активного parent-region;
+- root-only `memory.static` с compile-time capacity;
+- отдельный `on error` для каждой allocation boundary.
 
 ## 4. Style pitfalls
 

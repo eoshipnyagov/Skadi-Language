@@ -365,6 +365,39 @@ impl<'a> ExprParser<'a> {
                 Ok(Expression::LiteralFloat(parsed))
             }
             TokenKind::TypeBool => Ok(Expression::LiteralBool(tok.lexeme == "true")),
+            TokenKind::KeywordDirect => {
+                if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {
+                    return Err(parse_err(
+                        "SC-PARSE-222",
+                        "'direct' call argument requires an identifier.",
+                    ));
+                }
+                let name = self.tokens[self.idx].lexeme.clone();
+                self.idx += 1;
+                Ok(Expression::DirectBorrow(name))
+            }
+            TokenKind::KeywordView => {
+                if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {
+                    return Err(parse_err(
+                        "SC-PARSE-223",
+                        "'view' call argument requires an identifier.",
+                    ));
+                }
+                let name = self.tokens[self.idx].lexeme.clone();
+                self.idx += 1;
+                Ok(Expression::ViewBorrow(name))
+            }
+            TokenKind::KeywordMove => {
+                if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {
+                    return Err(parse_err(
+                        "SC-PARSE-224",
+                        "'move' requires an owning resource identifier.",
+                    ));
+                }
+                let name = self.tokens[self.idx].lexeme.clone();
+                self.idx += 1;
+                Ok(Expression::Move(name))
+            }
             TokenKind::Identifier | TokenKind::KeywordMy => {
                 let mut call_name = tok.lexeme.clone();
                 if self.idx + 1 < self.end

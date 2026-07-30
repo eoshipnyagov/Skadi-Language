@@ -147,8 +147,8 @@ iterate xs as item {
 fn edge_danger_on_error_flow_with_explicit_errorcode() {
     let src = r#"
 label ErrorCode {
-    Ok
-    ZeroDivision
+    Ok = 0
+    ZeroDivision = 1
 }
 
 danger fn div_safe(Int a, Int b) Int {

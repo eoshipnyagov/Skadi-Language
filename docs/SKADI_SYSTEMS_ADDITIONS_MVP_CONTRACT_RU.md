@@ -1,6 +1,6 @@
 # Skadi Systems Additions MVP Contract (RU)
 
-Дата: 2026-07-19
+Дата: 2026-07-29
 Статус: living implementation reference; Memory, Task/Channel, Time/Duration,
 ByteSize, Angle и Vector slices реализованы как experimental `v1.2` runtime MVP.
 Назначение: зафиксировать ближайший practical-first контракт для набора системных дополнений к Skadi, которые логично развивают оси `Memory`, `Task/Channel`, `Canvas`.
@@ -11,8 +11,10 @@ ByteSize, Angle и Vector slices реализованы как experimental `v1.
 
 ## 1. Назначение
 
-Этот документ не расширяет stable `v1.1` scope и не объявляет перечисленные ниже
-типы реализованными в `v1.2`.
+Этот документ не расширяет stable `v1.1` scope. Часть зафиксированного здесь
+контракта уже реализована как experimental `v1.2` runtime MVP:
+`Time/Duration`, `ByteSize`, `Angle` и `Vec2/Vec3/Vec4`. Остальные разделы
+остаются future contract и не являются обещанием текущего компилятора.
 
 Он нужен, чтобы заранее определить:
 
@@ -53,9 +55,9 @@ project-level policy hooks
 
 ## 4. Priority order
 
-Рекомендуемый порядок будущего проектирования и реализации:
+Порядок проектирования и реализации:
 
-1. `Time / Duration / units`
+1. `Time / Duration / units` — bounded MVP выполнен
 2. `Resource lifecycle`
 3. `Interrupt context rules`
 4. `Project tooling / policy layer`
@@ -71,7 +73,7 @@ project-level policy hooks
 `Time/Duration`, integer `ms/s/min`, monotonic `now/elapsed` и blocking
 `sleep/delay` на Win32/POSIX. Расширения этого раздела остаются future work.
 
-Если этот слой пойдёт в реализацию, минимальный контракт должен быть таким:
+Реализованный bounded MVP использует следующий минимальный контракт:
 
 ### Required types / concepts
 
@@ -300,7 +302,7 @@ big plugin/runtime framework
 
 ## 16. Recommended implementation discipline
 
-Если этот future-track пойдёт в реальную работу, дисциплина должна быть такой:
+Для уже реализованных и будущих частей track действует одна дисциплина:
 
 1. Сначала vocabulary and semantics.
 2. Потом очень маленький проверяемый subset.
@@ -320,4 +322,4 @@ big plugin/runtime framework
 или просто раздувает язык?
 ```
 
-Именно в этом его главная ценность для следующих версий после `v1.1`.
+Именно в этом его главная ценность для `v1.2` и следующих версий.

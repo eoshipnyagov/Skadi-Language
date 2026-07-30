@@ -5,7 +5,7 @@ repo_url: https://github.com/eoshipnyagov/Skadi-Language
 repo_name: Skadi
 docs_dir: .docs-build
 site_dir: site
-use_directory_urls: true
+use_directory_urls: false
 
 theme:
   name: material
@@ -40,23 +40,47 @@ plugins:
             Главная: Home
             Пользовательские документы: User Docs
             Внутренние документы: Internal Docs
+            Старт: Start
+            Инструменты: Tooling
+            Язык: Language
+            Основы языка: Language Basics
+            Systems surface: Systems Surface
+            Платформы и будущее: Platforms and Future
+            Примеры и автоматизация: Examples and Automation
             Обзор: Overview
             Установка: Installation
             Переход с v1.1 на v1.2: Migrating from v1.1 to v1.2
-            Начало работы: Getting Started
+            Быстрый старт: Quick Start
             Быстрый старт CLI: CLI Quick Start
             Справочник CLI/TUI: CLI/TUI Reference
-            Справочник языка: Language Reference
+            Быстрая справка: Quick Reference
+            Полная справка: Complete Reference
+            Типы, литералы и выражения: Types, Literals, and Expressions
+            Ветвления и циклы: Control Flow
+            Функции и ошибки: Functions and Errors
+            Struct, Text и List: Struct, Text, and List
+            Модули и видимость: Modules and Visibility
+            Ввод, вывод и файлы: I/O and Files
+            Математика: Math
+            Управление памятью: Memory
+            Владение и передача ресурсов: Ownership and Resource Transfer
+            Практики и антипримеры: Practices and Anti-patterns
             Короткие примеры: Short Examples
             Время и длительности: Time and Duration
             Размеры памяти: Byte Sizes
             Углы: Angles
             Векторы: Vectors
             Многопоточность: Concurrency
+            Embedded: Embedded
+            Canvas и Visual Core: Canvas and Visual Core
             Статус синтаксиса: Syntax Status
             Skadi для AI и vibe coding: Skadi for AI and vibe coding
             Showcase-программы: Showcase Programs
             Текущий компилятор: Current Compiler
+            Аудит документации: Documentation Audit
+            Обзор репозитория: Repository Overview
+            Служебная справка CLI: Internal CLI Usage
+            Исторический RFC CLI: Historical CLI RFC
             Контракты и стиль v1: v1 Contracts and Style
             Планы и блокеры: Plans and Blockers
             Будущие треки: Future Tracks
@@ -109,25 +133,48 @@ nav:
   - Главная: index.md
   - Пользовательские документы:
       - Обзор: user/index.md
-      - Установка: user/installation.md
-      - Переход с v1.1 на v1.2: user/v1-2-migration.md
-      - Начало работы: user/getting-started.md
-      - Быстрый старт CLI: user/cli-quick-start.md
-      - Справочник CLI/TUI: user/cli-reference.md
-      - Справочник языка: user/language-reference.md
-      - Короткие примеры: user/language-examples.md
-      - Время и длительности: user/time-duration.md
-      - Размеры памяти: user/byte-size.md
-      - Углы: user/angle.md
-      - Векторы: user/vectors.md
-      - Многопоточность: user/concurrency.md
-      - Статус синтаксиса: user/syntax-status.md
-      - Skadi для AI и vibe coding: user/ai-guide.md
-      - Showcase-программы: user/showcases.md
+      - Старт:
+          - Быстрый старт: user/getting-started.md
+          - Установка: user/installation.md
+          - Переход с v1.1 на v1.2: user/v1-2-migration.md
+      - Инструменты:
+          - Справочник CLI/TUI: user/cli-reference.md
+          - Быстрый старт CLI: user/cli-quick-start.md
+      - Язык:
+          - Быстрая справка: user/language-quick-reference.md
+          - Полная справка: user/language-reference.md
+          - Основы языка:
+              - Типы, литералы и выражения: user/language-basics.md
+              - Ветвления и циклы: user/control-flow.md
+              - Функции и ошибки: user/functions-errors.md
+              - Struct, Text и List: user/data-model.md
+              - Модули и видимость: user/modules.md
+              - Ввод, вывод и файлы: user/io-files.md
+              - Математика: user/math.md
+          - Systems surface:
+              - Управление памятью: user/memory.md
+              - Владение и передача ресурсов: user/ownership.md
+              - Многопоточность: user/concurrency.md
+              - Время и длительности: user/time-duration.md
+              - Размеры памяти: user/byte-size.md
+              - Углы: user/angle.md
+              - Векторы: user/vectors.md
+          - Практики и антипримеры: user/practices.md
+          - Статус синтаксиса: user/syntax-status.md
+      - Платформы и будущее:
+          - Embedded: user/embedded.md
+          - Canvas и Visual Core: user/canvas.md
+      - Примеры и автоматизация:
+          - Короткие примеры: user/language-examples.md
+          - Showcase-программы: user/showcases.md
+          - Skadi для AI и vibe coding: user/ai-guide.md
   - Внутренние документы:
       - Обзор: internal/index.md
       - Текущий компилятор:
+          - Аудит документации: internal/internal-docs-audit.md
+          - Обзор репозитория: internal/project-overview.md
           - Техсправочник проекта: internal/project-tech-reference.md
+          - Служебная справка CLI: internal/cli-usage.md
           - Границы Skadi -> C: internal/to-c-scope.md
           - Покрытие тестами: internal/test-coverage.md
           - Стиль диагностики: internal/diagnostics-style.md
@@ -147,6 +194,7 @@ nav:
           - RFC List: internal/rfc-list.md
           - RFC Math/Vector Core: internal/rfc-math-vector-core.md
       - Планы и блокеры:
+          - Исторический RFC CLI: internal/cli-rfc.md
           - План реализации: internal/implementation-plan.md
           - План v1.1: internal/v1-1-plan.md
           - Закрытие roadmap v1.1: internal/v1-1-roadmap.md
@@ -162,6 +210,12 @@ nav:
               - Draft: internal/task-model-draft.md
               - MVP Contract: internal/task-model-mvp.md
               - Runtime MVP Design: internal/task-runtime-mvp-design.md
+          - Accepted Systems Contracts:
+              - Tag and Label: internal/tag-label-contract.md
+              - Channel Lifecycle: internal/channel-lifecycle-contract.md
+              - Borrow Access and Resources: internal/direct-borrow-resource-contract.md
+              - Ownership UX Lab: internal/ownership-ux-lab.md
+              - Interrupt Model: internal/interrupt-model-contract.md
           - Visual Core:
               - Draft: internal/visual-core-draft.md
               - MVP Contract: internal/visual-core-mvp.md

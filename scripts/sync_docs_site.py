@@ -16,17 +16,34 @@ ROUTE_MAP = [
     ("user/getting-started", "SKADI_GETTING_STARTED_RU.md"),
     ("user/cli-quick-start", "SKADI_CLI_QUICK_START_RU.md"),
     ("user/cli-reference", "SKADI_CLI_REFERENCE_RU.md"),
+    ("user/language-quick-reference", "SKADI_LANGUAGE_QUICK_REFERENCE_RU.md"),
     ("user/language-reference", "SKADI_LANGUAGE_REFERENCE_RU.md"),
+    ("user/language-basics", "SKADI_LANGUAGE_BASICS_RU.md"),
+    ("user/control-flow", "SKADI_CONTROL_FLOW_RU.md"),
+    ("user/functions-errors", "SKADI_FUNCTIONS_ERRORS_RU.md"),
+    ("user/data-model", "SKADI_DATA_MODEL_RU.md"),
+    ("user/modules", "SKADI_MODULES_RU.md"),
+    ("user/io-files", "SKADI_IO_FILES_RU.md"),
+    ("user/math", "SKADI_MATH_RU.md"),
+    ("user/memory", "SKADI_MEMORY_GUIDE_RU.md"),
+    ("user/ownership", "SKADI_OWNERSHIP_RU.md"),
+    ("user/practices", "SKADI_PRACTICES_RU.md"),
     ("user/language-examples", "SKADI_LANGUAGE_EXAMPLES_RU.md"),
     ("user/time-duration", "SKADI_TIME_DURATION_RU.md"),
     ("user/byte-size", "SKADI_BYTE_SIZE_RU.md"),
     ("user/angle", "SKADI_ANGLE_RU.md"),
     ("user/vectors", "SKADI_VECTORS_RU.md"),
     ("user/concurrency", "SKADI_CONCURRENCY_GUIDE_RU.md"),
+    ("user/embedded", "SKADI_EMBEDDED_STATUS_RU.md"),
+    ("user/canvas", "SKADI_CANVAS_RU.md"),
     ("user/syntax-status", "SKADI_SYNTAX_STATUS.md"),
     ("user/ai-guide", "SKADI_FOR_AI_RU.md"),
     ("user/showcases", "SHOWCASE_PROGRAMS.md"),
     ("internal/project-tech-reference", "SKADI_PROJECT_TECH_REFERENCE_RU.md"),
+    ("internal/project-overview", "SKADI_PROJECT_OVERVIEW_RU.md"),
+    ("internal/cli-usage", "CLI_USAGE.md"),
+    ("internal/cli-rfc", "SKADI_CLI_RFC.md"),
+    ("internal/internal-docs-audit", "SKADI_INTERNAL_DOCS_AUDIT_RU.md"),
     ("internal/to-c-scope", "SKADI_TO_C_SCOPE.md"),
     ("internal/test-coverage", "TEST_COVERAGE_MATRIX.md"),
     ("internal/diagnostics-style", "DIAGNOSTICS_STYLE.md"),
@@ -53,6 +70,11 @@ ROUTE_MAP = [
     ("internal/task-model-draft", "SKADI_TASK_MODEL_DRAFT_RU.md"),
     ("internal/task-model-mvp", "SKADI_TASK_MODEL_MVP_CONTRACT_RU.md"),
     ("internal/task-runtime-mvp-design", "SKADI_TASK_RUNTIME_MVP_DESIGN_RU.md"),
+    ("internal/tag-label-contract", "SKADI_TAG_LABEL_CONTRACT_RU.md"),
+    ("internal/channel-lifecycle-contract", "SKADI_CHANNEL_LIFECYCLE_CONTRACT_RU.md"),
+    ("internal/direct-borrow-resource-contract", "SKADI_DIRECT_BORROW_RESOURCE_CONTRACT_RU.md"),
+    ("internal/ownership-ux-lab", "SKADI_OWNERSHIP_UX_LAB_RU.md"),
+    ("internal/interrupt-model-contract", "SKADI_INTERRUPT_MODEL_CONTRACT_RU.md"),
     ("internal/visual-core-draft", "SKADI_VISUAL_CORE_DRAFT_RU.md"),
     ("internal/visual-core-mvp", "SKADI_VISUAL_CORE_MVP_CONTRACT_RU.md"),
     ("internal/systems-additions-draft", "SKADI_SYSTEMS_ADDITIONS_DRAFT_RU.md"),
@@ -136,24 +158,25 @@ def make_user_index_ru() -> str:
 `skadi-cli` и `skadi-cli tui`.
 
 Текущая распространяемая линия — `v1.2.0-rc.1`. Она наследует stable base
-`v1.1` и добавляет experimental Memory, Task/Channel, Time/Duration, ByteSize,
-Angle и Vector tracks.
+`v1.1` и добавляет experimental Memory/ownership, Task/Channel, Time/Duration,
+ByteSize, Angle и Vector tracks.
 
-## Основные страницы
+## Рекомендуемый маршрут
+
+1. [Быстрый старт](getting-started.md)
+2. [Справочник CLI/TUI](cli-reference.md)
+3. [Полная таблица языка](language-quick-reference.md)
+4. [Тематическая справка](language-reference.md)
+5. [Как писать и чего избегать](practices.md)
+
+## Дополнительно
 
 - [Установка](installation.md)
 - [Переход с v1.1 на v1.2](v1-2-migration.md)
-- [Начало работы](getting-started.md)
-- [Быстрый старт CLI](cli-quick-start.md)
-- [Справочник CLI/TUI](cli-reference.md)
-- [Справочник языка](language-reference.md)
+- [Embedded status](embedded.md)
+- [Canvas / Visual Core](canvas.md)
+- [Владение и передача ресурсов](ownership.md)
 - [Короткие примеры](language-examples.md)
-- [Время и длительности](time-duration.md)
-- [Размеры памяти](byte-size.md)
-- [Углы](angle.md)
-- [Векторы](vectors.md)
-- [Многопоточность](concurrency.md)
-- [Статус синтаксиса](syntax-status.md)
 - [Showcase-программы](showcases.md)
 """
 
@@ -165,24 +188,24 @@ This section is for people writing programs in Skadi and using `skadi-cli` and
 `skadi-cli tui`.
 
 The current distributed line is `v1.2.0-rc.1`. It builds on the stable `v1.1`
-base and adds experimental Memory, Task/Channel, Time/Duration, ByteSize, Angle,
-and Vector tracks.
+base and adds experimental Memory/ownership, Task/Channel, Time/Duration,
+ByteSize, Angle, and Vector tracks.
 
-## Main pages
+## Recommended path
+
+1. [Quick Start](getting-started.en.md)
+2. [CLI/TUI Reference](cli-reference.en.md)
+3. [Complete Language Table](language-quick-reference.en.md)
+4. [Topic Reference](language-reference.en.md)
+5. [Recommended Practices](practices.en.md)
+
+## More
 
 - [Installation](installation.en.md)
 - [Migrating from v1.1](v1-2-migration.en.md)
-- [Getting Started](getting-started.en.md)
-- [CLI Quick Start](cli-quick-start.en.md)
-- [CLI/TUI Reference](cli-reference.en.md)
-- [Language Reference](language-reference.en.md)
-- [Short Language Examples](language-examples.en.md)
-- [Time and Duration](time-duration.en.md)
-- [Byte Sizes](byte-size.en.md)
-- [Angles](angle.en.md)
-- [Vectors](vectors.en.md)
-- [Concurrency](concurrency.en.md)
-- [Syntax Status](syntax-status.en.md)
+- [Embedded Status](embedded.en.md)
+- [Canvas / Visual Core](canvas.en.md)
+- [Ownership and Resource Transfer](ownership.en.md)
 - [Showcase Programs](showcases.en.md)
 """
 
@@ -195,6 +218,7 @@ def make_internal_index_ru() -> str:
 
 ## Основные группы
 
+- [Аудит актуальности и расхождений](internal-docs-audit.md);
 - текущее состояние компилятора;
 - контракты `v1`;
 - планы и блокеры;
@@ -212,6 +236,7 @@ experimental tracks, and future-track development work.
 
 ## Main groups
 
+- [Current documentation audit](internal-docs-audit.en.md);
 - current compiler state;
 - `v1` contracts;
 - plans and blockers;
