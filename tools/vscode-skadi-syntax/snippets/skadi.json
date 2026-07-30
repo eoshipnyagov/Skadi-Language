@@ -1,0 +1,102 @@
+{
+  "Function": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:name}(${2}) returns ${3:Int} {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Declare a Skadi function"
+  },
+  "Danger function": {
+    "prefix": "dangerfn",
+    "body": [
+      "danger fn ${1:name}(${2}) returns ${3:Int} {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Declare a function that may return an ErrorCode"
+  },
+  "On error handler": {
+    "prefix": "onerror",
+    "body": [
+      "${1:value} = ${2:operation} on error {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Handle a danger expression"
+  },
+  "Iterate list": {
+    "prefix": "iterate",
+    "body": [
+      "iterate ${1:items} as ${2:item} {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Iterate over a value"
+  },
+  "Memory region": {
+    "prefix": "memory",
+    "body": [
+      "Memory ${1:frame_memory} = memory(${2:64kb}) on error {",
+      "    ${3:output(\"memory allocation failed\")}",
+      "}",
+      "",
+      "place in ${1:frame_memory} {",
+      "    ${0}",
+      "} on error {",
+      "    output(\"memory region overflow\")",
+      "}"
+    ],
+    "description": "Create and enter an explicit Memory region"
+  },
+  "Task and channel": {
+    "prefix": "taskchannel",
+    "body": [
+      "Channel(${1:Int}) ${2:messages} = channel(${3:8})",
+      "Task ${4:worker_task} = run ${5:worker}(${2:messages})",
+      "",
+      "${0}",
+      "",
+      "wait ${4:worker_task}"
+    ],
+    "description": "Start a task connected to a bounded channel"
+  },
+  "Periodic interrupt": {
+    "prefix": "interrupt",
+    "body": [
+      "Interrupt ${1:tick} = interrupts.periodic(${2:10ms})",
+      "on interrupt ${1:tick} {",
+      "    ${3:events}.try_send(${4:1})",
+      "}",
+      "${0}"
+    ],
+    "description": "Bind a strict handler to a periodic host Interrupt"
+  },
+  "Borrowed Canvas function": {
+    "prefix": "directcanvas",
+    "body": [
+      "fn ${1:draw}(direct Canvas ${2:frame}) {",
+      "    ${2:frame}.clear(${3:Color.black})",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Declare a mutable Canvas borrow"
+  },
+  "Canvas window": {
+    "prefix": "canvaswindow",
+    "body": [
+      "Canvas ${1:frame} = canvas(${2:320}, ${3:200})",
+      "Window ${4:window} = windows.open(\"${5:Skadi Canvas}\", ${2:320}, ${3:200})",
+      "",
+      "${1:frame}.clear(${6:Color.terminal_black})",
+      "",
+      "while ${4:window}.is_open() {",
+      "    ${4:window}.present(direct ${1:frame})",
+      "    sleep(${7:16ms})",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Create a software Canvas and present it in a Win32 window"
+  }
+}

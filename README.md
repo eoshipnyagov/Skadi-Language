@@ -11,8 +11,8 @@ Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
 
 The current distributed line is `v1.2.0-rc.1`. It builds on the stable `v1.1`
-toolchain surface and includes experimental Memory, Task/Channel,
-Time/Duration, ByteSize, Angle, and vector MVPs.
+toolchain surface and includes experimental Memory and ownership,
+Task/Channel/Interrupt, Time/Duration, ByteSize, Angle, vector, and Canvas MVPs.
 
 The long-term design direction is broader:
 
@@ -43,8 +43,10 @@ The repository includes:
 - experimental fixed/growing/child/root-static Memory runtime for `v1.2`,
 - explicit `view`/`direct` borrows and `move` ownership transfer for current
   linear resources,
-- experimental native Task/Channel runtime for `v1.2`,
+- experimental native Task/Channel runtime and periodic host Interrupts for
+  `v1.2`,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
+- experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,
 - showcase programs,
 - regression tests,
@@ -262,7 +264,7 @@ loop {
         continue
     }
 
-    window.present()
+    window.present(direct canvas)
 }
 ```
 
@@ -305,44 +307,51 @@ wait joins and returns result.
 shared mutable memory is not the default.
 ```
 
-The current C backend maps each task to a Win32 or pthread native thread and
-implements blocking bounded channels. Advanced scheduling, channel close,
-timeouts, and embedded/RTOS targets remain future work. See the
+The current C backend maps each task to a Win32 or pthread native thread. It
+supports multiple tasks, task restart after `wait`, bounded blocking channels,
+non-blocking `try_send`, explicit channel close, and typed periodic host
+Interrupts. Cancellation-aware blocking channel operations, timed operations,
+hardware IRQ binding, advanced scheduling, and embedded/RTOS targets remain
+future work. See the
 [Concurrency Guide](https://eoshipnyagov.github.io/Skadi-Language/en/user/concurrency/).
 
 ### 3. Canvas
 
-**Status: design direction / future versions.**
+**Status: experimental `v1.2` software Canvas and Win32 presenter MVP.**
 
-Skadi is planned to treat visual output as a core systems capability.
+Skadi treats visual output as a core systems capability in the current
+experimental track.
 
-A future `Canvas` is not intended to be a full UI framework or a game engine.
-It is intended as a small deterministic drawing surface for displays, windows, framebuffers, debug views, tools, and operator panels.
+`Canvas` is not intended to be a full UI framework or a game engine. The
+current MVP is a small deterministic software drawing surface with colors,
+rectangles, pixels, lines, circles, alpha blending, and a frame checksum.
 
-Possible future syntax:
+Current syntax:
 
 ```skadi
-fn draw_status(Canvas canvas, Float temperature, Bool alarm) {
-    canvas.clear(Color.black)
+Canvas frame = canvas(320, 200)
+Window window = windows.open("Skadi Canvas", 320, 200)
 
-    canvas.text(Vec2(4, 4), "Temperature")
-    canvas.text(Vec2(4, 18), concat(text(temperature), " C"))
+new Color background = color_hex("#1d1f21", 255)
+new Rect panel = rect(24.0, 24.0, 272.0, 152.0)
+new Vec2 center = {x = 160.0, y = 100.0}
 
-    new Int width = clamp(Int(temperature * 2), 0, 100)
-    canvas.rect(Rect(4, 40, 100, 10), Color.gray)
-    canvas.fill_rect(Rect(4, 40, width, 10), Color.green)
+frame.clear(background)
+frame.fill_rect(panel, Color.terminal_blue)
+frame.circle(center, 48.0, Color.terminal_bright_yellow)
 
-    if alarm {
-        canvas.text(Vec2(4, 56), "ALARM", Color.red)
-    }
+while window.is_open() {
+    window.present(direct frame)
+    sleep(16ms)
 }
 ```
 
-The same drawing logic should eventually be able to target:
+The software Canvas and headless checksum path are portable. The interactive
+window presenter currently targets Win32. Future presenters are intended for:
 
 - a small OLED display,
-- a desktop window,
-- an offscreen framebuffer,
+- additional desktop systems,
+- direct framebuffers,
 - a game debug overlay,
 - an operator panel.
 
@@ -520,6 +529,9 @@ User-facing docs:
 - [Time and Duration](docs/SKADI_TIME_DURATION_RU.md)
 - [Byte Sizes](docs/SKADI_BYTE_SIZE_RU.md)
 - [Angles](docs/SKADI_ANGLE_RU.md)
+- [Ownership and borrowing](docs/SKADI_OWNERSHIP_RU.md)
+- [Concurrency](docs/SKADI_CONCURRENCY_GUIDE_RU.md)
+- [Canvas and Visual Core](docs/SKADI_VISUAL_CORE_MVP_CONTRACT_RU.md)
 - [Showcase programs](docs/SHOWCASE_PROGRAMS.md)
 
 Internal docs:
@@ -562,12 +574,15 @@ The repository already includes:
 - formatter,
 - math/core support for `v1.1`,
 - relative path imports, `local`/`hide`, and qualified `module.symbol` access,
-- experimental Memory MVP work for `v1.2`,
-- experimental native Task/Channel runtime for `v1.2`,
+- experimental fixed/growing/child/root-static Memory regions and explicit
+  resource ownership for `v1.2`,
+- experimental native Task/Channel runtime and periodic host Interrupts for
+  `v1.2`,
 - experimental nominal Time/Duration runtime for `v1.2`,
 - experimental nominal ByteSize and dynamic Memory capacity for `v1.2`,
 - experimental nominal Angle and `deg/rad` math integration for `v1.2`,
 - experimental Vec2/Vec3/Vec4 values and vector math for `v1.2`,
+- experimental software Canvas and Win32 window presenter,
 - release archives and installers for Windows, Linux, and macOS,
 - showcase programs,
 - regression tests,

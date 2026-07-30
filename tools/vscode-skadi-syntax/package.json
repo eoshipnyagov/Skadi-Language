@@ -2,9 +2,14 @@
   "name": "skadi-syntax",
   "displayName": "Skadi Syntax",
   "description": "Syntax highlighting for the current Skadi language surface",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "publisher": "skadi-local",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eoshipnyagov/Skadi-Language.git",
+    "directory": "tools/vscode-skadi-syntax"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -13,6 +18,7 @@
     "language-configuration.json",
     "package.json",
     "README.md",
+    "snippets/**",
     "syntaxes/**"
   ],
   "categories": [
@@ -32,6 +38,12 @@
         "language": "skadi",
         "scopeName": "source.skadi",
         "path": "./syntaxes/skadi.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "skadi",
+        "path": "./snippets/skadi.json"
       }
     ]
   }

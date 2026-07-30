@@ -91,7 +91,7 @@
             "3": { "name": "entity.name.function.skd" },
             "4": { "name": "punctuation.section.parameters.begin.skd" }
           },
-          "end": "(\\))(?=\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*(?:List)?\\s*)?\\{)",
+          "end": "(\\))(?=\\s*(?:returns\\s+[A-Za-z_][A-Za-z0-9_.]*(?:\\([^\\r\\n()]+\\))?(?:\\s+List)?\\s*)?\\{)",
           "endCaptures": {
             "1": { "name": "punctuation.section.parameters.end.skd" }
           },
@@ -115,7 +115,7 @@
             "2": { "name": "entity.name.function.skd" },
             "3": { "name": "punctuation.section.parameters.begin.skd" }
           },
-          "end": "(\\))(?=\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*(?:List)?\\s*)?\\{)",
+          "end": "(\\))(?=\\s*(?:returns\\s+[A-Za-z_][A-Za-z0-9_.]*(?:\\([^\\r\\n()]+\\))?(?:\\s+List)?\\s*)?\\{)",
           "endCaptures": {
             "1": { "name": "punctuation.section.parameters.end.skd" }
           },
@@ -137,7 +137,7 @@
       "patterns": [
         {
           "name": "meta.variable.declaration.skd",
-          "match": "\\b(new|const|fixed)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(List))?\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "match": "\\b(new|constant)\\s+([A-Za-z_][A-Za-z0-9_.]*(?:\\([^\\r\\n()]+\\))?)(?:\\s+(List))?\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
           "captures": {
             "1": { "name": "storage.modifier.skd" },
             "2": { "name": "storage.type.skd" },
@@ -230,6 +230,14 @@
           }
         },
         {
+          "name": "meta.control.on-interrupt.skd",
+          "match": "\\b(on)\\s+(interrupt)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.event.skd" },
+            "2": { "name": "keyword.control.event.skd" }
+          }
+        },
+        {
           "name": "meta.control.place-in.skd",
           "match": "\\b(place)\\s+(in)\\b",
           "captures": {
@@ -309,7 +317,7 @@
       "patterns": [
         {
           "name": "storage.type.skd",
-          "match": "\\b(Int|Float|Bool|Char|Byte|bool|char|Text|String|Path|Time|Duration|ByteSize|Angle|Memory|Task|Channel|Interrupt|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Color|Rect|Link|List|Canvas|Window|Point|Size)\\b"
+          "match": "\\b(Int|Float|Bool|Char|bool|char|Text|Path|Time|Duration|ByteSize|Angle|Memory|Task|Channel|Interrupt|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Color|Rect|List|Canvas|Window)\\b"
         }
       ]
     },
@@ -329,11 +337,11 @@
       "patterns": [
         {
           "name": "support.function.builtin.skd",
-          "match": "\\b(output|print|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg|dot|length|length_sq|normalize|distance|distance_sq|cross|color|color_hex|rect|canvas)\\b(?=\\s*\\()"
+          "match": "\\b(output|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg|dot|length|length_sq|normalize|distance|distance_sq|cross|color|color_hex|rect|canvas)\\b(?=\\s*\\()"
         },
         {
           "name": "meta.namespace.fs.skd",
-          "match": "\\b(fs)\\.(list|read|write|is_dir|join)\\b",
+          "match": "\\b(fs)\\.(list|is_dir|join)\\b",
           "captures": {
             "1": { "name": "entity.name.namespace.skd" },
             "2": { "name": "support.function.builtin.fs.skd" }
@@ -341,10 +349,12 @@
         },
         {
           "name": "meta.namespace.platform.skd",
-          "match": "\\b(windows|interrupts)\\.(open|periodic)\\b",
+          "match": "\\b(windows)\\.(open)\\b|\\b(interrupts)\\.(periodic)\\b",
           "captures": {
             "1": { "name": "entity.name.namespace.skd" },
-            "2": { "name": "support.function.builtin.platform.skd" }
+            "2": { "name": "support.function.builtin.platform.skd" },
+            "3": { "name": "entity.name.namespace.skd" },
+            "4": { "name": "support.function.builtin.platform.skd" }
           }
         }
       ]
