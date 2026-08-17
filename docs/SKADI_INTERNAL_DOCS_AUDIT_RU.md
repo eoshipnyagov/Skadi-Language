@@ -260,6 +260,10 @@ TUI:
    locals и runtime views ресурсов впереди;
 5. общий engine для CLI, TUI, будущего LSP и CI — первый JSON-контракт
    `skadi.analysis.v1` доступен через `skadi-cli analyze --json`.
+6. Локальный справочный AI-помощник — future research: retrieval по versioned
+   docs и structured facts остаётся источником истины, а маленькая модель может
+   только объяснять найденное; offline-first, без обязательной сети и без
+   автоматического изменения кода.
 
 ### Осознанно не надо добавлять без отдельного design decision
 
