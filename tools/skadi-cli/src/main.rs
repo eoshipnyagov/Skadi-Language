@@ -1,5 +1,6 @@
 mod actions;
 mod commands;
+mod debug_session;
 mod pipeline;
 mod project;
 mod targets;

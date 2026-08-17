@@ -2221,134 +2221,7 @@ fn emit_task_entry_prototypes(program: &Program, entries: &HashSet<String>, out:
 }
 
 fn emit_debug_runtime(out: &mut String) {
-    out.push_str(
-        r#"typedef struct {
-    const char *statement_id;
-    const char *source_path;
-    unsigned int line;
-    unsigned int col;
-} SkDebugLocation;
-
-static const SkDebugLocation sk_debug_locations[] = {
-    /* SKADI_DEBUG_LOCATION_TABLE */
-    {NULL, NULL, 0, 0}
-};
-
-static int sk_debug_initialized = 0;
-static int sk_debug_step_mode = 0;
-static const char *sk_debug_breakpoints = NULL;
-
-#if defined(_WIN32)
-static INIT_ONCE sk_debug_lock_once = INIT_ONCE_STATIC_INIT;
-static CRITICAL_SECTION sk_debug_lock_value;
-
-static BOOL CALLBACK sk_debug_init_lock(PINIT_ONCE once, PVOID parameter, PVOID *context) {
-    (void)once;
-    (void)parameter;
-    (void)context;
-    InitializeCriticalSection(&sk_debug_lock_value);
-    return TRUE;
-}
-
-static void sk_debug_lock(void) {
-    InitOnceExecuteOnce(&sk_debug_lock_once, sk_debug_init_lock, NULL, NULL);
-    EnterCriticalSection(&sk_debug_lock_value);
-}
-
-static void sk_debug_unlock(void) {
-    LeaveCriticalSection(&sk_debug_lock_value);
-}
-#else
-static pthread_mutex_t sk_debug_lock_value = PTHREAD_MUTEX_INITIALIZER;
-
-static void sk_debug_lock(void) {
-    pthread_mutex_lock(&sk_debug_lock_value);
-}
-
-static void sk_debug_unlock(void) {
-    pthread_mutex_unlock(&sk_debug_lock_value);
-}
-#endif
-
-static int sk_debug_has_breakpoint(const char *statement_id) {
-    const char *cursor = sk_debug_breakpoints;
-    size_t id_length = strlen(statement_id);
-    if (cursor == NULL || *cursor == '\0') return 0;
-    while (*cursor != '\0') {
-        const char *end = strchr(cursor, ',');
-        size_t length = end == NULL ? strlen(cursor) : (size_t)(end - cursor);
-        if (length == id_length && strncmp(cursor, statement_id, length) == 0) return 1;
-        if (end == NULL) break;
-        cursor = end + 1;
-    }
-    return 0;
-}
-
-static const SkDebugLocation *sk_debug_find_location(const char *statement_id) {
-    const SkDebugLocation *location = sk_debug_locations;
-    while (location->statement_id != NULL) {
-        if (strcmp(location->statement_id, statement_id) == 0) return location;
-        location++;
-    }
-    return NULL;
-}
-
-static void sk_debug_probe(const char *statement_id) {
-    char command[64];
-    const SkDebugLocation *location;
-    sk_debug_lock();
-    if (!sk_debug_initialized) {
-        const char *step = getenv("SKADI_DEBUG_STEP");
-        sk_debug_breakpoints = getenv("SKADI_DEBUG_BREAKPOINTS");
-        sk_debug_step_mode = step != NULL && strcmp(step, "1") == 0;
-        sk_debug_initialized = 1;
-    }
-    if (!sk_debug_step_mode && !sk_debug_has_breakpoint(statement_id)) {
-        sk_debug_unlock();
-        return;
-    }
-
-    location = sk_debug_find_location(statement_id);
-    if (location == NULL) {
-        fprintf(stderr, "\n[SKADI-DEBUG] stopped at %s\n", statement_id);
-    } else {
-        fprintf(stderr, "\n[SKADI-DEBUG] stopped at %s:%u:%u (%s)\n",
-            location->source_path, location->line, location->col, statement_id);
-    }
-    for (;;) {
-        size_t length;
-        fprintf(stderr, "(skadi-debug) ");
-        fflush(stderr);
-        if (fgets(command, sizeof(command), stdin) == NULL) {
-            sk_debug_step_mode = 0;
-            sk_debug_unlock();
-            return;
-        }
-        length = strlen(command);
-        while (length > 0 && (command[length - 1] == '\n' || command[length - 1] == '\r')) {
-            command[--length] = '\0';
-        }
-        if (strcmp(command, "c") == 0 || strcmp(command, "continue") == 0) {
-            sk_debug_step_mode = 0;
-            sk_debug_unlock();
-            return;
-        }
-        if (strcmp(command, "s") == 0 || strcmp(command, "step") == 0) {
-            sk_debug_step_mode = 1;
-            sk_debug_unlock();
-            return;
-        }
-        if (strcmp(command, "q") == 0 || strcmp(command, "quit") == 0) {
-            fprintf(stderr, "[SKADI-DEBUG] session terminated\n");
-            fflush(stderr);
-            exit(0);
-        }
-        fprintf(stderr, "commands: continue (c), step (s), quit (q)\n");
-    }
-}
-
-"#,
-    );
+    out.push_str(include_str!("debug_runtime.c"));
 }
 
 pub fn transpile_program_to_c(program: &Program) -> String {
@@ -2444,6 +2317,9 @@ pub fn transpile_program_to_c_with_options(
         || options.debug_probes
     {
         out.push_str("#if defined(_WIN32)\n");
+        if options.debug_probes {
+            out.push_str("#include <winsock2.h>\n#include <ws2tcpip.h>\n");
+        }
         out.push_str("#include <windows.h>\n");
         out.push_str("#else\n");
         if needs_task_runtime
@@ -2461,6 +2337,11 @@ pub fn transpile_program_to_c_with_options(
             out.push_str("#include <errno.h>\n");
             out.push_str("#include <time.h>\n");
         }
+        if options.debug_probes {
+            out.push_str("#include <arpa/inet.h>\n");
+            out.push_str("#include <sys/socket.h>\n");
+            out.push_str("#include <unistd.h>\n");
+        }
         out.push_str("#endif\n\n");
     }
     if needs_window_runtime
@@ -2470,9 +2351,6 @@ pub fn transpile_program_to_c_with_options(
             || needs_interrupt_runtime)
     {
         out.push_str("#if defined(_WIN32)\n#include <windows.h>\n#endif\n\n");
-    }
-    if options.debug_probes {
-        emit_debug_runtime(&mut out);
     }
     if needs_vector_runtime {
         emit_vector_declarations(&mut out);
@@ -2484,8 +2362,11 @@ pub fn transpile_program_to_c_with_options(
     if needs_time_runtime {
         emit_time_runtime(&mut out);
     }
-    if needs_memory_runtime || needs_task_runtime {
+    if needs_memory_runtime || needs_task_runtime || options.debug_probes {
         emit_thread_local_support(&mut out);
+    }
+    if options.debug_probes {
+        emit_debug_runtime(&mut out);
     }
     if needs_task_runtime {
         emit_task_runtime(&mut out);
@@ -2543,6 +2424,9 @@ pub fn transpile_program_to_c_with_options(
     } else {
         out.push_str("int main(void) {\n");
     }
+    if options.debug_probes {
+        out.push_str("    sk_debug_enter(\"<main>\");\n");
+    }
     let mut declared: HashMap<String, String> = HashMap::new();
     for stmt in &program.statements {
         if !matches!(stmt, Statement::FunctionDef { .. }) {
@@ -2563,6 +2447,9 @@ pub fn transpile_program_to_c_with_options(
         out.push_str("();\n");
     }
     emit_top_level_cleanup(program, &mut out);
+    if options.debug_probes {
+        out.push_str("    sk_debug_leave();\n");
+    }
     out.push_str("    return 0;\n");
     out.push_str("}\n");
 
@@ -2678,8 +2565,13 @@ fn emit_default_return_tail(
     indent: usize,
     return_type: Option<&str>,
     is_danger: bool,
+    debug_probes: bool,
 ) {
     let pad = "    ".repeat(indent);
+    if debug_probes {
+        out.push_str(&pad);
+        out.push_str("sk_debug_leave();\n");
+    }
     if is_danger {
         out.push_str(&pad);
         out.push_str("return 1;\n");
@@ -2778,6 +2670,16 @@ fn emit_struct_methods(program: &Program, out: &mut String, state: &mut CodegenS
                 is_danger: method.is_danger,
                 return_type: method.returns.clone(),
             };
+            if state.debug_probes {
+                out.push_str("    sk_debug_enter(\"");
+                out.push_str(name);
+                out.push('.');
+                out.push_str(&method.name);
+                out.push_str("\");\n");
+                for param in &method.params {
+                    emit_debug_named_local(out, 1, &param.name, &declared);
+                }
+            }
             emit_block(
                 &method.body,
                 out,
@@ -2787,7 +2689,13 @@ fn emit_struct_methods(program: &Program, out: &mut String, state: &mut CodegenS
                 None,
                 state,
             );
-            emit_default_return_tail(out, 1, method.returns.as_deref(), method.is_danger);
+            emit_default_return_tail(
+                out,
+                1,
+                method.returns.as_deref(),
+                method.is_danger,
+                state.debug_probes,
+            );
             out.push_str("}\n\n");
         }
     }
@@ -4221,9 +4129,17 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
             is_danger: *is_danger,
             return_type: returns.clone(),
         };
+        if state.debug_probes {
+            out.push_str("    sk_debug_enter(\"");
+            out.push_str(name);
+            out.push_str("\");\n");
+            for param in params {
+                emit_debug_named_local(out, 1, &param.name, &declared);
+            }
+        }
         emit_block(body, out, 1, &mut declared, Some(&fn_ctx), None, state);
         emit_move_parameter_cleanup(out, 1, params);
-        emit_default_return_tail(out, 1, returns.as_deref(), *is_danger);
+        emit_default_return_tail(out, 1, returns.as_deref(), *is_danger, state.debug_probes);
         out.push_str("}\n");
     }
 }
@@ -4475,6 +4391,9 @@ fn emit_statement(
     }
 
     emit_statement_body(stmt, out, indent, declared, fn_ctx, place_ctx, state);
+    if state.debug_probes {
+        emit_debug_local_update(stmt, out, indent, declared);
+    }
 
     let generated_end_line = generated_line(out)
         .saturating_sub(1)
@@ -4487,6 +4406,62 @@ fn emit_statement(
         generated_start_line,
         generated_end_line,
     });
+}
+
+fn emit_debug_local_update(
+    statement: &Statement,
+    out: &mut String,
+    indent: usize,
+    declared: &HashMap<String, String>,
+) {
+    let name = match statement {
+        Statement::VarDecl { name, .. } if indent == 1 => name,
+        Statement::Assignment { target, .. } | Statement::IncDec { target, .. } => target,
+        _ => return,
+    };
+    let Some(raw_type) = declared.get(name) else {
+        return;
+    };
+    emit_debug_named_local_with_type(out, indent, name, raw_type);
+}
+
+fn emit_debug_named_local(
+    out: &mut String,
+    indent: usize,
+    name: &str,
+    declared: &HashMap<String, String>,
+) {
+    let Some(raw_type) = declared.get(name) else {
+        return;
+    };
+    emit_debug_named_local_with_type(out, indent, name, raw_type);
+}
+
+fn emit_debug_named_local_with_type(out: &mut String, indent: usize, name: &str, raw_type: &str) {
+    let normalized = normalize_type_token(raw_type);
+    let value = if raw_type.ends_with("@direct") {
+        format!("(*{name})")
+    } else {
+        name.to_string()
+    };
+    let function = match normalized.as_str() {
+        "Float" | "f32" | "f64" | "Angle" => "sk_debug_local_f64",
+        "Bool" | "bool" => "sk_debug_local_bool",
+        "Char" | "char" => "sk_debug_local_char",
+        "Text" | "Path" => "sk_debug_local_text",
+        "Int" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "Time"
+        | "Duration" | "ByteSize" => "sk_debug_local_i64",
+        _ => return,
+    };
+    out.push_str(&"    ".repeat(indent));
+    out.push_str(function);
+    out.push_str("(\"");
+    out.push_str(name);
+    out.push_str("\", \"");
+    out.push_str(&normalized);
+    out.push_str("\", ");
+    out.push_str(&value);
+    out.push_str(");\n");
 }
 
 fn generated_line(out: &str) -> u32 {
@@ -5452,25 +5427,34 @@ fn emit_statement_body(
                         ));
                         out.push_str(";\n");
                         emit_owned_channel_cleanup(out, &pad, declared);
+                        if state.debug_probes {
+                            out.push_str(&pad);
+                            out.push_str("sk_debug_leave();\n");
+                        }
                         out.push_str(&pad);
                         out.push_str("return 0;\n");
                         return;
                     }
                     (true, None) => {
                         emit_owned_channel_cleanup(out, &pad, declared);
+                        if state.debug_probes {
+                            out.push_str(&pad);
+                            out.push_str("sk_debug_leave();\n");
+                        }
                         out.push_str(&pad);
                         out.push_str("return 1;\n");
                         return;
                     }
                     (false, Some(expr)) => {
                         let has_owned_channel = declared.values().any(|ty| ty.ends_with("@owned"));
+                        let needs_return_temp = has_owned_channel || state.debug_probes;
                         out.push_str(&pad);
-                        if has_owned_channel {
+                        if needs_return_temp {
                             out.push_str("int sk_channel_return_value_");
                         } else {
                             out.push_str("return ");
                         }
-                        let return_id = has_owned_channel.then(|| state.next_id());
+                        let return_id = needs_return_temp.then(|| state.next_id());
                         if let Some(return_id) = return_id {
                             out.push_str(&return_id.to_string());
                             out.push_str(" = ");
@@ -5482,6 +5466,10 @@ fn emit_statement_body(
                         ));
                         out.push_str(";\n");
                         emit_owned_channel_cleanup(out, &pad, declared);
+                        if state.debug_probes {
+                            out.push_str(&pad);
+                            out.push_str("sk_debug_leave();\n");
+                        }
                         if let Some(return_id) = return_id {
                             out.push_str(&pad);
                             out.push_str("return sk_channel_return_value_");
@@ -5492,6 +5480,10 @@ fn emit_statement_body(
                     }
                     (false, None) => {
                         emit_owned_channel_cleanup(out, &pad, declared);
+                        if state.debug_probes {
+                            out.push_str(&pad);
+                            out.push_str("sk_debug_leave();\n");
+                        }
                         out.push_str(&pad);
                         out.push_str("return 1;\n");
                         return;
@@ -5499,24 +5491,31 @@ fn emit_statement_body(
                 }
             }
             let has_owned_channel = declared.values().any(|ty| ty.ends_with("@owned"));
-            let return_temp = value.as_ref().filter(|_| has_owned_channel).map(|expr| {
-                let return_id = state.next_id();
-                out.push_str(&pad);
-                out.push_str(&map_skadi_type_to_c(
-                    fn_ctx.and_then(|ctx| ctx.return_type.as_deref()),
-                ));
-                out.push_str(" sk_channel_return_value_");
-                out.push_str(&return_id.to_string());
-                out.push_str(" = ");
-                out.push_str(&emit_return_expr(
-                    expr,
-                    fn_ctx.and_then(|ctx| ctx.return_type.as_deref()),
-                    declared,
-                ));
-                out.push_str(";\n");
-                return_id
-            });
+            let return_temp = value
+                .as_ref()
+                .filter(|_| has_owned_channel || state.debug_probes)
+                .map(|expr| {
+                    let return_id = state.next_id();
+                    out.push_str(&pad);
+                    out.push_str(&map_skadi_type_to_c(
+                        fn_ctx.and_then(|ctx| ctx.return_type.as_deref()),
+                    ));
+                    out.push_str(" sk_channel_return_value_");
+                    out.push_str(&return_id.to_string());
+                    out.push_str(" = ");
+                    out.push_str(&emit_return_expr(
+                        expr,
+                        fn_ctx.and_then(|ctx| ctx.return_type.as_deref()),
+                        declared,
+                    ));
+                    out.push_str(";\n");
+                    return_id
+                });
             emit_owned_channel_cleanup(out, &pad, declared);
+            if state.debug_probes {
+                out.push_str(&pad);
+                out.push_str("sk_debug_leave();\n");
+            }
             out.push_str(&pad);
             out.push_str("return");
             if let Some(return_id) = return_temp {
@@ -5560,6 +5559,10 @@ fn emit_statement_body(
                 out.push_str(");\n");
             }
             emit_owned_channel_cleanup(out, &pad, declared);
+            if state.debug_probes {
+                out.push_str(&pad);
+                out.push_str("sk_debug_leave();\n");
+            }
             let variant = code.rsplit('.').next().unwrap_or(code.as_str());
             out.push_str(&pad);
             out.push_str("return ErrorCode_");

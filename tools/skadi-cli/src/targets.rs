@@ -28,6 +28,7 @@ fn gnu_link_args(c: &str, out: &str, pthread: bool, windows: bool) -> Vec<String
     args.push("-lm".to_string());
     if windows {
         args.push("-lgdi32".to_string());
+        args.push("-lws2_32".to_string());
     }
     args
 }
@@ -99,6 +100,7 @@ pub fn candidate_invocations(
                         "/nologo".to_string(),
                         c.clone(),
                         "gdi32.lib".to_string(),
+                        "ws2_32.lib".to_string(),
                         format!("/Fo:{object}"),
                         format!("/Fe:{out}"),
                     ],
@@ -160,6 +162,7 @@ pub fn single_compiler_invocation(
                     "/nologo".to_string(),
                     c,
                     "gdi32.lib".to_string(),
+                    "ws2_32.lib".to_string(),
                     format!("/Fo:{object}"),
                     format!("/Fe:{out}"),
                 ],
@@ -286,6 +289,10 @@ mod tests {
         assert!(
             xs.iter()
                 .all(|invocation| invocation.args.iter().any(|arg| arg == "-lgdi32"))
+        );
+        assert!(
+            xs.iter()
+                .all(|invocation| invocation.args.iter().any(|arg| arg == "-lws2_32"))
         );
     }
 

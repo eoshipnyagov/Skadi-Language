@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -11,6 +12,7 @@ pub use v01::analysis::{AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind};
 use v01::codegen::CodegenOptions;
 use v01::formatter::format_source;
 
+use crate::debug_session::{DebugCommand, DebugEvent, DebugIoMode, DebugStop, start_debug_session};
 use crate::pipeline::{
     DebugSourceMapEntry, compile_c_to_exe_detailed, compile_frontend, compile_frontend_with_options,
 };
@@ -888,42 +890,100 @@ fn same_debug_path(left: &Path, right: &Path) -> bool {
 }
 
 pub fn execute_debug(prepared: &DebugPrepared) -> Result<DebugResult, ActionError> {
-    let breakpoint_ids = prepared
-        .breakpoints
-        .iter()
-        .map(|breakpoint| breakpoint.statement_id.as_str())
-        .collect::<Vec<_>>()
-        .join(",");
-    let status = Command::new(&prepared.build.exe_path)
-        .current_dir(&prepared.build.project.cwd)
-        .args(&prepared.program_args)
-        .env("SKADI_DEBUG_BREAKPOINTS", breakpoint_ids)
-        .env(
-            "SKADI_DEBUG_STEP",
-            if prepared.starts_paused { "1" } else { "0" },
-        )
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .map_err(|error| {
+    let session = start_debug_session(prepared, DebugIoMode::Terminal)?;
+    loop {
+        let event = session.recv().map_err(|_| {
             ActionError::new(
                 FailureSource::Runtime,
-                format!(
-                    "debug execution error: failed to run {}: {error}",
-                    prepared.build.exe_path.display()
-                ),
+                "debug transport error: event channel closed unexpectedly",
             )
         })?;
-    if !status.success() {
-        return Err(ActionError::new(
-            FailureSource::Runtime,
-            format!("debug execution error: program exited with status {status}"),
-        ));
+        match event {
+            DebugEvent::Started => {}
+            DebugEvent::Stopped(stop) => {
+                print_debug_stop(prepared, &stop);
+                let command = read_debug_command()?;
+                session
+                    .command(command)
+                    .map_err(|message| ActionError::new(FailureSource::Runtime, message))?;
+            }
+            DebugEvent::Stdout(_) | DebugEvent::Stderr(_) => {}
+            DebugEvent::Exited { status, success } if success => {
+                return Ok(DebugResult {
+                    exit_status: status,
+                });
+            }
+            DebugEvent::Exited { status, .. } => {
+                return Err(ActionError::new(
+                    FailureSource::Runtime,
+                    format!("debug execution error: program exited with status {status}"),
+                ));
+            }
+            DebugEvent::Error(message) => {
+                return Err(ActionError::new(FailureSource::Runtime, message));
+            }
+        }
     }
-    Ok(DebugResult {
-        exit_status: status.to_string(),
-    })
+}
+
+fn print_debug_stop(prepared: &DebugPrepared, stop: &DebugStop) {
+    if let Some(location) = prepared
+        .build
+        .debug_map
+        .iter()
+        .find(|entry| entry.statement_id == stop.statement_id)
+    {
+        eprintln!(
+            "\n[SKADI-DEBUG] stopped at {}:{}:{} ({}) [thread {}]",
+            location.source_path.display(),
+            location.source_line,
+            location.source_col,
+            stop.statement_id,
+            stop.thread_id
+        );
+    } else {
+        eprintln!(
+            "\n[SKADI-DEBUG] stopped at {} [thread {}]",
+            stop.statement_id, stop.thread_id
+        );
+    }
+    for (index, frame) in stop.frames.iter().enumerate() {
+        eprintln!("  #{index} {} ({})", frame.function, frame.statement_id);
+        for local in &frame.locals {
+            eprintln!(
+                "      {}: {} = {}",
+                local.name, local.type_name, local.value
+            );
+        }
+    }
+}
+
+fn read_debug_command() -> Result<DebugCommand, ActionError> {
+    loop {
+        eprint!("(skadi-debug) ");
+        io::stderr().flush().map_err(|error| {
+            ActionError::new(
+                FailureSource::Io,
+                format!("debug prompt error: flush failed: {error}"),
+            )
+        })?;
+        let mut command = String::new();
+        let read = io::stdin().read_line(&mut command).map_err(|error| {
+            ActionError::new(
+                FailureSource::Io,
+                format!("debug prompt error: input failed: {error}"),
+            )
+        })?;
+        if read == 0 {
+            return Ok(DebugCommand::Continue);
+        }
+        match command.trim() {
+            "c" | "continue" => return Ok(DebugCommand::Continue),
+            "s" | "step" => return Ok(DebugCommand::Step),
+            "q" | "quit" => return Ok(DebugCommand::Quit),
+            _ => eprintln!("commands: continue (c), step (s), quit (q)"),
+        }
+    }
 }
 
 pub fn prepare_quick_run(options: &QuickRunOptions) -> Result<QuickRunPrepared, ActionError> {

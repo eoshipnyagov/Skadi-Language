@@ -237,12 +237,12 @@ fn debug_breakpoint_and_step_smoke() {
 
     fs::write(
         project_dir.join("src").join("worker.skd"),
-        "fn helper() Int {\n    new Int result = 7\n    return result\n}\n",
+        "fn helper(Int value) Int {\n    new Int result = value + 1\n    return result\n}\n",
     )
     .expect("worker source should be written");
     fs::write(
         project_dir.join("src").join("main.skd"),
-        "import \"./worker.skd\"\nnew Int result = helper()\noutput(result)\n",
+        "import \"./worker.skd\"\nnew Int result = helper(6)\noutput(result)\n",
     )
     .expect("entry source should be written");
     let imported_debug = run_cli_with_input(
@@ -259,7 +259,54 @@ fn debug_breakpoint_and_step_smoke() {
         stdout_text(&imported_debug).contains("breakpoint src/worker.skd:2:5"),
         "imported breakpoint should resolve to its source file"
     );
-    assert!(stderr_text(&imported_debug).contains("worker.skd:2:5"));
+    let imported_stderr = stderr_text(&imported_debug);
+    assert!(imported_stderr.contains("worker.skd:2:5"));
+    assert!(imported_stderr.contains("#0 helper"));
+    assert!(imported_stderr.contains("value: Int = 6"));
+
+    let _ = fs::remove_dir_all(temp);
+}
+
+#[test]
+fn debug_serializes_breakpoints_from_five_tasks() {
+    if !host_compiler_ready() {
+        return;
+    }
+    let temp = unique_temp_dir("debug_tasks");
+    let created = run_cli(&temp, &["new", "debug_tasks"]);
+    assert!(
+        created.status.success(),
+        "new failed: {}",
+        stderr_text(&created)
+    );
+    let project_dir = temp.join("debug_tasks");
+    fs::write(
+        project_dir.join("src").join("main.skd"),
+        include_str!("../../../examples/concurrency/01_five_workers.skd"),
+    )
+    .expect("task debug source should be written");
+
+    let debug = run_cli_with_input(
+        &project_dir,
+        &["debug", "--break", "src/main.skd:2"],
+        "continue\ncontinue\ncontinue\ncontinue\ncontinue\n",
+    );
+    assert!(
+        debug.status.success(),
+        "task debug failed: {}",
+        stderr_text(&debug)
+    );
+    let stdout = stdout_text(&debug);
+    let stderr = stderr_text(&debug);
+    assert!(stdout.lines().any(|line| line.trim() == "55"));
+    assert_eq!(stderr.matches("[SKADI-DEBUG] stopped at").count(), 5);
+    assert_eq!(stderr.matches("#0 square_and_send").count(), 5);
+    for value in 1..=5 {
+        assert!(
+            stderr.contains(&format!("value: Int = {value}")),
+            "missing worker value {value}: {stderr}"
+        );
+    }
 
     let _ = fs::remove_dir_all(temp);
 }

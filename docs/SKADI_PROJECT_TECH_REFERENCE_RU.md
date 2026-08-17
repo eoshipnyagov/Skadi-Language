@@ -166,8 +166,9 @@ editor persistence.
 ### `tui.rs`
 
 Full-screen `ratatui`/`crossterm` application: dashboard, diagnostics,
-build/run, doctor, project bootstrap, config editor и help. Долгие actions пока
-синхронны; shell-out к собственным CLI-командам не используется.
+lifecycle, debug, build/run, doctor, project bootstrap, config editor и help.
+Подготовительные build-actions пока синхронны; запущенная debug-сессия отдаёт
+события TUI асинхронно. Shell-out к собственным CLI-командам не используется.
 
 Целевое развитие TUI - не перенос semantic logic в event loop, а представление
 общего structured analysis engine. Тот же набор facts должен обслуживать CLI,
@@ -178,11 +179,14 @@ debugger.
 Первый debugger строится поверх C pipeline. Lexer сохраняет start location
 токена, C-emitter вставляет `SK-STMT` markers и opt-in compiler probes, import
 pipeline восстанавливает исходный `.skd`, а `build` пишет portable JSON sidecar.
-CLI уже разрешает breakpoints `file.skd:line` и поддерживает `continue`, `step`
-и `quit`. Probes между задачами сериализуются, поэтому остановка кооперативная:
-это ещё не нативный stop-the-world debugger. Skadi type metadata, locals, call
-stack и TUI debug session остаются впереди. GDB/LLDB допустимы как нижний native
-layer; собственный machine debugger не является целью.
+CLI разрешает breakpoints `file.skd:line` и поддерживает `continue`, `step` и
+`quit`. Внутренний loopback TCP-протокол передаёт события STOP/FRAME/LOCAL
+отдельно от stdin программы; один и тот же `DebugSession` обслуживает CLI и TUI.
+Runtime ведёт thread-local Skadi stack и базовые scalar-locals. Probes между
+задачами сериализуются, поэтому остановка кооперативная: это ещё не нативный
+stop-the-world debugger. Впереди остаются nested locals, раскрытие структур и
+runtime views для Task/Channel/Memory/resources. GDB/LLDB допустимы как нижний
+native layer; собственный machine debugger не является целью.
 
 ## 5. Реализованные уровни языка
 

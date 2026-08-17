@@ -56,6 +56,13 @@ fn codegen_debug_probes_are_opt_in() {
     assert!(debug.c_code.contains("static void sk_debug_probe("));
     assert!(debug.c_code.contains("sk_debug_probe(\"SK-STMT@1:1#1\");"));
     assert!(debug.c_code.contains("sk_debug_probe(\"SK-STMT@2:1#1\");"));
+    assert!(debug.c_code.contains("sk_debug_enter(\"<main>\");"));
+    assert!(
+        debug
+            .c_code
+            .contains("sk_debug_local_i64(\"value\", \"Int\", value);")
+    );
+    assert!(debug.c_code.contains("sk_debug_leave();"));
     assert_eq!(
         normal
             .source_map
@@ -68,6 +75,30 @@ fn codegen_debug_probes_are_opt_in() {
             .map(|entry| &entry.statement_id)
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn codegen_debug_runtime_tracks_function_frames_and_parameters() {
+    let source = "fn add(Int value) Int {\n    new Int next = value + 1\n    return next\n}\nnew Int answer = add(4)\n";
+    let tokens = lex(source).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let debug =
+        transpile_program_to_c_with_options(&program, CodegenOptions { debug_probes: true });
+
+    assert!(debug.c_code.contains("sk_debug_enter(\"add\");"));
+    assert!(
+        debug
+            .c_code
+            .contains("sk_debug_local_i64(\"value\", \"Int\", value);")
+    );
+    assert!(
+        debug
+            .c_code
+            .contains("sk_debug_local_i64(\"next\", \"Int\", next);")
+    );
+    assert!(debug.c_code.contains("sk_debug_send_text(\"FRAME\\t\")"));
+    assert!(debug.c_code.contains("sk_debug_send_text(\"LOCAL\\t\")"));
 }
 
 #[test]

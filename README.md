@@ -50,7 +50,8 @@ The repository includes:
   operations, incomplete `when`, and resource lifecycle chains displayed in a
   dedicated TUI workspace and exported by `analyze --json`,
 - statement-level Skadi-to-C debug maps with multi-file source origins, plus an
-  opt-in probe debugger with source breakpoints, continue, and step,
+  opt-in probe debugger with source breakpoints, continue/step, call stacks,
+  scalar locals, thread-aware cooperative stops, and a TUI debug workspace,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
 - experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,

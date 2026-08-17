@@ -61,8 +61,9 @@ cargo run -p skadi-cli -- check
 `build` также создаёт `<project>.skadi-debug.json` со statement-level mapping
 между исходными `.skd` и generated C. Sidecar уже учитывает imports и является
 основой Skadi-level debugger. Команда `debug [-b file.skd:line]` уже поддерживает
-исходные точки останова, `continue`, `step` и `quit`; locals, call stack и
-debug-сессия внутри TUI пока не готовы.
+исходные точки останова, `continue`, `step` и `quit`. Остановка показывает
+Skadi call stack и базовые scalar-locals. Тот же машинный debug-канал используется
+экраном Debug внутри TUI.
 
 `build` и `run` принимают `--target` и `--cc`. C-компилятор является внешней
 зависимостью и не устанавливается вместе со Skadi.
@@ -76,6 +77,8 @@ TUI поддерживает:
 - structured analysis facts для blocking/timed Channel и timed Task wait,
   incomplete `when` и ownership/resource lifecycle chains с explain/next-action detail;
 - отдельный Lifecycle workspace с фильтрами Tasks, Channels, Memory и Resources;
+- Debug workspace с исходной позицией, thread ID, call stack, scalar-locals и
+  выводом программы;
 - `check`, `format`, `build`, `run`, `doctor`;
 - редактор каноничных полей `Skadi.toml`;
 - выбор target и компилятора для текущего сеанса;
@@ -86,9 +89,13 @@ TUI поддерживает:
 - `c`, `b`, `r`, `f`, `d` запускают соответствующие действия;
 - `m` открывает конфигурацию;
 - `o` переключает проект;
-- `p`, `e`, `l`, `h` открывают dashboard, диагностику, lifecycle и help;
+- `p`, `e`, `l`, `x`, `h` открывают dashboard, диагностику, lifecycle, debug и help;
+- `F5`, `F10`, `F8` запускают/продолжают, выполняют шаг и завершают
+  debug-сессию;
 - `1`-`5` фильтруют субъекты в Lifecycle workspace;
 - `q` завершает TUI.
 
-Пока нет фоновых задач и отдельного showcase browser. Для автоматизации и CI
-каноническим остаётся обычный CLI.
+Пока нет фоновых build-actions и отдельного showcase browser. Debug в TUI
+запускается без интерактивного stdin программы; для `input()` и точных source
+breakpoints используйте `skadi-cli debug`. Для автоматизации и CI каноническим
+остаётся обычный CLI.

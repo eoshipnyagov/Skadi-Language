@@ -15,8 +15,11 @@ use std::{fs, io, path::Path, time::Duration};
 
 use crate::actions::{
     self, ActionError, AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind, BuildOptions,
-    BuildResult, CheckResult, DiagnosticSummary, DoctorReport, FailureSource, FormatOptions,
-    FormatState, ManifestConfigResult, ProjectSummary, RunResult,
+    BuildResult, CheckResult, DebugOptions, DebugPrepared, DiagnosticSummary, DoctorReport,
+    FailureSource, FormatOptions, FormatState, ManifestConfigResult, ProjectSummary, RunResult,
+};
+use crate::debug_session::{
+    DebugCommand, DebugEvent, DebugIoMode, DebugSession, DebugStop, start_debug_session,
 };
 
 const MIN_WIDTH: u16 = 96;
@@ -74,7 +77,8 @@ fn print_help() {
     println!("  Tab            Next screen");
     println!("  Shift+Tab      Previous screen");
     println!("  c/b/r/f/d      Check / Build / Run / Format / Doctor");
-    println!("  p/m/e/l/h      Home / Config / Diagnostics / Lifecycle / Help");
+    println!("  p/m/e/l/x/h    Home / Config / Diagnostics / Lifecycle / Debug / Help");
+    println!("  F5/F10/F8      Start or continue / Step / Stop debug session");
     println!("  o/n/i          Open project / New project / Init directory (Bootstrap view)");
 }
 
@@ -93,6 +97,7 @@ fn run_app(
     app: &mut App,
 ) -> Result<(), String> {
     loop {
+        app.poll_debug_events();
         terminal
             .draw(|frame| render(frame, app))
             .map_err(|e| format!("failed to draw TUI: {e}"))?;
@@ -119,6 +124,7 @@ enum AppScreen {
     Config,
     Diagnostics,
     Lifecycle,
+    Debug,
     BuildRun,
     Doctor,
     Bootstrap,
@@ -132,6 +138,7 @@ impl AppScreen {
             Self::Config => "Config",
             Self::Diagnostics => "Diagnostics",
             Self::Lifecycle => "Lifecycle",
+            Self::Debug => "Debug",
             Self::BuildRun => "Build/Run",
             Self::Doctor => "Doctor",
             Self::Bootstrap => "Bootstrap",
@@ -144,7 +151,8 @@ impl AppScreen {
             Self::Home => Self::Config,
             Self::Config => Self::Diagnostics,
             Self::Diagnostics => Self::Lifecycle,
-            Self::Lifecycle => Self::BuildRun,
+            Self::Lifecycle => Self::Debug,
+            Self::Debug => Self::BuildRun,
             Self::BuildRun => Self::Doctor,
             Self::Doctor => Self::Bootstrap,
             Self::Bootstrap => Self::Help,
@@ -158,7 +166,8 @@ impl AppScreen {
             Self::Config => Self::Home,
             Self::Diagnostics => Self::Config,
             Self::Lifecycle => Self::Diagnostics,
-            Self::BuildRun => Self::Lifecycle,
+            Self::Debug => Self::Lifecycle,
+            Self::BuildRun => Self::Debug,
             Self::Doctor => Self::BuildRun,
             Self::Bootstrap => Self::Doctor,
             Self::Help => Self::Bootstrap,
@@ -175,6 +184,7 @@ enum AppFocus {
     DiagnosticsList,
     LifecycleSubjects,
     LifecycleFacts,
+    DebugFrames,
     BootstrapInput,
 }
 
@@ -265,6 +275,41 @@ struct LifecycleSubject<'a> {
 #[derive(Clone, Debug, Default)]
 struct EnvironmentState {
     report: Option<DoctorReport>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum DebugRunState {
+    #[default]
+    Idle,
+    Starting,
+    Running,
+    Stopped,
+    Exited,
+    Failed,
+}
+
+impl DebugRunState {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Starting => "starting",
+            Self::Running => "running",
+            Self::Stopped => "stopped",
+            Self::Exited => "exited",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+#[derive(Default)]
+struct DebugState {
+    session: Option<DebugSession>,
+    prepared: Option<DebugPrepared>,
+    run_state: DebugRunState,
+    current_stop: Option<DebugStop>,
+    selected_frame: usize,
+    output: Vec<String>,
+    exit_status: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -369,6 +414,7 @@ struct App {
     diagnostics: DiagnosticsState,
     lifecycle: LifecycleState,
     environment: EnvironmentState,
+    debug: DebugState,
     status: StatusLine,
     last_action: Option<ActionState>,
     last_build: Option<BuildResult>,
@@ -389,6 +435,7 @@ impl App {
             diagnostics: DiagnosticsState::default(),
             lifecycle: LifecycleState::default(),
             environment: EnvironmentState::default(),
+            debug: DebugState::default(),
             status: StatusLine {
                 text: "Ready. Press 'h' for keys.".to_string(),
             },
@@ -402,8 +449,28 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<(), String> {
+        if self.screen == AppScreen::Debug {
+            match key.code {
+                KeyCode::F(5) => {
+                    self.debug_start_or_continue();
+                    return Ok(());
+                }
+                KeyCode::F(10) => {
+                    self.debug_command(DebugCommand::Step);
+                    return Ok(());
+                }
+                KeyCode::F(8) => {
+                    self.debug_command(DebugCommand::Quit);
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
         match key.code {
             KeyCode::Char('q') => {
+                if let Some(session) = &self.debug.session {
+                    let _ = session.terminate();
+                }
                 self.should_quit = true;
                 return Ok(());
             }
@@ -453,6 +520,11 @@ impl App {
                 self.clamp_lifecycle_selection();
                 Ok(())
             }
+            KeyCode::Char('x') => {
+                self.screen = AppScreen::Debug;
+                self.focus = AppFocus::DebugFrames;
+                Ok(())
+            }
             KeyCode::Char('h') => {
                 self.screen = AppScreen::Help;
                 self.focus = AppFocus::Tabs;
@@ -475,6 +547,7 @@ impl App {
             AppScreen::Config => self.handle_config_key(key),
             AppScreen::Diagnostics => self.handle_diagnostics_key(key),
             AppScreen::Lifecycle => self.handle_lifecycle_key(key),
+            AppScreen::Debug => self.handle_debug_key(key),
             AppScreen::Bootstrap => self.handle_bootstrap_key(key),
             _ => Ok(()),
         }
@@ -602,6 +675,27 @@ impl App {
                 }
                 _ => {}
             },
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_debug_key(&mut self, key: KeyEvent) -> Result<(), String> {
+        let frame_count = self
+            .debug
+            .current_stop
+            .as_ref()
+            .map(|stop| stop.frames.len())
+            .unwrap_or(0);
+        match key.code {
+            KeyCode::Down | KeyCode::Char('j') if frame_count > 0 => {
+                self.debug.selected_frame =
+                    (self.debug.selected_frame + 1).min(frame_count.saturating_sub(1));
+            }
+            KeyCode::Up | KeyCode::Char('k') if frame_count > 0 => {
+                self.debug.selected_frame = self.debug.selected_frame.saturating_sub(1);
+            }
+            KeyCode::Enter => self.debug_start_or_continue(),
             _ => {}
         }
         Ok(())
@@ -757,6 +851,9 @@ impl App {
     }
 
     fn run_build(&mut self) -> Result<(), String> {
+        if self.debug_session_blocks_project_change("build") {
+            return Ok(());
+        }
         let options = self.current_build_options();
         match actions::run_build_at(&self.project.summary.cwd, &options) {
             Ok(result) => {
@@ -787,6 +884,9 @@ impl App {
     }
 
     fn run_run(&mut self) -> Result<(), String> {
+        if self.debug_session_blocks_project_change("run") {
+            return Ok(());
+        }
         let options = self.current_build_options();
         match actions::run_project_at(&self.project.summary.cwd, &options) {
             Ok(result) => {
@@ -816,7 +916,181 @@ impl App {
         Ok(())
     }
 
+    fn debug_start_or_continue(&mut self) {
+        if self.debug.run_state == DebugRunState::Stopped {
+            self.debug_command(DebugCommand::Continue);
+            return;
+        }
+        if matches!(
+            self.debug.run_state,
+            DebugRunState::Starting | DebugRunState::Running
+        ) {
+            self.status.text = "Debug program is already running.".to_string();
+            return;
+        }
+
+        self.debug.run_state = DebugRunState::Starting;
+        self.debug.current_stop = None;
+        self.debug.selected_frame = 0;
+        self.debug.output.clear();
+        self.debug.exit_status = None;
+        let options = DebugOptions {
+            build: self.current_build_options(),
+            breakpoints: Vec::new(),
+            program_args: Vec::new(),
+        };
+        match actions::prepare_debug_at(&self.project.summary.cwd, &options) {
+            Ok(prepared) => match start_debug_session(&prepared, DebugIoMode::Captured) {
+                Ok(session) => {
+                    self.last_build = Some(prepared.build.clone());
+                    self.debug.prepared = Some(prepared);
+                    self.debug.session = Some(session);
+                    self.debug.run_state = DebugRunState::Running;
+                    self.status.text =
+                        "Debug session started; waiting for the first statement.".to_string();
+                    self.screen = AppScreen::Debug;
+                    self.focus = AppFocus::DebugFrames;
+                }
+                Err(error) => self.apply_debug_start_error(error),
+            },
+            Err(error) => self.apply_debug_start_error(error),
+        }
+    }
+
+    fn apply_debug_start_error(&mut self, error: ActionError) {
+        self.debug.run_state = DebugRunState::Failed;
+        self.debug.output.push(error.to_string());
+        self.status.text = "Debug session could not start.".to_string();
+        self.apply_error("debug", error);
+        self.screen = AppScreen::Debug;
+        self.focus = AppFocus::DebugFrames;
+    }
+
+    fn debug_command(&mut self, command: DebugCommand) {
+        if command == DebugCommand::Quit && self.debug.run_state != DebugRunState::Stopped {
+            let Some(session) = &self.debug.session else {
+                self.status.text = "No active debug session.".to_string();
+                return;
+            };
+            match session.terminate() {
+                Ok(()) => {
+                    self.status.text = "Debug session is stopping.".to_string();
+                }
+                Err(message) => {
+                    self.debug.run_state = DebugRunState::Failed;
+                    self.debug.output.push(message.clone());
+                    self.status.text = message;
+                }
+            }
+            return;
+        }
+        if self.debug.run_state != DebugRunState::Stopped {
+            self.status.text =
+                "Debug commands are available while execution is stopped.".to_string();
+            return;
+        }
+        let Some(session) = &self.debug.session else {
+            self.status.text = "No active debug session.".to_string();
+            return;
+        };
+        match session.command(command) {
+            Ok(()) => {
+                self.debug.run_state = DebugRunState::Running;
+                self.status.text = match command {
+                    DebugCommand::Continue => "Debug execution continued.".to_string(),
+                    DebugCommand::Step => "Debug execution advanced by one statement.".to_string(),
+                    DebugCommand::Quit => "Debug session is stopping.".to_string(),
+                };
+            }
+            Err(message) => {
+                self.debug.run_state = DebugRunState::Failed;
+                self.debug.output.push(message.clone());
+                self.status.text = message;
+            }
+        }
+    }
+
+    fn poll_debug_events(&mut self) {
+        let mut pending = Vec::new();
+        if let Some(session) = &self.debug.session {
+            loop {
+                match session.try_recv() {
+                    Ok(event) => pending.push(event),
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                }
+            }
+        }
+        let mut finished = false;
+        for event in pending {
+            finished |= matches!(event, DebugEvent::Exited { .. } | DebugEvent::Error(_));
+            self.apply_debug_event(event);
+        }
+        if finished {
+            self.debug.session = None;
+        }
+    }
+
+    fn apply_debug_event(&mut self, event: DebugEvent) {
+        match event {
+            DebugEvent::Started => {
+                self.debug.run_state = DebugRunState::Running;
+            }
+            DebugEvent::Stopped(stop) => {
+                self.debug.run_state = DebugRunState::Stopped;
+                self.debug.selected_frame = 0;
+                self.status.text = format!(
+                    "Stopped at {} on thread {}.",
+                    self.debug_location(&stop.statement_id),
+                    stop.thread_id
+                );
+                self.debug.current_stop = Some(stop);
+            }
+            DebugEvent::Stdout(line) => self.debug.output.push(format!("[out] {line}")),
+            DebugEvent::Stderr(line) => self.debug.output.push(format!("[err] {line}")),
+            DebugEvent::Exited { status, success } => {
+                self.debug.run_state = if success {
+                    DebugRunState::Exited
+                } else {
+                    DebugRunState::Failed
+                };
+                self.debug.exit_status = Some(status.clone());
+                self.status.text = format!("Debug program exited: {status}");
+            }
+            DebugEvent::Error(message) => {
+                self.debug.run_state = DebugRunState::Failed;
+                self.debug.output.push(format!("[debug] {message}"));
+                self.status.text = message;
+            }
+        }
+    }
+
+    fn debug_location(&self, statement_id: &str) -> String {
+        self.debug
+            .prepared
+            .as_ref()
+            .and_then(|prepared| {
+                prepared
+                    .build
+                    .debug_map
+                    .iter()
+                    .find(|entry| entry.statement_id == statement_id)
+            })
+            .map(|entry| {
+                format!(
+                    "{}:{}:{}",
+                    entry.source_path.display(),
+                    entry.source_line,
+                    entry.source_col
+                )
+            })
+            .unwrap_or_else(|| statement_id.to_string())
+    }
+
     fn run_format(&mut self) -> Result<(), String> {
+        if self.debug_session_blocks_project_change("format") {
+            return Ok(());
+        }
         let options = FormatOptions {
             check_only: false,
             paths: Vec::new(),
@@ -1035,6 +1309,10 @@ impl App {
             self.focus = AppFocus::DiagnosticsHistory;
             return;
         }
+        if let Some(session) = &self.debug.session {
+            let _ = session.terminate();
+        }
+        self.debug = DebugState::default();
         self.set_project_summary(actions::project_summary_at(&root));
         self.bootstrap.mode = BootstrapMode::Idle;
         self.bootstrap.input.clear();
@@ -1254,6 +1532,17 @@ impl App {
         }
     }
 
+    fn debug_session_blocks_project_change(&mut self, action: &str) -> bool {
+        if self.debug.session.is_none() {
+            return false;
+        }
+        self.status.text =
+            format!("Stop the active debug session with F8 before running {action}.");
+        self.screen = AppScreen::Debug;
+        self.focus = AppFocus::DebugFrames;
+        true
+    }
+
     fn set_project_summary(&mut self, summary: ProjectSummary) {
         self.project = load_project_state(&summary);
         self.refresh_config();
@@ -1395,6 +1684,7 @@ fn render_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         AppScreen::Config,
         AppScreen::Diagnostics,
         AppScreen::Lifecycle,
+        AppScreen::Debug,
         AppScreen::BuildRun,
         AppScreen::Doctor,
         AppScreen::Bootstrap,
@@ -1414,10 +1704,11 @@ fn render_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         AppScreen::Config => 1,
         AppScreen::Diagnostics => 2,
         AppScreen::Lifecycle => 3,
-        AppScreen::BuildRun => 4,
-        AppScreen::Doctor => 5,
-        AppScreen::Bootstrap => 6,
-        AppScreen::Help => 7,
+        AppScreen::Debug => 4,
+        AppScreen::BuildRun => 5,
+        AppScreen::Doctor => 6,
+        AppScreen::Bootstrap => 7,
+        AppScreen::Help => 8,
     };
     let tabs = Tabs::new(titles)
         .block(Block::default().borders(Borders::ALL).title("skadi tui"))
@@ -1432,6 +1723,7 @@ fn render_screen(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
         AppScreen::Config => render_config(frame, area, app),
         AppScreen::Diagnostics => render_diagnostics(frame, area, app),
         AppScreen::Lifecycle => render_lifecycle(frame, area, app),
+        AppScreen::Debug => render_debug(frame, area, app),
         AppScreen::BuildRun => render_build_run(frame, area, app),
         AppScreen::Doctor => render_doctor(frame, area, app),
         AppScreen::Bootstrap => render_bootstrap(frame, area, app),
@@ -2093,6 +2385,137 @@ fn render_lifecycle(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
     );
 }
 
+fn render_debug(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(7),
+            Constraint::Min(8),
+            Constraint::Length(8),
+        ])
+        .split(area);
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(42), Constraint::Percentage(58)])
+        .split(rows[1]);
+
+    let stop = app.debug.current_stop.as_ref();
+    let session_lines = vec![
+        Line::from(format!("state: {}", app.debug.run_state.label())),
+        Line::from(format!(
+            "location: {}",
+            stop.map(|value| app.debug_location(&value.statement_id))
+                .unwrap_or_else(|| "<not stopped>".to_string())
+        )),
+        Line::from(format!(
+            "thread: {}",
+            stop.map(|value| value.thread_id.to_string())
+                .unwrap_or_else(|| "-".to_string())
+        )),
+        Line::from(format!(
+            "exit: {}",
+            app.debug.exit_status.as_deref().unwrap_or("-")
+        )),
+        Line::from("F5/Enter start or continue | F10 step | F8 stop"),
+    ];
+    frame.render_widget(
+        Paragraph::new(session_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Debug Session"),
+            )
+            .wrap(Wrap { trim: false }),
+        rows[0],
+    );
+
+    let frame_items = stop
+        .map(|value| {
+            value
+                .frames
+                .iter()
+                .enumerate()
+                .map(|(index, item)| {
+                    ListItem::new(format!(
+                        "#{index} {}  {}",
+                        item.function,
+                        app.debug_location(&item.statement_id)
+                    ))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let mut frame_state = ListState::default();
+    if !frame_items.is_empty() {
+        frame_state.select(Some(
+            app.debug
+                .selected_frame
+                .min(frame_items.len().saturating_sub(1)),
+        ));
+    }
+    frame.render_stateful_widget(
+        List::new(frame_items)
+            .block(Block::default().borders(Borders::ALL).title("Call Stack"))
+            .highlight_symbol("> ")
+            .highlight_style(Style::default().add_modifier(Modifier::BOLD)),
+        columns[0],
+        &mut frame_state,
+    );
+
+    let local_lines = stop
+        .and_then(|value| value.frames.get(app.debug.selected_frame))
+        .map(|selected| {
+            let mut lines = vec![Line::from(format!("frame: {}", selected.function))];
+            if selected.locals.is_empty() {
+                lines.push(Line::from("<no scalar locals captured yet>"));
+            } else {
+                lines.extend(selected.locals.iter().map(|local| {
+                    Line::from(format!(
+                        "{}: {} = {}",
+                        local.name, local.type_name, local.value
+                    ))
+                }));
+            }
+            lines
+        })
+        .unwrap_or_else(|| {
+            vec![
+                Line::from("No stopped frame."),
+                Line::from("Press F5 or Enter to build and start debugging."),
+            ]
+        });
+    frame.render_widget(
+        Paragraph::new(local_lines)
+            .block(Block::default().borders(Borders::ALL).title("Locals"))
+            .wrap(Wrap { trim: false }),
+        columns[1],
+    );
+
+    let output = if app.debug.output.is_empty() {
+        vec![Line::from("Program output will appear here.")]
+    } else {
+        app.debug
+            .output
+            .iter()
+            .rev()
+            .take(rows[2].height.saturating_sub(2) as usize)
+            .rev()
+            .cloned()
+            .map(Line::from)
+            .collect()
+    };
+    frame.render_widget(
+        Paragraph::new(output)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Program Output [out/error markers]"),
+            )
+            .wrap(Wrap { trim: false }),
+        rows[2],
+    );
+}
+
 fn render_build_run(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -2344,7 +2767,11 @@ fn render_help(frame: &mut Frame<'_>, area: Rect) {
         Line::from("m config"),
         Line::from("e diagnostics"),
         Line::from("l lifecycle analysis"),
+        Line::from("x debug workspace"),
         Line::from("h help"),
+        Line::from("F5 / Enter start or continue debug execution"),
+        Line::from("F10 step one Skadi statement while stopped"),
+        Line::from("F8 stop a debug session"),
         Line::from("o/n/i bootstrap actions in Bootstrap view"),
         Line::from("Enter edit config field"),
         Line::from("s save Skadi.toml from Config view"),
@@ -2353,6 +2780,8 @@ fn render_help(frame: &mut Frame<'_>, area: Rect) {
         Line::from("Current limitations"),
         Line::from("No showcase browser yet."),
         Line::from("No async background task runner yet."),
+        Line::from("Debugged programs receive EOF from input() in TUI mode."),
+        Line::from("Use CLI debug for interactive program stdin and source breakpoints."),
         Line::from("Regular commands remain the canonical CI/scripting path."),
     ];
     frame.render_widget(
@@ -2521,6 +2950,7 @@ mod tests {
         ActionError, AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind, DiagnosticSummary,
         FailureSource,
     };
+    use crate::debug_session::{DebugEvent, DebugFrame, DebugLocal, DebugStop};
     use crate::project::init_project;
     use ratatui::{Terminal, backend::TestBackend};
     use v01::analysis::AnalysisFactKind;
@@ -2550,6 +2980,69 @@ mod tests {
         ))
         .expect("tab should work");
         assert_eq!(app.screen, AppScreen::Config);
+    }
+
+    #[test]
+    fn debug_hotkey_opens_workspace() {
+        let mut app = App::new();
+        app.handle_key(crossterm::event::KeyEvent::from(
+            crossterm::event::KeyCode::Char('x'),
+        ))
+        .expect("debug hotkey should work");
+        assert_eq!(app.screen, AppScreen::Debug);
+        assert_eq!(app.focus, super::AppFocus::DebugFrames);
+    }
+
+    #[test]
+    fn debug_stop_maps_frames_locals_and_renders_workspace() {
+        let mut app = App::new();
+        app.screen = AppScreen::Debug;
+        app.apply_debug_event(DebugEvent::Stopped(DebugStop {
+            thread_id: 17,
+            statement_id: "SK-STMT@2:5#1".to_string(),
+            frames: vec![
+                DebugFrame {
+                    function: "worker".to_string(),
+                    statement_id: "SK-STMT@2:5#1".to_string(),
+                    locals: vec![DebugLocal {
+                        name: "value".to_string(),
+                        type_name: "Int".to_string(),
+                        value: "42".to_string(),
+                    }],
+                },
+                DebugFrame {
+                    function: "<main>".to_string(),
+                    statement_id: "SK-STMT@8:1#1".to_string(),
+                    locals: Vec::new(),
+                },
+            ],
+        }));
+
+        assert_eq!(app.debug.run_state, super::DebugRunState::Stopped);
+        app.handle_key(crossterm::event::KeyEvent::from(
+            crossterm::event::KeyCode::Down,
+        ))
+        .expect("frame navigation should work");
+        assert_eq!(app.debug.selected_frame, 1);
+        app.debug.selected_frame = 0;
+
+        let backend = TestBackend::new(120, 40);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal
+            .draw(|frame| super::render(frame, &mut app))
+            .expect("render debug workspace");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("Debug Session"));
+        assert!(rendered.contains("Call Stack"));
+        assert!(rendered.contains("worker"));
+        assert!(rendered.contains("value: Int = 42"));
+        assert!(rendered.contains("thread: 17"));
     }
 
     #[test]

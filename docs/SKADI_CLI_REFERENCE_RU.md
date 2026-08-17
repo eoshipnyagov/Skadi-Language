@@ -163,10 +163,14 @@ skadi-cli debug -b src/main.skd:12 -b src/worker.skd:8 -- input.txt
 программе.
 
 Внутри сессии доступны `continue` (`c`), `step` (`s`) и `quit` (`q`). Остановка
-показывает исходный `.skd`, line/col и statement ID. Текущий ранний slice не
-показывает locals и call stack и ещё не встроен в TUI. Для многопоточного кода
-остановки сериализуются на compiler probes: это кооперативная, а не нативная
-stop-the-world отладка. Поддерживается только host target.
+показывает исходный `.skd`, line/col, statement ID, thread ID, Skadi call stack и
+базовые scalar-locals текущих кадров. Runtime соединяется с CLI по внутреннему
+loopback TCP-каналу, поэтому команды отладчика не занимают stdin программы.
+
+Для многопоточного кода остановки сериализуются на compiler probes: это
+кооперативная, а не нативная stop-the-world отладка. Значения сложных ресурсов,
+полей структур и вложенных block-locals пока не раскрываются. Поддерживается
+только host target.
 
 ## `quick-run`
 
@@ -206,6 +210,8 @@ skadi-cli tui
 - diagnostics / analysis list и detail с кодом, source location, контекстом и
   рекомендуемым действием;
 - отдельный lifecycle workspace для Tasks, Channels, Memory и Resources;
+- debug workspace с текущей исходной позицией, thread ID, call stack,
+  scalar-locals и stdout/stderr;
 - build/run output;
 - путь к generated debug map после build/run;
 - doctor/environment;
@@ -218,7 +224,10 @@ skadi-cli tui
 | Клавиша | Действие |
 |---|---|
 | `c`, `b`, `r`, `f`, `d` | check, build, run, format, doctor |
-| `p`, `e`, `l`, `m`, `h` | project, errors, lifecycle, manifest config, help |
+| `p`, `e`, `l`, `x`, `m`, `h` | project, errors, lifecycle, debug, manifest config, help |
+| `F5`, `Enter` | Запустить debug-сессию или продолжить остановленную программу |
+| `F10` | Выполнить один Skadi statement |
+| `F8` | Завершить debug-сессию |
 | `1`-`5` | Фильтр All/Tasks/Channels/Memory/Resources в Lifecycle |
 | `o` | Открыть другой проект |
 | `g` | Создать отсутствующий entry из Config |
@@ -228,8 +237,10 @@ skadi-cli tui
 | `q` | Выход |
 
 TUI восстанавливает terminal state при выходе и показывает отдельный fallback
-для слишком узкого terminal. Actions пока синхронны; showcase browser и source
-editor отсутствуют.
+для слишком узкого terminal. Build-подготовка debug-сессии пока синхронна;
+showcase browser и source editor отсутствуют. Debugged-программа в TUI получает
+EOF на `input()`: интерактивный stdin и source breakpoints пока доступны через
+обычный `skadi-cli debug`.
 
 После успешного `check/build` тот же compiler core передаёт TUI structured
 analysis facts. Diagnostics оставляет ошибки и предупреждения в общем action

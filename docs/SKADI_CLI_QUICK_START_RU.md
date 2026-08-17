@@ -106,7 +106,9 @@ skadi-cli debug --break src/main.skd:1
 - `debug` для интерактивной остановки и пошагового выполнения по `.skd`.
 
 Без `--break` debugger остановится на первом исполняемом statement. В сессии
-доступны `continue` (`c`), `step` (`s`) и `quit` (`q`).
+доступны `continue` (`c`), `step` (`s`) и `quit` (`q`). Каждая остановка
+показывает исходную позицию, поток, стек Skadi-функций и поддерживаемые
+scalar-locals.
 
 ## 7. Инициализация проекта в текущей папке
 
@@ -161,6 +163,10 @@ skadi-cli tui
 - `p` - обзор проекта
 - `e` - diagnostics и structured analysis
 - `l` - lifecycle workspace для Tasks, Channels, Memory и Resources
+- `x` - debug workspace
+- `F5` / `Enter` - запустить или продолжить debug-сессию
+- `F10` - выполнить один Skadi statement
+- `F8` - завершить debug-сессию
 - `h` - help
 - `q` - выход
 
@@ -170,6 +176,8 @@ skadi-cli tui
 - экран diagnostics с action history и объяснением следующего действия;
 - отдельный lifecycle workspace с typed subjects, source locations и
   фильтрами `1`-`5`;
+- debug workspace с source location, thread ID, call stack, scalar-locals и
+  stdout/stderr;
 - build/run view с `stdout/stderr`;
 - `doctor` view;
 - редактирование `Skadi.toml`;

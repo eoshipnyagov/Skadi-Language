@@ -255,8 +255,9 @@ TUI:
 3. отдельный Lifecycle workspace с фильтрами ресурсов, задач, каналов и
    регионов — выполнен первый slice;
 4. statement-level source mapping с multi-file origins и build sidecar —
-   выполнен первый slice; debug probes и CLI breakpoint/step готовы, locals,
-   call stack и TUI debug session впереди;
+   выполнен первый slice; debug probes, CLI breakpoint/step, loopback machine
+   channel, call stack, scalar-locals и TUI Debug workspace готовы; nested
+   locals и runtime views ресурсов впереди;
 5. общий engine для CLI, TUI, будущего LSP и CI — первый JSON-контракт
    `skadi.analysis.v1` доступен через `skadi-cli analyze --json`.
 
