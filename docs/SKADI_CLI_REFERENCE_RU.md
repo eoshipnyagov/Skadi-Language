@@ -45,6 +45,7 @@ skadi-cli tui
 | `new <name>` | Создать папку проекта, manifest и entry | Нет |
 | `init` | Инициализировать проект в текущей папке | Нет |
 | `check` | Imports, lexer, parser, semantic и warnings | Нет |
+| `analyze [--json]` | Объяснить blocking и lifecycle behavior | Нет |
 | `format [--check] [path ...]` | Форматировать или проверить `.skd` | Нет |
 | `build [--target name] [--cc compiler]` | Собрать native binary | Да |
 | `run [--target name] [--cc compiler]` | Собрать и запустить | Да |
@@ -108,6 +109,21 @@ skadi-cli format --check
 Без путей форматируется entry текущего проекта. `--check` ничего не меняет и
 возвращает ненулевой exit code, если файл неканоничен.
 
+## `analyze`
+
+```powershell
+skadi-cli analyze
+skadi-cli analyze --json
+```
+
+Команда запускает тот же frontend, что `check`, и выводит explainable facts по
+Task, Channel, Memory, ownership/resources и неполному `when`. Обычный режим
+предназначен для чтения человеком. `--json` использует схему
+`skadi.analysis.v1`: каждый факт содержит стабильный ID в рамках исходника,
+statement-anchor span, код, уровень, контекст, typed subject, объяснение и
+рекомендуемое действие. При frontend-ошибке JSON остаётся валидным, а exit code
+остаётся ненулевым. Это automation surface для CI, будущего LSP и других tools.
+
 ## `build` и `run`
 
 ```powershell
@@ -164,6 +180,7 @@ skadi-cli tui
 - project dashboard;
 - diagnostics / analysis list и detail с кодом, source location, контекстом и
   рекомендуемым действием;
+- отдельный lifecycle workspace для Tasks, Channels, Memory и Resources;
 - build/run output;
 - doctor/environment;
 - project bootstrap;
@@ -175,7 +192,8 @@ skadi-cli tui
 | Клавиша | Действие |
 |---|---|
 | `c`, `b`, `r`, `f`, `d` | check, build, run, format, doctor |
-| `p`, `e`, `m`, `h` | project, errors, manifest config, help |
+| `p`, `e`, `l`, `m`, `h` | project, errors, lifecycle, manifest config, help |
+| `1`-`5` | Фильтр All/Tasks/Channels/Memory/Resources в Lifecycle |
 | `o` | Открыть другой проект |
 | `g` | Создать отсутствующий entry из Config |
 | `Tab`, `Shift+Tab` | Сменить экран/focus |
@@ -188,10 +206,13 @@ TUI восстанавливает terminal state при выходе и пок�
 editor отсутствуют.
 
 После успешного `check/build` тот же compiler core передаёт TUI structured
-analysis facts. Текущий slice показывает blocking/timed Channel operations и
-path-sensitive timed Task wait, учитывает task-entry context и `on error`, отмечает `when` без `else` и строит
-source-order lifecycle chains для ownership/resources/Task/Memory. Это
-информационный workbench, а не новый класс hard errors.
+analysis facts. Diagnostics оставляет ошибки и предупреждения в общем action
+context, а Lifecycle группирует source-order events по стабильному subject ID,
+показывает тип субъекта, source span, explain-chain и next action. Текущий slice
+покрывает blocking/timed Channel operations, path-sensitive timed Task wait,
+task-entry context, `on error`, неполный `when` и
+ownership/resources/Task/Memory chains. Это информационный workbench, а не
+новый класс hard errors.
 
 ## Запуск из исходников
 

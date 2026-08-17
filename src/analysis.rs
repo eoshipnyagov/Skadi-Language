@@ -24,18 +24,76 @@ pub enum AnalysisFactLevel {
     Attention,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnalysisSubjectKind {
+    Task,
+    Channel,
+    Memory,
+    Resource,
+}
+
+impl AnalysisSubjectKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Task => "task",
+            Self::Channel => "channel",
+            Self::Memory => "memory",
+            Self::Resource => "resource",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AnalysisSourceSpan {
+    // The first analysis slice anchors a statement; expression end positions can extend it later.
+    pub start_line: u32,
+    pub start_col: u32,
+    pub end_line: u32,
+    pub end_col: u32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnalysisFact {
+    pub id: String,
     pub kind: AnalysisFactKind,
     pub level: AnalysisFactLevel,
     pub code: &'static str,
     pub line: u32,
     pub col: u32,
+    pub span: AnalysisSourceSpan,
     pub context: String,
     pub subject: Option<String>,
+    pub subject_id: Option<String>,
+    pub subject_kind: Option<AnalysisSubjectKind>,
     pub summary: String,
     pub explanation: String,
     pub action: String,
+}
+
+impl AnalysisFact {
+    pub fn kind_name(&self) -> &'static str {
+        match self.kind {
+            AnalysisFactKind::BlockingChannelSend => "blocking_channel_send",
+            AnalysisFactKind::BlockingChannelReceive => "blocking_channel_receive",
+            AnalysisFactKind::TimedChannelSend => "timed_channel_send",
+            AnalysisFactKind::TimedChannelReceive => "timed_channel_receive",
+            AnalysisFactKind::TimedTaskWait => "timed_task_wait",
+            AnalysisFactKind::IncompleteWhen => "incomplete_when",
+            AnalysisFactKind::ResourceCreated => "resource_created",
+            AnalysisFactKind::ResourceBorrowed => "resource_borrowed",
+            AnalysisFactKind::ResourceMoved => "resource_moved",
+            AnalysisFactKind::ResourceClosed => "resource_closed",
+            AnalysisFactKind::TaskLifecycle => "task_lifecycle",
+            AnalysisFactKind::MemoryLifecycle => "memory_lifecycle",
+        }
+    }
+
+    pub fn level_name(&self) -> &'static str {
+        match self.level {
+            AnalysisFactLevel::Info => "info",
+            AnalysisFactLevel::Attention => "attention",
+        }
+    }
 }
 
 pub fn collect_analysis_facts(program: &Program) -> Vec<AnalysisFact> {
@@ -222,14 +280,16 @@ fn collect_statement_facts(
                 if let Some(resource_type) = declared_type
                     && is_lifecycle_resource_type(resource_type)
                 {
-                    push_lifecycle_fact(
+                    push_fact(
                         facts,
                         AnalysisFactKind::ResourceCreated,
+                        AnalysisFactLevel::Info,
                         "SC-AN-301",
                         loc,
                         function,
                         task_entries,
-                        name,
+                        Some(name),
+                        Some(resource_subject_kind(resource_type)),
                         format!("'{name}' becomes the owner of {resource_type}"),
                         "the binding owns deterministic cleanup responsibility",
                         "follow this subject to verify its final close, move, wait, or scope cleanup",
@@ -322,18 +382,20 @@ fn collect_statement_facts(
                     facts,
                 );
                 if else_block.is_none() {
-                    facts.push(AnalysisFact {
-                        kind: AnalysisFactKind::IncompleteWhen,
-                        level: AnalysisFactLevel::Attention,
-                        code: "SC-AN-201",
-                        line: loc.line,
-                        col: loc.column,
-                        context: context_name(function, task_entries),
-                        subject: None,
-                        summary: "when has no else branch".to_string(),
-                        explanation: "values not covered by an is branch leave the when block without an explicit outcome".to_string(),
-                        action: "add an else branch when exhaustive behavior is required".to_string(),
-                    });
+                    push_fact(
+                        facts,
+                        AnalysisFactKind::IncompleteWhen,
+                        AnalysisFactLevel::Attention,
+                        "SC-AN-201",
+                        loc,
+                        function,
+                        task_entries,
+                        None,
+                        None,
+                        "when has no else branch".to_string(),
+                        "values not covered by an is branch leave the when block without an explicit outcome",
+                        "add an else branch when exhaustive behavior is required",
+                    );
                 }
                 for (expressions, block) in cases {
                     for expression in expressions {
@@ -621,18 +683,20 @@ fn collect_call_fact(
         "verify that the channel protocol always supplies the matching producer or consumer"
     };
 
-    facts.push(AnalysisFact {
+    push_fact(
+        facts,
         kind,
         level,
         code,
-        line: loc.line,
-        col: loc.column,
-        context: context_name(function, task_entries),
-        subject: Some(channel.to_string()),
-        summary: format!("'{channel}.{operation}' may block"),
-        explanation: cancellation.to_string(),
-        action: action.to_string(),
-    });
+        loc,
+        function,
+        task_entries,
+        Some(channel),
+        Some(AnalysisSubjectKind::Channel),
+        format!("'{channel}.{operation}' may block"),
+        cancellation,
+        action,
+    );
 }
 
 fn is_lifecycle_resource_type(type_name: &str) -> bool {
@@ -641,6 +705,18 @@ fn is_lifecycle_resource_type(type_name: &str) -> bool {
         "Canvas" | "Window" | "Interrupt" | "Task" | "Memory"
     ) || type_name.starts_with("Channel(")
         || type_name.starts_with("Task(")
+}
+
+fn resource_subject_kind(type_name: &str) -> AnalysisSubjectKind {
+    if type_name == "Task" || type_name.starts_with("Task(") {
+        AnalysisSubjectKind::Task
+    } else if type_name.starts_with("Channel(") {
+        AnalysisSubjectKind::Channel
+    } else if type_name == "Memory" {
+        AnalysisSubjectKind::Memory
+    } else {
+        AnalysisSubjectKind::Resource
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -656,14 +732,77 @@ fn push_lifecycle_fact(
     explanation: &str,
     action: &str,
 ) {
-    facts.push(AnalysisFact {
+    let subject_kind = match kind {
+        AnalysisFactKind::BlockingChannelSend
+        | AnalysisFactKind::BlockingChannelReceive
+        | AnalysisFactKind::TimedChannelSend
+        | AnalysisFactKind::TimedChannelReceive => AnalysisSubjectKind::Channel,
+        AnalysisFactKind::TimedTaskWait | AnalysisFactKind::TaskLifecycle => {
+            AnalysisSubjectKind::Task
+        }
+        AnalysisFactKind::MemoryLifecycle => AnalysisSubjectKind::Memory,
+        AnalysisFactKind::ResourceCreated
+        | AnalysisFactKind::ResourceBorrowed
+        | AnalysisFactKind::ResourceMoved
+        | AnalysisFactKind::ResourceClosed
+        | AnalysisFactKind::IncompleteWhen => AnalysisSubjectKind::Resource,
+    };
+    push_fact(
+        facts,
         kind,
-        level: AnalysisFactLevel::Info,
+        AnalysisFactLevel::Info,
+        code,
+        loc,
+        function,
+        task_entries,
+        Some(subject),
+        Some(subject_kind),
+        summary,
+        explanation,
+        action,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_fact(
+    facts: &mut Vec<AnalysisFact>,
+    kind: AnalysisFactKind,
+    level: AnalysisFactLevel,
+    code: &'static str,
+    loc: &Location,
+    function: Option<&str>,
+    task_entries: &HashSet<String>,
+    subject: Option<&str>,
+    subject_kind: Option<AnalysisSubjectKind>,
+    summary: String,
+    explanation: &str,
+    action: &str,
+) {
+    let context = context_name(function, task_entries);
+    let collision = facts
+        .iter()
+        .filter(|fact| fact.code == code && fact.line == loc.line && fact.col == loc.column)
+        .count()
+        + 1;
+    let subject = subject.map(str::to_string);
+    let subject_id = subject.as_ref().map(|name| format!("{context}::{name}"));
+    facts.push(AnalysisFact {
+        id: format!("{code}@{}:{}#{collision}", loc.line, loc.column),
+        kind,
+        level,
         code,
         line: loc.line,
         col: loc.column,
-        context: context_name(function, task_entries),
-        subject: Some(subject.to_string()),
+        span: AnalysisSourceSpan {
+            start_line: loc.line,
+            start_col: loc.column,
+            end_line: loc.line,
+            end_col: loc.column,
+        },
+        context,
+        subject,
+        subject_id,
+        subject_kind,
         summary,
         explanation: explanation.to_string(),
         action: action.to_string(),

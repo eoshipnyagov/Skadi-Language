@@ -23,6 +23,7 @@
 - `new`
 - `init`
 - `check`
+- `analyze [--json]`
 - `build`
 - `run`
 - `quick-run <file.skd> [-- <args ...>]`

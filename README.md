@@ -46,8 +46,9 @@ The repository includes:
 - experimental native Task/Channel runtime and periodic host Interrupts for
   `v1.2`, including cancellation-aware Channel operations and Duration-bounded
   Channel/Task waits,
-- structured analysis facts for blocking/timed operations, incomplete `when`,
-  and resource lifecycle chains displayed in the TUI diagnostics workbench,
+- structured analysis facts with stable IDs/source anchors for blocking/timed
+  operations, incomplete `when`, and resource lifecycle chains displayed in a
+  dedicated TUI workspace and exported by `analyze --json`,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
 - experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,
@@ -526,6 +527,7 @@ skadi-cli doctor
 skadi-cli new <name>
 skadi-cli init
 skadi-cli check
+skadi-cli analyze --json
 skadi-cli build
 skadi-cli run
 skadi-cli quick-run <file.skd> [-- <args>]
@@ -598,7 +600,8 @@ The repository already includes:
   resource ownership for `v1.2`,
 - experimental native Task/Channel runtime and periodic host Interrupts for
   `v1.2`, including blocking Channel cancellation and timed Channel/Task waits,
-- structured compiler analysis facts surfaced by CLI actions and TUI,
+- structured compiler analysis facts surfaced by `analyze --json` and the TUI
+  Lifecycle workspace,
 - experimental nominal Time/Duration runtime for `v1.2`,
 - experimental nominal ByteSize and dynamic Memory capacity for `v1.2`,
 - experimental nominal Angle and `deg/rad` math integration for `v1.2`,

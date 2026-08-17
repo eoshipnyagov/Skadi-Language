@@ -259,7 +259,7 @@ Duration-bounded `send_for/receive_for` и path-sensitive
 
 ## Отдельный трек - analysis-first TUI и Skadi-level debugger
 
-Статус: planned; развивается параллельно runtime backlog и использует тот же
+Статус: in progress; развивается параллельно runtime backlog и использует тот же
 compiler/action pipeline, что CLI и CI.
 
 Архитектурное правило: static analyzer не должен жить внутри rendering/event
@@ -271,9 +271,11 @@ loop TUI. Compiler core возвращает структурированные 
 Первые foundation slices выполнены: compiler core возвращает task-aware facts
 для blocking/timed Channel, timed Task wait, incomplete `when` и source-order lifecycle facts
 для ownership/resources/Task/Memory; CLI action pipeline передаёт их в общий
-TUI view Diagnostics / Analysis и связывает факты по subject.
+TUI action history и связывает факты по typed subject. Каждый факт имеет
+детерминированный ID и statement-anchor span; `analyze --json` экспортирует
+схему `skadi.analysis.v1`. Полные expression spans остаются следующим шагом AST.
 
-- стабильные source spans и identifiers для statements/values/resources;
+- стабильные identifiers и statement-anchor spans — выполнен первый slice;
 - facts по creation/copy/borrow/move/close и scope cleanup;
 - incomplete `when`, unreachable code и необработанные danger paths;
 - потенциально blocking operations и interrupt-context violations;
@@ -283,11 +285,13 @@ TUI view Diagnostics / Analysis и связывает факты по subject.
 
 ### Фаза B - представление в TUI
 
-- отдельные views для diagnostics, ownership/resources, Tasks/Channels и Memory;
-- история выбранного значения или ресурса;
+- отдельные Diagnostics и Lifecycle workspaces с фильтрами
+  ownership/resources, Tasks/Channels и Memory — выполнен первый slice;
+- source-order история выбранного значения или ресурса — выполнен первый slice;
 - места automatic cleanup и раннего `.close()`;
 - blocking/capacity state без зависимости только от цвета;
-- экспорт тех же результатов в machine-readable CLI output для CI/LSP.
+- экспорт тех же результатов в machine-readable CLI output для CI/LSP —
+  выполнен первый контракт `skadi.analysis.v1`.
 
 ### Фаза C - первый отладчик
 

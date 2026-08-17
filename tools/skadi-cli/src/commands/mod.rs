@@ -1,3 +1,4 @@
+pub mod analyze_cmd;
 pub mod build_cmd;
 pub mod check_cmd;
 pub mod doctor_cmd;

@@ -170,7 +170,9 @@
   - `tests/analysis_facts.rs` закрепляет task-aware blocking/timed Channel facts,
     timed Task wait, explainable incomplete `when` и subject-linked lifecycle chains
   - CLI action pipeline передаёт facts в TUI Diagnostics / Analysis view,
-    который показывает source-order lifecycle выбранного ресурса
+    а Lifecycle workspace показывает typed subjects и source-order timeline
+  - `skadi-cli analyze --json` покрыт success/failure smoke и закрепляет схему
+    `skadi.analysis.v1`, IDs, source anchors и subject kinds
 - module ergonomics
   - относительный path-import и правила видимости покрыты полноценно
   - path import aliases реализованы; module-name imports и re-export остаются TODO

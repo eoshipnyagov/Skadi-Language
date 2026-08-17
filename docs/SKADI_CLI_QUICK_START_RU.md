@@ -151,14 +151,16 @@ skadi-cli tui
 - `g` - создать отсутствующий `entry`-файл из `Config`
 - `p` - обзор проекта
 - `e` - diagnostics и structured analysis
+- `l` - lifecycle workspace для Tasks, Channels, Memory и Resources
 - `h` - help
 - `q` - выход
 
 Что уже умеет TUI:
 
 - обзор проекта;
-- экран diagnostics/analysis с объяснением следующего действия и lifecycle
-  выбранного ресурса;
+- экран diagnostics с action history и объяснением следующего действия;
+- отдельный lifecycle workspace с typed subjects, source locations и
+  фильтрами `1`-`5`;
 - build/run view с `stdout/stderr`;
 - `doctor` view;
 - редактирование `Skadi.toml`;

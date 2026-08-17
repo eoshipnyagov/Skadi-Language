@@ -11,3 +11,4 @@ v01 = { package = "skadi-compiler", path = "../.." }
 crossterm = "0.28"
 ratatui = "0.28"
 regex = "1"
+serde_json = "1"

@@ -48,6 +48,7 @@ cargo run -p skadi-cli -- check
 
 - `new`, `init` создают проект;
 - `check` запускает `lex / parse / semantic`;
+- `analyze [--json]` объясняет blocking/lifecycle facts и выдаёт стабильный JSON для tools/CI;
 - `format` форматирует проект или проверяет стиль через `--check`;
 - `build` выполняет `Skadi -> C -> executable`;
 - `run` собирает и запускает программу;
@@ -67,6 +68,7 @@ TUI поддерживает:
 - диагностику с кодами и stage;
 - structured analysis facts для blocking/timed Channel и timed Task wait,
   incomplete `when` и ownership/resource lifecycle chains с explain/next-action detail;
+- отдельный Lifecycle workspace с фильтрами Tasks, Channels, Memory и Resources;
 - `check`, `format`, `build`, `run`, `doctor`;
 - редактор каноничных полей `Skadi.toml`;
 - выбор target и компилятора для текущего сеанса;
@@ -77,7 +79,8 @@ TUI поддерживает:
 - `c`, `b`, `r`, `f`, `d` запускают соответствующие действия;
 - `m` открывает конфигурацию;
 - `o` переключает проект;
-- `p`, `e`, `h` открывают dashboard, диагностику и help;
+- `p`, `e`, `l`, `h` открывают dashboard, диагностику, lifecycle и help;
+- `1`-`5` фильтруют субъекты в Lifecycle workspace;
 - `q` завершает TUI.
 
 Пока нет фоновых задач и отдельного showcase browser. Для автоматизации и CI

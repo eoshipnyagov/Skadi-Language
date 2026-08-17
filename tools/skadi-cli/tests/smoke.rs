@@ -155,6 +155,72 @@ fn new_check_and_optional_build_run_smoke() {
 }
 
 #[test]
+fn analyze_json_reports_lifecycle_facts_and_frontend_failures() {
+    let temp = unique_temp_dir("analyze_json");
+    let init = run_cli(&temp, &["init"]);
+    assert!(init.status.success(), "init failed: {}", stderr_text(&init));
+    fs::write(
+        temp.join("src").join("main.skd"),
+        r#"fn worker(Channel(Int) jobs) {
+    new Int value = 0
+    value = jobs.receive() on error {
+        if stopping {
+            pass
+        }
+        pass
+    }
+    output(value)
+}
+
+Channel(Int) jobs = channel(1)
+Task worker_task = run worker(jobs)
+jobs.send(7)
+jobs.close() on error {
+    pass
+}
+wait worker_task
+"#,
+    )
+    .expect("analysis source should be writable");
+
+    let analyzed = run_cli(&temp, &["analyze", "--json"]);
+    assert!(
+        analyzed.status.success(),
+        "analyze failed: stdout={} stderr={}",
+        stdout_text(&analyzed),
+        stderr_text(&analyzed),
+    );
+    let report: serde_json::Value =
+        serde_json::from_slice(&analyzed.stdout).expect("analysis output should be JSON");
+    assert_eq!(report["schema"], "skadi.analysis.v1");
+    assert_eq!(report["ok"], true);
+    let facts = report["facts"].as_array().expect("facts array");
+    assert!(facts.iter().any(|fact| fact["code"] == "SC-AN-311"));
+    assert!(
+        facts
+            .iter()
+            .any(|fact| fact["subject"]["kind"] == "channel")
+    );
+    assert!(facts.iter().all(|fact| fact["id"].is_string()));
+
+    fs::write(temp.join("src").join("main.skd"), "output(missing_value)\n")
+        .expect("invalid source should be writable");
+    let failed = run_cli(&temp, &["analyze", "--json"]);
+    assert!(!failed.status.success());
+    let report: serde_json::Value =
+        serde_json::from_slice(&failed.stdout).expect("failure output should be JSON");
+    assert_eq!(report["ok"], false);
+    assert_eq!(report["source"], "frontend");
+    assert!(
+        report["diagnostics"]
+            .as_array()
+            .is_some_and(|items| !items.is_empty())
+    );
+
+    let _ = fs::remove_dir_all(temp);
+}
+
+#[test]
 fn quick_run_executes_one_file_without_manifest_and_forwards_arguments() {
     let temp = unique_temp_dir("quick_run");
     let help = run_cli(&temp, &["quick-run", "--help"]);

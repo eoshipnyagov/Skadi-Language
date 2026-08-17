@@ -252,9 +252,11 @@ TUI:
    выполнен первый slice;
 2. source-order explain-chain для ownership/resource lifecycle и
    Task/Channel/Memory state — выполнен первый slice;
-3. отдельные TUI views ресурсов, задач, каналов и регионов;
+3. отдельный Lifecycle workspace с фильтрами ресурсов, задач, каналов и
+   регионов — выполнен первый slice;
 4. source mapping/debug probes и первый breakpoint/step/locals workflow;
-5. общий engine для CLI, TUI, будущего LSP и CI.
+5. общий engine для CLI, TUI, будущего LSP и CI — первый JSON-контракт
+   `skadi.analysis.v1` доступен через `skadi-cli analyze --json`.
 
 ### Осознанно не надо добавлять без отдельного design decision
 

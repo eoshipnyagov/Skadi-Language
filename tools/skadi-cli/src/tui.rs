@@ -14,9 +14,9 @@ use ratatui::{
 use std::{fs, io, path::Path, time::Duration};
 
 use crate::actions::{
-    self, ActionError, AnalysisFact, AnalysisFactLevel, BuildOptions, BuildResult, CheckResult,
-    DiagnosticSummary, DoctorReport, FailureSource, FormatOptions, FormatState,
-    ManifestConfigResult, ProjectSummary, RunResult,
+    self, ActionError, AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind, BuildOptions,
+    BuildResult, CheckResult, DiagnosticSummary, DoctorReport, FailureSource, FormatOptions,
+    FormatState, ManifestConfigResult, ProjectSummary, RunResult,
 };
 
 const MIN_WIDTH: u16 = 96;
@@ -74,7 +74,7 @@ fn print_help() {
     println!("  Tab            Next screen");
     println!("  Shift+Tab      Previous screen");
     println!("  c/b/r/f/d      Check / Build / Run / Format / Doctor");
-    println!("  p/m/e/h        Home / Config / Diagnostics / Help");
+    println!("  p/m/e/l/h      Home / Config / Diagnostics / Lifecycle / Help");
     println!("  o/n/i          Open project / New project / Init directory (Bootstrap view)");
 }
 
@@ -118,6 +118,7 @@ enum AppScreen {
     Home,
     Config,
     Diagnostics,
+    Lifecycle,
     BuildRun,
     Doctor,
     Bootstrap,
@@ -130,6 +131,7 @@ impl AppScreen {
             Self::Home => "Project",
             Self::Config => "Config",
             Self::Diagnostics => "Diagnostics",
+            Self::Lifecycle => "Lifecycle",
             Self::BuildRun => "Build/Run",
             Self::Doctor => "Doctor",
             Self::Bootstrap => "Bootstrap",
@@ -141,7 +143,8 @@ impl AppScreen {
         match self {
             Self::Home => Self::Config,
             Self::Config => Self::Diagnostics,
-            Self::Diagnostics => Self::BuildRun,
+            Self::Diagnostics => Self::Lifecycle,
+            Self::Lifecycle => Self::BuildRun,
             Self::BuildRun => Self::Doctor,
             Self::Doctor => Self::Bootstrap,
             Self::Bootstrap => Self::Help,
@@ -154,7 +157,8 @@ impl AppScreen {
             Self::Home => Self::Help,
             Self::Config => Self::Home,
             Self::Diagnostics => Self::Config,
-            Self::BuildRun => Self::Diagnostics,
+            Self::Lifecycle => Self::Diagnostics,
+            Self::BuildRun => Self::Lifecycle,
             Self::Doctor => Self::BuildRun,
             Self::Bootstrap => Self::Doctor,
             Self::Help => Self::Bootstrap,
@@ -169,6 +173,8 @@ enum AppFocus {
     ConfigInput,
     DiagnosticsHistory,
     DiagnosticsList,
+    LifecycleSubjects,
+    LifecycleFacts,
     BootstrapInput,
 }
 
@@ -207,6 +213,53 @@ struct DiagnosticsState {
     history: Vec<DiagnosticsRecord>,
     history_selected: usize,
     selected: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum LifecycleFilter {
+    #[default]
+    All,
+    Tasks,
+    Channels,
+    Memory,
+    Resources,
+}
+
+impl LifecycleFilter {
+    fn label(self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Tasks => "Tasks",
+            Self::Channels => "Channels",
+            Self::Memory => "Memory",
+            Self::Resources => "Resources",
+        }
+    }
+
+    fn accepts(self, kind: AnalysisSubjectKind) -> bool {
+        match self {
+            Self::All => true,
+            Self::Tasks => kind == AnalysisSubjectKind::Task,
+            Self::Channels => kind == AnalysisSubjectKind::Channel,
+            Self::Memory => kind == AnalysisSubjectKind::Memory,
+            Self::Resources => kind == AnalysisSubjectKind::Resource,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct LifecycleState {
+    filter: LifecycleFilter,
+    selected_subject: usize,
+    selected_fact: usize,
+}
+
+#[derive(Clone, Debug)]
+struct LifecycleSubject<'a> {
+    id: &'a str,
+    name: &'a str,
+    kind: AnalysisSubjectKind,
+    facts: Vec<&'a AnalysisFact>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -314,6 +367,7 @@ struct App {
     config: ConfigState,
     build_prefs: BuildPrefs,
     diagnostics: DiagnosticsState,
+    lifecycle: LifecycleState,
     environment: EnvironmentState,
     status: StatusLine,
     last_action: Option<ActionState>,
@@ -333,6 +387,7 @@ impl App {
             config: ConfigState::default(),
             build_prefs: BuildPrefs::default(),
             diagnostics: DiagnosticsState::default(),
+            lifecycle: LifecycleState::default(),
             environment: EnvironmentState::default(),
             status: StatusLine {
                 text: "Ready. Press 'h' for keys.".to_string(),
@@ -392,6 +447,12 @@ impl App {
                 };
                 Ok(())
             }
+            KeyCode::Char('l') => {
+                self.screen = AppScreen::Lifecycle;
+                self.focus = AppFocus::LifecycleSubjects;
+                self.clamp_lifecycle_selection();
+                Ok(())
+            }
             KeyCode::Char('h') => {
                 self.screen = AppScreen::Help;
                 self.focus = AppFocus::Tabs;
@@ -413,6 +474,7 @@ impl App {
         match self.screen {
             AppScreen::Config => self.handle_config_key(key),
             AppScreen::Diagnostics => self.handle_diagnostics_key(key),
+            AppScreen::Lifecycle => self.handle_lifecycle_key(key),
             AppScreen::Bootstrap => self.handle_bootstrap_key(key),
             _ => Ok(()),
         }
@@ -500,6 +562,56 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    fn handle_lifecycle_key(&mut self, key: KeyEvent) -> Result<(), String> {
+        match key.code {
+            KeyCode::Left => self.focus = AppFocus::LifecycleSubjects,
+            KeyCode::Right => self.focus = AppFocus::LifecycleFacts,
+            KeyCode::Char('1') => self.set_lifecycle_filter(LifecycleFilter::All),
+            KeyCode::Char('2') => self.set_lifecycle_filter(LifecycleFilter::Tasks),
+            KeyCode::Char('3') => self.set_lifecycle_filter(LifecycleFilter::Channels),
+            KeyCode::Char('4') => self.set_lifecycle_filter(LifecycleFilter::Memory),
+            KeyCode::Char('5') => self.set_lifecycle_filter(LifecycleFilter::Resources),
+            KeyCode::Down | KeyCode::Char('j') => match self.focus {
+                AppFocus::LifecycleSubjects => {
+                    let count = self.current_lifecycle_subjects().len();
+                    if count > 0 {
+                        self.lifecycle.selected_subject =
+                            (self.lifecycle.selected_subject + 1).min(count - 1);
+                        self.lifecycle.selected_fact = 0;
+                    }
+                }
+                AppFocus::LifecycleFacts => {
+                    let count = self.current_lifecycle_fact_count();
+                    if count > 0 {
+                        self.lifecycle.selected_fact =
+                            (self.lifecycle.selected_fact + 1).min(count - 1);
+                    }
+                }
+                _ => {}
+            },
+            KeyCode::Up | KeyCode::Char('k') => match self.focus {
+                AppFocus::LifecycleSubjects => {
+                    self.lifecycle.selected_subject =
+                        self.lifecycle.selected_subject.saturating_sub(1);
+                    self.lifecycle.selected_fact = 0;
+                }
+                AppFocus::LifecycleFacts => {
+                    self.lifecycle.selected_fact = self.lifecycle.selected_fact.saturating_sub(1);
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn set_lifecycle_filter(&mut self, filter: LifecycleFilter) {
+        self.lifecycle.filter = filter;
+        self.lifecycle.selected_subject = 0;
+        self.lifecycle.selected_fact = 0;
+        self.focus = AppFocus::LifecycleSubjects;
     }
 
     fn handle_bootstrap_key(&mut self, key: KeyEvent) -> Result<(), String> {
@@ -1076,6 +1188,8 @@ impl App {
         }
         self.diagnostics.history_selected = self.diagnostics.history.len().saturating_sub(1);
         self.diagnostics.selected = 0;
+        self.lifecycle.selected_subject = 0;
+        self.lifecycle.selected_fact = 0;
     }
 
     fn current_record(&self) -> Option<&DiagnosticsRecord> {
@@ -1094,6 +1208,37 @@ impl App {
         self.current_record()
             .map(|record| record.analysis.as_slice())
             .unwrap_or(&[])
+    }
+
+    fn current_lifecycle_subjects(&self) -> Vec<LifecycleSubject<'_>> {
+        lifecycle_subjects(self.current_analysis(), self.lifecycle.filter)
+    }
+
+    fn current_lifecycle_fact_count(&self) -> usize {
+        self.current_lifecycle_subjects()
+            .get(self.lifecycle.selected_subject)
+            .map(|subject| subject.facts.len())
+            .unwrap_or(0)
+    }
+
+    fn clamp_lifecycle_selection(&mut self) {
+        let (selected_subject, fact_count) = {
+            let subjects = self.current_lifecycle_subjects();
+            let selected_subject = self
+                .lifecycle
+                .selected_subject
+                .min(subjects.len().saturating_sub(1));
+            let fact_count = subjects
+                .get(selected_subject)
+                .map(|subject| subject.facts.len())
+                .unwrap_or(0);
+            (selected_subject, fact_count)
+        };
+        self.lifecycle.selected_subject = selected_subject;
+        self.lifecycle.selected_fact = self
+            .lifecycle
+            .selected_fact
+            .min(fact_count.saturating_sub(1));
     }
 
     fn current_diagnostic_items_len(&self) -> usize {
@@ -1156,6 +1301,39 @@ fn load_project_state(summary: &ProjectSummary) -> ProjectState {
     }
 }
 
+fn lifecycle_subjects<'a>(
+    facts: &'a [AnalysisFact],
+    filter: LifecycleFilter,
+) -> Vec<LifecycleSubject<'a>> {
+    let mut subjects: Vec<LifecycleSubject<'a>> = Vec::new();
+    for fact in facts {
+        let (Some(id), Some(name), Some(kind)) = (
+            fact.subject_id.as_deref(),
+            fact.subject.as_deref(),
+            fact.subject_kind,
+        ) else {
+            continue;
+        };
+        if let Some(subject) = subjects.iter_mut().find(|subject| subject.id == id) {
+            if subject.kind == AnalysisSubjectKind::Resource
+                && kind != AnalysisSubjectKind::Resource
+            {
+                subject.kind = kind;
+            }
+            subject.facts.push(fact);
+        } else {
+            subjects.push(LifecycleSubject {
+                id,
+                name,
+                kind,
+                facts: vec![fact],
+            });
+        }
+    }
+    subjects.retain(|subject| filter.accepts(subject.kind));
+    subjects
+}
+
 fn load_manifest_preview(manifest: &Path) -> Vec<String> {
     match fs::read_to_string(manifest) {
         Ok(content) => content
@@ -1214,6 +1392,7 @@ fn render_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         AppScreen::Home,
         AppScreen::Config,
         AppScreen::Diagnostics,
+        AppScreen::Lifecycle,
         AppScreen::BuildRun,
         AppScreen::Doctor,
         AppScreen::Bootstrap,
@@ -1232,10 +1411,11 @@ fn render_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         AppScreen::Home => 0,
         AppScreen::Config => 1,
         AppScreen::Diagnostics => 2,
-        AppScreen::BuildRun => 3,
-        AppScreen::Doctor => 4,
-        AppScreen::Bootstrap => 5,
-        AppScreen::Help => 6,
+        AppScreen::Lifecycle => 3,
+        AppScreen::BuildRun => 4,
+        AppScreen::Doctor => 5,
+        AppScreen::Bootstrap => 6,
+        AppScreen::Help => 7,
     };
     let tabs = Tabs::new(titles)
         .block(Block::default().borders(Borders::ALL).title("skadi tui"))
@@ -1249,6 +1429,7 @@ fn render_screen(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
         AppScreen::Home => render_home(frame, area, app),
         AppScreen::Config => render_config(frame, area, app),
         AppScreen::Diagnostics => render_diagnostics(frame, area, app),
+        AppScreen::Lifecycle => render_lifecycle(frame, area, app),
         AppScreen::BuildRun => render_build_run(frame, area, app),
         AppScreen::Doctor => render_doctor(frame, area, app),
         AppScreen::Bootstrap => render_bootstrap(frame, area, app),
@@ -1755,6 +1936,161 @@ fn render_diagnostics(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
     frame.render_widget(detail, columns[2]);
 }
 
+fn render_lifecycle(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(1)])
+        .split(area);
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(28),
+            Constraint::Percentage(34),
+            Constraint::Percentage(38),
+        ])
+        .split(rows[1]);
+
+    let filters = format!(
+        "1 All  2 Tasks  3 Channels  4 Memory  5 Resources   active=[{}]   Left/Right panes, j/k navigate",
+        app.lifecycle.filter.label()
+    );
+    frame.render_widget(
+        Paragraph::new(filters).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Lifecycle Workspace"),
+        ),
+        rows[0],
+    );
+
+    let subjects = app.current_lifecycle_subjects();
+    let subject_items = if subjects.is_empty() {
+        vec![ListItem::new(
+            "No lifecycle subjects. Run check/build on a project that uses owned resources.",
+        )]
+    } else {
+        subjects
+            .iter()
+            .map(|subject| {
+                let attention = subject
+                    .facts
+                    .iter()
+                    .filter(|fact| fact.level == AnalysisFactLevel::Attention)
+                    .count();
+                ListItem::new(format!(
+                    "[{}] {}  events:{} check:{}",
+                    subject_kind_marker(subject.kind),
+                    subject.name,
+                    subject.facts.len(),
+                    attention
+                ))
+            })
+            .collect()
+    };
+    let subject_title = if app.focus == AppFocus::LifecycleSubjects {
+        "Subjects [focused]"
+    } else {
+        "Subjects"
+    };
+    let subject_list = List::new(subject_items)
+        .block(Block::default().borders(Borders::ALL).title(subject_title))
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+        .highlight_symbol(">> ");
+    let mut subject_state = ListState::default();
+    if !subjects.is_empty() {
+        subject_state.select(Some(app.lifecycle.selected_subject.min(subjects.len() - 1)));
+    }
+    frame.render_stateful_widget(subject_list, columns[0], &mut subject_state);
+
+    let selected_subject = subjects.get(app.lifecycle.selected_subject);
+    let timeline_items = selected_subject
+        .map(|subject| {
+            subject
+                .facts
+                .iter()
+                .map(|fact| {
+                    ListItem::new(format!(
+                        "[{}] {} {}:{} {}",
+                        analysis_level_label(fact.level),
+                        fact.code,
+                        fact.span.start_line,
+                        fact.span.start_col,
+                        compact_message(&fact.summary)
+                    ))
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|items| !items.is_empty())
+        .unwrap_or_else(|| vec![ListItem::new("Select a lifecycle subject.")]);
+    let timeline_title = if app.focus == AppFocus::LifecycleFacts {
+        "Timeline [focused]"
+    } else {
+        "Timeline"
+    };
+    let timeline = List::new(timeline_items)
+        .block(Block::default().borders(Borders::ALL).title(timeline_title))
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+        .highlight_symbol(">> ");
+    let mut timeline_state = ListState::default();
+    if let Some(subject) = selected_subject
+        && !subject.facts.is_empty()
+    {
+        timeline_state.select(Some(
+            app.lifecycle.selected_fact.min(subject.facts.len() - 1),
+        ));
+    }
+    frame.render_stateful_widget(timeline, columns[1], &mut timeline_state);
+
+    let detail_lines = selected_subject
+        .and_then(|subject| {
+            subject
+                .facts
+                .get(app.lifecycle.selected_fact)
+                .map(|fact| (subject, *fact))
+        })
+        .map(|(subject, fact)| {
+            vec![
+                Line::from(format!(
+                    "[{}] {}",
+                    subject_kind_marker(subject.kind),
+                    subject.name
+                )),
+                Line::from(format!("subject id: {}", subject.id)),
+                Line::from(format!("fact id: {}", fact.id)),
+                Line::from(format!("event: {} ({})", fact.kind_name(), fact.code)),
+                Line::from(format!("context: {}", fact.context)),
+                Line::from(format!(
+                    "source: {}:{}-{}:{}",
+                    fact.span.start_line,
+                    fact.span.start_col,
+                    fact.span.end_line,
+                    fact.span.end_col
+                )),
+                Line::from(""),
+                Line::from(fact.summary.clone()),
+                Line::from(""),
+                Line::from("Why it matters"),
+                Line::from(fact.explanation.clone()),
+                Line::from(""),
+                Line::from("Next action"),
+                Line::from(fact.action.clone()),
+            ]
+        })
+        .unwrap_or_else(|| {
+            vec![
+                Line::from("No lifecycle event selected."),
+                Line::from(""),
+                Line::from("Run check or build, then choose a subject."),
+            ]
+        });
+    frame.render_widget(
+        Paragraph::new(detail_lines)
+            .block(Block::default().borders(Borders::ALL).title("Explain"))
+            .wrap(Wrap { trim: false }),
+        columns[2],
+    );
+}
+
 fn render_build_run(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -1991,8 +2327,9 @@ fn render_help(frame: &mut Frame<'_>, area: Rect) {
         Line::from("q quit"),
         Line::from("Tab / Shift+Tab switch screens"),
         Line::from("m open config editor"),
-        Line::from("Left/Right switch diagnostics panes"),
-        Line::from("j/k or arrows navigate diagnostics, analysis, and history"),
+        Line::from("Left/Right switch diagnostics or lifecycle panes"),
+        Line::from("j/k or arrows navigate diagnostics, lifecycle, and history"),
+        Line::from("1-5 filter lifecycle subjects"),
         Line::from(""),
         Line::from("Actions"),
         Line::from("c check"),
@@ -2003,6 +2340,7 @@ fn render_help(frame: &mut Frame<'_>, area: Rect) {
         Line::from("p project"),
         Line::from("m config"),
         Line::from("e diagnostics"),
+        Line::from("l lifecycle analysis"),
         Line::from("h help"),
         Line::from("o/n/i bootstrap actions in Bootstrap view"),
         Line::from("Enter edit config field"),
@@ -2118,6 +2456,15 @@ fn analysis_level_label(level: AnalysisFactLevel) -> &'static str {
     }
 }
 
+fn subject_kind_marker(kind: AnalysisSubjectKind) -> &'static str {
+    match kind {
+        AnalysisSubjectKind::Task => "TASK",
+        AnalysisSubjectKind::Channel => "CHAN",
+        AnalysisSubjectKind::Memory => "MEM",
+        AnalysisSubjectKind::Resource => "RES",
+    }
+}
+
 fn compact_message(message: &str) -> String {
     let first = message.lines().next().unwrap_or(message).trim();
     if first.chars().count() <= 96 {
@@ -2168,7 +2515,8 @@ mod tests {
 
     use super::{App, AppScreen, DiagnosticsRecord, MIN_HEIGHT, MIN_WIDTH};
     use crate::actions::{
-        ActionError, AnalysisFact, AnalysisFactLevel, DiagnosticSummary, FailureSource,
+        ActionError, AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind, DiagnosticSummary,
+        FailureSource,
     };
     use crate::project::init_project;
     use ratatui::{Terminal, backend::TestBackend};
@@ -2238,13 +2586,22 @@ mod tests {
                 is_warning: true,
             }],
             analysis: vec![AnalysisFact {
+                id: "SC-AN-102@4:9#1".to_string(),
                 kind: AnalysisFactKind::BlockingChannelReceive,
                 level: AnalysisFactLevel::Attention,
                 code: "SC-AN-102",
                 line: 4,
                 col: 9,
+                span: v01::analysis::AnalysisSourceSpan {
+                    start_line: 4,
+                    start_col: 9,
+                    end_line: 4,
+                    end_col: 9,
+                },
                 context: "task entry 'worker'".to_string(),
                 subject: Some("jobs".to_string()),
+                subject_id: Some("task entry 'worker'::jobs".to_string()),
+                subject_kind: Some(AnalysisSubjectKind::Channel),
                 summary: "'jobs.receive' may block".to_string(),
                 explanation: "cancellation needs an explicit path".to_string(),
                 action: "attach on error".to_string(),
@@ -2274,25 +2631,43 @@ mod tests {
             diagnostics: Vec::new(),
             analysis: vec![
                 AnalysisFact {
+                    id: "SC-AN-311@1:1#1".to_string(),
                     kind: AnalysisFactKind::TaskLifecycle,
                     level: AnalysisFactLevel::Info,
                     code: "SC-AN-311",
                     line: 1,
                     col: 1,
+                    span: v01::analysis::AnalysisSourceSpan {
+                        start_line: 1,
+                        start_col: 1,
+                        end_line: 1,
+                        end_col: 1,
+                    },
                     context: "top-level workflow".to_string(),
                     subject: Some("worker_task".to_string()),
+                    subject_id: Some("top-level workflow::worker_task".to_string()),
+                    subject_kind: Some(AnalysisSubjectKind::Task),
                     summary: "task 'worker_task' starts".to_string(),
                     explanation: "task owner created".to_string(),
                     action: "follow lifecycle".to_string(),
                 },
                 AnalysisFact {
+                    id: "SC-AN-314@8:1#1".to_string(),
                     kind: AnalysisFactKind::TimedTaskWait,
                     level: AnalysisFactLevel::Info,
                     code: "SC-AN-314",
                     line: 8,
                     col: 1,
+                    span: v01::analysis::AnalysisSourceSpan {
+                        start_line: 8,
+                        start_col: 1,
+                        end_line: 8,
+                        end_col: 1,
+                    },
                     context: "top-level workflow".to_string(),
                     subject: Some("worker_task".to_string()),
+                    subject_id: Some("top-level workflow::worker_task".to_string()),
+                    subject_kind: Some(AnalysisSubjectKind::Task),
                     summary: "task 'worker_task' is waited with a deadline".to_string(),
                     explanation: "timeout preserves the handle".to_string(),
                     action: "finish timeout cleanup".to_string(),
@@ -2315,6 +2690,39 @@ mod tests {
             .collect::<String>();
         assert!(rendered.contains("Lifecycle: worker_task"));
         assert!(rendered.contains("SC-AN-314"));
+
+        app.handle_key(crossterm::event::KeyEvent::from(
+            crossterm::event::KeyCode::Char('l'),
+        ))
+        .expect("lifecycle hotkey");
+        assert_eq!(app.screen, AppScreen::Lifecycle);
+        assert_eq!(app.current_lifecycle_subjects().len(), 1);
+
+        app.handle_key(crossterm::event::KeyEvent::from(
+            crossterm::event::KeyCode::Char('3'),
+        ))
+        .expect("channel filter");
+        assert!(app.current_lifecycle_subjects().is_empty());
+        app.handle_key(crossterm::event::KeyEvent::from(
+            crossterm::event::KeyCode::Char('2'),
+        ))
+        .expect("task filter");
+        assert_eq!(app.current_lifecycle_subjects().len(), 1);
+
+        terminal
+            .draw(|frame| super::render(frame, &mut app))
+            .expect("render lifecycle workspace");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("Lifecycle Workspace"));
+        assert!(rendered.contains("TASK"));
+        assert!(rendered.contains("SC-AN-311"));
+        assert!(rendered.contains("fact id:"));
     }
 
     #[test]

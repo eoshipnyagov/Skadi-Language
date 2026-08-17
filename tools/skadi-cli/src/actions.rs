@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub use v01::analysis::{AnalysisFact, AnalysisFactLevel};
+pub use v01::analysis::{AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind};
 use v01::formatter::format_source;
 
 use crate::pipeline::{compile_c_to_exe_detailed, compile_frontend};
@@ -930,11 +930,31 @@ fn parse_warning(input: &str) -> Vec<DiagnosticSummary> {
 
 fn parse_structured_diagnostic(input: &str) -> Option<DiagnosticSummary> {
     let trimmed = input.trim();
+    let trimmed = [
+        "Semantic error at ",
+        "Semantic error:",
+        "Parse error at ",
+        "Parse error:",
+        "Lex error at ",
+        "Lex error:",
+        "Style warning at ",
+    ]
+    .iter()
+    .filter_map(|marker| trimmed.find(marker))
+    .min()
+    .map(|position| &trimmed[position..])
+    .unwrap_or(trimmed);
     let (stage, rest, is_warning) = if let Some(x) = trimmed.strip_prefix("Semantic error at ") {
         ("Semantic".to_string(), x, false)
     } else if let Some(x) = trimmed.strip_prefix("Parse error at ") {
         ("Parse".to_string(), x, false)
     } else if let Some(x) = trimmed.strip_prefix("Lex error at ") {
+        ("Lex".to_string(), x, false)
+    } else if let Some(x) = trimmed.strip_prefix("Semantic error:") {
+        ("Semantic".to_string(), x, false)
+    } else if let Some(x) = trimmed.strip_prefix("Parse error:") {
+        ("Parse".to_string(), x, false)
+    } else if let Some(x) = trimmed.strip_prefix("Lex error:") {
         ("Lex".to_string(), x, false)
     } else {
         let x = trimmed.strip_prefix("Style warning at ")?;
@@ -1084,5 +1104,12 @@ mod tests {
         assert_eq!(xs[0].code.as_deref(), Some("SC-SEM-020"));
         assert_eq!(xs[0].line, Some(2));
         assert_eq!(xs[0].col, Some(5));
+
+        let wrapped = parse_diagnostics(
+            "Skadi frontend error: [SC-SEM-000] stage=semantic: Semantic error at line 3, col 7 [SC-SEM-020]: undefined symbol 'y'",
+        );
+        assert_eq!(wrapped.len(), 1);
+        assert_eq!(wrapped[0].code.as_deref(), Some("SC-SEM-020"));
+        assert_eq!(wrapped[0].line, Some(3));
     }
 }

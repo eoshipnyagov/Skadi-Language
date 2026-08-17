@@ -18,6 +18,7 @@ fn help_text() -> String {
         "  new <name>         Create a new Skadi project",
         "  init               Initialize Skadi project in current directory",
         "  check              Run frontend checks",
+        "  analyze [--json]   Explain lifecycle and blocking behavior",
         "  build [--target] [--cc]  Build project",
         "  run [--target] [--cc]    Build and run project",
         "  quick-run <file.skd> [-- <args>]  Run one file without a manifest",
@@ -48,6 +49,7 @@ fn main() {
         "new" => commands::new_cmd::run(&args[2..]),
         "init" => commands::init_cmd::run(&args[2..]),
         "check" => commands::check_cmd::run(&args[2..]),
+        "analyze" => commands::analyze_cmd::run(&args[2..]),
         "build" => commands::build_cmd::run(&args[2..]),
         "run" => commands::run_cmd::run(&args[2..]),
         "quick-run" => commands::quick_run_cmd::run(&args[2..]),
@@ -67,7 +69,11 @@ fn main() {
     };
 
     if let Err(err) = result {
-        eprintln!("error: {err}");
+        if cmd == "analyze" && args[2..].iter().any(|arg| arg == "--json") {
+            println!("{err}");
+        } else {
+            eprintln!("error: {err}");
+        }
         std::process::exit(1);
     }
 }
@@ -85,6 +91,7 @@ mod tests {
         assert!(help.contains("-V, --version"));
         assert!(help.contains("format [--check] [path ...]  Format Skadi source files"));
         assert!(help.contains("quick-run <file.skd> [-- <args>]"));
+        assert!(help.contains("analyze [--json]"));
         assert!(help.contains("tui                Full-screen interactive workflow"));
     }
 }

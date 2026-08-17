@@ -1,4 +1,6 @@
-use v01::analysis::{AnalysisFactKind, AnalysisFactLevel, collect_analysis_facts};
+use v01::analysis::{
+    AnalysisFactKind, AnalysisFactLevel, AnalysisSubjectKind, collect_analysis_facts,
+};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::semantic_analyze;
@@ -105,6 +107,14 @@ wait worker_task
         .expect("timed send fact");
     assert_eq!(timed_send.code, "SC-AN-103");
     assert_eq!(timed_send.subject.as_deref(), Some("jobs"));
+    assert_eq!(timed_send.subject_kind, Some(AnalysisSubjectKind::Channel));
+    assert_eq!(
+        timed_send.subject_id.as_deref(),
+        Some("top-level workflow::jobs")
+    );
+    assert!(timed_send.id.starts_with("SC-AN-103@"));
+    assert_eq!(timed_send.span.start_line, timed_send.line);
+    assert_eq!(timed_send.span.start_col, timed_send.col);
     assert!(timed_send.explanation.contains("timed_out"));
 
     let job_chain = facts
@@ -123,6 +133,12 @@ wait worker_task
     assert!(task_chain.contains(&"SC-AN-311"));
     assert!(task_chain.contains(&"SC-AN-312"));
     assert!(task_chain.contains(&"SC-AN-313"));
+
+    let task_start = facts
+        .iter()
+        .find(|fact| fact.code == "SC-AN-311")
+        .expect("task start fact");
+    assert_eq!(task_start.subject_kind, Some(AnalysisSubjectKind::Task));
 }
 
 #[test]

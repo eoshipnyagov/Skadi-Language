@@ -457,7 +457,9 @@ vector slice до матриц или transform framework.
    в TUI; первый slice покрывает blocking Channel и incomplete `when`;
 2. первый source-order explain-chain ownership/resource/Task/Memory state
    реализован и показывается в TUI по общему subject;
-3. расширить explain-chain path-sensitive причинами и scope cleanup;
+3. отдельный Lifecycle workspace, typed subject IDs, statement-anchor spans и
+   `skadi-cli analyze --json` реализованы; полные expression spans, path-sensitive
+   причины и scope cleanup остаются следующей итерацией;
 4. подготовить source mapping/debug probes для первого Skadi-level debugger;
 5. сохранить общий engine для CLI, TUI, CI и будущего LSP.
 
