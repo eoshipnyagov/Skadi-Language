@@ -460,9 +460,9 @@ vector slice до матриц или transform framework.
 3. отдельный Lifecycle workspace, typed subject IDs, statement-anchor spans и
    `skadi-cli analyze --json` реализованы; полные expression spans, path-sensitive
    причины и scope cleanup остаются следующей итерацией;
-4. statement-level source mapping, `SK-STMT` markers, multi-file origins и
-   `skadi.debug-map.v1` build sidecar реализованы; следующими идут probes и
-   первый breakpoint/step/locals workflow;
+4. statement-level source mapping, `SK-STMT` markers, multi-file origins,
+   `skadi.debug-map.v1`, opt-in probes и первый CLI breakpoint/step workflow
+   реализованы; следующими идут locals, call stack и TUI debug session;
 5. сохранить общий engine для CLI, TUI, CI и будущего LSP.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate

@@ -1,6 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn cli_bin() -> PathBuf {
@@ -26,6 +27,26 @@ fn run_cli(cwd: &Path, args: &[&str]) -> std::process::Output {
         .args(args)
         .output()
         .expect("skadi-cli process should start")
+}
+
+fn run_cli_with_input(cwd: &Path, args: &[&str], input: &str) -> std::process::Output {
+    let mut child = Command::new(cli_bin())
+        .current_dir(cwd)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("skadi-cli process should start");
+    child
+        .stdin
+        .take()
+        .expect("debug stdin should be piped")
+        .write_all(input.as_bytes())
+        .expect("debug commands should be written");
+    child
+        .wait_with_output()
+        .expect("skadi-cli process should finish")
 }
 
 fn stdout_text(out: &std::process::Output) -> String {
@@ -77,6 +98,16 @@ fn doctor_and_target_list_smoke() {
     assert!(targets_out.contains("host"));
     assert!(targets_out.contains("x86_64-w64-mingw32"));
     assert!(targets_out.contains("x86_64-unknown-linux-gnu"));
+
+    let debug_help = run_cli(&temp, &["debug", "--help"]);
+    assert!(
+        debug_help.status.success(),
+        "debug help failed: {}",
+        stderr_text(&debug_help)
+    );
+    let debug_help_out = stdout_text(&debug_help);
+    assert!(debug_help_out.contains("skadi-cli debug"));
+    assert!(debug_help_out.contains("continue (c), step (s), quit (q)"));
 
     let _ = fs::remove_dir_all(temp);
 }
@@ -168,6 +199,67 @@ fn new_check_and_optional_build_run_smoke() {
         assert!(run_out.contains("build ok [host]:"));
         assert!(run_out.contains("Hello from Skadi"));
     }
+
+    let _ = fs::remove_dir_all(temp);
+}
+
+#[test]
+fn debug_breakpoint_and_step_smoke() {
+    if !host_compiler_ready() {
+        return;
+    }
+    let temp = unique_temp_dir("debug_flow");
+    let created = run_cli(&temp, &["new", "debug_smoke"]);
+    assert!(
+        created.status.success(),
+        "new failed: {}",
+        stderr_text(&created)
+    );
+    let project_dir = temp.join("debug_smoke");
+    let debug = run_cli_with_input(
+        &project_dir,
+        &["debug", "--break", "src/main.skd:1"],
+        "step\ncontinue\n",
+    );
+    assert!(
+        debug.status.success(),
+        "debug failed: {}",
+        stderr_text(&debug)
+    );
+    let stdout = stdout_text(&debug);
+    let stderr = stderr_text(&debug);
+    assert!(stdout.contains("debug build ok [host]:"));
+    assert!(stdout.contains("breakpoint src/main.skd:1:1"));
+    assert!(stdout.contains("Hello from Skadi"));
+    assert!(stderr.matches("[SKADI-DEBUG] stopped at").count() >= 2);
+    assert!(stderr.contains("main.skd:1:1"));
+    assert!(stderr.contains("main.skd:3:1"));
+
+    fs::write(
+        project_dir.join("src").join("worker.skd"),
+        "fn helper() Int {\n    new Int result = 7\n    return result\n}\n",
+    )
+    .expect("worker source should be written");
+    fs::write(
+        project_dir.join("src").join("main.skd"),
+        "import \"./worker.skd\"\nnew Int result = helper()\noutput(result)\n",
+    )
+    .expect("entry source should be written");
+    let imported_debug = run_cli_with_input(
+        &project_dir,
+        &["debug", "--break", "src/worker.skd:2"],
+        "continue\n",
+    );
+    assert!(
+        imported_debug.status.success(),
+        "imported debug failed: {}",
+        stderr_text(&imported_debug)
+    );
+    assert!(
+        stdout_text(&imported_debug).contains("breakpoint src/worker.skd:2:5"),
+        "imported breakpoint should resolve to its source file"
+    );
+    assert!(stderr_text(&imported_debug).contains("worker.skd:2:5"));
 
     let _ = fs::remove_dir_all(temp);
 }

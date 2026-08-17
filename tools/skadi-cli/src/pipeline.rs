@@ -9,7 +9,7 @@ use crate::targets::{
     CompilerInvocation, candidate_invocations, resolve_profile, single_compiler_invocation,
 };
 use v01::analysis::{AnalysisFact, collect_analysis_facts};
-use v01::codegen::{ensure_codegen_supported, transpile_program_to_c_with_map};
+use v01::codegen::{CodegenOptions, ensure_codegen_supported, transpile_program_to_c_with_options};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
@@ -61,6 +61,13 @@ pub struct ToolchainOutput {
 }
 
 pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
+    compile_frontend_with_options(entry_path, CodegenOptions::default())
+}
+
+pub fn compile_frontend_with_options(
+    entry_path: &Path,
+    codegen_options: CodegenOptions,
+) -> Result<FrontendOutput, String> {
     let loaded = load_source_bundle(entry_path).map_err(|e| {
         format!(
             "[SC-MOD-001] stage=module-import: {e}\nhint: use only path imports like import \"./file.skd\" and verify import graph paths/cycles."
@@ -88,8 +95,8 @@ pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
     })?;
     let warnings = semantic_style_warnings(&program);
     let analysis = collect_analysis_facts(&program);
-    let codegen = transpile_program_to_c_with_map(&program);
-    let debug_map = codegen
+    let codegen = transpile_program_to_c_with_options(&program, codegen_options);
+    let mut debug_map: Vec<DebugSourceMapEntry> = codegen
         .source_map
         .into_iter()
         .filter_map(|entry| {
@@ -107,12 +114,73 @@ pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
             })
         })
         .collect();
+    let c_code = if codegen_options.debug_probes {
+        let inserted_lines = debug_map.len() as u32;
+        for entry in &mut debug_map {
+            entry.generated_start_line += inserted_lines;
+            entry.generated_end_line += inserted_lines;
+        }
+        inject_debug_locations(codegen.c_code, &debug_map)
+    } else {
+        codegen.c_code
+    };
     Ok(FrontendOutput {
-        c_code: codegen.c_code,
+        c_code,
         warnings,
         analysis,
         debug_map,
     })
+}
+
+fn inject_debug_locations(mut c_code: String, entries: &[DebugSourceMapEntry]) -> String {
+    const PLACEHOLDER: &str = "/* SKADI_DEBUG_LOCATION_TABLE */";
+    let mut table = String::new();
+    for entry in entries {
+        table.push_str("{\"");
+        table.push_str(&escape_c_string(&entry.statement_id));
+        table.push_str("\", \"");
+        table.push_str(&escape_c_string(&display_debug_path(&entry.source_path)));
+        table.push_str("\", ");
+        table.push_str(&entry.source_line.to_string());
+        table.push_str(", ");
+        table.push_str(&entry.source_col.to_string());
+        table.push_str("},\n    ");
+    }
+    c_code = c_code.replacen(PLACEHOLDER, &table, 1);
+    c_code
+}
+
+fn display_debug_path(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    if let Some(unc) = value.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        value
+            .strip_prefix(r"\\?\")
+            .unwrap_or(value.as_ref())
+            .to_string()
+    }
+}
+
+fn escape_c_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'\\' => escaped.push_str("\\\\"),
+            b'"' => escaped.push_str("\\\""),
+            b'\n' => escaped.push_str("\\n"),
+            b'\r' => escaped.push_str("\\r"),
+            b'\t' => escaped.push_str("\\t"),
+            0x20..=0x7e => escaped.push(char::from(byte)),
+            other => {
+                escaped.push('\\');
+                escaped.push(char::from(b'0' + ((other >> 6) & 0x07)));
+                escaped.push(char::from(b'0' + ((other >> 3) & 0x07)));
+                escaped.push(char::from(b'0' + (other & 0x07)));
+            }
+        }
+    }
+    escaped
 }
 
 #[cfg(test)]
@@ -536,14 +604,15 @@ pub fn compile_c_to_exe(c_path: &Path, exe_path: &Path, target: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::{
-        compile_c_to_exe, compile_frontend, compile_to_c, load_source_with_imports,
-        parse_import_line, rewrite_local_symbols,
+        compile_c_to_exe, compile_frontend, compile_frontend_with_options, compile_to_c,
+        escape_c_string, load_source_with_imports, parse_import_line, rewrite_local_symbols,
     };
     use crate::targets::detect_compiler;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use v01::codegen::CodegenOptions;
 
     fn temp_case_dir(stem: &str) -> PathBuf {
         let stamp = SystemTime::now()
@@ -559,6 +628,14 @@ mod tests {
         ["gcc", "clang", "cc", "cl"]
             .iter()
             .any(|c| detect_compiler(c))
+    }
+
+    #[test]
+    fn debug_paths_are_embedded_as_portable_utf8_bytes() {
+        assert_eq!(
+            escape_c_string("путь\\main.skd"),
+            r"\320\277\321\203\321\202\321\214\\main.skd"
+        );
     }
 
     #[test]
@@ -655,6 +732,29 @@ local label State {
                 && item.source_line == 2
                 && item.statement_kind == "variable_declaration"
         }));
+        assert!(!frontend.c_code.contains("sk_debug_probe("));
+
+        let debug_frontend =
+            compile_frontend_with_options(&entry, CodegenOptions { debug_probes: true })
+                .expect("debug frontend output");
+        assert!(debug_frontend.c_code.contains("sk_debug_probe("));
+        assert!(debug_frontend.c_code.contains("util.skd"));
+        assert!(
+            !debug_frontend
+                .c_code
+                .contains("/* SKADI_DEBUG_LOCATION_TABLE */")
+        );
+        let util_statement = debug_frontend
+            .debug_map
+            .iter()
+            .find(|item| item.source_path == util_abs && item.source_line == 2)
+            .expect("imported statement mapping");
+        let generated_probe = debug_frontend
+            .c_code
+            .lines()
+            .nth(util_statement.generated_start_line.saturating_sub(1) as usize)
+            .expect("generated probe line");
+        assert!(generated_probe.contains(&util_statement.statement_id));
 
         let _ = fs::remove_dir_all(root);
     }

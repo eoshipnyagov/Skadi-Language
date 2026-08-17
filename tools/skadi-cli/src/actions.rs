@@ -8,9 +8,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 
 pub use v01::analysis::{AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind};
+use v01::codegen::CodegenOptions;
 use v01::formatter::format_source;
 
-use crate::pipeline::{compile_c_to_exe_detailed, compile_frontend};
+use crate::pipeline::{
+    DebugSourceMapEntry, compile_c_to_exe_detailed, compile_frontend, compile_frontend_with_options,
+};
 use crate::project::{
     ManifestConfig, create_project, ensure_build_dir, ensure_entry_file_at, init_project,
     load_manifest_config_at, load_project_at, save_manifest_config_at,
@@ -103,6 +106,7 @@ pub struct BuildResult {
     pub toolchain_stderr: String,
     pub c_path: PathBuf,
     pub debug_map_path: PathBuf,
+    pub debug_map: Vec<DebugSourceMapEntry>,
     pub exe_path: PathBuf,
 }
 
@@ -136,6 +140,41 @@ pub struct QuickRunResult {
     pub source: PathBuf,
     pub target: String,
     pub selected_compiler: String,
+    pub exit_status: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceBreakpoint {
+    pub path: PathBuf,
+    pub line: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct DebugOptions {
+    pub build: BuildOptions,
+    pub breakpoints: Vec<SourceBreakpoint>,
+    pub program_args: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResolvedBreakpoint {
+    pub source_path: PathBuf,
+    pub line: u32,
+    pub col: u32,
+    pub statement_id: String,
+    pub statement_kind: &'static str,
+}
+
+#[derive(Clone, Debug)]
+pub struct DebugPrepared {
+    pub build: BuildResult,
+    pub breakpoints: Vec<ResolvedBreakpoint>,
+    pub starts_paused: bool,
+    pub program_args: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DebugResult {
     pub exit_status: String,
 }
 
@@ -339,6 +378,101 @@ pub fn parse_build_options(args: &[String]) -> Result<BuildOptions, ActionError>
     Ok(BuildOptions { target, cc })
 }
 
+pub fn parse_debug_options(args: &[String]) -> Result<DebugOptions, ActionError> {
+    let split = args
+        .iter()
+        .position(|arg| arg == "--")
+        .unwrap_or(args.len());
+    let command_args = &args[..split];
+    let program_args = if split < args.len() {
+        args[(split + 1)..].to_vec()
+    } else {
+        Vec::new()
+    };
+    let mut target = "host".to_string();
+    let mut cc = None;
+    let mut breakpoints = Vec::new();
+    let mut index = 0usize;
+
+    while index < command_args.len() {
+        match command_args[index].as_str() {
+            "--target" => {
+                let Some(value) = command_args.get(index + 1) else {
+                    return Err(ActionError::new(
+                        FailureSource::Usage,
+                        "--target requires value",
+                    ));
+                };
+                target = value.clone();
+                index += 2;
+            }
+            "--cc" => {
+                let Some(value) = command_args.get(index + 1) else {
+                    return Err(ActionError::new(
+                        FailureSource::Usage,
+                        "--cc requires value",
+                    ));
+                };
+                cc = Some(value.clone());
+                index += 2;
+            }
+            "--break" | "-b" => {
+                let Some(value) = command_args.get(index + 1) else {
+                    return Err(ActionError::new(
+                        FailureSource::Usage,
+                        "--break requires <file.skd:line>",
+                    ));
+                };
+                breakpoints.push(parse_source_breakpoint(value)?);
+                index += 2;
+            }
+            other => {
+                return Err(ActionError::new(
+                    FailureSource::Usage,
+                    format!("unknown debug option: {other}"),
+                ));
+            }
+        }
+    }
+
+    Ok(DebugOptions {
+        build: BuildOptions { target, cc },
+        breakpoints,
+        program_args,
+    })
+}
+
+fn parse_source_breakpoint(value: &str) -> Result<SourceBreakpoint, ActionError> {
+    let (path, line) = value.rsplit_once(':').ok_or_else(|| {
+        ActionError::new(
+            FailureSource::Usage,
+            format!("invalid breakpoint '{value}'; expected <file.skd:line>"),
+        )
+    })?;
+    if path.trim().is_empty() {
+        return Err(ActionError::new(
+            FailureSource::Usage,
+            format!("invalid breakpoint '{value}'; source path is empty"),
+        ));
+    }
+    let line = line.parse::<u32>().map_err(|_| {
+        ActionError::new(
+            FailureSource::Usage,
+            format!("invalid breakpoint '{value}'; line must be a positive integer"),
+        )
+    })?;
+    if line == 0 {
+        return Err(ActionError::new(
+            FailureSource::Usage,
+            format!("invalid breakpoint '{value}'; line must be greater than zero"),
+        ));
+    }
+    Ok(SourceBreakpoint {
+        path: PathBuf::from(path),
+        line,
+    })
+}
+
 pub fn parse_quick_run_options(args: &[String]) -> Result<QuickRunOptions, ActionError> {
     let split = args
         .iter()
@@ -452,6 +586,14 @@ pub fn run_build(options: &BuildOptions) -> Result<BuildResult, ActionError> {
 }
 
 pub fn run_build_at(root: &Path, options: &BuildOptions) -> Result<BuildResult, ActionError> {
+    run_build_at_mode(root, options, false)
+}
+
+fn run_build_at_mode(
+    root: &Path,
+    options: &BuildOptions,
+    debug_probes: bool,
+) -> Result<BuildResult, ActionError> {
     let profile =
         resolve_profile(&options.target).map_err(|e| ActionError::new(FailureSource::Usage, e))?;
     let project = load_project_at(root).map_err(|e| ActionError::new(FailureSource::Project, e))?;
@@ -463,7 +605,8 @@ pub fn run_build_at(root: &Path, options: &BuildOptions) -> Result<BuildResult, 
         name: Some(project.name.clone()),
         entry: Some(project.entry.clone()),
     };
-    let frontend = compile_frontend(&project.entry).map_err(|e| {
+    let frontend = compile_frontend_with_options(&project.entry, CodegenOptions { debug_probes })
+        .map_err(|e| {
         ActionError::new(
             FailureSource::Frontend,
             format!("Skadi frontend error: {e}"),
@@ -481,6 +624,7 @@ pub fn run_build_at(root: &Path, options: &BuildOptions) -> Result<BuildResult, 
             ),
         )
     })?;
+    let debug_map = frontend.debug_map.clone();
     let debug_map_path = build_dir.join(format!("{}.skadi-debug.json", project.name));
     write_debug_map(
         &debug_map_path,
@@ -515,6 +659,7 @@ pub fn run_build_at(root: &Path, options: &BuildOptions) -> Result<BuildResult, 
         toolchain_stderr: toolchain.stderr,
         c_path,
         debug_map_path,
+        debug_map,
         exe_path,
     })
 }
@@ -625,6 +770,159 @@ pub fn run_project_at(root: &Path, options: &BuildOptions) -> Result<RunResult, 
         exit_status: output.status.to_string(),
         stdout,
         stderr,
+    })
+}
+
+pub fn prepare_debug(options: &DebugOptions) -> Result<DebugPrepared, ActionError> {
+    let cwd = std::env::current_dir()
+        .map_err(|e| ActionError::new(FailureSource::Io, format!("cwd failed: {e}")))?;
+    prepare_debug_at(&cwd, options)
+}
+
+pub fn prepare_debug_at(root: &Path, options: &DebugOptions) -> Result<DebugPrepared, ActionError> {
+    if options.build.target != "host" {
+        return Err(ActionError::new(
+            FailureSource::Usage,
+            format!(
+                "debug executes host programs only, got target '{}'; use `skadi-cli build --target {}` for cross-target artifacts",
+                options.build.target, options.build.target
+            ),
+        ));
+    }
+    let build = run_build_at_mode(root, &options.build, true)?;
+    let mut breakpoints = Vec::new();
+    let mut seen_statement_ids = BTreeSet::new();
+    for requested in &options.breakpoints {
+        for resolved in resolve_breakpoint(&build, requested)? {
+            if seen_statement_ids.insert(resolved.statement_id.clone()) {
+                breakpoints.push(resolved);
+            }
+        }
+    }
+    Ok(DebugPrepared {
+        build,
+        starts_paused: breakpoints.is_empty(),
+        breakpoints,
+        program_args: options.program_args.clone(),
+    })
+}
+
+fn resolve_breakpoint(
+    build: &BuildResult,
+    requested: &SourceBreakpoint,
+) -> Result<Vec<ResolvedBreakpoint>, ActionError> {
+    let requested_path = if requested.path.is_absolute() {
+        requested.path.clone()
+    } else {
+        build.project.cwd.join(&requested.path)
+    };
+    let requested_path = fs::canonicalize(&requested_path).map_err(|error| {
+        ActionError::new(
+            FailureSource::Usage,
+            format!(
+                "breakpoint source '{}' cannot be opened: {error}",
+                requested_path.display()
+            ),
+        )
+    })?;
+    let source_entries = build
+        .debug_map
+        .iter()
+        .filter(|entry| same_debug_path(&entry.source_path, &requested_path))
+        .collect::<Vec<_>>();
+    if source_entries.is_empty() {
+        return Err(ActionError::new(
+            FailureSource::Usage,
+            format!(
+                "breakpoint source '{}' is not part of the current project import graph",
+                requested.path.display()
+            ),
+        ));
+    }
+    let matches = source_entries
+        .iter()
+        .filter(|entry| entry.source_line == requested.line)
+        .map(|entry| ResolvedBreakpoint {
+            source_path: entry.source_path.clone(),
+            line: entry.source_line,
+            col: entry.source_col,
+            statement_id: entry.statement_id.clone(),
+            statement_kind: entry.statement_kind,
+        })
+        .collect::<Vec<_>>();
+    if !matches.is_empty() {
+        return Ok(matches);
+    }
+
+    let mut lines = source_entries
+        .iter()
+        .map(|entry| entry.source_line)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    lines.sort_by_key(|line| (line.abs_diff(requested.line), *line));
+    let nearest = lines
+        .into_iter()
+        .take(5)
+        .map(|line| line.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(ActionError::new(
+        FailureSource::Usage,
+        format!(
+            "no executable statement at '{}:{}'; nearest executable lines: {}",
+            requested.path.display(),
+            requested.line,
+            nearest
+        ),
+    ))
+}
+
+fn same_debug_path(left: &Path, right: &Path) -> bool {
+    if cfg!(windows) {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    } else {
+        left == right
+    }
+}
+
+pub fn execute_debug(prepared: &DebugPrepared) -> Result<DebugResult, ActionError> {
+    let breakpoint_ids = prepared
+        .breakpoints
+        .iter()
+        .map(|breakpoint| breakpoint.statement_id.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let status = Command::new(&prepared.build.exe_path)
+        .current_dir(&prepared.build.project.cwd)
+        .args(&prepared.program_args)
+        .env("SKADI_DEBUG_BREAKPOINTS", breakpoint_ids)
+        .env(
+            "SKADI_DEBUG_STEP",
+            if prepared.starts_paused { "1" } else { "0" },
+        )
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(|error| {
+            ActionError::new(
+                FailureSource::Runtime,
+                format!(
+                    "debug execution error: failed to run {}: {error}",
+                    prepared.build.exe_path.display()
+                ),
+            )
+        })?;
+    if !status.success() {
+        return Err(ActionError::new(
+            FailureSource::Runtime,
+            format!("debug execution error: program exited with status {status}"),
+        ));
+    }
+    Ok(DebugResult {
+        exit_status: status.to_string(),
     })
 }
 

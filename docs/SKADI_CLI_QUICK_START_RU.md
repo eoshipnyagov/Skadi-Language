@@ -90,6 +90,7 @@ skadi-cli format
 skadi-cli format --check
 skadi-cli build
 skadi-cli run
+skadi-cli debug --break src/main.skd:1
 ```
 
 После `build` в `build/` лежат executable, generated C и
@@ -102,6 +103,10 @@ skadi-cli run
 - `format` для приведения к каноничному стилю;
 - `build` для сборки через C-компилятор;
 - `run` для полного smoke-пути.
+- `debug` для интерактивной остановки и пошагового выполнения по `.skd`.
+
+Без `--break` debugger остановится на первом исполняемом statement. В сессии
+доступны `continue` (`c`), `step` (`s`) и `quit` (`q`).
 
 ## 7. Инициализация проекта в текущей папке
 

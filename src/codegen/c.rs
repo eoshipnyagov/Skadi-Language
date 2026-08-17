@@ -22,6 +22,7 @@ struct CodegenState {
     interrupt_handler_index: usize,
     statement_collisions: HashMap<(u32, u32), usize>,
     source_map: Vec<CodegenSourceMapEntry>,
+    debug_probes: bool,
 }
 
 impl CodegenState {
@@ -46,6 +47,11 @@ pub struct CodegenSourceMapEntry {
 pub struct CodegenOutput {
     pub c_code: String,
     pub source_map: Vec<CodegenSourceMapEntry>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CodegenOptions {
+    pub debug_probes: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2214,11 +2220,149 @@ fn emit_task_entry_prototypes(program: &Program, entries: &HashSet<String>, out:
     out.push('\n');
 }
 
+fn emit_debug_runtime(out: &mut String) {
+    out.push_str(
+        r#"typedef struct {
+    const char *statement_id;
+    const char *source_path;
+    unsigned int line;
+    unsigned int col;
+} SkDebugLocation;
+
+static const SkDebugLocation sk_debug_locations[] = {
+    /* SKADI_DEBUG_LOCATION_TABLE */
+    {NULL, NULL, 0, 0}
+};
+
+static int sk_debug_initialized = 0;
+static int sk_debug_step_mode = 0;
+static const char *sk_debug_breakpoints = NULL;
+
+#if defined(_WIN32)
+static INIT_ONCE sk_debug_lock_once = INIT_ONCE_STATIC_INIT;
+static CRITICAL_SECTION sk_debug_lock_value;
+
+static BOOL CALLBACK sk_debug_init_lock(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+    (void)once;
+    (void)parameter;
+    (void)context;
+    InitializeCriticalSection(&sk_debug_lock_value);
+    return TRUE;
+}
+
+static void sk_debug_lock(void) {
+    InitOnceExecuteOnce(&sk_debug_lock_once, sk_debug_init_lock, NULL, NULL);
+    EnterCriticalSection(&sk_debug_lock_value);
+}
+
+static void sk_debug_unlock(void) {
+    LeaveCriticalSection(&sk_debug_lock_value);
+}
+#else
+static pthread_mutex_t sk_debug_lock_value = PTHREAD_MUTEX_INITIALIZER;
+
+static void sk_debug_lock(void) {
+    pthread_mutex_lock(&sk_debug_lock_value);
+}
+
+static void sk_debug_unlock(void) {
+    pthread_mutex_unlock(&sk_debug_lock_value);
+}
+#endif
+
+static int sk_debug_has_breakpoint(const char *statement_id) {
+    const char *cursor = sk_debug_breakpoints;
+    size_t id_length = strlen(statement_id);
+    if (cursor == NULL || *cursor == '\0') return 0;
+    while (*cursor != '\0') {
+        const char *end = strchr(cursor, ',');
+        size_t length = end == NULL ? strlen(cursor) : (size_t)(end - cursor);
+        if (length == id_length && strncmp(cursor, statement_id, length) == 0) return 1;
+        if (end == NULL) break;
+        cursor = end + 1;
+    }
+    return 0;
+}
+
+static const SkDebugLocation *sk_debug_find_location(const char *statement_id) {
+    const SkDebugLocation *location = sk_debug_locations;
+    while (location->statement_id != NULL) {
+        if (strcmp(location->statement_id, statement_id) == 0) return location;
+        location++;
+    }
+    return NULL;
+}
+
+static void sk_debug_probe(const char *statement_id) {
+    char command[64];
+    const SkDebugLocation *location;
+    sk_debug_lock();
+    if (!sk_debug_initialized) {
+        const char *step = getenv("SKADI_DEBUG_STEP");
+        sk_debug_breakpoints = getenv("SKADI_DEBUG_BREAKPOINTS");
+        sk_debug_step_mode = step != NULL && strcmp(step, "1") == 0;
+        sk_debug_initialized = 1;
+    }
+    if (!sk_debug_step_mode && !sk_debug_has_breakpoint(statement_id)) {
+        sk_debug_unlock();
+        return;
+    }
+
+    location = sk_debug_find_location(statement_id);
+    if (location == NULL) {
+        fprintf(stderr, "\n[SKADI-DEBUG] stopped at %s\n", statement_id);
+    } else {
+        fprintf(stderr, "\n[SKADI-DEBUG] stopped at %s:%u:%u (%s)\n",
+            location->source_path, location->line, location->col, statement_id);
+    }
+    for (;;) {
+        size_t length;
+        fprintf(stderr, "(skadi-debug) ");
+        fflush(stderr);
+        if (fgets(command, sizeof(command), stdin) == NULL) {
+            sk_debug_step_mode = 0;
+            sk_debug_unlock();
+            return;
+        }
+        length = strlen(command);
+        while (length > 0 && (command[length - 1] == '\n' || command[length - 1] == '\r')) {
+            command[--length] = '\0';
+        }
+        if (strcmp(command, "c") == 0 || strcmp(command, "continue") == 0) {
+            sk_debug_step_mode = 0;
+            sk_debug_unlock();
+            return;
+        }
+        if (strcmp(command, "s") == 0 || strcmp(command, "step") == 0) {
+            sk_debug_step_mode = 1;
+            sk_debug_unlock();
+            return;
+        }
+        if (strcmp(command, "q") == 0 || strcmp(command, "quit") == 0) {
+            fprintf(stderr, "[SKADI-DEBUG] session terminated\n");
+            fflush(stderr);
+            exit(0);
+        }
+        fprintf(stderr, "commands: continue (c), step (s), quit (q)\n");
+    }
+}
+
+"#,
+    );
+}
+
 pub fn transpile_program_to_c(program: &Program) -> String {
     transpile_program_to_c_with_map(program).c_code
 }
 
 pub fn transpile_program_to_c_with_map(program: &Program) -> CodegenOutput {
+    transpile_program_to_c_with_options(program, CodegenOptions::default())
+}
+
+pub fn transpile_program_to_c_with_options(
+    program: &Program,
+    options: CodegenOptions,
+) -> CodegenOutput {
     let mut out = String::new();
     let mut codegen_state = CodegenState {
         function_returns: program
@@ -2233,6 +2377,7 @@ pub fn transpile_program_to_c_with_map(program: &Program) -> CodegenOutput {
                 _ => None,
             })
             .collect(),
+        debug_probes: options.debug_probes,
         ..CodegenState::default()
     };
     let struct_names = collect_struct_names(program);
@@ -2269,6 +2414,7 @@ pub fn transpile_program_to_c_with_map(program: &Program) -> CodegenOutput {
         || needs_time_runtime
         || needs_interrupt_runtime
         || needs_visual_runtime
+        || options.debug_probes
     {
         out.push_str("#include <stddef.h>\n");
         out.push_str("#include <stdlib.h>\n");
@@ -2283,6 +2429,7 @@ pub fn transpile_program_to_c_with_map(program: &Program) -> CodegenOutput {
         || needs_memory_runtime
         || needs_channel_runtime
         || needs_visual_runtime
+        || options.debug_probes
     {
         out.push_str("#include <string.h>\n\n");
     }
@@ -2290,12 +2437,20 @@ pub fn transpile_program_to_c_with_map(program: &Program) -> CodegenOutput {
         out.push_str("#include <math.h>\n\n");
         emit_math_runtime(&mut out);
     }
-    if needs_task_runtime || needs_channel_runtime || needs_time_runtime || needs_interrupt_runtime
+    if needs_task_runtime
+        || needs_channel_runtime
+        || needs_time_runtime
+        || needs_interrupt_runtime
+        || options.debug_probes
     {
         out.push_str("#if defined(_WIN32)\n");
         out.push_str("#include <windows.h>\n");
         out.push_str("#else\n");
-        if needs_task_runtime || needs_channel_runtime || needs_interrupt_runtime {
+        if needs_task_runtime
+            || needs_channel_runtime
+            || needs_interrupt_runtime
+            || options.debug_probes
+        {
             out.push_str("#include <pthread.h>\n");
         }
         if needs_task_runtime
@@ -2315,6 +2470,9 @@ pub fn transpile_program_to_c_with_map(program: &Program) -> CodegenOutput {
             || needs_interrupt_runtime)
     {
         out.push_str("#if defined(_WIN32)\n#include <windows.h>\n#endif\n\n");
+    }
+    if options.debug_probes {
+        emit_debug_runtime(&mut out);
     }
     if needs_vector_runtime {
         emit_vector_declarations(&mut out);
@@ -4308,6 +4466,13 @@ fn emit_statement(
     out.push_str(&statement_id);
     out.push_str(" */\n");
     let generated_start_line = generated_line(out);
+
+    if state.debug_probes {
+        out.push_str(&"    ".repeat(indent));
+        out.push_str("sk_debug_probe(\"");
+        out.push_str(&statement_id);
+        out.push_str("\");\n");
+    }
 
     emit_statement_body(stmt, out, indent, declared, fn_ctx, place_ctx, state);
 

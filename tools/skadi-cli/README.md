@@ -52,6 +52,7 @@ cargo run -p skadi-cli -- check
 - `format` форматирует проект или проверяет стиль через `--check`;
 - `build` выполняет `Skadi -> C -> executable`;
 - `run` собирает и запускает программу;
+- `debug` запускает opt-in debug build с breakpoints по `.skd`, `continue` и `step`;
 - `quick-run` собирает и запускает один `.skd` без `Skadi.toml`;
 - `doctor` проверяет host и cross toolchains;
 - `target list` показывает поддерживаемые target profiles;
@@ -59,7 +60,9 @@ cargo run -p skadi-cli -- check
 
 `build` также создаёт `<project>.skadi-debug.json` со statement-level mapping
 между исходными `.skd` и generated C. Sidecar уже учитывает imports и является
-основой будущего Skadi-level debugger; breakpoints/step/locals пока не готовы.
+основой Skadi-level debugger. Команда `debug [-b file.skd:line]` уже поддерживает
+исходные точки останова, `continue`, `step` и `quit`; locals, call stack и
+debug-сессия внутри TUI пока не готовы.
 
 `build` и `run` принимают `--target` и `--cc`. C-компилятор является внешней
 зависимостью и не устанавливается вместе со Skadi.

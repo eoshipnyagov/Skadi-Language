@@ -1,4 +1,7 @@
-use v01::codegen::{transpile_program_to_c, transpile_program_to_c_with_map};
+use v01::codegen::{
+    CodegenOptions, transpile_program_to_c, transpile_program_to_c_with_map,
+    transpile_program_to_c_with_options,
+};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::semantic_analyze;
@@ -37,6 +40,34 @@ fn codegen_source_map_points_to_generated_statement_ranges() {
         .expect("mapped generated line");
     assert!(generated.contains("value = (value + 1);"));
     assert!(output.c_code.contains("/* SK-STMT@1:1#1 */"));
+}
+
+#[test]
+fn codegen_debug_probes_are_opt_in() {
+    let tokens = lex("new Int value = 1\nvalue = value + 1\n").expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+
+    let normal = transpile_program_to_c_with_map(&program);
+    let debug =
+        transpile_program_to_c_with_options(&program, CodegenOptions { debug_probes: true });
+
+    assert!(!normal.c_code.contains("sk_debug_probe("));
+    assert!(debug.c_code.contains("static void sk_debug_probe("));
+    assert!(debug.c_code.contains("sk_debug_probe(\"SK-STMT@1:1#1\");"));
+    assert!(debug.c_code.contains("sk_debug_probe(\"SK-STMT@2:1#1\");"));
+    assert_eq!(
+        normal
+            .source_map
+            .iter()
+            .map(|entry| &entry.statement_id)
+            .collect::<Vec<_>>(),
+        debug
+            .source_map
+            .iter()
+            .map(|entry| &entry.statement_id)
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]

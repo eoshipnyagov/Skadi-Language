@@ -132,8 +132,9 @@ GitHub Pages.
 - Canvas events, text/images, transforms и non-Windows presenters;
 - systems additions;
 - hardware/RTOS backend для `on interrupt` поверх готового host periodic MVP;
-- расширенные path-sensitive ownership/lifecycle facts и Skadi-level debugger в TUI; первый
-  structured analysis slice для blocking Channel и incomplete `when` уже доступен.
+- расширенные path-sensitive ownership/lifecycle facts и Skadi-level debugger в
+  TUI; CLI уже поддерживает первый probe-based breakpoint/step slice, а
+  structured analysis покрывает blocking Channel и incomplete `when`.
 
 ## 10. Навигация по документам
 

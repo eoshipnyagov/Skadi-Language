@@ -175,8 +175,10 @@
     `skadi.analysis.v1`, IDs, source anchors и subject kinds
 - debugger foundation
   - codegen-тест закрепляет `SK-STMT` IDs и generated C ranges
+  - codegen-тест проверяет, что probes включаются только для debug build
   - module pipeline проверяет source origin для entry и imported `.skd`
   - CLI build smoke проверяет sidecar `skadi.debug-map.v1`
+  - CLI smoke запускает breakpoint по `.skd`, затем `step` и `continue`
 - module ergonomics
   - относительный path-import и правила видимости покрыты полноценно
   - path import aliases реализованы; module-name imports и re-export остаются TODO

@@ -298,8 +298,10 @@ TUI action history и связывает факты по typed subject. Кажд
 - debug build с mapping `Skadi source -> generated C` — выполнен первый
   statement-level slice: `SK-STMT` markers, multi-file origins и sidecar
   `skadi.debug-map.v1`;
-- compiler-inserted debug probes и метаданные известных Skadi-типов;
-- breakpoints по `.skd`, continue, step, locals и call stack;
+- compiler-inserted debug probes — выполнен первый opt-in host slice;
+- breakpoints по `.skd`, continue и step — выполнены в CLI; locals, call stack
+  и TUI debug session остаются следующим этапом;
+- метаданные известных Skadi-типов;
 - runtime views для Task, Channel, Memory и linear resources;
 - GDB/LLDB могут подключаться как нижний native layer, но TUI не должен
   показывать пользователю generated C как основную модель.

@@ -49,6 +49,7 @@ skadi-cli tui
 | `format [--check] [path ...]` | Форматировать или проверить `.skd` | Нет |
 | `build [--target name] [--cc compiler]` | Собрать native binary | Да |
 | `run [--target name] [--cc compiler]` | Собрать и запустить | Да |
+| `debug [-b file.skd:line] [-- <args ...>]` | Отладочная сборка, breakpoints и step | Да |
 | `quick-run <file.skd> [-- <args ...>]` | Собрать и запустить один файл без manifest | Да |
 | `doctor` | Проверить host/cross toolchains | Нет |
 | `target list` | Показать target profiles | Нет |
@@ -143,9 +144,29 @@ skadi-cli run --target host --cc gcc
 Артефакты находятся в `build/`: executable, generated `.c` и
 `<project>.skadi-debug.json`. Debug map использует схему `skadi.debug-map.v1` и
 связывает statement ID, исходный `.skd`/line/col и диапазон строк generated C.
-Для imports сохраняется реальный файл происхождения, а не только entry. Это
-foundation для будущих breakpoints/step/locals, но отдельной команды debugger
-пока нет. `run` передаёт stdout/stderr программы и сохраняет её exit status.
+Для imports сохраняется реальный файл происхождения, а не только entry. Эту же
+карту использует команда `debug`. `run` передаёт stdout/stderr программы и
+сохраняет её exit status.
+
+## `debug`
+
+```powershell
+skadi-cli debug
+skadi-cli debug --break src/main.skd:12
+skadi-cli debug -b src/main.skd:12 -b src/worker.skd:8 -- input.txt
+```
+
+Команда создаёт отдельную opt-in debug-сборку с compiler probes. Без точек
+останова выполнение приостанавливается на первом исполняемом statement.
+`--break`/`-b` можно повторять; путь задаётся относительно корня проекта, а
+строка должна содержать исполняемый statement. Аргументы после `--` передаются
+программе.
+
+Внутри сессии доступны `continue` (`c`), `step` (`s`) и `quit` (`q`). Остановка
+показывает исходный `.skd`, line/col и statement ID. Текущий ранний slice не
+показывает locals и call stack и ещё не встроен в TUI. Для многопоточного кода
+остановки сериализуются на compiler probes: это кооперативная, а не нативная
+stop-the-world отладка. Поддерживается только host target.
 
 ## `quick-run`
 

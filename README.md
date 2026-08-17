@@ -49,8 +49,8 @@ The repository includes:
 - structured analysis facts with stable IDs/source anchors for blocking/timed
   operations, incomplete `when`, and resource lifecycle chains displayed in a
   dedicated TUI workspace and exported by `analyze --json`,
-- statement-level Skadi-to-C debug maps with multi-file source origins emitted
-  beside native build artifacts,
+- statement-level Skadi-to-C debug maps with multi-file source origins, plus an
+  opt-in probe debugger with source breakpoints, continue, and step,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
 - experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,
@@ -508,6 +508,7 @@ skadi-cli check
 skadi-cli format
 skadi-cli build
 skadi-cli run
+skadi-cli debug --break src/main.skd:1
 ```
 
 For interactive work:
@@ -532,6 +533,7 @@ skadi-cli check
 skadi-cli analyze --json
 skadi-cli build
 skadi-cli run
+skadi-cli debug [-b file.skd:line]
 skadi-cli quick-run <file.skd> [-- <args>]
 skadi-cli format
 skadi-cli tui
