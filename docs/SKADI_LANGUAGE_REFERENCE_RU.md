@@ -22,6 +22,7 @@ functions и builtins используйте [быструю справку](lan
 - [ByteSize](byte-size.md)
 - [Angle](angle.md)
 - [Vec2, Vec3 и Vec4](vectors.md)
+- [Платформенный Int и битовые операции](bits.md)
 
 Эти возможности работают end-to-end, но пока имеют статус `Experimental`: их
 public API ещё не заморожен.

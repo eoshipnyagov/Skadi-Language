@@ -154,9 +154,9 @@ danger fn require_positive(Int value) returns Int {
 
 ```skadi
 label ErrorCode {
-    Ok,
-    NotFound,
-    InvalidValue
+    Ok = 0
+    NotFound = 1
+    InvalidValue = 2
 }
 
 new Int content = 0

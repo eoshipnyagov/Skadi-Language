@@ -21,7 +21,8 @@ fn origin_distance(geometry.Point point) returns Float {
 }
 ```
 
-Avoid reserved `fixed/const/allow` forms, C-style loops, legacy return syntax,
+Use `constant` for immutable bindings; `fixed` and `const` are ordinary names,
+not declaration modifiers. Avoid contextual `allow` outside Memory, C-style loops, legacy return syntax,
 invented I/O error forms, and mutable/capability payload across channels.
 
 Run `check -> format -> build -> run` as the normal project discipline. Skadi

@@ -19,6 +19,8 @@ struct PlaceContext {
 struct CodegenState {
     next_label_id: usize,
     function_returns: HashMap<String, String>,
+    call_types: HashMap<String, String>,
+    nominal_types: HashSet<String>,
     interrupt_handler_index: usize,
     statement_collisions: HashMap<(u32, u32), usize>,
     source_map: Vec<CodegenSourceMapEntry>,
@@ -50,8 +52,29 @@ pub struct CodegenOutput {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum IntWidth {
+    I8,
+    I16,
+    #[default]
+    I32,
+    I64,
+}
+
+impl IntWidth {
+    fn c_type(self) -> &'static str {
+        match self {
+            Self::I8 => "int8_t",
+            Self::I16 => "int16_t",
+            Self::I32 => "int32_t",
+            Self::I64 => "int64_t",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CodegenOptions {
     pub debug_probes: bool,
+    pub int_width: IntWidth,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +87,8 @@ enum ExprKind {
     Unknown,
 }
 
-const LIST_TYPE_MAP: [(&str, &str, &str); 20] = [
+const LIST_TYPE_MAP: [(&str, &str, &str); 21] = [
+    ("Int", "SkInt", "int"),
     ("i8", "int8_t", "i8"),
     ("i16", "int16_t", "i16"),
     ("i32", "int32_t", "i32"),
@@ -81,7 +105,7 @@ const LIST_TYPE_MAP: [(&str, &str, &str); 20] = [
     ("Time", "int64_t", "time"),
     ("Duration", "int64_t", "duration"),
     ("ByteSize", "int64_t", "bytesize"),
-    ("Angle", "double", "angle"),
+    ("Angle", "float", "angle"),
     ("Vec2", "Vec2", "vec2"),
     ("Vec3", "Vec3", "vec3"),
     ("Vec4", "Vec4", "vec4"),
@@ -93,8 +117,8 @@ fn list_elem_from_decl(t: &str) -> Option<&str> {
 
 fn list_meta(elem: &str) -> Option<(&'static str, &'static str)> {
     let normalized = match elem {
-        "Int" => "i64",
-        "Float" => "f64",
+        "Int" => "Int",
+        "Float" => "f32",
         "Bool" => "bool",
         "Char" => "char",
         "Path" => "Text",
@@ -788,6 +812,14 @@ fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
     out.push_str("static int sk_output_float(double v) { printf(\"%f\\n\", v); return 0; }\n");
     out.push_str("static int sk_output_bool(bool v) { printf(\"%s\\n\", v ? \"true\" : \"false\"); return 0; }\n");
     out.push_str("static int sk_output_char(char v) { printf(\"%c\\n\", v); return 0; }\n\n");
+    out.push_str("static int sk_output_text_part(const char *s) { printf(\"%s\", s ? s : \"\"); return 0; }\n");
+    out.push_str(
+        "static int sk_output_int_part(int64_t v) { printf(\"%lld\", (long long)v); return 0; }\n",
+    );
+    out.push_str("static int sk_output_float_part(double v) { printf(\"%f\", v); return 0; }\n");
+    out.push_str("static int sk_output_bool_part(bool v) { printf(\"%s\", v ? \"true\" : \"false\"); return 0; }\n");
+    out.push_str("static int sk_output_char_part(char v) { printf(\"%c\", v); return 0; }\n");
+    out.push_str("static int sk_output_end(void) { putchar('\\n'); return 0; }\n\n");
     out.push_str("static char* sk_input(const char *prompt) {\n");
     out.push_str("    if (prompt) printf(\"%s\", prompt);\n");
     out.push_str("    char buf[4096];\n");
@@ -834,12 +866,95 @@ fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
 fn emit_math_runtime(out: &mut String) {
     out.push_str("#ifndef M_PI\n#define M_PI 3.14159265358979323846\n#endif\n");
     out.push_str("#ifndef M_E\n#define M_E 2.71828182845904523536\n#endif\n\n");
+    out.push_str(
+        "static int64_t sk_math_min_int(int64_t a, int64_t b) { return a < b ? a : b; }\n",
+    );
+    out.push_str(
+        "static int64_t sk_math_max_int(int64_t a, int64_t b) { return a > b ? a : b; }\n",
+    );
+    out.push_str("static int64_t sk_math_clamp_int(int64_t v, int64_t lo, int64_t hi) { return v < lo ? lo : (v > hi ? hi : v); }\n");
+    out.push_str("static int64_t sk_math_sign_int(int64_t v) { return (v > 0) - (v < 0); }\n");
+    out.push_str("static float sk_math_min_float(float a, float b) { return fminf(a, b); }\n");
+    out.push_str("static float sk_math_max_float(float a, float b) { return fmaxf(a, b); }\n");
+    out.push_str("static float sk_math_clamp_float(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }\n");
+    out.push_str(
+        "static float sk_math_sign_float(float v) { return isnan(v) ? v : (float)((v > 0.0f) - (v < 0.0f)); }\n",
+    );
+    out.push_str("static float sk_math_fract(float v) { return v - floorf(v); }\n");
+    out.push_str(
+        "static float sk_math_lerp(float a, float b, float t) { return a + (b - a) * t; }\n",
+    );
+    out.push_str("static float sk_math_inverse_lerp(float a, float b, float v) { return (v - a) / (b - a); }\n");
+    out.push_str("static float sk_math_remap(float v, float in_a, float in_b, float out_a, float out_b) { return sk_math_lerp(out_a, out_b, sk_math_inverse_lerp(in_a, in_b, v)); }\n");
+    out.push_str("static float sk_math_smoothstep(float edge_a, float edge_b, float v) { float t = sk_math_clamp_float(sk_math_inverse_lerp(edge_a, edge_b, v), 0.0f, 1.0f); return t * t * (3.0f - 2.0f * t); }\n");
+    out.push_str("static float sk_math_normalize_angle(float radians) { float wrapped = fmodf(radians + (float)M_PI, 2.0f * (float)M_PI); if (wrapped < 0.0f) wrapped += 2.0f * (float)M_PI; return wrapped - (float)M_PI; }\n\n");
+}
+
+fn emit_bit_runtime(out: &mut String) {
+    out.push_str(
+        "static void sk_bit_panic(const char *operation, int64_t index, int64_t width) {\n",
+    );
+    out.push_str("    fprintf(stderr, \"Skadi bit runtime error [SC-RT-340]: %s index %lld is outside 0..%lld\\n\", operation, (long long)index, (long long)(width - 1));\n");
+    out.push_str("    exit(1);\n}\n\n");
+
+    for (suffix, c_type, unsigned_type, bits) in [
+        ("i8", "int8_t", "uint8_t", 8),
+        ("i16", "int16_t", "uint16_t", 16),
+        ("i32", "int32_t", "uint32_t", 32),
+        ("i64", "int64_t", "uint64_t", 64),
+        ("u8", "uint8_t", "uint8_t", 8),
+        ("u16", "uint16_t", "uint16_t", 16),
+        ("u32", "uint32_t", "uint32_t", 32),
+        ("u64", "uint64_t", "uint64_t", 64),
+    ] {
+        emit_bit_helpers_for(out, suffix, c_type, unsigned_type, bits);
+    }
+    out.push('\n');
+}
+
+fn emit_bit_helpers_for(
+    out: &mut String,
+    suffix: &str,
+    c_type: &str,
+    unsigned_type: &str,
+    bits: u32,
+) {
+    for (name, operator) in [("and", "&"), ("or", "|"), ("xor", "^")] {
+        out.push_str(&format!(
+            "static {c_type} sk_bit_{name}_{suffix}({c_type} a, {c_type} b) {{ return ({c_type})(({unsigned_type})a {operator} ({unsigned_type})b); }}\n"
+        ));
+    }
+    out.push_str(&format!(
+        "static {c_type} sk_bit_not_{suffix}({c_type} value) {{ return ({c_type})(~({unsigned_type})value); }}\n"
+    ));
+    out.push_str(&format!(
+        "static {c_type} sk_bit_shift_left_{suffix}({c_type} value, int64_t index) {{ if (index < 0 || index >= {bits}) sk_bit_panic(\"bit_shift_left\", index, {bits}); return ({c_type})(({unsigned_type})value << index); }}\n"
+    ));
+    out.push_str(&format!(
+        "static {c_type} sk_bit_shift_right_{suffix}({c_type} value, int64_t index) {{ if (index < 0 || index >= {bits}) sk_bit_panic(\"bit_shift_right\", index, {bits}); return ({c_type})(({unsigned_type})value >> index); }}\n"
+    ));
+    out.push_str(&format!(
+        "static bool sk_bit_is_set_{suffix}({c_type} value, int64_t index) {{ if (index < 0 || index >= {bits}) sk_bit_panic(\"bit_is_set\", index, {bits}); return ((({unsigned_type})value >> index) & 1u) != 0; }}\n"
+    ));
+    for (name, operator) in [("set", "|"), ("clear", "&"), ("toggle", "^")] {
+        let mask = if name == "clear" {
+            format!("~(({unsigned_type})1u << index)")
+        } else {
+            format!("(({unsigned_type})1u << index)")
+        };
+        out.push_str(&format!(
+            "static {c_type} sk_bit_{name}_{suffix}({c_type} value, int64_t index) {{ if (index < 0 || index >= {bits}) sk_bit_panic(\"bit_{name}\", index, {bits}); return ({c_type})(({unsigned_type})value {operator} {mask}); }}\n"
+        ));
+    }
+    out.push_str(&format!(
+        "static {c_type} sk_bit_write_{suffix}({c_type} value, int64_t index, bool enabled) {{ return enabled ? sk_bit_set_{suffix}(value, index) : sk_bit_clear_{suffix}(value, index); }}\n"
+    ));
 }
 
 fn emit_vector_declarations(out: &mut String) {
-    out.push_str("typedef struct { double x; double y; } Vec2;\n");
-    out.push_str("typedef struct { double x; double y; double z; } Vec3;\n");
-    out.push_str("typedef struct { double x; double y; double z; double w; } Vec4;\n\n");
+    out.push_str("typedef struct { float x; float y; } Vec2;\n");
+    out.push_str("typedef struct { float x; float y; float z; } Vec3;\n");
+    out.push_str("typedef struct { float x; float y; float z; float w; } Vec4;\n\n");
 }
 
 fn emit_vector_runtime(out: &mut String, include_length_helpers: bool) {
@@ -861,7 +976,7 @@ fn emit_vector_runtime(out: &mut String, include_length_helpers: bool) {
             out.push_str("}; }\n");
         }
         for (operation, symbol) in [("scale", "*"), ("div", "/")] {
-            out.push_str(&format!("static {name} sk_{suffix}_{operation}({name} value, double scalar) {{ return ({name}){{"));
+            out.push_str(&format!("static {name} sk_{suffix}_{operation}({name} value, float scalar) {{ return ({name}){{"));
             for (index, field) in fields.iter().enumerate() {
                 if index > 0 {
                     out.push_str(", ");
@@ -881,7 +996,7 @@ fn emit_vector_runtime(out: &mut String, include_length_helpers: bool) {
         }
         out.push_str("}; }\n");
         out.push_str(&format!(
-            "static double sk_{suffix}_dot({name} a, {name} b) {{ return "
+            "static float sk_{suffix}_dot({name} a, {name} b) {{ return "
         ));
         for (index, field) in fields.iter().enumerate() {
             if index > 0 {
@@ -890,12 +1005,12 @@ fn emit_vector_runtime(out: &mut String, include_length_helpers: bool) {
             out.push_str(&format!("a.{field} * b.{field}"));
         }
         out.push_str("; }\n");
-        out.push_str(&format!("static double sk_{suffix}_length_sq({name} value) {{ return sk_{suffix}_dot(value, value); }}\n"));
-        out.push_str(&format!("static double sk_{suffix}_distance_sq({name} a, {name} b) {{ return sk_{suffix}_length_sq(sk_{suffix}_sub(a, b)); }}\n"));
+        out.push_str(&format!("static float sk_{suffix}_length_sq({name} value) {{ return sk_{suffix}_dot(value, value); }}\n"));
+        out.push_str(&format!("static float sk_{suffix}_distance_sq({name} a, {name} b) {{ return sk_{suffix}_length_sq(sk_{suffix}_sub(a, b)); }}\n"));
         if include_length_helpers {
-            out.push_str(&format!("static double sk_{suffix}_length({name} value) {{ return sqrt(sk_{suffix}_length_sq(value)); }}\n"));
-            out.push_str(&format!("static {name} sk_{suffix}_normalize({name} value) {{ double magnitude = sk_{suffix}_length(value); return magnitude > 0.0 ? sk_{suffix}_div(value, magnitude) : ({name}){{0}}; }}\n"));
-            out.push_str(&format!("static double sk_{suffix}_distance({name} a, {name} b) {{ return sk_{suffix}_length(sk_{suffix}_sub(a, b)); }}\n"));
+            out.push_str(&format!("static float sk_{suffix}_length({name} value) {{ return sqrtf(sk_{suffix}_length_sq(value)); }}\n"));
+            out.push_str(&format!("static {name} sk_{suffix}_normalize({name} value) {{ float magnitude = sk_{suffix}_length(value); return magnitude > 0.0f ? sk_{suffix}_div(value, magnitude) : ({name}){{0}}; }}\n"));
+            out.push_str(&format!("static float sk_{suffix}_distance({name} a, {name} b) {{ return sk_{suffix}_length(sk_{suffix}_sub(a, b)); }}\n"));
         }
         out.push('\n');
     }
@@ -1409,8 +1524,153 @@ fn statement_list_uses_deferred_task_surface(statements: &[Statement]) -> bool {
 }
 
 pub fn ensure_codegen_supported(program: &Program) -> Result<(), String> {
-    let _ = program;
-    Ok(())
+    ensure_codegen_supported_with_options(program, CodegenOptions::default())
+}
+
+pub fn ensure_codegen_supported_with_options(
+    program: &Program,
+    options: CodegenOptions,
+) -> Result<(), String> {
+    fn literal_fits(value: i64, width: IntWidth) -> bool {
+        match width {
+            IntWidth::I8 => i8::try_from(value).is_ok(),
+            IntWidth::I16 => i16::try_from(value).is_ok(),
+            IntWidth::I32 => i32::try_from(value).is_ok(),
+            IntWidth::I64 => true,
+        }
+    }
+
+    fn validate_int_expression(expr: &Expression, width: IntWidth) -> Result<(), String> {
+        match expr {
+            Expression::LiteralInt(value) if !literal_fits(*value, width) => Err(format!(
+                "[SC-CG-302] Int literal {} does not fit configured {:?}; use an explicit fixed-width type or widen [numeric] int.",
+                value, width
+            )),
+            Expression::Call { args, .. } | Expression::ListLiteral(args) => {
+                for arg in args {
+                    validate_int_expression(arg, width)?;
+                }
+                Ok(())
+            }
+            Expression::Index { base, index } => {
+                validate_int_expression(base, width)?;
+                validate_int_expression(index, width)
+            }
+            Expression::BinaryOp { left, right, .. } => {
+                validate_int_expression(left, width)?;
+                if let Some(right) = right {
+                    validate_int_expression(right, width)?;
+                }
+                Ok(())
+            }
+            Expression::StructConstruction { fields } => {
+                for value in fields.values() {
+                    validate_int_expression(value, width)?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn validate_statements(
+        statements: &[Statement],
+        width: IntWidth,
+        inherited_ints: &HashSet<String>,
+    ) -> Result<(), String> {
+        let mut int_names = inherited_ints.clone();
+        for statement in statements {
+            match statement {
+                Statement::VarDecl {
+                    name,
+                    declared_type,
+                    value,
+                    ..
+                } => {
+                    let is_int = declared_type
+                        .as_deref()
+                        .map(normalize_type_token)
+                        .is_none_or(|ty| ty == "Int");
+                    if is_int {
+                        validate_int_expression(value, width)?;
+                        int_names.insert(name.clone());
+                    }
+                }
+                Statement::Assignment { target, value, .. } if int_names.contains(target) => {
+                    validate_int_expression(value, width)?;
+                }
+                Statement::FunctionDef {
+                    params,
+                    body,
+                    returns,
+                    ..
+                } => {
+                    let mut function_ints = HashSet::new();
+                    for param in params {
+                        if param
+                            .param_type
+                            .as_deref()
+                            .map(normalize_type_token)
+                            .is_none_or(|ty| ty == "Int")
+                        {
+                            function_ints.insert(param.name.clone());
+                        }
+                    }
+                    validate_statements(&body.statements, width, &function_ints)?;
+                    if returns.as_deref().map(normalize_type_token).as_deref() == Some("Int") {
+                        for nested in &body.statements {
+                            if let Statement::ReturnStatement {
+                                value: Some(value), ..
+                            } = nested
+                            {
+                                validate_int_expression(value, width)?;
+                            }
+                        }
+                    }
+                }
+                Statement::StructDecl { methods, .. } => {
+                    for method in methods {
+                        validate_statements(&method.body.statements, width, &HashSet::new())?;
+                    }
+                }
+                Statement::IfStatement {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    validate_statements(&then_block.statements, width, &int_names)?;
+                    if let Some(else_block) = else_block {
+                        validate_statements(&else_block.statements, width, &int_names)?;
+                    }
+                }
+                Statement::ForLoop { body, .. }
+                | Statement::WhileLoop { body, .. }
+                | Statement::LoopStatement { body, .. }
+                | Statement::OnBlock { body, .. }
+                | Statement::PlaceIn { body, .. } => {
+                    validate_statements(&body.statements, width, &int_names)?;
+                }
+                Statement::WhenBlock {
+                    cases, else_block, ..
+                } => {
+                    for (_, block) in cases {
+                        validate_statements(&block.statements, width, &int_names)?;
+                    }
+                    if let Some(block) = else_block {
+                        validate_statements(&block.statements, width, &int_names)?;
+                    }
+                }
+                Statement::BlockStatement { statements, .. }
+                | Statement::OnErrorBlock { statements, .. } => {
+                    validate_statements(statements, width, &int_names)?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    validate_statements(&program.statements, options.int_width, &HashSet::new())
 }
 
 fn collect_task_entries_from_expression(expr: &Expression, entries: &mut HashSet<String>) {
@@ -2250,6 +2510,17 @@ pub fn transpile_program_to_c_with_options(
                 _ => None,
             })
             .collect(),
+        call_types: collect_call_types(program),
+        nominal_types: program
+            .statements
+            .iter()
+            .filter_map(|stmt| match stmt {
+                Statement::LabelDecl { name, .. } | Statement::TagDecl { name, .. } => {
+                    Some(name.clone())
+                }
+                _ => None,
+            })
+            .collect(),
         debug_probes: options.debug_probes,
         ..CodegenState::default()
     };
@@ -2260,6 +2531,7 @@ pub fn transpile_program_to_c_with_options(
     let needs_io_runtime = program_uses_io_runtime(program);
     let needs_args_runtime = program_uses_args_runtime(program);
     let needs_math_runtime = program_uses_math_runtime(program);
+    let needs_bit_runtime = program_uses_bit_runtime(program);
     let needs_visual_runtime = program_uses_visual_runtime(program);
     let needs_window_runtime = program_uses_window_runtime(program);
     let needs_vector_runtime = statements_use_vector(&program.statements) || needs_visual_runtime;
@@ -2287,6 +2559,7 @@ pub fn transpile_program_to_c_with_options(
         || needs_time_runtime
         || needs_interrupt_runtime
         || needs_visual_runtime
+        || needs_bit_runtime
         || options.debug_probes
     {
         out.push_str("#include <stddef.h>\n");
@@ -2294,6 +2567,10 @@ pub fn transpile_program_to_c_with_options(
     }
     out.push_str("#include <stdint.h>\n");
     out.push_str("#include <stdbool.h>\n\n");
+    out.push_str(&format!(
+        "typedef {} SkInt;\n\n",
+        options.int_width.c_type()
+    ));
     if needs_text_runtime
         || needs_fs_list
         || needs_fs_join
@@ -2307,8 +2584,11 @@ pub fn transpile_program_to_c_with_options(
         out.push_str("#include <string.h>\n\n");
     }
     if needs_math_runtime {
-        out.push_str("#include <math.h>\n\n");
+        out.push_str("#include <float.h>\n#include <math.h>\n\n");
         emit_math_runtime(&mut out);
+    }
+    if needs_bit_runtime {
+        emit_bit_runtime(&mut out);
     }
     if needs_task_runtime
         || needs_channel_runtime
@@ -2428,6 +2708,7 @@ pub fn transpile_program_to_c_with_options(
         out.push_str("    sk_debug_enter(\"<main>\");\n");
     }
     let mut declared: HashMap<String, String> = HashMap::new();
+    seed_call_types(&mut declared, &codegen_state);
     for stmt in &program.statements {
         if !matches!(stmt, Statement::FunctionDef { .. }) {
             emit_statement(
@@ -2659,6 +2940,7 @@ fn emit_struct_methods(program: &Program, out: &mut String, state: &mut CodegenS
             }
             out.push_str(") {\n");
             let mut declared = HashMap::new();
+            seed_call_types(&mut declared, state);
             declared.insert("my".to_string(), name.clone());
             for p in &method.params {
                 declared.insert(
@@ -3363,7 +3645,7 @@ fn emit_interrupt_runtime(out: &mut String) {
 fn emit_visual_runtime(out: &mut String, needs_window_runtime: bool) {
     out.push_str(
         r##"typedef struct { uint8_t r; uint8_t g; uint8_t b; uint8_t a; } SkColor;
-typedef struct { double x; double y; double width; double height; } SkRect;
+typedef struct { float x; float y; float width; float height; } SkRect;
 typedef struct {
     int64_t width;
     int64_t height;
@@ -3432,11 +3714,11 @@ static SkColor sk_color_hex(const char *text, int64_t alpha) {
 #define Color_white Color_terminal_bright_white
 #define Color_transparent ((SkColor){0, 0, 0, 0})
 
-static SkRect sk_rect(double x, double y, double width, double height) {
+static SkRect sk_rect(float x, float y, float width, float height) {
     return (SkRect){x, y, width, height};
 }
 
-static int64_t sk_visual_round(double value) {
+static int64_t sk_visual_round(float value) {
     return (int64_t)(value >= 0.0 ? value + 0.5 : value - 0.5);
 }
 
@@ -3577,7 +3859,7 @@ static void sk_canvas_circle_octants(SkCanvas *canvas, int64_t cx, int64_t cy, i
     sk_canvas_blend_pixel(canvas, cx + x, cy - y, color);
 }
 
-static int64_t sk_canvas_circle(SkCanvas *canvas, Vec2 center, double radius, SkColor color) {
+static int64_t sk_canvas_circle(SkCanvas *canvas, Vec2 center, float radius, SkColor color) {
     if (radius < 0.0) sk_visual_panic("circle radius cannot be negative");
     int64_t cx = sk_visual_round(center.x), cy = sk_visual_round(center.y);
     int64_t x = sk_visual_round(radius), y = 0, error = 1 - x;
@@ -3590,7 +3872,7 @@ static int64_t sk_canvas_circle(SkCanvas *canvas, Vec2 center, double radius, Sk
     return 0;
 }
 
-static int64_t sk_canvas_fill_circle(SkCanvas *canvas, Vec2 center, double radius, SkColor color) {
+static int64_t sk_canvas_fill_circle(SkCanvas *canvas, Vec2 center, float radius, SkColor color) {
     if (radius < 0.0) sk_visual_panic("fill_circle radius cannot be negative");
     int64_t cx = sk_visual_round(center.x), cy = sk_visual_round(center.y);
     int64_t r = sk_visual_round(radius);
@@ -4125,6 +4407,7 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
                 })
             })
             .collect();
+        seed_call_types(&mut declared, state);
         let fn_ctx = FunctionContext {
             is_danger: *is_danger,
             return_type: returns.clone(),
@@ -4329,6 +4612,60 @@ fn emit_owned_channel_cleanup(out: &mut String, pad: &str, declared: &HashMap<St
     }
 }
 
+fn collect_call_types(program: &Program) -> HashMap<String, String> {
+    let mut call_types = HashMap::new();
+    for statement in &program.statements {
+        match statement {
+            Statement::FunctionDef { name, returns, .. } => {
+                call_types.insert(
+                    format!("fn:{name}"),
+                    returns.clone().unwrap_or_else(|| "Int".to_string()),
+                );
+            }
+            Statement::StructDecl {
+                name,
+                fields,
+                methods,
+                ..
+            } => {
+                for field in fields {
+                    call_types.insert(
+                        format!("field:{name}.{}", field.name),
+                        field.field_type.clone(),
+                    );
+                }
+                for method in methods {
+                    call_types.insert(
+                        format!("method:{name}.{}", method.name),
+                        method.returns.clone().unwrap_or_else(|| "Int".to_string()),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    call_types
+}
+
+fn seed_call_types(declared: &mut HashMap<String, String>, state: &CodegenState) {
+    for (name, return_type) in &state.call_types {
+        declared.insert(format!("\0skadi:{name}"), return_type.clone());
+    }
+}
+
+fn call_return_type<'a>(name: &str, declared: &'a HashMap<String, String>) -> Option<&'a str> {
+    if let Some((receiver, method)) = name.split_once('.')
+        && let Some(receiver_type) = declared.get(receiver)
+    {
+        let receiver_type = normalize_type_token(receiver_type);
+        let key = format!("\0skadi:method:{receiver_type}.{method}");
+        return declared.get(&key).map(String::as_str);
+    }
+    declared
+        .get(&format!("\0skadi:fn:{name}"))
+        .map(String::as_str)
+}
+
 fn infer_scalar_declaration_type(
     value: &Expression,
     declared: &HashMap<String, String>,
@@ -4342,6 +4679,9 @@ fn infer_scalar_declaration_type(
             if let Some(declared_type) = declared.get(name) {
                 return Some(normalize_type_token(declared_type));
             }
+        }
+        Expression::Call { name, .. } if matches!(name.as_str(), "as_nanoseconds" | "as_bytes") => {
+            return Some("i64".to_string());
         }
         Expression::Call { name, .. } => {
             if let Some(return_type) = state.function_returns.get(name) {
@@ -5582,6 +5922,8 @@ fn emit_statement_body(
                 return;
             }
             let when_expr = emit_expr(when_expression, declared);
+            let when_nominal_type = infer_scalar_declaration_type(when_expression, declared, state)
+                .filter(|name| state.nominal_types.contains(name));
             let when_tmp = format!("__when_tmp_{}", indent);
             let when_is_text = is_text_expr(when_expression, declared)
                 || cases
@@ -5615,13 +5957,21 @@ fn emit_statement_body(
                             out.push_str("(strcmp(");
                             out.push_str(&when_tmp);
                             out.push_str(", ");
-                            out.push_str(&emit_expr(expr, declared));
+                            out.push_str(&emit_when_case_expr(
+                                expr,
+                                when_nominal_type.as_deref(),
+                                declared,
+                            ));
                             out.push_str(") == 0)");
                         } else {
                             out.push('(');
                             out.push_str(&when_tmp);
                             out.push_str(" == ");
-                            out.push_str(&emit_expr(expr, declared));
+                            out.push_str(&emit_when_case_expr(
+                                expr,
+                                when_nominal_type.as_deref(),
+                                declared,
+                            ));
                             out.push(')');
                         }
                     }
@@ -5885,15 +6235,16 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
     match normalized {
         "i8" => "int8_t".to_string(),
         "i16" => "int16_t".to_string(),
+        "Int" => "SkInt".to_string(),
         "i32" => "int32_t".to_string(),
-        "Int" | "i64" | "Time" | "Duration" | "ByteSize" => "int64_t".to_string(),
+        "i64" | "Time" | "Duration" | "ByteSize" => "int64_t".to_string(),
         "u8" => "uint8_t".to_string(),
         "u16" => "uint16_t".to_string(),
         "u32" => "uint32_t".to_string(),
         "u64" => "uint64_t".to_string(),
-        "f32" => "float".to_string(),
-        "Float" | "f64" => "double".to_string(),
-        "Angle" => "double".to_string(),
+        "Float" | "f32" => "float".to_string(),
+        "f64" => "double".to_string(),
+        "Angle" => "float".to_string(),
         "Vec2" | "Vec3" | "Vec4" => normalized.to_string(),
         "Color" => "SkColor".to_string(),
         "Rect" => "SkRect".to_string(),
@@ -5977,10 +6328,15 @@ fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
             .map(|t| t.as_str() == "Text" || t.as_str() == "Path")
             .unwrap_or(false),
         Expression::MemberAccess { .. } => false,
-        Expression::Call { name, .. } => matches!(
-            name.as_str(),
-            "input" | "read" | "slice" | "concat" | "fs.join"
-        ),
+        Expression::Call { name, .. } => {
+            matches!(
+                name.as_str(),
+                "input" | "read" | "slice" | "concat" | "fs.join"
+            ) || call_return_type(name, declared)
+                .map(normalize_type_token)
+                .map(|ty| matches!(ty.as_str(), "Text" | "Path"))
+                .unwrap_or(false)
+        }
         _ => false,
     }
 }
@@ -6017,15 +6373,34 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
             None => ExprKind::Unknown,
         },
         Expression::Call { name, .. } => match name.as_str() {
-            "contains" | "fs.is_dir" => ExprKind::Bool,
-            "find" | "len" | "write" | "output" | "now" | "elapsed" | "sleep" | "delay" => {
+            "contains" | "fs.is_dir" | "is_nan" | "is_finite" | "is_infinite" | "bit_is_set" => {
+                ExprKind::Bool
+            }
+            "find" | "len" | "write" | "output" | "now" | "elapsed" | "sleep" | "delay"
+            | "as_nanoseconds" | "as_bytes" | "bit_and" | "bit_or" | "bit_xor" | "bit_not"
+            | "bit_shift_left" | "bit_shift_right" | "bit_set" | "bit_clear" | "bit_toggle"
+            | "bit_write" => ExprKind::Int,
+            "input" | "read" | "slice" | "concat" | "fs.join" => ExprKind::Text,
+            "abs" | "min" | "max" | "clamp" | "sign" if matches!(expr, Expression::Call { args, .. } if args.iter().all(|arg| expr_kind(arg, declared) == ExprKind::Int)) => {
                 ExprKind::Int
             }
-            "input" | "read" | "slice" | "concat" | "fs.join" => ExprKind::Text,
-            "abs" | "min" | "max" | "clamp" | "floor" | "ceil" | "round" | "sin" | "cos"
-            | "atan2" | "sqrt" | "root" | "deg_to_rad" | "rad_to_deg" | "dot" | "length"
-            | "length_sq" | "distance" | "distance_sq" => ExprKind::Float,
-            _ => ExprKind::Unknown,
+            "abs" | "min" | "max" | "clamp" | "sign" | "floor" | "ceil" | "round" | "trunc"
+            | "fract" | "lerp" | "inverse_lerp" | "remap" | "smoothstep" | "sin" | "cos"
+            | "tan" | "asin" | "acos" | "atan" | "atan2" | "normalize_angle" | "sqrt" | "root"
+            | "deg_to_rad" | "rad_to_deg" | "as_radians" | "dot" | "length" | "length_sq"
+            | "distance" | "distance_sq" => ExprKind::Float,
+            _ => call_return_type(name, declared)
+                .map(normalize_type_token)
+                .map(|ty| match ty.as_str() {
+                    "Float" | "f32" | "f64" | "Angle" => ExprKind::Float,
+                    "Bool" | "bool" => ExprKind::Bool,
+                    "Char" | "char" => ExprKind::Char,
+                    "Text" | "Path" => ExprKind::Text,
+                    "Int" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
+                    | "Time" | "Duration" | "ByteSize" => ExprKind::Int,
+                    _ => ExprKind::Unknown,
+                })
+                .unwrap_or(ExprKind::Unknown),
         },
         Expression::MemberAccess { base, .. }
             if declared
@@ -6060,6 +6435,17 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
             ) {
                 return ExprKind::Bool;
             }
+            if op == "/" {
+                let left_nominal = nominal_scalar_expr_type(left, declared);
+                let right_nominal = right
+                    .as_deref()
+                    .and_then(|value| nominal_scalar_expr_type(value, declared));
+                if left_nominal == right_nominal
+                    && matches!(left_nominal.as_deref(), Some("Duration" | "ByteSize"))
+                {
+                    return ExprKind::Float;
+                }
+            }
             let left_kind = expr_kind(left, declared);
             let right_kind = right
                 .as_ref()
@@ -6075,6 +6461,92 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
         }
         _ => ExprKind::Unknown,
     }
+}
+
+fn nominal_scalar_expr_type(
+    expr: &Expression,
+    declared: &HashMap<String, String>,
+) -> Option<String> {
+    match expr {
+        Expression::LiteralDuration { .. } => Some("Duration".to_string()),
+        Expression::LiteralByteSize { .. } => Some("ByteSize".to_string()),
+        Expression::LiteralAngle { .. } => Some("Angle".to_string()),
+        Expression::VariableReference(name) => declared.get(name).and_then(|ty| {
+            let ty = normalize_type_token(ty);
+            matches!(ty.as_str(), "Time" | "Duration" | "ByteSize" | "Angle").then_some(ty)
+        }),
+        Expression::Call { name, .. } => match name.as_str() {
+            "now" => Some("Time".to_string()),
+            "elapsed" => Some("Duration".to_string()),
+            "deg_to_rad" | "asin" | "acos" | "atan" | "atan2" | "normalize_angle" => {
+                Some("Angle".to_string())
+            }
+            _ => call_return_type(name, declared).and_then(|ty| {
+                let ty = normalize_type_token(ty);
+                matches!(ty.as_str(), "Time" | "Duration" | "ByteSize" | "Angle").then_some(ty)
+            }),
+        },
+        Expression::BinaryOp { op, left, right } if op != "/" => {
+            let left_ty = nominal_scalar_expr_type(left, declared)?;
+            let right_ty = right
+                .as_deref()
+                .and_then(|value| nominal_scalar_expr_type(value, declared));
+            right_ty.filter(|ty| ty == &left_ty).or(Some(left_ty))
+        }
+        _ => None,
+    }
+}
+
+fn fixed_integer_expr_suffix(
+    expr: &Expression,
+    declared: &HashMap<String, String>,
+) -> Option<&'static str> {
+    let from_type = |raw: &str| match normalize_type_token(raw).as_str() {
+        "i8" => Some("i8"),
+        "i16" => Some("i16"),
+        "i32" => Some("i32"),
+        "i64" => Some("i64"),
+        "u8" => Some("u8"),
+        "u16" => Some("u16"),
+        "u32" => Some("u32"),
+        "u64" => Some("u64"),
+        _ => None,
+    };
+    match expr {
+        Expression::VariableReference(name) => declared.get(name).and_then(|ty| from_type(ty)),
+        Expression::MemberAccess { base, field } => {
+            let owner_type = declared.get(base).map(|ty| normalize_type_token(ty))?;
+            declared
+                .get(&format!("\0skadi:field:{owner_type}.{field}"))
+                .and_then(|ty| from_type(ty))
+        }
+        Expression::Call { name, args } if name.starts_with("bit_") => args
+            .first()
+            .and_then(|arg| fixed_integer_expr_suffix(arg, declared)),
+        Expression::Call { name, .. } => call_return_type(name, declared).and_then(from_type),
+        Expression::BinaryOp { left, right, .. } => fixed_integer_expr_suffix(left, declared)
+            .or_else(|| {
+                right
+                    .as_deref()
+                    .and_then(|value| fixed_integer_expr_suffix(value, declared))
+            }),
+        Expression::Index { base, .. } => {
+            let Expression::VariableReference(name) = base.as_ref() else {
+                return None;
+            };
+            declared
+                .get(name)
+                .and_then(|ty| list_elem_from_decl(ty))
+                .and_then(from_type)
+        }
+        _ => None,
+    }
+}
+
+fn bit_call_suffix(args: &[Expression], declared: &HashMap<String, String>) -> &'static str {
+    args.iter()
+        .find_map(|arg| fixed_integer_expr_suffix(arg, declared))
+        .unwrap_or("i32")
 }
 
 fn vector_expr_type(expr: &Expression, declared: &HashMap<String, String>) -> Option<&'static str> {
@@ -6110,6 +6582,34 @@ fn vector_expr_type(expr: &Expression, declared: &HashMap<String, String>) -> Op
     }
 }
 
+fn emit_when_case_expr(
+    expr: &Expression,
+    nominal_type: Option<&str>,
+    declared: &HashMap<String, String>,
+) -> String {
+    if let (Some(type_name), Expression::VariableReference(variant)) = (nominal_type, expr) {
+        return format!("{}_{}", type_name, variant);
+    }
+    emit_expr(expr, declared)
+}
+
+fn emit_output_arg(
+    expr: &Expression,
+    declared: &HashMap<String, String>,
+    fragment: bool,
+) -> String {
+    let rendered = emit_expr(expr, declared);
+    let suffix = if fragment { "_part" } else { "" };
+    match expr_kind(expr, declared) {
+        ExprKind::Float => format!("sk_output_float{suffix}({rendered})"),
+        ExprKind::Bool => format!("sk_output_bool{suffix}({rendered})"),
+        ExprKind::Char => format!("sk_output_char{suffix}({rendered})"),
+        ExprKind::Text => format!("sk_output_text{suffix}({rendered})"),
+        ExprKind::Unknown => format!("sk_output_int{suffix}({rendered})"),
+        _ => format!("sk_output_int{suffix}({rendered})"),
+    }
+}
+
 fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
     match expr {
         Expression::LiteralInt(v) => v.to_string(),
@@ -6133,7 +6633,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::LiteralString(s) => s.clone(),
         Expression::LiteralDuration { nanoseconds, .. } => nanoseconds.to_string(),
         Expression::LiteralByteSize { bytes, .. } => bytes.to_string(),
-        Expression::LiteralAngle { radians, .. } => format!("{radians:.17}"),
+        Expression::LiteralAngle { radians, .. } => format!("{radians:.9}f"),
         Expression::VariableReference(name)
             if declared
                 .get(name)
@@ -6143,10 +6643,10 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             format!("(*{name})")
         }
         Expression::VariableReference(name) => match name.as_str() {
-            "PI" => "M_PI".to_string(),
-            "TAU" => "(2.0 * M_PI)".to_string(),
-            "E" => "M_E".to_string(),
-            "EPSILON" => "1e-9".to_string(),
+            "PI" => "((float)M_PI)".to_string(),
+            "TAU" => "(2.0f * (float)M_PI)".to_string(),
+            "E" => "((float)M_E)".to_string(),
+            "EPSILON" => "FLT_EPSILON".to_string(),
             _ => name.clone(),
         },
         Expression::DirectBorrow(name) => {
@@ -6394,15 +6894,16 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     Builtin::Args if args.is_empty() => {
                         return "sk_args(argc, argv)".to_string();
                     }
-                    Builtin::Output if args.len() == 1 => {
-                        let rendered = emit_expr(&args[0], declared);
-                        return match expr_kind(&args[0], declared) {
-                            ExprKind::Float => format!("sk_output_float({})", rendered),
-                            ExprKind::Bool => format!("sk_output_bool({})", rendered),
-                            ExprKind::Char => format!("sk_output_char({})", rendered),
-                            ExprKind::Text => format!("sk_output_text({})", rendered),
-                            _ => format!("sk_output_int({})", rendered),
-                        };
+                    Builtin::Output if !args.is_empty() => {
+                        if args.len() == 1 {
+                            return emit_output_arg(&args[0], declared, false);
+                        }
+                        let mut parts = args
+                            .iter()
+                            .map(|arg| emit_output_arg(arg, declared, true))
+                            .collect::<Vec<_>>();
+                        parts.push("sk_output_end()".to_string());
+                        return format!("({})", parts.join(", "));
                     }
                     Builtin::Input if args.len() == 1 => {
                         let prompt = emit_expr(&args[0], declared);
@@ -6428,73 +6929,233 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                         let duration = emit_expr(&args[0], declared);
                         return format!("sk_time_sleep({})", duration);
                     }
+                    Builtin::AsNanoseconds | Builtin::AsBytes if args.len() == 1 => {
+                        return emit_expr(&args[0], declared);
+                    }
+                    Builtin::BitAnd | Builtin::BitOr | Builtin::BitXor if args.len() == 2 => {
+                        let operation = match builtin {
+                            Builtin::BitAnd => "and",
+                            Builtin::BitOr => "or",
+                            Builtin::BitXor => "xor",
+                            _ => unreachable!(),
+                        };
+                        let suffix = bit_call_suffix(args, declared);
+                        return format!(
+                            "sk_bit_{operation}_{suffix}({}, {})",
+                            emit_expr(&args[0], declared),
+                            emit_expr(&args[1], declared)
+                        );
+                    }
+                    Builtin::BitNot if args.len() == 1 => {
+                        let suffix = bit_call_suffix(args, declared);
+                        return format!("sk_bit_not_{suffix}({})", emit_expr(&args[0], declared));
+                    }
+                    Builtin::BitShiftLeft
+                    | Builtin::BitShiftRight
+                    | Builtin::BitIsSet
+                    | Builtin::BitSet
+                    | Builtin::BitClear
+                    | Builtin::BitToggle
+                        if args.len() == 2 =>
+                    {
+                        let operation = match builtin {
+                            Builtin::BitShiftLeft => "shift_left",
+                            Builtin::BitShiftRight => "shift_right",
+                            Builtin::BitIsSet => "is_set",
+                            Builtin::BitSet => "set",
+                            Builtin::BitClear => "clear",
+                            Builtin::BitToggle => "toggle",
+                            _ => unreachable!(),
+                        };
+                        let suffix = bit_call_suffix(args, declared);
+                        return format!(
+                            "sk_bit_{operation}_{suffix}({}, {})",
+                            emit_expr(&args[0], declared),
+                            emit_expr(&args[1], declared)
+                        );
+                    }
+                    Builtin::BitWrite if args.len() == 3 => {
+                        let suffix = bit_call_suffix(args, declared);
+                        return format!(
+                            "sk_bit_write_{suffix}({}, {}, {})",
+                            emit_expr(&args[0], declared),
+                            emit_expr(&args[1], declared),
+                            emit_expr(&args[2], declared)
+                        );
+                    }
                     Builtin::Abs if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
                         return match expr_kind(&args[0], declared) {
                             ExprKind::Int => format!("llabs({})", a),
-                            _ => format!("fabs({})", a),
+                            _ => format!("fabsf({})", a),
                         };
                     }
                     Builtin::Min if args.len() == 2 => {
                         let a = emit_expr(&args[0], declared);
                         let b = emit_expr(&args[1], declared);
-                        return format!("(({} < {}) ? {} : {})", a, b, a, b);
+                        let suffix = if args
+                            .iter()
+                            .all(|arg| expr_kind(arg, declared) == ExprKind::Int)
+                        {
+                            "int"
+                        } else {
+                            "float"
+                        };
+                        return format!("sk_math_min_{suffix}({a}, {b})");
                     }
                     Builtin::Max if args.len() == 2 => {
                         let a = emit_expr(&args[0], declared);
                         let b = emit_expr(&args[1], declared);
-                        return format!("(({} > {}) ? {} : {})", a, b, a, b);
+                        let suffix = if args
+                            .iter()
+                            .all(|arg| expr_kind(arg, declared) == ExprKind::Int)
+                        {
+                            "int"
+                        } else {
+                            "float"
+                        };
+                        return format!("sk_math_max_{suffix}({a}, {b})");
                     }
                     Builtin::Clamp if args.len() == 3 => {
                         let x = emit_expr(&args[0], declared);
                         let lo = emit_expr(&args[1], declared);
                         let hi = emit_expr(&args[2], declared);
-                        return format!(
-                            "(({} < {}) ? {} : (({} > {}) ? {} : {}))",
-                            x, lo, lo, x, hi, hi, x
-                        );
+                        let suffix = if args
+                            .iter()
+                            .all(|arg| expr_kind(arg, declared) == ExprKind::Int)
+                        {
+                            "int"
+                        } else {
+                            "float"
+                        };
+                        return format!("sk_math_clamp_{suffix}({x}, {lo}, {hi})");
                     }
                     Builtin::Floor if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
-                        return format!("floor({})", a);
+                        return format!("floorf({})", a);
                     }
                     Builtin::Ceil if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
-                        return format!("ceil({})", a);
+                        return format!("ceilf({})", a);
                     }
                     Builtin::Round if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
-                        return format!("round({})", a);
+                        return format!("roundf({})", a);
+                    }
+                    Builtin::Sign if args.len() == 1 => {
+                        let a = emit_expr(&args[0], declared);
+                        let suffix = if expr_kind(&args[0], declared) == ExprKind::Int {
+                            "int"
+                        } else {
+                            "float"
+                        };
+                        return format!("sk_math_sign_{suffix}({a})");
+                    }
+                    Builtin::Trunc if args.len() == 1 => {
+                        return format!("truncf({})", emit_expr(&args[0], declared));
+                    }
+                    Builtin::Fract if args.len() == 1 => {
+                        return format!("sk_math_fract({})", emit_expr(&args[0], declared));
+                    }
+                    Builtin::Lerp if args.len() == 3 => {
+                        let rendered = args
+                            .iter()
+                            .map(|arg| emit_expr(arg, declared))
+                            .collect::<Vec<_>>();
+                        return format!(
+                            "sk_math_lerp({}, {}, {})",
+                            rendered[0], rendered[1], rendered[2]
+                        );
+                    }
+                    Builtin::InverseLerp if args.len() == 3 => {
+                        let rendered = args
+                            .iter()
+                            .map(|arg| emit_expr(arg, declared))
+                            .collect::<Vec<_>>();
+                        return format!(
+                            "sk_math_inverse_lerp({}, {}, {})",
+                            rendered[0], rendered[1], rendered[2]
+                        );
+                    }
+                    Builtin::Remap if args.len() == 5 => {
+                        let rendered = args
+                            .iter()
+                            .map(|arg| emit_expr(arg, declared))
+                            .collect::<Vec<_>>();
+                        return format!(
+                            "sk_math_remap({}, {}, {}, {}, {})",
+                            rendered[0], rendered[1], rendered[2], rendered[3], rendered[4]
+                        );
+                    }
+                    Builtin::Smoothstep if args.len() == 3 => {
+                        let rendered = args
+                            .iter()
+                            .map(|arg| emit_expr(arg, declared))
+                            .collect::<Vec<_>>();
+                        return format!(
+                            "sk_math_smoothstep({}, {}, {})",
+                            rendered[0], rendered[1], rendered[2]
+                        );
                     }
                     Builtin::Sin if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
-                        return format!("sin({})", a);
+                        return format!("sinf({})", a);
                     }
                     Builtin::Cos if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
-                        return format!("cos({})", a);
+                        return format!("cosf({})", a);
+                    }
+                    Builtin::Tan if args.len() == 1 => {
+                        return format!("tanf({})", emit_expr(&args[0], declared));
+                    }
+                    Builtin::Asin if args.len() == 1 => {
+                        return format!("asinf({})", emit_expr(&args[0], declared));
+                    }
+                    Builtin::Acos if args.len() == 1 => {
+                        return format!("acosf({})", emit_expr(&args[0], declared));
+                    }
+                    Builtin::Atan if args.len() == 1 => {
+                        return format!("atanf({})", emit_expr(&args[0], declared));
                     }
                     Builtin::Atan2 if args.len() == 2 => {
                         let y = emit_expr(&args[0], declared);
                         let x = emit_expr(&args[1], declared);
-                        return format!("atan2({}, {})", y, x);
+                        return format!("atan2f({}, {})", y, x);
+                    }
+                    Builtin::NormalizeAngle if args.len() == 1 => {
+                        return format!(
+                            "sk_math_normalize_angle({})",
+                            emit_expr(&args[0], declared)
+                        );
                     }
                     Builtin::Sqrt if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
-                        return format!("sqrt({})", a);
+                        return format!("sqrtf({})", a);
                     }
                     Builtin::Root if args.len() == 2 => {
                         let a = emit_expr(&args[0], declared);
                         let n = emit_expr(&args[1], declared);
-                        return format!("pow({}, (1.0 / {}))", a, n);
+                        return format!("powf({}, (1.0f / {}))", a, n);
+                    }
+                    Builtin::IsNan if args.len() == 1 => {
+                        return format!("isnan({})", emit_expr(&args[0], declared));
+                    }
+                    Builtin::IsFinite if args.len() == 1 => {
+                        return format!("isfinite({})", emit_expr(&args[0], declared));
+                    }
+                    Builtin::IsInfinite if args.len() == 1 => {
+                        return format!("isinf({})", emit_expr(&args[0], declared));
                     }
                     Builtin::DegToRad if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
-                        return format!("(({} * M_PI) / 180.0)", a);
+                        return format!("(({} * (float)M_PI) / 180.0f)", a);
                     }
                     Builtin::RadToDeg if args.len() == 1 => {
                         let a = emit_expr(&args[0], declared);
-                        return format!("(({} * 180.0) / M_PI)", a);
+                        return format!("(({} * 180.0f) / (float)M_PI)", a);
+                    }
+                    Builtin::AsRadians if args.len() == 1 => {
+                        return emit_expr(&args[0], declared);
                     }
                     Builtin::Dot | Builtin::Distance | Builtin::DistanceSq if args.len() == 2 => {
                         if let Some(vector) = vector_expr_type(&args[0], declared) {
@@ -6617,8 +7278,17 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     }
                     return format!("(strcmp({}, {}) != 0)", l, rr);
                 }
+                if op == "/" {
+                    let left_nominal = nominal_scalar_expr_type(left, declared);
+                    let right_nominal = nominal_scalar_expr_type(r, declared);
+                    if left_nominal == right_nominal
+                        && matches!(left_nominal.as_deref(), Some("Duration" | "ByteSize"))
+                    {
+                        return format!("(((float)({l})) / ((float)({rr})))");
+                    }
+                }
                 if op == "^" {
-                    return format!("pow({}, {})", l, rr);
+                    return format!("powf({}, {})", l, rr);
                 }
                 let c_op = match op.as_str() {
                     "and" => "&&",
@@ -6653,13 +7323,29 @@ fn expression_uses_math_call(expr: &Expression) -> bool {
                     | "floor"
                     | "ceil"
                     | "round"
+                    | "sign"
+                    | "trunc"
+                    | "fract"
+                    | "lerp"
+                    | "inverse_lerp"
+                    | "remap"
+                    | "smoothstep"
                     | "sin"
                     | "cos"
+                    | "tan"
+                    | "asin"
+                    | "acos"
+                    | "atan"
                     | "atan2"
+                    | "normalize_angle"
                     | "sqrt"
                     | "root"
+                    | "is_nan"
+                    | "is_finite"
+                    | "is_infinite"
                     | "deg_to_rad"
                     | "rad_to_deg"
+                    | "as_radians"
                     | "dot"
                     | "length"
                     | "length_sq"
@@ -6688,33 +7374,49 @@ fn expression_uses_math_call(expr: &Expression) -> bool {
     }
 }
 
-fn stmt_uses_math(stmt: &Statement) -> bool {
+fn stmt_uses_expression(stmt: &Statement, expression_matches: fn(&Expression) -> bool) -> bool {
     match stmt {
         Statement::VarDecl { value, .. }
         | Statement::Assignment { value, .. }
-        | Statement::ExpressionStatement { expr: value, .. } => expression_uses_math_call(value),
+        | Statement::ExpressionStatement { expr: value, .. } => expression_matches(value),
         Statement::ReturnStatement { value, .. } => value
             .as_ref()
-            .map(|expr| expression_uses_math_call(expr))
+            .map(|expr| expression_matches(expr))
             .unwrap_or(false),
-        Statement::FieldAssignment { value, .. } => expression_uses_math_call(value),
+        Statement::FieldAssignment { value, .. } => expression_matches(value),
         Statement::IfStatement {
             condition,
             then_block,
             else_block,
             ..
         } => {
-            expression_uses_math_call(condition)
-                || then_block.statements.iter().any(stmt_uses_math)
+            expression_matches(condition)
+                || then_block
+                    .statements
+                    .iter()
+                    .any(|stmt| stmt_uses_expression(stmt, expression_matches))
                 || else_block
                     .as_ref()
-                    .map(|b| b.statements.iter().any(stmt_uses_math))
+                    .map(|b| {
+                        b.statements
+                            .iter()
+                            .any(|stmt| stmt_uses_expression(stmt, expression_matches))
+                    })
                     .unwrap_or(false)
         }
         Statement::WhileLoop {
             condition, body, ..
-        } => expression_uses_math_call(condition) || body.statements.iter().any(stmt_uses_math),
-        Statement::LoopStatement { body, .. } => body.statements.iter().any(stmt_uses_math),
+        } => {
+            expression_matches(condition)
+                || body
+                    .statements
+                    .iter()
+                    .any(|stmt| stmt_uses_expression(stmt, expression_matches))
+        }
+        Statement::LoopStatement { body, .. } => body
+            .statements
+            .iter()
+            .any(|stmt| stmt_uses_expression(stmt, expression_matches)),
         Statement::ForLoop {
             initialization,
             condition,
@@ -6724,17 +7426,20 @@ fn stmt_uses_math(stmt: &Statement) -> bool {
         } => {
             initialization
                 .as_ref()
-                .map(|expr| expression_uses_math_call(expr))
+                .map(|expr| expression_matches(expr))
                 .unwrap_or(false)
                 || condition
                     .as_ref()
-                    .map(|expr| expression_uses_math_call(expr))
+                    .map(|expr| expression_matches(expr))
                     .unwrap_or(false)
                 || update
                     .as_ref()
-                    .map(|expr| expression_uses_math_call(expr))
+                    .map(|expr| expression_matches(expr))
                     .unwrap_or(false)
-                || body.statements.iter().any(stmt_uses_math)
+                || body
+                    .statements
+                    .iter()
+                    .any(|stmt| stmt_uses_expression(stmt, expression_matches))
         }
         Statement::WhenBlock {
             when_expression,
@@ -6742,37 +7447,90 @@ fn stmt_uses_math(stmt: &Statement) -> bool {
             else_block,
             ..
         } => {
-            expression_uses_math_call(when_expression)
+            expression_matches(when_expression)
                 || cases.iter().any(|(exprs, block)| {
-                    exprs.iter().any(expression_uses_math_call)
-                        || block.statements.iter().any(stmt_uses_math)
+                    exprs.iter().any(expression_matches)
+                        || block
+                            .statements
+                            .iter()
+                            .any(|stmt| stmt_uses_expression(stmt, expression_matches))
                 })
                 || else_block
                     .as_ref()
-                    .map(|b| b.statements.iter().any(stmt_uses_math))
+                    .map(|b| {
+                        b.statements
+                            .iter()
+                            .any(|stmt| stmt_uses_expression(stmt, expression_matches))
+                    })
                     .unwrap_or(false)
         }
         Statement::DangerAssignOnError { args, on_error, .. }
         | Statement::DangerCallOnError { args, on_error, .. } => {
-            args.iter().any(expression_uses_math_call)
-                || on_error.statements.iter().any(stmt_uses_math)
+            args.iter().any(expression_matches)
+                || on_error
+                    .statements
+                    .iter()
+                    .any(|stmt| stmt_uses_expression(stmt, expression_matches))
         }
-        Statement::ListPush { value, .. } => expression_uses_math_call(value),
-        Statement::ListPopOnError { on_error, .. } => {
-            on_error.statements.iter().any(stmt_uses_math)
-        }
-        Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_math),
-        Statement::StructDecl { methods, .. } => methods
+        Statement::ListPush { value, .. } => expression_matches(value),
+        Statement::ListPopOnError { on_error, .. } => on_error
+            .statements
             .iter()
-            .any(|m| m.body.statements.iter().any(stmt_uses_math)),
+            .any(|stmt| stmt_uses_expression(stmt, expression_matches)),
+        Statement::FunctionDef { body, .. } => body
+            .statements
+            .iter()
+            .any(|stmt| stmt_uses_expression(stmt, expression_matches)),
+        Statement::StructDecl { methods, .. } => methods.iter().any(|m| {
+            m.body
+                .statements
+                .iter()
+                .any(|stmt| stmt_uses_expression(stmt, expression_matches))
+        }),
         Statement::BlockStatement { statements, .. }
-        | Statement::OnErrorBlock { statements, .. } => statements.iter().any(stmt_uses_math),
+        | Statement::OnErrorBlock { statements, .. } => statements
+            .iter()
+            .any(|stmt| stmt_uses_expression(stmt, expression_matches)),
         _ => false,
     }
 }
 
+fn stmt_uses_math(stmt: &Statement) -> bool {
+    stmt_uses_expression(stmt, expression_uses_math_call)
+}
+
 fn program_uses_math_runtime(program: &Program) -> bool {
     program.statements.iter().any(stmt_uses_math)
+}
+
+fn expression_uses_bit_call(expr: &Expression) -> bool {
+    match expr {
+        Expression::Call { name, args } => {
+            name.starts_with("bit_") || args.iter().any(expression_uses_bit_call)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_bit_call(left)
+                || right
+                    .as_deref()
+                    .map(expression_uses_bit_call)
+                    .unwrap_or(false)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_bit_call(base) || expression_uses_bit_call(index)
+        }
+        Expression::ListLiteral(items) => items.iter().any(expression_uses_bit_call),
+        Expression::StructConstruction { fields } => {
+            fields.values().any(|value| expression_uses_bit_call(value))
+        }
+        _ => false,
+    }
+}
+
+fn program_uses_bit_runtime(program: &Program) -> bool {
+    program
+        .statements
+        .iter()
+        .any(|stmt| stmt_uses_expression(stmt, expression_uses_bit_call))
 }
 
 fn expression_uses_time_call(expr: &Expression) -> bool {

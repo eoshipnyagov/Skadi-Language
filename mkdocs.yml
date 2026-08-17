@@ -70,6 +70,7 @@ plugins:
             Размеры памяти: Byte Sizes
             Углы: Angles
             Векторы: Vectors
+            Целые и биты: Integers and Bits
             Многопоточность: Concurrency
             Embedded: Embedded
             Canvas и Visual Core: Canvas and Visual Core
@@ -159,6 +160,7 @@ nav:
               - Размеры памяти: user/byte-size.md
               - Углы: user/angle.md
               - Векторы: user/vectors.md
+              - Целые и биты: user/bits.md
           - Практики и антипримеры: user/practices.md
           - Статус синтаксиса: user/syntax-status.md
       - Платформы и будущее:

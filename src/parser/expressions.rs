@@ -326,21 +326,24 @@ impl<'a> ExprParser<'a> {
                 unit.line == tok.line && unit.col == tok.col + tok.lexeme.chars().count() as u32;
             if unit.kind == TokenKind::Identifier
                 && is_adjacent
-                && matches!(unit.lexeme.as_str(), "ms" | "s" | "min")
+                && matches!(unit.lexeme.as_str(), "ns" | "us" | "ms" | "s" | "min" | "h")
             {
                 if tok.kind == TokenKind::TypeFloat {
                     return Err(parse_err(
                         "SC-PARSE-216",
-                        "duration literal requires an integer magnitude in the current MVP.",
+                        "duration literal requires an integer magnitude.",
                     ));
                 }
-                let magnitude = tok.lexeme.parse::<i64>().map_err(|_| {
+                let magnitude = parse_integer_literal(&tok.lexeme).map_err(|_| {
                     parse_err("SC-PARSE-216", "invalid duration literal magnitude.")
                 })?;
                 let multiplier = match unit.lexeme.as_str() {
+                    "ns" => 1_i64,
+                    "us" => 1_000_i64,
                     "ms" => 1_000_000_i64,
                     "s" => 1_000_000_000_i64,
                     "min" => 60_000_000_000_i64,
+                    "h" => 3_600_000_000_000_i64,
                     _ => unreachable!(),
                 };
                 let nanoseconds = magnitude.checked_mul(multiplier).ok_or_else(|| {
@@ -355,7 +358,7 @@ impl<'a> ExprParser<'a> {
             }
             if unit.kind == TokenKind::Identifier
                 && is_adjacent
-                && matches!(unit.lexeme.as_str(), "b" | "kb" | "mb" | "gb")
+                && matches!(unit.lexeme.as_str(), "b" | "kb" | "mb" | "gb" | "tb")
             {
                 let expression = parse_byte_size_literal(tok, unit)?;
                 self.idx += 2;
@@ -374,11 +377,27 @@ impl<'a> ExprParser<'a> {
         self.idx += 1;
         match tok.kind {
             TokenKind::TypeInt => {
-                let parsed = tok.lexeme.parse::<i64>().unwrap_or(0);
+                let parsed = parse_integer_literal(&tok.lexeme).map_err(|_| {
+                    parse_err(
+                        "SC-PARSE-225",
+                        format!("invalid integer literal '{}'.", tok.lexeme),
+                    )
+                })?;
                 Ok(Expression::LiteralInt(parsed))
             }
             TokenKind::TypeFloat => {
-                let parsed = tok.lexeme.parse::<f32>().unwrap_or(0.0);
+                let parsed = tok.lexeme.replace('_', "").parse::<f32>().map_err(|_| {
+                    parse_err(
+                        "SC-PARSE-226",
+                        format!("invalid Float literal '{}'.", tok.lexeme),
+                    )
+                })?;
+                if !parsed.is_finite() {
+                    return Err(parse_err(
+                        "SC-PARSE-226",
+                        "Float literal must produce a finite f32 value.",
+                    ));
+                }
                 Ok(Expression::LiteralFloat(parsed))
             }
             TokenKind::TypeBool => Ok(Expression::LiteralBool(tok.lexeme == "true")),
@@ -538,6 +557,29 @@ fn parse_char_literal(token: &Token) -> Result<Expression, String> {
     Ok(Expression::LiteralChar(value))
 }
 
+fn parse_integer_literal(lexeme: &str) -> Result<i64, std::num::ParseIntError> {
+    let compact = lexeme.replace('_', "");
+    let (digits, radix) = if let Some(value) = compact
+        .strip_prefix("0b")
+        .or_else(|| compact.strip_prefix("0B"))
+    {
+        (value, 2)
+    } else if let Some(value) = compact
+        .strip_prefix("0o")
+        .or_else(|| compact.strip_prefix("0O"))
+    {
+        (value, 8)
+    } else if let Some(value) = compact
+        .strip_prefix("0x")
+        .or_else(|| compact.strip_prefix("0X"))
+    {
+        (value, 16)
+    } else {
+        (compact.as_str(), 10)
+    };
+    i64::from_str_radix(digits, radix)
+}
+
 fn parse_byte_size_literal(
     magnitude_token: &Token,
     unit_token: &Token,
@@ -545,18 +587,18 @@ fn parse_byte_size_literal(
     if magnitude_token.kind == TokenKind::TypeFloat {
         return Err(parse_err(
             "SC-PARSE-219",
-            "ByteSize literal requires an integer magnitude in the current MVP.",
+            "ByteSize literal requires an integer magnitude.",
         ));
     }
-    let magnitude = magnitude_token
-        .lexeme
-        .parse::<i64>()
+    let magnitude = magnitude_token.lexeme.as_str();
+    let magnitude = parse_integer_literal(magnitude)
         .map_err(|_| parse_err("SC-PARSE-219", "invalid ByteSize literal magnitude."))?;
     let multiplier = match unit_token.lexeme.as_str() {
         "b" => 1_i64,
         "kb" => 1024_i64,
         "mb" => 1024_i64 * 1024,
         "gb" => 1024_i64 * 1024 * 1024,
+        "tb" => 1024_i64 * 1024 * 1024 * 1024,
         _ => {
             return Err(parse_err(
                 "SC-PARSE-219",
@@ -577,10 +619,11 @@ fn parse_byte_size_literal(
 fn parse_angle_literal(magnitude_token: &Token, unit_token: &Token) -> Result<Expression, String> {
     let magnitude = magnitude_token
         .lexeme
-        .parse::<f64>()
+        .replace('_', "")
+        .parse::<f32>()
         .map_err(|_| parse_err("SC-PARSE-220", "invalid Angle literal magnitude."))?;
     let radians = match unit_token.lexeme.as_str() {
-        "deg" => magnitude * std::f64::consts::PI / 180.0,
+        "deg" => magnitude * std::f32::consts::PI / 180.0,
         "rad" => magnitude,
         _ => {
             return Err(parse_err("SC-PARSE-220", "unsupported Angle literal unit."));
@@ -589,7 +632,7 @@ fn parse_angle_literal(magnitude_token: &Token, unit_token: &Token) -> Result<Ex
     if !radians.is_finite() {
         return Err(parse_err(
             "SC-PARSE-220",
-            "Angle literal must produce a finite f64 value.",
+            "Angle literal must produce a finite f32 value.",
         ));
     }
     Ok(Expression::LiteralAngle {
@@ -607,7 +650,10 @@ pub(super) fn parse_memory_size_expression(
     if end == start + 2
         && tokens[start].kind == TokenKind::TypeInt
         && tokens[start + 1].kind == TokenKind::Identifier
-        && matches!(tokens[start + 1].lexeme.as_str(), "b" | "kb" | "mb" | "gb")
+        && matches!(
+            tokens[start + 1].lexeme.as_str(),
+            "b" | "kb" | "mb" | "gb" | "tb"
+        )
     {
         return parse_byte_size_literal(&tokens[start], &tokens[start + 1]);
     }

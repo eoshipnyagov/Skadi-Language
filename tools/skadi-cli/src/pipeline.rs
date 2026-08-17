@@ -9,7 +9,9 @@ use crate::targets::{
     CompilerInvocation, candidate_invocations, resolve_profile, single_compiler_invocation,
 };
 use v01::analysis::{AnalysisFact, collect_analysis_facts};
-use v01::codegen::{CodegenOptions, ensure_codegen_supported, transpile_program_to_c_with_options};
+use v01::codegen::{
+    CodegenOptions, ensure_codegen_supported_with_options, transpile_program_to_c_with_options,
+};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
@@ -60,6 +62,7 @@ pub struct ToolchainOutput {
     pub stderr: String,
 }
 
+#[cfg(test)]
 pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
     compile_frontend_with_options(entry_path, CodegenOptions::default())
 }
@@ -88,7 +91,7 @@ pub fn compile_frontend_with_options(
             "[SC-SEM-000] stage=semantic: {e}\nhint: align types/signatures and ensure on error is used only in allowed contexts."
         )
     })?;
-    ensure_codegen_supported(&program).map_err(|e| {
+    ensure_codegen_supported_with_options(&program, codegen_options).map_err(|e| {
         format!(
             "[SC-CG-000] stage=codegen: {e}\nhint: use only syntax supported by the current C backend."
         )
@@ -734,9 +737,14 @@ local label State {
         }));
         assert!(!frontend.c_code.contains("sk_debug_probe("));
 
-        let debug_frontend =
-            compile_frontend_with_options(&entry, CodegenOptions { debug_probes: true })
-                .expect("debug frontend output");
+        let debug_frontend = compile_frontend_with_options(
+            &entry,
+            CodegenOptions {
+                debug_probes: true,
+                ..CodegenOptions::default()
+            },
+        )
+        .expect("debug frontend output");
         assert!(debug_frontend.c_code.contains("sk_debug_probe("));
         assert!(debug_frontend.c_code.contains("util.skd"));
         assert!(

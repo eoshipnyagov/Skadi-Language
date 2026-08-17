@@ -89,6 +89,95 @@ new Direction direction = Direction.South
 }
 
 #[test]
+fn nominal_values_flow_through_functions_and_short_when_cases() {
+    let program = semantic_ok(
+        r#"
+label ExitCode {
+    Success = 0
+    InvalidInput = 64
+}
+
+tag Direction {
+    North
+    South
+}
+
+fn choose(Direction direction) returns ExitCode {
+    when direction {
+        is North {
+            return ExitCode.Success
+        }
+        is South {
+            return ExitCode.InvalidInput
+        }
+    }
+    return ExitCode.InvalidInput
+}
+
+new Direction direction = Direction.North
+new ExitCode result = choose(direction)
+new Bool accepted = result == ExitCode.Success
+"#,
+    );
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("ExitCode choose(Direction direction)"), "{c}");
+    assert!(c.contains("Direction_North"), "{c}");
+    assert!(c.contains("Direction_South"), "{c}");
+    assert!(c.contains("ExitCode result = choose(direction)"), "{c}");
+}
+
+#[test]
+fn short_when_case_must_belong_to_the_subject_nominal_type() {
+    let err = semantic_err(
+        r#"
+tag Direction {
+    North
+    South
+}
+
+new Direction direction = Direction.North
+when direction {
+    is Missing {
+        pass
+    }
+}
+"#,
+    );
+    assert!(err.contains("SC-SEM-020"), "{err}");
+    assert!(
+        err.contains("variant 'Missing' does not belong to tag 'Direction'"),
+        "{err}"
+    );
+}
+
+#[test]
+fn variadic_output_accepts_printable_values_and_rejects_empty_calls() {
+    semantic_ok(
+        r#"
+new Text name = "Skadi"
+new Int count = 3
+new Bool ready = true
+output(name, ": ", count, ", ready=", ready)
+"#,
+    );
+
+    let empty = semantic_err("output()\n");
+    assert!(empty.contains("SC-SEM-033"), "{empty}");
+    assert!(empty.contains("expects at least 1 argument"), "{empty}");
+}
+
+#[test]
+fn fixed_and_const_are_available_as_ordinary_identifiers() {
+    semantic_ok(
+        r#"
+new Int fixed = 4
+new Int const = 5
+output("sum=", fixed + const)
+"#,
+    );
+}
+
+#[test]
 fn value_direct_and_view_parameters_enforce_the_call_contract() {
     let program = semantic_ok(
         r#"
@@ -107,10 +196,10 @@ new Int observed = observe(view answer)
 "#,
     );
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int64_t increment(int64_t * value)"), "{c}");
-    assert!(c.contains("int64_t observe(const int64_t * value)"), "{c}");
+    assert!(c.contains("SkInt increment(SkInt * value)"), "{c}");
+    assert!(c.contains("SkInt observe(const SkInt * value)"), "{c}");
     assert!(c.contains("increment(&count)"), "{c}");
-    assert!(c.contains("const int64_t answer = 42"), "{c}");
+    assert!(c.contains("const SkInt answer = 42"), "{c}");
 
     let missing_direct = semantic_err(
         r#"

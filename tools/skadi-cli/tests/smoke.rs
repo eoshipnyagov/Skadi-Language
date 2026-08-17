@@ -507,6 +507,37 @@ fn init_and_check_smoke() {
 }
 
 #[test]
+fn check_applies_project_int_width() {
+    let temp = unique_temp_dir("int_width");
+    let init = run_cli(&temp, &["init"]);
+    assert!(init.status.success(), "init failed: {}", stderr_text(&init));
+
+    let manifest_path = temp.join("Skadi.toml");
+    let manifest = fs::read_to_string(&manifest_path).expect("manifest should be readable");
+    fs::write(
+        &manifest_path,
+        manifest.replace("int = \"target\"", "int = \"i8\""),
+    )
+    .expect("manifest should be writable");
+
+    let entry = temp.join("src").join("main.skd");
+    fs::write(&entry, "new Int too_large = 128\n").expect("entry should be writable");
+    let rejected = run_cli(&temp, &["check"]);
+    assert!(!rejected.status.success());
+    assert!(stderr_text(&rejected).contains("SC-CG-302"));
+
+    fs::write(&entry, "new i16 allowed = 128\n").expect("entry should be writable");
+    let accepted = run_cli(&temp, &["check"]);
+    assert!(
+        accepted.status.success(),
+        "fixed-width value should pass: {}",
+        stderr_text(&accepted)
+    );
+
+    let _ = fs::remove_dir_all(temp);
+}
+
+#[test]
 fn format_rewrites_project_entry() {
     let temp = unique_temp_dir("format_flow");
 

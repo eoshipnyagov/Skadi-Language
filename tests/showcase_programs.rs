@@ -70,9 +70,9 @@ fn showcase_push_pop_compiles() {
     assert!(!src.contains("for "));
     let c = compile_pipeline(src);
     assert!(c.contains("int main(int argc, char **argv) {"));
-    assert!(c.contains("SkadiList_i64"));
-    assert!(c.contains("sk_list_i64_pop("));
-    assert!(c.contains("if (sk_list_i64_pop(&stack, &value) != 0) {"));
+    assert!(c.contains("SkadiList_int stack"));
+    assert!(c.contains("sk_list_int_pop("));
+    assert!(c.contains("if (sk_list_int_pop(&stack, &value) != 0) {"));
     assert!(c.contains("j = n;"));
     assert!(c.contains("(i % 1024)"));
 }
@@ -82,7 +82,7 @@ fn showcase_struct_account_compiles() {
     let src = include_str!("../benchmarks/bench_06_struct_account.skd");
     let c = compile_pipeline(src);
     assert!(c.contains("} Account;"));
-    assert!(c.contains("int64_t Account_withdraw(Account *my, int64_t amount)"));
+    assert!(c.contains("SkInt Account_withdraw(Account *my, SkInt amount)"));
     assert!(c.contains("Account_deposit(&acc, 25)"));
     assert!(c.contains("Account_snapshot(&acc)"));
     assert!(c.contains("my->balance = (my->balance - amount);"));
@@ -103,7 +103,7 @@ fn showcase_path_list_helpers_compiles() {
     let src = include_str!("../benchmarks/bench_08_path_list_helpers.skd");
     assert!(src.contains("iterate "));
     let c = compile_pipeline(src);
-    assert!(c.contains("int64_t skadi_user_main()"));
+    assert!(c.contains("SkInt skadi_user_main()"));
     assert!(c.contains("skadi_user_main();"));
     assert!(c.contains("sk_fs_list("));
     assert!(c.contains("sk_fs_join("));
@@ -115,13 +115,11 @@ fn showcase_math_navigation_compiles() {
     let src = include_str!("../benchmarks/bench_09_math_navigation.skd");
     let c = compile_pipeline(src);
     assert!(c.contains("#include <math.h>"));
-    assert!(c.contains("double heading = 0.78539816339744828;"));
-    assert!(c.contains("cos("));
-    assert!(c.contains("sin("));
-    assert!(c.contains("atan2("));
-    assert!(c.contains(
-        "double bounded = ((restored_deg < 0) ? 0 : ((restored_deg > 90) ? 90 : restored_deg));"
-    ));
+    assert!(c.contains("float heading = 0.785398185f;"));
+    assert!(c.contains("cosf("));
+    assert!(c.contains("sinf("));
+    assert!(c.contains("atan2f("));
+    assert!(c.contains("float bounded = sk_math_clamp_float(restored_deg, 0, 90);"));
 }
 
 #[test]
@@ -132,7 +130,7 @@ fn showcase_v1_1_toolbox_compiles() {
     assert!(src.contains("danger fn"));
     let c = compile_pipeline(src);
     assert!(c.contains("typedef enum ErrorCode"));
-    assert!(c.contains("int safe_speed(double distance, double seconds, double *out)"));
+    assert!(c.contains("int safe_speed(float distance, float seconds, float *out)"));
     assert!(c.contains("SkadiList_Waypoint"));
     assert!(c.contains("Waypoint_distance_from_origin(&point)"));
     assert!(c.contains("if (safe_speed(total, 0, &fallback) != 0) {"));
@@ -184,11 +182,11 @@ fn showcase_byte_size_budget_compiles() {
 fn showcase_angle_navigation_compiles() {
     let src = include_str!("../benchmarks/bench_15_angle_navigation.skd");
     let c = compile_pipeline(src);
-    assert!(c.contains("double steer(double heading, double correction, double influence)"));
+    assert!(c.contains("float steer(float heading, float correction, float influence)"));
     assert!(c.contains("SkadiList_angle checkpoints"));
-    assert!(c.contains("double measured = atan2(y, x)"));
-    assert!(c.contains("cos(target)"));
-    assert!(c.contains("sin(target)"));
+    assert!(c.contains("float measured = atan2f(y, x)"));
+    assert!(c.contains("cosf(target)"));
+    assert!(c.contains("sinf(target)"));
 }
 
 #[test]
@@ -211,4 +209,15 @@ fn showcase_canvas_palette_compiles() {
     assert!(c.contains("sk_canvas_circle(&frame"));
     assert!(c.contains("sk_canvas_checksum(&frame)"));
     assert!(!c.contains("StretchDIBits"));
+}
+
+#[test]
+fn showcase_bit_registers_compiles() {
+    let src = include_str!("../benchmarks/bench_18_bit_registers.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("uint8_t control = 1"));
+    assert!(c.contains("sk_bit_set_u8(control, 3)"));
+    assert!(c.contains("sk_bit_or_u16(status, 52)"));
+    assert!(c.contains("sk_bit_shift_right_i8(signed_pattern, 1)"));
+    assert!(c.contains("SC-RT-340"));
 }

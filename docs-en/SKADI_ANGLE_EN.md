@@ -2,7 +2,7 @@
 
 Status: experimental `Angle` MVP in the current `v1.2` line.
 
-`Angle` is a nominal angle type stored as `f64` radians. It is not an alias for
+`Angle` is a nominal angle type stored as `f32` radians. It is not an alias for
 `Float`; source units and semantic intent remain explicit.
 
 ## Quick example
@@ -24,7 +24,7 @@ new Angle quarter_turn = 90deg
 new Angle phase = 0.25rad
 ```
 
-Spaced forms are rejected. Literal conversion must produce a finite `f64`.
+Spaced forms are rejected. Literal conversion must produce a finite `f32`.
 Negative angles use unary minus, for example `-45deg`.
 
 ## Operations
@@ -40,13 +40,17 @@ Negative angles use unary minus, for example `-45deg`.
 - `deg_to_rad(Int/Float) -> Angle`;
 - `atan2(numeric, numeric) -> Angle`;
 - `rad_to_deg(Angle) -> Float`;
-- `sin(Angle)` and `cos(Angle)` return `Float`.
+- `as_radians(Angle) -> Float`;
+- `sin(Angle)`, `cos(Angle)`, and `tan(Angle) -> Float`;
+- `asin`, `acos`, and `atan` accept numeric values and return `Angle`;
+- `normalize_angle(Angle) -> Angle` in the `[-PI, PI)` range.
 
-For `v1.1` compatibility, `sin/cos` temporarily still accept numeric raw
-radians. Canonical `v1.2` code uses `Angle`.
+Ordinary numeric values are not treated as implicit radians. Math domain
+failures follow IEEE 754 / C `math.h`; use `is_nan`, `is_finite`, or
+`is_infinite` when a result must be validated.
 
 `Angle` is value-safe in structs, Lists, `Task(Angle)`, and `Channel(Angle)`.
-The MVP does not include dimensional algebra, angle normalization, angular
+The MVP does not include dimensional algebra, angular
 velocity, automatic `output(Angle)`, or a fixed-point embedded representation.
 
 Compile-checked showcase: `benchmarks/bench_15_angle_navigation.skd`.

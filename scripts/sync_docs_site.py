@@ -33,6 +33,7 @@ ROUTE_MAP = [
     ("user/byte-size", "SKADI_BYTE_SIZE_RU.md"),
     ("user/angle", "SKADI_ANGLE_RU.md"),
     ("user/vectors", "SKADI_VECTORS_RU.md"),
+    ("user/bits", "SKADI_BITS_RU.md"),
     ("user/concurrency", "SKADI_CONCURRENCY_GUIDE_RU.md"),
     ("user/embedded", "SKADI_EMBEDDED_STATUS_RU.md"),
     ("user/canvas", "SKADI_CANVAS_RU.md"),

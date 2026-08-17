@@ -323,17 +323,19 @@ enum ConfigField {
     Version,
     Edition,
     Entry,
+    NumericInt,
     Target,
     Compiler,
 }
 
 impl ConfigField {
-    fn all() -> [Self; 6] {
+    fn all() -> [Self; 7] {
         [
             Self::Name,
             Self::Version,
             Self::Edition,
             Self::Entry,
+            Self::NumericInt,
             Self::Target,
             Self::Compiler,
         ]
@@ -345,6 +347,7 @@ impl ConfigField {
             Self::Version => "version",
             Self::Edition => "edition",
             Self::Entry => "entry",
+            Self::NumericInt => "numeric Int width",
             Self::Target => "build target",
             Self::Compiler => "preferred compiler",
         }
@@ -353,7 +356,7 @@ impl ConfigField {
     fn is_manifest_field(self) -> bool {
         matches!(
             self,
-            Self::Name | Self::Version | Self::Edition | Self::Entry
+            Self::Name | Self::Version | Self::Edition | Self::Entry | Self::NumericInt
         )
     }
 }
@@ -1200,6 +1203,7 @@ impl App {
                     ConfigField::Version => manifest.version = value,
                     ConfigField::Edition => manifest.edition = value,
                     ConfigField::Entry => manifest.entry = value,
+                    ConfigField::NumericInt => manifest.int_width = value,
                     ConfigField::Target | ConfigField::Compiler => {}
                 }
                 self.config.editing = false;
@@ -1225,7 +1229,8 @@ impl App {
                 ConfigField::Name
                 | ConfigField::Version
                 | ConfigField::Edition
-                | ConfigField::Entry => {}
+                | ConfigField::Entry
+                | ConfigField::NumericInt => {}
             }
             self.config.editing = false;
             self.config.edit_buffer.clear();
@@ -1558,6 +1563,7 @@ impl App {
             ConfigField::Version => manifest.version.clone(),
             ConfigField::Edition => manifest.edition.clone(),
             ConfigField::Entry => manifest.entry.clone(),
+            ConfigField::NumericInt => manifest.int_width.clone(),
             ConfigField::Target => self.build_prefs.target.clone(),
             ConfigField::Compiler => self.build_prefs.compiler.clone().unwrap_or_default(),
         }
@@ -1892,6 +1898,7 @@ fn render_config(frame: &mut Frame<'_>, area: Rect, app: &App) {
                     ConfigField::Version => manifest.version.clone(),
                     ConfigField::Edition => manifest.edition.clone(),
                     ConfigField::Entry => manifest.entry.clone(),
+                    ConfigField::NumericInt => manifest.int_width.clone(),
                     ConfigField::Target => app.build_prefs.target.clone(),
                     ConfigField::Compiler => app
                         .build_prefs
@@ -1967,6 +1974,9 @@ fn render_config(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 String::new(),
                 "[build]".to_string(),
                 format!("entry = \"{}\"", manifest.entry),
+                String::new(),
+                "[numeric]".to_string(),
+                format!("int = \"{}\"", manifest.int_width),
             ] {
                 lines.push(Line::from(line));
             }

@@ -114,7 +114,8 @@ GitHub Pages.
   close/drain работают на Win32/pthread; `stop` пробуждает блокирующий
   `send/receive`, не закрывая Channel.
 - Time/Duration MVP проходит parser/semantic/codegen/runtime путь: nominal-типы,
-  literals `ms/s/min` и monotonic Win32/POSIX runtime исполняются end-to-end.
+  literals `ns/us/ms/s/min/h`, scalar operations, exact conversion и monotonic
+  Win32/POSIX runtime исполняются end-to-end.
 - Dedicated TSan и GCC/Clang/MinGW/MSVC jobs в remote CI проходят; systems API
   остаётся experimental из-за незамороженных контрактов, а не отсутствия backend.
 

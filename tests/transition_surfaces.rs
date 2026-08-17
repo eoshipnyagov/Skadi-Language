@@ -130,8 +130,8 @@ fn untyped_scalar_declarations_receive_their_inferred_c_type() {
     );
     semantic_analyze(&program).expect("scalar inference must stay supported");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int64_t count = 1;"), "{c}");
-    assert!(c.contains("double ratio = 1.5"), "{c}");
+    assert!(c.contains("SkInt count = 1;"), "{c}");
+    assert!(c.contains("float ratio = 1.5"), "{c}");
     assert!(c.contains("bool enabled = true;"), "{c}");
     assert!(c.contains("char letter = 'a';"), "{c}");
     assert!(c.contains("const char* title = \"Skadi\";"), "{c}");

@@ -43,6 +43,17 @@ skadi-cli tui
 
 ## Manifest
 
+The ordinary `Int` width is configured in `skadi.toml` and is shared by CLI and
+TUI builds:
+
+```toml
+[numeric]
+int = "target" # target, i8, i16, i32, or i64
+```
+
+Current desktop targets resolve `target` to `i32`. Use explicit fixed-width
+types for ABI, FFI, registers, and data formats.
+
 ```toml
 [package]
 name = "project"

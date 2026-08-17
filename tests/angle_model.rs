@@ -41,7 +41,7 @@ new Angle offset = 0.25rad
     else {
         panic!("expected Angle literal");
     };
-    assert!((*radians - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
+    assert!((*radians - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
     assert_eq!(magnitude, "90");
     assert_eq!(unit, "deg");
 
@@ -51,7 +51,7 @@ new Angle offset = 0.25rad
             if matches!(
                 value.as_ref(),
                 Expression::LiteralAngle { radians, magnitude, unit }
-                    if (*radians - 0.25).abs() < 1e-12
+                    if (*radians - 0.25).abs() < 1e-6
                         && magnitude == "0.25"
                         && unit == "rad"
             )
@@ -67,7 +67,7 @@ fn parser_rejects_spaced_and_non_finite_angle_literals() {
     let tokens = lex(&huge).expect("lex non-finite Angle");
     let err = parse_program(&tokens).expect_err("non-finite Angle literal must fail");
     assert!(err.contains("SC-PARSE-220"), "{err}");
-    assert!(err.contains("finite f64"), "{err}");
+    assert!(err.contains("finite f32"), "{err}");
 }
 
 #[test]
@@ -84,9 +84,16 @@ new Float ratio = doubled / heading
 new Bool ordered = mirrored < half
 new Float dx = cos(combined)
 new Float dy = sin(combined)
+new Float slope = tan(combined)
+new Angle from_sine = asin(0.5)
+new Angle from_cosine = acos(0.5)
+new Angle from_tangent = atan(1.0)
 new Angle measured = atan2(dy, dx)
+new Angle normalized = normalize_angle(measured + 360deg)
 new Float measured_degrees = rad_to_deg(measured)
+new Float measured_radians = as_radians(measured)
 new Angle converted = deg_to_rad(measured_degrees)
+new Bool finite = is_finite(measured)
 "#,
     );
 }
@@ -116,6 +123,12 @@ fn semantic_rejects_implicit_numeric_mixing_and_wrong_conversions() {
         wrong_from_degrees.contains("builtin 'deg_to_rad' expects numeric degrees, got Angle"),
         "{wrong_from_degrees}"
     );
+
+    let raw_radians = semantic_err("new Float value = sin(1.0)\n");
+    assert!(
+        raw_radians.contains("builtin 'sin' expects Angle, got Float"),
+        "{raw_radians}"
+    );
 }
 
 #[test]
@@ -130,7 +143,7 @@ new Angle heading=45deg+0.25rad
 }
 
 #[test]
-fn codegen_lowers_angles_to_double_radians() {
+fn codegen_lowers_angles_to_float_radians() {
     let program = semantic_ok(
         r#"
 new Angle heading = 90deg
@@ -140,11 +153,11 @@ new Float degrees = rad_to_deg(measured)
 "#,
     );
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("double heading = 1.57079632679489656;"), "{c}");
-    assert!(c.contains("double x = cos(heading);"), "{c}");
-    assert!(c.contains("double measured = atan2(1, x);"), "{c}");
+    assert!(c.contains("float heading = 1.570796371f;"), "{c}");
+    assert!(c.contains("float x = cosf(heading);"), "{c}");
+    assert!(c.contains("float measured = atan2f(1, x);"), "{c}");
     assert!(
-        c.contains("double degrees = ((measured * 180.0) / M_PI);"),
+        c.contains("float degrees = ((measured * 180.0f) / (float)M_PI);"),
         "{c}"
     );
 }
@@ -169,5 +182,5 @@ new Angle received = angles.receive()
     assert!(c.contains("SkadiList_angle headings"), "{c}");
     assert!(c.contains("sk_channel_send_Angle"), "{c}");
     assert!(c.contains("sk_channel_receive_Angle"), "{c}");
-    assert!(c.contains("double result;"), "{c}");
+    assert!(c.contains("float result;"), "{c}");
 }

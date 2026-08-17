@@ -53,8 +53,8 @@ last = values.pop() on error {
 
 ```skadi
 label ErrorCode {
-    Ok
-    InvalidValue
+    Ok = 0
+    InvalidValue = 1
 }
 
 danger fn positive_half(Int value) returns Int {
@@ -202,7 +202,7 @@ new Bool completed = measured >= budget
 ```
 
 `Time` использует monotonic clock. `Duration` не смешивается с `Int` неявно;
-поддерживаются целые literals `ms`, `s`, `min`. Полный контракт описан на
+поддерживаются целые literals `ns`, `us`, `ms`, `s`, `min`, `h`. Полный контракт описан на
 странице [Время и длительности](time-duration.md).
 
 ## Размеры памяти (`v1.2`, experimental)
@@ -217,7 +217,7 @@ Memory scratch_memory = memory(capacity)
 ```
 
 `ByteSize` не смешивается с `Int/Float` неявно. Поддерживаются целые joined
-literals `b`, `kb`, `mb`, `gb`; `memory(...)` принимает полноценное выражение
+literals `b`, `kb`, `mb`, `gb`, `tb`; `memory(...)` принимает полноценное выражение
 `ByteSize`. Полный контракт описан на странице [Размеры памяти](byte-size.md).
 
 ## Memory (`v1.2`, experimental)

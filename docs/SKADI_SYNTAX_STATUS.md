@@ -1,6 +1,6 @@
 # Статус синтаксиса Skadi
 
-Дата: 2026-07-30
+Дата: 2026-08-17
 Назначение: единый точный срез того, какой синтаксис действительно работает в этом репозитории сейчас.
 
 ## Уровни статуса
@@ -41,9 +41,8 @@
   - старое имя после передачи недоступно;
   - partial move после ветвления и move из повторяющегося loop диагностируются.
 - `constant direct` - `Removed`; parser указывает использовать `view`
-- `fixed` / `const` - `Reserved / Not implemented`
-  - lexer распознаёт эти слова, но текущий statement parser намеренно не принимает формы;
-  - они не должны использоваться в пользовательском коде.
+- `fixed` / `const` не являются ключевыми словами и доступны как обычные identifiers;
+  неизменяемый binding объявляется только через `constant`.
 
 ## Функции
 
@@ -82,6 +81,8 @@
   - semantic выдаёт `SC-SEM-040`: backend не исполняет эту форму;
   - используйте `iterate collection as item` или `for item in collection`.
 - `when / is / else` - `Stable`
+  - для `label`/`tag` поддерживается полная форма `Direction.North` и короткая
+    однозначная форма `is North` внутри `when` соответствующего nominal-типа.
 
 ## Структуры и методы
 
@@ -127,6 +128,8 @@
 - `fs.join` - `Stable`
 - `args` - `Stable`
 - `output` - `Stable`
+  - принимает 1+ значений `Int`, `Float`, `Bool`, `Char` и `Text`;
+  - печатает их подряд без неявных разделителей и завершает одним переводом строки.
 - `input` - `Stable`
 - `read` - `Stable`
 - `write` - `Stable`
@@ -136,8 +139,10 @@
 - константы `PI`, `TAU`, `E`, `EPSILON` - `Stable`
 - `abs`, `min`, `max`, `clamp` - `Stable`
 - `floor`, `ceil`, `round` - `Stable`
-- `sin`, `cos`, `atan2`, `sqrt`, `root` - `Stable`
-- `deg_to_rad`, `rad_to_deg` - `Stable`
+- `sign`, `trunc`, `fract`, `lerp`, `inverse_lerp`, `remap`, `smoothstep` - `Stable`
+- `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `normalize_angle` - `Stable`
+- `sqrt`, `root`, `is_nan`, `is_finite`, `is_infinite` - `Stable`
+- `deg_to_rad`, `rad_to_deg`, `as_radians` - `Stable`
 
 ## Типы
 
@@ -182,7 +187,7 @@
   - hardware IRQ backends остаются planned.
 - time/duration systems MVP - `Experimental / Runtime MVP`
   - nominal types `Time` и `Duration` проходят parser/semantic/C codegen;
-  - integer literals `ms`, `s`, `min` проверяются на overflow;
+  - integer literals `ns`, `us`, `ms`, `s`, `min`, `h` проверяются на overflow;
   - `now`, `elapsed`, `sleep`, `delay` работают через Win32/POSIX monotonic runtime;
   - разрешена только явная time/duration арифметика без смешивания с `Int/Float`;
   - `Time` и `Duration` value-safe для struct/List/Task/Channel;
@@ -190,22 +195,22 @@
   - полный контракт: [Время и длительности](time-duration.md).
 - byte-size systems MVP - `Experimental / Runtime MVP`
   - nominal type `ByteSize` проходит parser/semantic/C codegen;
-  - integer literals `b`, `kb`, `mb`, `gb` используют бинарные множители и проверяются на overflow;
-  - `ByteSize +/- ByteSize` и сравнения одинаковых типов работают без смешивания с `Int/Float`;
+  - integer literals `b`, `kb`, `mb`, `gb`, `tb` используют бинарные множители и проверяются на overflow;
+  - scalar `Int` operations, same-type ratios and comparisons работают без неявного numeric mixing;
   - `memory(...)` принимает `ByteSize` expression, а non-positive capacity отклоняется runtime;
   - `ByteSize` value-safe для struct/List/Task/Channel;
   - allocator policies, fractional units и dimensional algebra отложены;
   - полный контракт: [Размеры памяти](byte-size.md).
 - angle math MVP - `Experimental / Runtime MVP`
-  - nominal `Angle` хранится как `f64` radians;
+  - nominal `Angle` хранится как `f32` radians;
   - integer/fractional literals `deg` и `rad` проверяются на finite value;
   - angle arithmetic, comparisons, limited scalar operations и value-safe boundaries реализованы;
-  - `deg_to_rad` и `atan2` возвращают `Angle`, `rad_to_deg` принимает `Angle`;
-  - `sin/cos` принимают `Angle`, сохраняя numeric raw-radians compatibility для `v1.1`;
-  - dimensional algebra, normalization и fixed-point embedded representation отложены;
+  - `deg_to_rad`, inverse trigonometry и `atan2` возвращают `Angle`;
+  - `sin/cos/tan` требуют `Angle`, `normalize_angle` возвращает `[-PI, PI)`;
+  - dimensional algebra и fixed-point embedded representation отложены;
   - полный контракт: [Углы](angle.md).
 - vector math MVP - `Experimental / Runtime MVP`
-  - `Vec2`, `Vec3`, `Vec4` имеют `f64` components и точную structural-literal форму;
+  - `Vec2`, `Vec3`, `Vec4` имеют `f32` components и точную structural-literal форму;
   - component access/assignment, same-dimension `+/-`, unary minus и scalar `*//` реализованы;
   - `dot`, `length`, `length_sq`, `normalize`, `distance`, `distance_sq` работают для всех трёх типов;
   - `cross` принимает только два `Vec3`, zero normalization возвращает zero vector;

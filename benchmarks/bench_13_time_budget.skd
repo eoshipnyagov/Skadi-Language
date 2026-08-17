@@ -5,6 +5,8 @@ fn measure_step(Duration work_budget) returns Duration {
 }
 
 new Duration target_budget = 5ms
+new Duration scheduler_quantum = 500us
+new Duration frame_budget = 1s / 60
 Task(Duration) measurement_task = run measure_step(target_budget)
 new Duration measured = wait measurement_task
 new Bool respected_lower_bound = measured >= target_budget
@@ -12,3 +14,5 @@ new Bool stayed_reasonable = measured < 1s
 
 output("time budget respected")
 output(respected_lower_bound and stayed_reasonable)
+output("scheduler quantum ns: ", as_nanoseconds(scheduler_quantum))
+output("frame budget ns: ", as_nanoseconds(frame_budget))

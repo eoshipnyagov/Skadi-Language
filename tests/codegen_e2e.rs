@@ -731,6 +731,72 @@ output(bounded)
 }
 
 #[test]
+fn e2e_complete_math_and_units_slice_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping complete math/units e2e test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new Float fraction = fract(-1.25)
+new Float interpolated = lerp(10.0, 20.0, 0.25)
+new Float mapped = remap(50.0, 0.0, 100.0, -1.0, 1.0)
+new Float eased = smoothstep(0.0, 1.0, 0.5)
+new Angle wrapped = normalize_angle(540deg)
+new Bool invalid = is_nan(sqrt(-1.0))
+
+new Duration tick = 1ns
+new Duration pulse = 10us
+new Duration frame = 1s / 4
+new Float frame_ratio = 1s / 250ms
+
+new ByteSize archive = 1tb
+new ByteSize half_archive = archive / 2
+new Float size_ratio = 1mb / 256kb
+
+output(fraction)
+output(interpolated)
+output(mapped)
+output(eased)
+output(rad_to_deg(wrapped))
+output(invalid)
+output(as_nanoseconds(tick + pulse + frame))
+output(frame_ratio)
+output(as_bytes(half_archive))
+output(size_ratio)
+"#;
+    let c = compile_showcase_to_c(src);
+    let run = compile_c_and_execute(
+        compiler,
+        &c,
+        "Skadi_e2e_complete_math_units",
+        &["-lm"],
+        &[],
+        None,
+    );
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let lines = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(lines.len(), 10, "{lines:?}");
+    let number = |index: usize| lines[index].parse::<f64>().expect("numeric output");
+    assert!((number(0) - 0.75).abs() < 1e-9, "{lines:?}");
+    assert!((number(1) - 12.5).abs() < 1e-9, "{lines:?}");
+    assert!(number(2).abs() < 1e-9, "{lines:?}");
+    assert!((number(3) - 0.5).abs() < 1e-9, "{lines:?}");
+    assert!((number(4) + 180.0).abs() < 1e-6, "{lines:?}");
+    assert_eq!(lines[5], "true");
+    assert_eq!(lines[6], "250010001");
+    assert!((number(7) - 4.0).abs() < 1e-9, "{lines:?}");
+    assert_eq!(lines[8], "549755813888");
+    assert!((number(9) - 4.0).abs() < 1e-9, "{lines:?}");
+}
+
+#[test]
 fn e2e_angle_literals_and_trigonometry_build_and_run() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping Angle e2e C build test: no clang/gcc/cc in PATH.");
@@ -835,7 +901,7 @@ output(squared)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("#include <math.h>"));
-    assert!(c.contains("pow(3, 2)"));
+    assert!(c.contains("powf(3, 2)"));
 
     let run = compile_c_and_execute(
         compiler,
@@ -847,6 +913,41 @@ output(squared)
     );
     assert!(run.status.success());
     assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "9.000000");
+}
+
+#[test]
+fn e2e_fixed_width_bit_operations_are_predictable() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new i8 raw_value = -1
+new i8 logical = bit_shift_right(raw_value, 1)
+new u8 flags = 0
+flags = bit_set(flags, 3)
+flags = bit_toggle(flags, 0)
+output(logical)
+output(flags)
+output(bit_is_set(flags, 3))
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+
+    let run = compile_c_and_execute(compiler, &c, "Skadi_e2e_bits", &[], &[], None);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout)
+            .lines()
+            .collect::<Vec<_>>(),
+        ["127", "9", "true"]
+    );
 }
 
 #[test]
@@ -930,6 +1031,68 @@ fn e2e_stable_showcase_subset_builds_and_runs() {
         let c = compile_showcase_to_c(src);
         compile_c_and_run(compiler, &c, name, extra_flags);
     }
+}
+
+#[test]
+fn e2e_variadic_output_and_nominal_when_run() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping variadic output e2e test: no C compiler in PATH.");
+        return;
+    };
+    let src = r#"
+tag Direction {
+    North
+    South
+}
+
+fn direction_name() returns Text {
+    return "north"
+}
+
+fn is_ready() returns Bool {
+    return true
+}
+
+struct Compass {
+    Text heading
+
+    fn name() returns Text {
+        return my.heading
+    }
+}
+
+new Direction direction = Direction.North
+new Compass compass = {heading = "north"}
+when direction {
+    is North {
+        output("direction=", direction_name(), "/", compass.name(), ", value=", 7, ", ready=", is_ready())
+    }
+    is South {
+        output("direction=south")
+    }
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(!c.contains("_Generic"), "{c}");
+    assert!(c.contains("sk_output_text_part(direction_name())"), "{c}");
+    assert!(
+        c.contains("sk_output_text_part(Compass_name(&compass))"),
+        "{c}"
+    );
+    assert!(c.contains("sk_output_bool_part(is_ready())"), "{c}");
+    let run = compile_c_and_execute(compiler, &c, "Skadi_e2e_variadic_output", &[], &[], None);
+    assert!(
+        run.status.success(),
+        "variadic output runtime failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout).trim_end(),
+        "direction=north/north, value=7, ready=true"
+    );
 }
 
 #[test]

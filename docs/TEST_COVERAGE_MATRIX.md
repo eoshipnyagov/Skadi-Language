@@ -62,11 +62,12 @@
     - `danger` + `on error` + explicit `ErrorCode`
 - math core coverage
   - semantic positive/negative checks для constants и numeric builtin typing
-  - codegen shape checks для `math.h`, constants, trigonometry, `root`, angle conversion
+  - codegen shape checks для `math.h`, constants, interpolation, complete basic trigonometry, IEEE result checks и angle conversion
+  - selection helpers закрепляют single-evaluation lowering для `min/max/clamp`
   - showcase coverage через `bench_09_math_navigation.skd` и `bench_10_v1_1_toolbox.skd`
 - showcase coverage
-  - compile-pipeline shape tests покрывают `bench_01..16`
-  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..16`
+  - compile-pipeline shape tests покрывают `bench_01..18`
+  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..18`
   - runtime showcase e2e покрывает:
     - CLI-driven subset `bench_01..05`
     - stable subset `bench_06..09`
@@ -78,6 +79,7 @@
     - angle navigation showcase `bench_15_angle_navigation.skd`
     - vector navigation showcase `bench_16_vector_navigation.skd`
     - headless Canvas palette showcase `bench_17_canvas_palette.skd`
+    - fixed-width register showcase `bench_18_bit_registers.skd`
   - showcase fixtures лежат в `benchmarks/showcase-data/` и используются в script/e2e smoke-path
 - experimental memory frontend coverage
   - `tests/memory_model_frontend.rs` проверяет parser/formatter/semantic/codegen
@@ -119,13 +121,13 @@
   - `bench_12_systems_pipeline.skd` проверяет совместное использование thread-local
     Memory context и Task/Channel runtime
 - experimental Time/Duration coverage
-  - `tests/time_model.rs` проверяет literals, overflow, formatter, nominal semantic
-    arithmetic, invalid conversions, codegen shape и List/Task/Channel boundaries
+  - `tests/time_model.rs` проверяет `ns/us/ms/s/min/h`, overflow, formatter,
+    nominal/scalar arithmetic, exact conversion, codegen shape и boundaries
   - `tests/codegen_e2e.rs` запускает monotonic measurement и blocking sleep/delay
   - `bench_13_time_budget.skd` входит в native showcase gate
 - experimental ByteSize coverage
-  - `tests/byte_size_model.rs` проверяет literals, overflow, formatter, nominal
-    arithmetic, invalid numeric mixing, dynamic Memory capacity и
+  - `tests/byte_size_model.rs` проверяет `b/kb/mb/gb/tb`, overflow, formatter,
+    nominal/scalar arithmetic, exact conversion, dynamic Memory capacity и
     List/Task/Channel boundaries
   - codegen shape закрепляет non-positive runtime guard до `size_t` conversion
   - `bench_14_byte_size_budget.skd` входит в native showcase gate
@@ -133,7 +135,8 @@
   - `tests/angle_model.rs` проверяет integer/fractional/finite literals,
     formatter, nominal and scalar arithmetic, conversions, invalid mixing,
     codegen и List/Task/Channel boundaries
-  - `tests/codegen_e2e.rs` запускает angle arithmetic и trigonometry через native C
+  - `tests/codegen_e2e.rs` запускает math/range helpers, IEEE checks, extended
+    units, angle arithmetic и trigonometry через native C
   - `bench_15_angle_navigation.skd` входит в native showcase gate
 - experimental Vector coverage
   - `tests/vector_model.rs` проверяет точную construction shape, components, арифметику,
@@ -146,6 +149,12 @@
   - native headless scene закреплена deterministic framebuffer checksum
   - Win32 presenter shape и `gdi32` link flags проверяются без открытия окна в CI
   - `bench_17_canvas_palette.skd` входит в native showcase gate
+- fixed-width integer and bit coverage
+  - `tests/bit_model.rs` проверяет radix literals, все signed/unsigned widths,
+    запрет platform `Int`, mixed-type errors и compile-time index bounds
+  - `tests/codegen_e2e.rs` закрепляет logical signed right shift и native output
+  - dynamic bounds используют runtime diagnostic `SC-RT-340`
+  - `bench_18_bit_registers.skd` входит в showcase gate
 
 ## 2. Что покрыто частично / что ещё требует углубления
 

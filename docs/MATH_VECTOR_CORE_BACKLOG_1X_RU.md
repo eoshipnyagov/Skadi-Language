@@ -37,9 +37,8 @@
 
 ## 2. Базовые численные функции
 
-`Stable`: `abs`, `min`, `max`, `clamp`, `floor`, `ceil`, `round`.
-
-`Backlog`: `sign`, `trunc`, `fract`.
+`Stable`: `abs`, `min`, `max`, `clamp`, `floor`, `ceil`, `round`, `sign`,
+`trunc`, `fract`.
 
 - `abs`, `sign`
   - Где применяется: физика, обработка сигналов, контроллеры.
@@ -67,12 +66,11 @@
 
 ## 3. Тригонометрия и углы
 
-`Stable`: `sin`, `cos`, `atan2`, `deg_to_rad`, `rad_to_deg`.
+`Stable`: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`,
+`normalize_angle`, `deg_to_rad`, `rad_to_deg`, `as_radians`.
 
 `Experimental v1.2`: nominal `Angle`, literals `deg/rad`, angle arithmetic и
 value-safe container/concurrency boundaries.
-
-`Backlog`: `tan`, `asin`, `acos`, `atan`, `normalize_angle`.
 
 - `sin`, `cos`, `tan`
   - Частота: **очень часто**.
@@ -111,6 +109,10 @@ value-safe container/concurrency boundaries.
   - Частота: **средне** (часто для процедурных систем и матмоделей).
 
 ## 5. Интерполяция/плавность
+
+`Stable`: `lerp`, `inverse_lerp`, `remap`, `smoothstep`.
+
+`Backlog`: `smootherstep`.
 
 - `lerp`, `inverse_lerp`, `remap`
   - Частота: **очень часто** в геймплее, анимации, UI, аудио.
@@ -162,11 +164,13 @@ value-safe container/concurrency boundaries.
 Завершённый baseline `v1.1`:
 
 - `PI`, `TAU`, `E`, `EPSILON`;
-- `abs`, `min`, `max`, `clamp`, `floor`, `ceil`, `round`;
-- `sin`, `cos`, `atan2`, `sqrt`, `root`, `deg_to_rad`, `rad_to_deg`;
+- `abs`, `min`, `max`, `clamp`, `floor`, `ceil`, `round`, `sign`, `trunc`, `fract`;
+- `lerp`, `inverse_lerp`, `remap`, `smoothstep`;
+- полная базовая тригонометрия, `normalize_angle`, `sqrt`, `root` и проверки IEEE-result;
+- `deg_to_rad`, `rad_to_deg`, `as_radians`;
 - numeric semantic checks, `math.h` lowering и e2e/showcase coverage.
 
-Остальные пункты этого документа являются backlog. `Time/Duration`, `ByteSize`,
+Остальные непомеченные пункты этого документа являются backlog. `Time/Duration`, `ByteSize`,
 `Angle` и bounded `Vec2/Vec3/Vec4` уже имеют рабочие experimental контракты.
 
 Реализованный Vector MVP не включает матрицы, SIMD-specific lowering, generic vectors,

@@ -49,15 +49,16 @@ when arg {
 
 ## 4. Стиль вывода
 
-- Для чисел и `Bool`: `output("label:")` + `output(value)`
-- Для текста: `output(concat("label: ", text))`
+- Передавайте текст и значения одним вызовом `output`.
+- Пробелы и знаки пунктуации записывайте явно в текстовых фрагментах.
+- Не собирайте временный `Text` через `concat`, если он нужен только для вывода.
 
 Пример:
 
 ```skadi
-output("count:")
-output(count)
-output(concat("file: ", path))
+output("count: ", count)
+output("file: ", path)
+output("position: ", point.x, ", ", point.y)
 ```
 
 ## 5. Ошибки и danger-flow

@@ -1,0 +1,17 @@
+// Fixed-width register and flag operations.
+
+new u8 control = 0b0000_0001
+control = bit_set(control, 3)
+control = bit_toggle(control, 0)
+
+new u16 status = 0x1200
+status = bit_or(status, 0x0034)
+status = bit_clear(status, 9)
+
+new i8 signed_pattern = -1
+new i8 logical_half = bit_shift_right(signed_pattern, 1)
+
+output("control=", control)
+output("ready=", bit_is_set(control, 3))
+output("status=", status)
+output("logical_half=", logical_half)

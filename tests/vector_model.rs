@@ -140,7 +140,7 @@ output(normal.z)
     );
     let c = transpile_program_to_c(&program);
     assert!(
-        c.contains("typedef struct { double x; double y; double z; } Vec3;"),
+        c.contains("typedef struct { float x; float y; float z; } Vec3;"),
         "{c}"
     );
     assert!(c.contains("sk_vec3_normalize(sk_vec3_cross(a, b))"), "{c}");

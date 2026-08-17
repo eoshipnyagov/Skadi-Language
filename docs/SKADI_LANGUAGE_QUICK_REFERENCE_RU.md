@@ -8,7 +8,8 @@
 - **Stable** — рабочая база `v1.1`;
 - **Experimental** — исполняемый `v1.2` MVP с незамороженным API;
 - **Compatibility** — читается для совместимости, но не рекомендуется;
-- **Reserved** — распознаётся только частью frontend и не компилируется;
+- **Reserved** — форма удерживается для отдельного контракта, но не является
+  компилируемой пользовательской поверхностью;
 - **Future** — описано в планах, но отсутствует в языке.
 
 ## Файлы и объявления
@@ -26,24 +27,24 @@
 | Присваивание | `count = count + 1` | Stable | Изменение существующего значения |
 | Compound assignment | `count += 1` | Compatibility | Formatter раскрывает в обычное присваивание |
 | Инкремент/декремент | `count++`, `count--` | Stable | Только statement |
-| `fixed` / `const` | `fixed Int n = 1` | Reserved | Lexer token без statement semantics |
+| Константа | `constant Int n = 1` | Stable | Binding нельзя переназначить |
 | `;` и `:` | Punctuation tokens | Reserved вне legacy C-style `for`; statements разделяются строками |
 
 ## Типы и литералы
 
 | Категория | Типы или формы | Статус | Примечание |
 |---|---|---:|---|
-| Целые | `Int`, `i8/i16/i32/i64`, `u8/u16/u32/u64` | Stable | Semantic family `Int`; C layout следует аннотации |
-| Вещественные | `Float`, `f32`, `f64` | Stable | Semantic family `Float` |
+| Целые | `Int`, `i8/i16/i32/i64`, `u8/u16/u32/u64`; `0b`, `0o`, `0x`, `_` | Stable | `Int` следует `[numeric] int`; fixed-width типы сохраняют ширину |
+| Вещественные | `Float`, `f32`, `f64` | Stable | `Float`/`f32` используют 32 бита; `f64` явный |
 | Логические | `Bool`, alias `bool`; `true`, `false` | Stable | Канонически `Bool` |
 | Символ | `Char`, alias `char`; `'a'`, `'\n'` | Stable | Только ASCII и поддержанные escapes |
 | Текст/путь | `Text`, `Path`; `"hello"` | Stable | `Path` использует text representation |
 | Список | `Int List`, `[1, 2, 3]` | Stable | `List(T)` не является синтаксисом типа |
 | Пользовательские данные | `struct Name`, `{x = 1}` | Stable | Поддерживается field punning `{x, y}` |
-| Время | `Time`, `Duration`; `5ms`, `2s`, `3min` | Experimental | Magnitude должна быть целой |
-| Размер памяти | `ByteSize`; `64b`, `4kb`, `8mb`, `1gb` | Experimental | Бинарные множители |
+| Время | `Time`, `Duration`; `1ns`, `10us`, `5ms`, `2s`, `3min`, `1h` | Experimental | Magnitude должна быть целой |
+| Размер памяти | `ByteSize`; `64b`, `4kb`, `8mb`, `1gb`, `1tb` | Experimental | Бинарные множители |
 | Угол | `Angle`; `90deg`, `0.25rad` | Experimental | Хранение в radians |
-| Векторы | `Vec2`, `Vec3`, `Vec4` | Experimental | Компоненты `f64` |
+| Векторы | `Vec2`, `Vec3`, `Vec4` | Experimental | Компоненты `f32` |
 | Задача | `Task`, `Task(Int)` | Experimental | Линейный owning handle |
 | Канал | `Channel(Int)` | Experimental | Value-safe message type |
 | Регион | `Memory` | Experimental | Capability, не обычное значение |
@@ -98,7 +99,7 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 |---|---|---:|
 | Условие | `if ready { ... } else { ... }` | Stable |
 | Цепочка | `else if condition { ... }` | Stable |
-| Сопоставление | `when value { is 1 { ... } else { ... } }` | Stable |
+| Сопоставление | `when value { is 1 { ... } else { ... } }` | Stable; для `label/tag` допустим `is Ready` |
 | Условный цикл | `while condition { ... }` | Stable |
 | Бесконечный цикл | `loop { ... }` | Stable |
 | Канонический обход | `iterate items as item { ... }` | Stable |
@@ -131,7 +132,7 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 | `math.Point` | Stable | Квалифицированный тип |
 | `math.SomeError` | Stable | Квалифицированный `ErrorCode` variant |
 | `import module_name` | Future | Нет package/module resolver |
-| `import "./x.skd" as x` | Future | Aliases отсутствуют |
+| `import "./x.skd" as x` | Stable | Alias локален импортирующему файлу |
 | Re-export | Future | Отсутствует |
 
 ## Text, List и I/O builtins
@@ -144,7 +145,7 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 | `slice` | `slice(Text, Int, Int)` | `Text` | Stable |
 | `concat` | `concat(Text, Text)` | `Text` | Stable |
 | `args` | `args()` | `Text List` | Stable |
-| `output` | `output(Int\|Float\|Bool\|Char\|Text)` | `Int` | Stable |
+| `output` | `output(printable, ...)` | `Int` | Stable; 1+ аргументов без неявных разделителей, один перевод строки |
 | `input` | `input(Text)` | `Text` | Stable |
 | `read` | `read(Text\|Path)` | `Text` | Stable |
 | `write` | `write(Text\|Path, Text)` | `Int` | Stable |
@@ -171,16 +172,32 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `min`, `max` | numeric, numeric | Общий numeric type |
 | `clamp` | numeric, numeric, numeric | Общий numeric type |
 | `floor`, `ceil`, `round` | numeric | `Float` |
+| `sign` | numeric | Сохраняет `Int`, иначе `Float` |
+| `trunc`, `fract` | numeric | `Float` |
+| `lerp`, `inverse_lerp`, `smoothstep` | numeric, numeric, numeric | `Float` |
+| `remap` | пять numeric | `Float` |
 | `sqrt`, `root` | numeric; numeric, numeric | `Float` |
-| `sin`, `cos` | `Angle` или legacy numeric radians | `Float` |
+| `sin`, `cos`, `tan` | `Angle` | `Float` |
+| `asin`, `acos`, `atan` | numeric | `Angle` |
 | `atan2` | numeric, numeric | `Angle` |
+| `normalize_angle` | `Angle` | `Angle` в `[-PI, PI)` |
+| `is_nan`, `is_finite`, `is_infinite` | numeric или `Angle` | `Bool` |
 | `deg_to_rad` | numeric degrees | `Angle` |
-| `rad_to_deg` | `Angle` | `Float` |
+| `rad_to_deg`, `as_radians` | `Angle` | `Float` |
 | `dot` | два одинаковых vector type | `Float` |
 | `length`, `length_sq` | vector | `Float` |
 | `normalize` | vector | Тот же vector type |
 | `distance`, `distance_sq` | два одинаковых vector type | `Float` |
 | `cross` | `Vec3`, `Vec3` | `Vec3` |
+
+## Битовые операции
+
+`bit_and`, `bit_or`, `bit_xor`, `bit_not`, `bit_shift_left`,
+`bit_shift_right`, `bit_is_set`, `bit_set`, `bit_clear`, `bit_toggle` и
+`bit_write` работают только с `i8..i64` и `u8..u64`. Binary operands должны
+иметь один тип; подходящий литерал получает тип второго операнда. `Int` не
+принимается, правый сдвиг всегда логический, индекс проверяется. Подробнее:
+[целочисленная модель и биты](bits.md).
 
 ## Time, Memory, Task и Channel
 
@@ -190,6 +207,8 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `elapsed(start)` | Прошедший `Duration` | Experimental |
 | `sleep(duration)` | Blocking sleep | Experimental |
 | `delay(duration)` | Alias-подобная blocking delay | Experimental |
+| `as_nanoseconds(duration)` | Точное число наносекунд как `i64` | Experimental |
+| `as_bytes(size)` | Точное число байтов как `i64` | Experimental |
 | `Memory arena = memory(4kb)` | Fixed-capacity region | Experimental |
 | `memory(4kb, allow grow)` | Segmented growing region | Experimental |
 | `memory(..., allow drop)` | Явный policy marker без implicit reclamation | Experimental |
@@ -219,8 +238,8 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | Тип | Разрешено |
 |---|---|
 | `Time` | `Time - Time -> Duration`, `Time +/- Duration -> Time`, comparisons |
-| `Duration` | `Duration +/- Duration`, comparisons |
-| `ByteSize` | `ByteSize +/- ByteSize`, comparisons |
+| `Duration` | `+/- Duration`, `*`/`Int`, `/ Int`, ratio двух `Duration`, comparisons |
+| `ByteSize` | `+/- ByteSize`, `*`/`Int`, `/ Int`, ratio двух `ByteSize`, comparisons |
 | `Angle` | `+/- Angle`, scalar `*`/`/`, `Angle / Angle -> Float`, comparisons |
 | Vector | Same-dimension `+/-`, unary `-`, scalar `*`/`/`, component access |
 
@@ -260,7 +279,6 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `Interrupt tick = interrupts.periodic(10ms)` | Host MVP: typed periodic source |
 | `on interrupt tick { channel.try_send(1) }` | Host MVP: строгий interrupt context |
 | Отдельный `on error { ... }` | Reserved: recovery должен быть связан с danger-вызовом |
-| `fixed`, `const` | Lexer-only reservations |
 | Одинарные `&`, `\|` и общий `:` | Lexer-only tokens без текущей semantic формы |
 | `allow grow`, `allow drop` вне `memory(...)` | Не является общей языковой формой |
 | Channel `select` и `try_receive` | Future |

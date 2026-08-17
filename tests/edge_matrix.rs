@@ -82,7 +82,7 @@ new char b0 = t[0]
 new Text s = slice(t, 0, 2)
 "#;
     let c = pipeline_ok(src);
-    assert!(c.contains("int64_t n = ((int64_t)strlen(t));"));
+    assert!(c.contains("SkInt n = ((int64_t)strlen(t));"));
     assert!(c.contains("char b0 = sk_text_char_at(t, 0);"));
     assert!(c.contains("const char* s = sk_text_slice(t, 0, 2);"));
 }

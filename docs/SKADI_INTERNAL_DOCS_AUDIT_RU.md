@@ -124,12 +124,22 @@ experimental не из-за отсутствия runtime, а потому что
 Разница с широким замыслом:
 
 - `Time` только monotonic; wall clock и calendar отсутствуют;
-- `Duration` имеет только целые `ms/s/min`;
+- `Duration` имеет целые `ns/us/ms/s/min/h`, scalar `Int` operations и exact conversion;
 - `ByteSize` не является общей dimensional algebra;
-- `Angle` хранится в radians и временно принимает legacy numeric radians в
-  `sin/cos`;
-- vectors имеют фиксированные `f64` components без generics, SIMD contract,
+- `Angle` хранится в radians; тригонометрия требует nominal `Angle`, inverse
+  functions возвращают `Angle`;
+- vectors имеют фиксированные `f32` components без generics, SIMD contract,
   swizzling и matrices.
+
+### Numeric ABI и биты
+
+`Int` больше не следует считать alias `i64`: C backend создаёт target-specific
+`SkInt`, а `skadi.toml` принимает `[numeric] int = "target|i8|i16|i32|i64"`.
+Текущие desktop profiles разрешают `target` в `i32`. Fixed-width типы остаются
+независимыми от проекта. Bit builtins работают только с fixed-width signed и
+unsigned типами, используют logical right shift и checked indexes. Общая
+система явных numeric conversions пока не принята; width/signedness переменных
+не смешиваются неявно.
 
 ### Modules
 
@@ -205,7 +215,7 @@ backend и embedded display adapter.
 
 | Форма | Реальный статус | Решение |
 |---|---|---|
-| `fixed` / `const` | Lexer-only reservation | Не показывать как рабочее объявление; рабочая форма — `constant` |
+| `fixed` / `const` | Обычные identifiers | Не резервировать без контракта; неизменяемая форма — только `constant` |
 | `direct` / `view` | Реализованный borrow contract | Использовать для явной mutable/read-only передачи без владения |
 | `move` | Реализованный bounded ownership transfer | Использовать явно в signature, call site, binding и resource return |
 | `allow grow` / `allow drop` | Реализованы только как contextual Memory policies | Не превращать `allow` в общий modifier |
@@ -225,8 +235,8 @@ backend и embedded display adapter.
   расширенных policies в quick-start workflow;
 - перед финальным следующим release нужен повторный прогон на чистых
   Windows/Linux/macOS окружениях;
-- переходные lexer-only tokens требуют отдельного решения: RFC, реализация или
-  удаление.
+- прежняя фиктивная резервация `fixed`/`const` удалена из документации и
+  подсветки; оба слова являются обычными identifiers.
 
 ### Следующая функциональная очередь
 
@@ -241,7 +251,10 @@ backend и embedded display adapter.
 5. Embedded target contract и первый ESP32/FreeRTOS spike.
 6. `Ring`/bounded `Pool` для явной `drop oldest` семантики.
 7. Canvas events, text/images и следующие presentation backends.
-8. Module/package ergonomics.
+8. Module/package ergonomics и первый ограниченный C ABI slice. Направление
+   принято: manifest + lockfile, explicit imports, fixed-width ABI, explicit
+   struct layout, opaque handles и видимое владение buffers/resources; точный
+   declaration syntax проверяется на реальных C-библиотеках до заморозки.
 
 ### Параллельный tooling-трек
 

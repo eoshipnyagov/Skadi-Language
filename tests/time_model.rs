@@ -27,6 +27,9 @@ fn parser_accepts_duration_literals_and_preserves_units() {
 new Duration short_delay = 25ms
 new Duration normal_delay = 2s
 new Duration long_delay = 3min
+new Duration tick = 1ns
+new Duration pulse = 10us
+new Duration session = 2h
 "#,
     );
 
@@ -34,6 +37,9 @@ new Duration long_delay = 3min
         (25, "ms", 25_000_000),
         (2, "s", 2_000_000_000),
         (3, "min", 180_000_000_000),
+        (1, "ns", 1),
+        (10, "us", 10_000),
+        (2, "h", 7_200_000_000_000),
     ];
     for (statement, (magnitude, unit, nanoseconds)) in program.statements.iter().zip(expected) {
         assert!(matches!(
@@ -73,6 +79,10 @@ fn semantic_accepts_nominal_time_operations() {
         r#"
 new Duration interval = 1s + 250ms
 new Duration remaining = interval - 50ms
+new Duration doubled = remaining * 2
+new Duration half = doubled / 2
+new Float frames = doubled / interval
+new Int exact_nanoseconds = as_nanoseconds(half)
 new Time started_at = now()
 new Time deadline = started_at + remaining
 new Duration window = deadline - started_at
@@ -94,6 +104,9 @@ fn semantic_rejects_implicit_numbers_and_invalid_time_arithmetic() {
 
     let sleep_int = semantic_err("sleep(1)\n");
     assert!(sleep_int.contains("expects (Duration), got (Int)"));
+
+    let fractional_scale = semantic_err("new Duration value = 1s * 0.5\n");
+    assert!(fractional_scale.contains("operator '*' is not defined for Duration and Float"));
 
     let add_times = semantic_err(
         r#"

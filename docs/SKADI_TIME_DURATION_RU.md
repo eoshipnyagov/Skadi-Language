@@ -27,15 +27,21 @@ output(completed)
 new Duration debounce = 25ms
 new Duration timeout = 2s
 new Duration maintenance = 3min
+new Duration hardware_tick = 1ns
+new Duration sensor_pulse = 10us
+new Duration session = 1h
 ```
 
 Число и единица пишутся слитно. `1.5s` и `1 s` не входят в текущий контракт.
 
 Поддерживаемые единицы:
 
+- `ns` - наносекунды;
+- `us` - микросекунды (`us` используется как переносимая ASCII-запись);
 - `ms` - миллисекунды;
 - `s` - секунды;
-- `min` - минуты.
+- `min` - минуты;
+- `h` - часы.
 
 Compiler проверяет переполнение при переводе literal во внутреннее представление.
 
@@ -51,6 +57,10 @@ contract текущего runtime, но не разрешение использ
 - значение не является Unix timestamp;
 - из него нельзя получить календарную дату;
 - origin clock намеренно не определён публичным API.
+
+Наносекунда является точностью представления, а не обещанием физической
+точности ожидания. `sleep(1ns)` округляется backend до разрешения системного или
+аппаратного таймера конкретной платформы.
 
 ## Builtins
 
@@ -91,6 +101,10 @@ cooperative `delay` могут появиться только после отд
 ```skadi
 new Duration frame = 16ms + 500ms
 new Duration remaining = frame - 5ms
+new Duration doubled = remaining * 2
+new Duration half = doubled / 2
+new Float ratio = doubled / frame
+new Int exact_ns = as_nanoseconds(half)
 
 new Time started_at = now()
 new Time deadline = started_at + remaining
@@ -104,6 +118,9 @@ new Time earlier = deadline - 1ms
 |---|---|
 | `Duration + Duration` | `Duration` |
 | `Duration - Duration` | `Duration` |
+| `Duration * Int`, `Int * Duration` | `Duration` |
+| `Duration / Int` | `Duration`, целочисленное деление наносекунд |
+| `Duration / Duration` | `Float` |
 | `Time + Duration` | `Time` |
 | `Duration + Time` | `Time` |
 | `Time - Duration` | `Time` |
@@ -115,8 +132,9 @@ new Time earlier = deadline - 1ms
 Не поддерживаются:
 
 - `Time + Time`;
-- арифметика между `Duration` и `Int/Float`;
-- умножение, деление и возведение длительности в степень;
+- сложение/вычитание `Duration` и обычного числа;
+- scalar-операции с `Float`;
+- возведение длительности в степень;
 - неявное присваивание `Int -> Duration` или `Duration -> Time`.
 
 ## Функции, списки и concurrency
@@ -154,10 +172,10 @@ ESP32/FreeRTOS backend пока не реализован; desktop API не сл
 
 - нет wall-clock, calendar/date/timezone API;
 - нет `Timer`;
-- нет literals `ns`, `us`, `h`;
 - нет fractional duration literals;
 - нет general units algebra;
 - `output(Time/Duration)` не добавляет скрытое форматирование;
+- `as_nanoseconds(Duration) returns i64` является точным явным преобразованием;
 - `send_for`, `receive_for` и `wait task for Duration` используют один nominal
   тип длительности и обязательную явную timeout-границу.
 

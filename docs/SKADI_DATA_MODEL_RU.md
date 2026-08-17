@@ -20,14 +20,39 @@ new Int current = counter.bump(2)
 `hide` запрещает внешний доступ к полю, но методы того же struct используют его
 через `my`. `local struct` не экспортируется из файла.
 
-## Label
+## Label и tag
 
-Рабочий runtime-контракт сейчас имеет только специальный `label ErrorCode`;
-первым вариантом обязан быть `Ok`.
+`label` является числовым nominal-типом с обязательными явными уникальными
+дискриминантами. `tag` является символическим nominal-типом без доступного
+пользователю числового контракта.
 
-Общий `label Status { ... }` принимается parser и участвует в module visibility,
-но пока не имеет завершённого value/type/C-lowering контракта. Не используйте
-его как enum-like data type до отдельного design decision.
+```skadi
+label ExitCode {
+    Success = 0
+    InvalidInput = 64
+}
+
+tag Direction {
+    North
+    South
+}
+
+new Direction direction = Direction.North
+
+when direction {
+    is North {
+        output("north")
+    }
+    is South {
+        output("south")
+    }
+}
+```
+
+Обе формы работают как типы значений, параметров и результатов функций.
+Варианты не смешиваются с `Int` и с другими nominal-типами. Специальный
+`label ErrorCode` использует тот же механизм, но дополнительно требует первым
+вариантом `Ok = 0` для `danger/on error` flow.
 
 Field punning сокращает literal, когда имя переменной совпадает с полем:
 

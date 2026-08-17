@@ -38,19 +38,23 @@ They serve three roles:
     Task/Channel, thread-local runtime contexts, and safe region boundaries.
 13. `bench_13_time_budget.skd`
     Monotonic time-budget showcase with `Time`, `Duration`, `now`, `elapsed`,
-    `sleep`, and `Task(Duration)`.
+    `us/ms/s`, scalar arithmetic, exact conversion, `sleep`, and `Task(Duration)`.
 14. `bench_14_byte_size_budget.skd`
-    Nominal `ByteSize` capacity calculation with binary literals, arithmetic,
-    a `ByteSize List`, and dynamic `memory(ByteSize)` integration.
+    Nominal `ByteSize` calculation through `tb`, scalar arithmetic, ratios,
+    exact conversion, a `ByteSize List`, and dynamic Memory integration.
 15. `bench_15_angle_navigation.skd`
     Nominal `Angle` navigation with `deg/rad` literals, scalar arithmetic,
-    trigonometry, conversion to degrees, and an `Angle List`.
+    complete basic trigonometry, normalization, explicit conversion, and an
+    `Angle List`.
 16. `bench_16_vector_navigation.skd`
     `Vec2/Vec3/Vec4` navigation with component access, vector/scalar arithmetic,
     normalization, distance, length, and `Vec3` cross product.
 17. `bench_17_canvas_palette.skd`
     Headless Canvas v0 scene with color helpers, shape primitives, alpha
     blending, clipping, and a deterministic framebuffer checksum.
+18. `bench_18_bit_registers.skd`
+    Fixed-width control-register operations with radix literals, checked bit
+    indexes, and a logical right shift of a signed bit pattern.
 
 Focused native examples also cover:
 
@@ -94,14 +98,14 @@ POSIX shell:
 
 ## Coverage notes
 
-- compile-pipeline showcase tests cover `bench_01..16`;
-- native build tests cover `bench_01..16`;
+- compile-pipeline showcase tests cover `bench_01..18`;
+- native build tests cover `bench_01..18`;
 - runtime e2e coverage is split into:
   - CLI-driven showcase subset `bench_01..05`,
   - stable showcase subset `bench_06..09`,
   - dedicated `bench_10` showcase e2e,
   - native Task/Channel and combined systems coverage through `bench_11..12`,
-  - time, byte-size, angle, and vector coverage through `bench_13..16`.
+  - time, byte-size, angle, vector, Canvas, and bit coverage through `bench_13..18`.
 
 See the [Concurrency Guide](concurrency.md) for Task/Channel lifecycle,
 multi-worker, cancellation, and timed-wait patterns, platform details, and the

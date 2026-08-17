@@ -22,6 +22,7 @@ inventory. The detailed reference is split by topic:
 - [ByteSize](byte-size.en.md)
 - [Angle](angle.en.md)
 - [Vectors](vectors.en.md)
+- [Platform Int and bit operations](bits.en.md)
 
 ## Practice and platforms
 

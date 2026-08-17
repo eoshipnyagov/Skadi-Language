@@ -70,6 +70,7 @@ Backend/runtime error без source location использует форму:
 - `SC-RT-311..313` — channel allocation/capacity/synchronization failures
 - `SC-RT-314` — unhandled operation on a closed Channel
 - `SC-RT-315` — unhandled cancellation of a blocking Channel operation
+- `SC-RT-340` — bit index/shift count outside the fixed-width value
 - `SC-AN-101..104` — structured blocking/timed Channel analysis facts
 - `SC-AN-301..322` — ownership, resource, Task и Memory lifecycle facts, включая timed Task wait
 - `SC-AN-201` — structured incomplete `when` analysis fact
@@ -81,7 +82,7 @@ Runtime code считается публичным только после по�
 
 - `SC-PARSE-001..003` — parser entry/wrapper diagnostics (`parser/mod.rs`)
 - `SC-PARSE-101..148` — statement-level parser diagnostics (`parser/statements.rs`)
-- `SC-PARSE-201..222` — expression parser diagnostics (`parser/expressions.rs`)
+- `SC-PARSE-201..226` — expression parser diagnostics (`parser/expressions.rs`)
 
 ### Диапазоны parse codes
 

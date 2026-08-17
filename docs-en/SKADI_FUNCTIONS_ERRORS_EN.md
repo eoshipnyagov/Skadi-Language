@@ -11,8 +11,8 @@ the current file.
 
 ```skadi
 label ErrorCode {
-    Ok
-    InvalidInput
+    Ok = 0
+    InvalidInput = 1
 }
 
 danger fn require_positive(Int value) returns Int {

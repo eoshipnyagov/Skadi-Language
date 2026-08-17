@@ -312,8 +312,8 @@ impl From<Vec<Statement>> for Box<BlockStatement> {
 /// Represents an expression, which can be anything that evaluates to a value (variable, literal, call).
 #[derive(Debug)]
 pub enum Expression {
-    LiteralInt(i64),   // Simple integer literal
-    LiteralFloat(f32), // Floating point literal
+    LiteralInt(i64), // Parsed wide; semantic context chooses Int/i32 or an explicit width.
+    LiteralFloat(f32), // Float is the portable f32 default.
     LiteralBool(bool),
     LiteralChar(char),
     LiteralString(String),
@@ -328,7 +328,7 @@ pub enum Expression {
         unit: String,
     },
     LiteralAngle {
-        radians: f64,
+        radians: f32,
         magnitude: String,
         unit: String,
     },

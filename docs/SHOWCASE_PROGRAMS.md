@@ -24,9 +24,9 @@
   <li><code>bench_10_v1_1_toolbox.skd</code><ul><li>Сборный showcase для ключевых обновлений <code>v1.1</code>.</li><li>Покрытие: <code>danger fn</code>, <code>on error</code>, <code>label ErrorCode</code>, <code>struct</code>, методы, <code>List</code>, <code>iterate ... as ...</code>, <code>when</code>, math core и cleanup generated C.</li></ul></li>
   <li><code>bench_11_task_channel_pipeline.skd</code><ul><li>Исполняемый showcase concurrency slice <code>v1.2</code>.</li><li>Покрытие: <code>Task</code>, <code>Task(Float)</code>, bounded <code>Channel(Reading)</code>, capacity-1 backpressure, struct messages, blocking <code>send/receive</code> и обязательный <code>wait</code>.</li></ul></li>
   <li><code>bench_12_systems_pipeline.skd</code><ul><li>Совместный systems showcase <code>v1.2</code>.</li><li>Покрытие: fixed-capacity <code>Memory</code>, <code>place in</code>, Task/Channel pipeline, thread-local runtime contexts и безопасная граница между region-owned данными и сообщениями.</li></ul></li>
-  <li><code>bench_13_time_budget.skd</code><ul><li>Измерение небольшого time budget в <code>v1.2</code>.</li><li>Покрытие: <code>Time</code>, <code>Duration</code>, literals <code>ms/s</code>, <code>now</code>, <code>elapsed</code>, <code>sleep</code> и передача <code>Duration</code> через <code>Task(Duration)</code>.</li></ul></li>
-  <li><code>bench_14_byte_size_budget.skd</code><ul><li>Расчёт ёмкости Memory через nominal <code>ByteSize</code>.</li><li>Покрытие: literals <code>b/kb</code>, арифметика и сравнение <code>ByteSize</code>, <code>ByteSize List</code>, динамический <code>memory(ByteSize)</code>, <code>place in</code> и <code>clear</code>.</li></ul></li>
-  <li><code>bench_15_angle_navigation.skd</code><ul><li>Расчёт направления через nominal <code>Angle</code>.</li><li>Покрытие: integer/fractional literals <code>deg/rad</code>, angle/scalar arithmetic, <code>sin</code>, <code>cos</code>, <code>atan2</code>, <code>rad_to_deg</code> и <code>Angle List</code>.</li></ul></li>
+  <li><code>bench_13_time_budget.skd</code><ul><li>Измерение небольшого time budget в <code>v1.2</code>.</li><li>Покрытие: <code>Time</code>, <code>Duration</code>, literals <code>us/ms/s</code>, scalar arithmetic, <code>as_nanoseconds</code>, monotonic runtime и <code>Task(Duration)</code>.</li></ul></li>
+  <li><code>bench_14_byte_size_budget.skd</code><ul><li>Расчёт ёмкости Memory через nominal <code>ByteSize</code>.</li><li>Покрытие: literals <code>b/kb/tb</code>, scalar arithmetic, ratio, <code>as_bytes</code>, <code>ByteSize List</code>, dynamic Memory и <code>place in</code>.</li></ul></li>
+  <li><code>bench_15_angle_navigation.skd</code><ul><li>Расчёт направления через nominal <code>Angle</code>.</li><li>Покрытие: literals <code>deg/rad</code>, arithmetic, basic trigonometry, <code>normalize_angle</code>, <code>as_radians</code> и <code>Angle List</code>.</li></ul></li>
   <li><code>bench_16_vector_navigation.skd</code><ul><li>Навигационный расчёт с встроенными векторами.</li><li>Покрытие: <code>Vec2/Vec3/Vec4</code>, components, vector/scalar arithmetic, <code>normalize</code>, <code>distance</code>, <code>length</code> и <code>cross</code>.</li></ul></li>
   <li><code>bench_17_canvas_palette.skd</code><ul><li>Детерминированная headless-сцена Canvas v0.</li><li>Покрытие: <code>Color</code>, <code>color_hex</code>, 16-цветная терминальная палитра, <code>Rect</code>, <code>Canvas</code>, clipping, alpha blending, прямоугольники, окружности и framebuffer checksum.</li></ul></li>
 </ol>
@@ -95,6 +95,7 @@ Pop-Location
 .\bench_15_angle_navigation.exe
 .\bench_16_vector_navigation.exe
 .\bench_17_canvas_palette.exe
+.\bench_18_bit_registers.exe
 ```
 
 Или через вспомогательные скрипты:
@@ -124,6 +125,7 @@ Pop-Location
 - Для `bench_01` и `bench_08` smoke-скрипты временно меняют рабочую директорию на `benchmarks/showcase-data/tree_fixture`.
 - Для `bench_02` и `bench_03` smoke-скрипты используют `benchmarks/showcase-data/sample_weather.txt`.
 - `bench_17` остаётся headless и поэтому безопасно проверяет software Canvas в CI без открытия окна.
+- `bench_18` показывает fixed-width регистр, radix literals и проверяемые битовые операции.
 - В `v1.1` проверка showcase-программ остаётся CLI/script-driven, но теперь опирается на репозиторные fixture-данные.
 - `skadi-cli tui` можно использовать внутри showcase-проекта для ручного `check`, `build` и `run`, но отдельного браузера showcase-программ в TUI пока нет.
 

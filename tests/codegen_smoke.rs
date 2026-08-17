@@ -1,6 +1,6 @@
 use v01::codegen::{
-    CodegenOptions, transpile_program_to_c, transpile_program_to_c_with_map,
-    transpile_program_to_c_with_options,
+    CodegenOptions, IntWidth, ensure_codegen_supported_with_options, transpile_program_to_c,
+    transpile_program_to_c_with_map, transpile_program_to_c_with_options,
 };
 use v01::lexer::lex;
 use v01::parser::parse_program;
@@ -14,7 +14,54 @@ fn codegen_emits_main_and_assignment() {
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("int main(void)"));
-    assert!(c.contains("int64_t x = (1 + 2);"));
+    assert!(c.contains("SkInt x = (1 + 2);"));
+}
+
+#[test]
+fn codegen_configures_platform_int_without_changing_fixed_width_types() {
+    let src = "new Int platform_value = 1\nnew i64 fixed_value = 2\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let output = transpile_program_to_c_with_options(
+        &program,
+        CodegenOptions {
+            int_width: IntWidth::I16,
+            ..CodegenOptions::default()
+        },
+    );
+    assert!(output.c_code.contains("typedef int16_t SkInt;"));
+    assert!(output.c_code.contains("SkInt platform_value = 1;"));
+    assert!(output.c_code.contains("int64_t fixed_value = 2;"));
+}
+
+#[test]
+fn configured_platform_int_rejects_out_of_range_literals() {
+    let tokens =
+        lex("new Int too_large = 128\nnew i16 allowed = 128\n").expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass before target selection");
+    let error = ensure_codegen_supported_with_options(
+        &program,
+        CodegenOptions {
+            int_width: IntWidth::I8,
+            ..CodegenOptions::default()
+        },
+    )
+    .expect_err("configured Int width must reject narrowing");
+    assert!(error.contains("SC-CG-302"), "{error}");
+    assert!(error.contains("128"), "{error}");
+}
+
+#[test]
+fn codegen_keeps_exact_unit_conversions_at_i64() {
+    let src = "new Duration delay = 1ms\nnew exact_delay = as_nanoseconds(delay)\nnew ByteSize storage = 1kb\nnew exact_storage = as_bytes(storage)\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int64_t exact_delay = delay;"), "{c}");
+    assert!(c.contains("int64_t exact_storage = storage;"), "{c}");
 }
 
 #[test]
@@ -49,8 +96,13 @@ fn codegen_debug_probes_are_opt_in() {
     semantic_analyze(&program).expect("semantic should pass");
 
     let normal = transpile_program_to_c_with_map(&program);
-    let debug =
-        transpile_program_to_c_with_options(&program, CodegenOptions { debug_probes: true });
+    let debug = transpile_program_to_c_with_options(
+        &program,
+        CodegenOptions {
+            debug_probes: true,
+            ..CodegenOptions::default()
+        },
+    );
 
     assert!(!normal.c_code.contains("sk_debug_probe("));
     assert!(debug.c_code.contains("static void sk_debug_probe("));
@@ -83,8 +135,13 @@ fn codegen_debug_runtime_tracks_function_frames_and_parameters() {
     let tokens = lex(source).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
-    let debug =
-        transpile_program_to_c_with_options(&program, CodegenOptions { debug_probes: true });
+    let debug = transpile_program_to_c_with_options(
+        &program,
+        CodegenOptions {
+            debug_probes: true,
+            ..CodegenOptions::default()
+        },
+    );
 
     assert!(debug.c_code.contains("sk_debug_enter(\"add\");"));
     assert!(
@@ -112,7 +169,7 @@ fn add(Int a, Int b) Int {
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int64_t add(int64_t a, int64_t b)"));
+    assert!(c.contains("SkInt add(SkInt a, SkInt b)"));
 }
 
 #[test]
@@ -145,7 +202,7 @@ fn codegen_respects_typed_new() {
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("double temperature = 21.5;"));
+    assert!(c.contains("float temperature = 21.5;"));
 }
 
 #[test]
@@ -172,7 +229,7 @@ danger fn parse_value(Int x) Int {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int parse_value(int64_t x, int64_t *out)"));
+    assert!(c.contains("int parse_value(SkInt x, SkInt *out)"));
     assert!(c.contains("*out = x;"));
 }
 
@@ -186,7 +243,7 @@ danger fn parse_value(Int x) Int {
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int parse_value(int64_t x, int64_t *out)"));
+    assert!(c.contains("int parse_value(SkInt x, SkInt *out)"));
     assert!(c.contains("return 1;"));
 }
 
@@ -243,7 +300,7 @@ new Int y = add(x, 2)
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int64_t y = add(x, 2);"));
+    assert!(c.contains("SkInt y = add(x, 2);"));
 }
 
 #[test]
@@ -258,7 +315,7 @@ new Int y = util.add(1, 2)
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int64_t y = add(1, 2);"));
+    assert!(c.contains("SkInt y = add(1, 2);"));
 }
 
 #[test]
@@ -374,7 +431,7 @@ new Int n = len(xs)
     assert!(c.contains("SkadiList_i32 xs = sk_list_i32_new();"));
     assert!(c.contains("sk_list_i32_push(&xs, 3)"));
     assert!(c.contains("if (sk_list_i32_pop(&xs, &x) != 0) {"));
-    assert!(c.contains("int64_t n = ((int64_t)xs.len);"));
+    assert!(c.contains("SkInt n = ((int64_t)xs.len);"));
 }
 
 #[test]
@@ -411,7 +468,7 @@ new char c = t[0]
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("const char* t = \"weather\";"));
-    assert!(c.contains("int64_t n = ((int64_t)strlen(t));"));
+    assert!(c.contains("SkInt n = ((int64_t)strlen(t));"));
     assert!(c.contains("char c = sk_text_char_at(t, 0);"));
 }
 
@@ -428,7 +485,7 @@ new Text tail = slice(t, 3, 7)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("bool has = (strstr(t, \"station\") != NULL);"));
-    assert!(c.contains("int64_t idx = sk_text_find(t, \"ther\");"));
+    assert!(c.contains("SkInt idx = sk_text_find(t, \"ther\");"));
     assert!(c.contains("const char* tail = sk_text_slice(t, 3, 7);"));
 }
 
@@ -478,7 +535,7 @@ new Int ok = write("out.txt", body)
     assert!(c.contains("sk_output_text(\"hello\");"));
     assert!(c.contains("const char* name = sk_input(\"name: \");"));
     assert!(c.contains("const char* body = sk_read_file(\"in.txt\");"));
-    assert!(c.contains("int64_t ok = sk_write_file(\"out.txt\", body);"));
+    assert!(c.contains("SkInt ok = sk_write_file(\"out.txt\", body);"));
 }
 
 #[test]
@@ -530,7 +587,7 @@ new Sensor s = {id = 7, name = "cpu"}
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("typedef struct {"));
-    assert!(c.contains("int64_t id;"));
+    assert!(c.contains("SkInt id;"));
     assert!(c.contains("const char* name;"));
     assert!(c.contains("} Sensor;"));
     assert!(c.contains("Sensor s = (Sensor){.id = 7, .name = \"cpu\"};"));
@@ -554,9 +611,9 @@ new Int next = c.inc(2)
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int64_t Counter_inc(Counter *my, int64_t delta)"));
+    assert!(c.contains("SkInt Counter_inc(Counter *my, SkInt delta)"));
     assert!(c.contains("my->value = (my->value + delta);"));
-    assert!(c.contains("int64_t next = Counter_inc(&c, 2);"));
+    assert!(c.contains("SkInt next = Counter_inc(&c, 2);"));
 }
 
 #[test]
@@ -644,7 +701,7 @@ when y {
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int parse(int64_t x, int64_t *out)"));
+    assert!(c.contains("int parse(SkInt x, SkInt *out)"));
     assert!(c.contains("if (parse(x, &y) != 0) {"));
     assert!(c.contains("if ((__when_tmp_"));
     assert!(c.contains("||"));
@@ -704,20 +761,82 @@ new Float cl = clamp(3, 0, 2)
 new Float up = ceil(2.1)
 new Float dn = floor(2.9)
 new Float rr = round(2.5)
+new Int sg = sign(-4)
+new Float tr = trunc(-1.75)
+new Float fr = fract(-1.25)
+new Float mix = lerp(10, 20, 0.25)
+new Float unit = inverse_lerp(0, 100, 25)
+new Float mapped = remap(50, 0, 100, -1, 1)
+new Float eased = smoothstep(0, 1, 0.5)
+new Float tangent = tan(angle)
+new Angle arc = asin(0.5) + acos(0.5) + atan(1)
+new Angle wrapped = normalize_angle(arc)
+new Bool valid = is_finite(wrapped)
+new Bool invalid = is_nan(sqrt(-1))
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("#include <math.h>"));
-    assert!(c.contains("double pi = M_PI;"));
-    assert!(c.contains("double tau = (2.0 * M_PI);"));
-    assert!(c.contains("double angle = ((90 * M_PI) / 180.0);"));
-    assert!(c.contains("double x = cos(angle);"));
-    assert!(c.contains("double y = sin(angle);"));
-    assert!(c.contains("double a = atan2(y, x);"));
-    assert!(c.contains("double n = sqrt(9);"));
-    assert!(c.contains("double r = pow(27, (1.0 / 3));"));
+    assert!(c.contains("float pi = ((float)M_PI);"));
+    assert!(c.contains("float tau = (2.0f * (float)M_PI);"));
+    assert!(c.contains("float angle = ((90 * (float)M_PI) / 180.0f);"));
+    assert!(c.contains("float x = cosf(angle);"));
+    assert!(c.contains("float y = sinf(angle);"));
+    assert!(c.contains("float a = atan2f(y, x);"));
+    assert!(c.contains("float n = sqrtf(9);"));
+    assert!(c.contains("float r = powf(27, (1.0f / 3));"));
+    assert!(c.contains("SkInt sg = sk_math_sign_int((-4));"));
+    assert!(c.contains("float fr = sk_math_fract((-1.25"));
+    assert!(c.contains("float mix = sk_math_lerp(10, 20, 0.25"));
+    assert!(c.contains("float mapped = sk_math_remap(50, 0, 100, (-1), 1);"));
+    assert!(c.contains("float tangent = tanf(angle);"));
+    assert!(c.contains("float wrapped = sk_math_normalize_angle(arc);"));
+    assert!(c.contains("bool valid = isfinite(wrapped);"));
+}
+
+#[test]
+fn codegen_math_selection_helpers_evaluate_each_argument_once() {
+    let src = r#"
+fn mark(Int value) returns Int {
+    output(value)
+    return value
+}
+
+new Int low = min(mark(2), mark(1))
+new Int high = max(mark(2), mark(1))
+new Int bounded = clamp(mark(3), mark(0), mark(2))
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_math_min_int(mark(2), mark(1))"), "{c}");
+    assert!(c.contains("sk_math_max_int(mark(2), mark(1))"), "{c}");
+    assert!(
+        c.contains("sk_math_clamp_int(mark(3), mark(0), mark(2))"),
+        "{c}"
+    );
+}
+
+#[test]
+fn codegen_infers_float_for_specialized_type_ratios() {
+    let src = r#"
+new Duration frame = 16ms
+new Duration second = 1s
+new frame_ratio = second / frame
+
+new ByteSize used = 1mb
+new ByteSize capacity = 4mb
+new usage_ratio = used / capacity
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("float frame_ratio = (((float)"), "{c}");
+    assert!(c.contains("float usage_ratio = (((float)"), "{c}");
 }
 
 #[test]
@@ -734,4 +853,22 @@ output(read("in.txt"))
     let c = transpile_program_to_c(&program);
     assert!(c.contains("sk_output_text(sk_text_concat(a, b));"));
     assert!(c.contains("sk_output_text(sk_read_file(\"in.txt\"));"));
+}
+
+#[test]
+fn codegen_variadic_output_emits_one_composed_line() {
+    let src = r#"
+new Text name = "Skadi"
+new Int count = 3
+new Bool ready = true
+output(name, ": ", count, ", ready=", ready)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_output_text_part(name)"), "{c}");
+    assert!(c.contains("sk_output_int_part(count)"), "{c}");
+    assert!(c.contains("sk_output_bool_part(ready)"), "{c}");
+    assert!(c.contains("sk_output_end()"), "{c}");
 }

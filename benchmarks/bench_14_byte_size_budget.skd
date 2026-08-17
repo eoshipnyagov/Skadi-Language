@@ -4,6 +4,9 @@ fn calculate_capacity(ByteSize payload) returns ByteSize {
 
 new ByteSize payload = 2kb
 new ByteSize capacity = calculate_capacity(payload)
+new ByteSize archive_limit = 1tb
+new ByteSize archive_half = archive_limit / 2
+new Float archive_ratio = archive_half / archive_limit
 new ByteSize List checkpoints = [payload, capacity]
 new Int checkpoint_count = 0
 
@@ -27,4 +30,6 @@ place in buffer_memory {
 new Bool exact_capacity = capacity == 3kb
 output(exact_capacity)
 output(checkpoint_count)
+output("archive half bytes: ", as_bytes(archive_half))
+output("archive ratio: ", archive_ratio)
 buffer_memory.clear()

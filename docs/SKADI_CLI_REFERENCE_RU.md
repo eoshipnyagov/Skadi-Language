@@ -189,6 +189,17 @@ skadi-cli quick-run tools/inspect.skd -- input.txt --verbose
 
 ## Targets и doctor
 
+Ширина обычного `Int` задаётся в `skadi.toml` и применяется одинаково в CLI и
+TUI:
+
+```toml
+[numeric]
+int = "target" # target, i8, i16, i32 или i64
+```
+
+Текущие desktop targets разрешают `target` в `i32`. Для ABI, FFI, регистров и
+форматов данных используйте явные fixed-width типы, а не проектный `Int`.
+
 ```powershell
 skadi-cli target list
 skadi-cli doctor

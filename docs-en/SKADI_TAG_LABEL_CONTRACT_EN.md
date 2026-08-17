@@ -1,6 +1,6 @@
 # `tag` and `label` Contract
 
-Status: **Accepted design, implemented frontend/runtime contract**.
+Status: **Implemented stable contract**.
 
 - `tag` declares a closed symbolic nominal set with no user-visible numeric ABI.
 - `label` declares a closed numeric nominal set; every variant requires an

@@ -262,12 +262,12 @@ fn run_session(
         }
     };
 
-    if let Some(stream) = stream {
-        if let Err(error) = process_protocol(stream, &events, &commands) {
-            let _ = events.send(DebugEvent::Error(error));
-            if let Ok(mut child) = child.lock() {
-                let _ = child.kill();
-            }
+    if let Some(stream) = stream
+        && let Err(error) = process_protocol(stream, &events, &commands)
+    {
+        let _ = events.send(DebugEvent::Error(error));
+        if let Ok(mut child) = child.lock() {
+            let _ = child.kill();
         }
     }
     loop {

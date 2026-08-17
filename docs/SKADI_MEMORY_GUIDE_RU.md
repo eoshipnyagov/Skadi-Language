@@ -8,8 +8,8 @@ lifetime/borrow theory из design draft.
 
 ```skadi
 label ErrorCode {
-    Ok
-    OutOfMemory
+    Ok = 0
+    OutOfMemory = 1
 }
 
 Memory scratch = memory(8kb) on error {

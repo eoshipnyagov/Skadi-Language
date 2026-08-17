@@ -32,18 +32,18 @@ Skadi -> lexer -> parser -> semantic -> C codegen -> host C compiler -> binary
 
 | Skadi | C |
 |---|---|
-| `Int`, `i64` | `int64_t` |
-| `i8/i16/i32` | `int8_t/int16_t/int32_t` |
+| `Int` | target-configured `SkInt` typedef; desktop default `int32_t` |
+| `i8/i16/i32/i64` | `int8_t/int16_t/int32_t/int64_t` |
 | `u8/u16/u32/u64` | `uint8_t/uint16_t/uint32_t/uint64_t` |
-| `Float`, `f64` | `double` |
-| `f32` | `float` |
+| `Float`, `f32` | `float` |
+| `f64` | `double` |
 | `Bool` | `bool` |
 | `Char` | `char` |
 | `Text`, `Path` | managed `char*` runtime representation |
 | `Time`, `Duration` | nominal Skadi types lowered to `int64_t` nanoseconds |
 | `ByteSize` | nominal Skadi type lowered to signed `int64_t` bytes |
-| `Angle` | nominal Skadi type lowered to `double` radians |
-| `Vec2`, `Vec3`, `Vec4` | value structs из 2/3/4 `double` components |
+| `Angle` | nominal Skadi type lowered to `float` radians |
+| `Vec2`, `Vec3`, `Vec4` | value structs из 2/3/4 `float` components |
 | user struct | generated C `typedef struct` |
 
 Nominal semantic rules сохраняются до codegen: совпадающее C representation не
@@ -68,9 +68,11 @@ Math core понижается через `math.h` и generated helper expressio
 
 - `PI`, `TAU`, `E`, `EPSILON`;
 - `abs`, `min`, `max`, `clamp`;
-- `floor`, `ceil`, `round`;
-- `sin`, `cos`, `atan2`, `sqrt`, `root`;
-- `deg_to_rad`, `rad_to_deg`;
+- `floor`, `ceil`, `round`, `sign`, `trunc`, `fract`;
+- `lerp`, `inverse_lerp`, `remap`, `smoothstep`;
+- complete basic trigonometry, `normalize_angle`, `sqrt`, `root`;
+- `is_nan`, `is_finite`, `is_infinite`;
+- `deg_to_rad`, `rad_to_deg`, `as_radians`;
 - `dot`, `length`, `length_sq`, `normalize`, `distance`, `distance_sq`, `cross`;
 - оператор степени `^` через `pow`.
 
@@ -113,7 +115,7 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
 ## Time runtime (`v1.2`, experimental)
 
 - `Time` и `Duration` lower'ятся в signed `i64` nanoseconds;
-- literals `ms`, `s`, `min` вычисляются и overflow-check'ятся до C codegen;
+- literals `ns`, `us`, `ms`, `s`, `min`, `h` вычисляются и overflow-check'ятся до C codegen;
 - `now` использует `QueryPerformanceCounter` или `clock_gettime(CLOCK_MONOTONIC)`;
 - `elapsed` возвращает monotonic duration;
 - `sleep`/`delay` используют `Sleep` или retry вокруг `nanosleep`;
@@ -121,7 +123,7 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
 
 ## ByteSize runtime (`v1.2`, experimental)
 
-- literals `b`, `kb`, `mb`, `gb` вычисляются с бинарными множителями и
+- literals `b`, `kb`, `mb`, `gb`, `tb` вычисляются с бинарными множителями и
   overflow-check'ятся до C codegen;
 - `ByteSize` lower'ится в signed `int64_t` bytes;
 - nominal arithmetic и comparisons проверяются semantic pass;
@@ -129,18 +131,26 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
 - non-positive capacity отклоняется до преобразования signed значения к `size_t`;
 - structs, Lists, Task и Channel используют value-safe `int64_t` representation.
 
+## Fixed-width bit runtime (`v1.2`, experimental)
+
+- `Int` width comes from `[numeric] int`, but bit builtins reject `Int`;
+- `i8/i16/i32/i64` and `u8/u16/u32/u64` lower to width-specific helpers;
+- signed operations use the corresponding unsigned C representation internally;
+- right shift is logical for both signed and unsigned values;
+- dynamic indexes are checked before C shifts and fail with `SC-RT-340`.
+
 ## Angle runtime (`v1.2`, experimental)
 
 - `deg/rad` literals вычисляются и finite-check'ятся до C codegen;
-- `Angle` lower'ится в `double` radians;
-- angle arithmetic lower'ится в обычные C double expressions после semantic checks;
-- `sin/cos/atan2` используют `math.h` напрямую;
+- `Angle` lower'ится в `float` radians;
+- angle arithmetic lower'ится в обычные C float expressions после semantic checks;
+- basic trigonometry использует `math.h`, а `normalize_angle` - generated helper;
 - `deg_to_rad` и `rad_to_deg` lower'ятся в явные expressions с `M_PI`;
-- Lists, Task и Channel используют value-safe `double` representation.
+- Lists, Task и Channel используют value-safe `float` representation.
 
 ## Vector runtime (`v1.2`, experimental)
 
-- `Vec2`, `Vec3`, `Vec4` lower'ятся в C structs из `double` components;
+- `Vec2`, `Vec3`, `Vec4` lower'ятся в C structs из `float` components;
 - typed structural literals становятся designated initializers;
 - arithmetic, dot products, lengths, normalization and distance используют
   небольшие статические helpers без hidden allocation;
@@ -150,7 +160,7 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
 
 ## Canvas runtime (`v1.2`, experimental)
 
-- `Color` lower'ится в RGBA8 struct, `Rect` — в четыре `double`;
+- `Color` lower'ится в RGBA8 struct, `Rect` — в четыре `float`;
 - `Canvas` является owning software framebuffer и освобождается
   детерминированно при выходе из scope;
 - `clear/pixel/line/rect/fill_rect/circle/fill_circle` lower'ятся в небольшой

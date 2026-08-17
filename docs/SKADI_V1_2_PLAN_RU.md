@@ -309,7 +309,7 @@ macOS. Обнаруженные platform-specific расхождения исп�
 Реализовано:
 
 - nominal `Time` и `Duration` без неявного смешивания с `Int/Float`;
-- overflow-checked integer literals `ms`, `s`, `min`;
+- overflow-checked integer literals `ns`, `us`, `ms`, `s`, `min`, `h`;
 - явная арифметика `Time/Duration` и сравнения одинаковых типов;
 - `now`, `elapsed`, `sleep`, `delay`;
 - signed `i64` nanoseconds и monotonic Win32/POSIX C runtime;
@@ -353,7 +353,7 @@ nominal type и связать его с существующим Memory MVP.
 
 Реализовано:
 
-- `ByteSize` и integer literals `b`, `kb`, `mb`, `gb`;
+- `ByteSize` и integer literals `b`, `kb`, `mb`, `gb`, `tb`;
 - overflow-checked parser representation;
 - запрет неявного смешивания с `Int/Float`;
 - явно зафиксированная арифметика и сравнения;
@@ -400,7 +400,7 @@ nominal-type slices.
 - `cross` только для `Vec3`;
 - semantic negative coverage, C lowering, e2e и showcase.
 
-Контракт зафиксирован: `f64` components, точные structural literals,
+Контракт зафиксирован: `f32` components, точные structural literals,
 same-dimension operations, zero-safe normalization и value-safe boundaries.
 
 Матрицы, SIMD-specific lowering, generic vectors, swizzling и пользовательский
@@ -465,6 +465,23 @@ vector slice до матриц или transform framework.
    channel, call stack, scalar-locals и TUI Debug workspace реализованы;
    следующими идут nested locals и runtime views ресурсов;
 5. сохранить общий engine для CLI, TUI, CI и будущего LSP.
+
+### Milestone 14: numeric ABI и fixed-width bits - functional slice выполнен
+
+Реализовано:
+
+- `Int` стал target/project-configured ABI type через `[numeric] int`;
+- desktop `target` default закреплён как `i32`, доступны overrides
+  `i8/i16/i32/i64`;
+- `Float`, `Angle`, vectors и default math согласованы на `f32`, explicit `f64`
+  сохранён;
+- radix integer literals (`0b/0o/0x`) и `_` separators;
+- fixed-width bit builtins для `i8..i64` и `u8..u64`, logical right shift и
+  checked index contract с `SC-RT-340`;
+- parser/semantic/codegen/native tests, showcase, VS Code/Pygments и RU/EN docs.
+
+Отложено: явные numeric conversions с отдельными widening/narrowing/overflow
+правилами и реальные embedded target defaults.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 

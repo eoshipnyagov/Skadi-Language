@@ -80,8 +80,9 @@ backends remain future work.
 ### Specialized types
 
 Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 execute end-to-end but remain
-experimental because their APIs are not frozen. Wall clock/calendar, unit
-algebra, angle normalization, generic/SIMD vectors, and matrices are absent.
+experimental because their APIs are not frozen. Wall clock/calendar, general
+unit algebra, generic/SIMD vectors, and matrices are absent; basic angle
+normalization is implemented.
 
 ### Labels and tags
 
@@ -115,7 +116,12 @@ remain future.
 4. Design the first ESP32/FreeRTOS platform slice and hardware interrupt binding.
 5. Add explicit `Ring`/bounded `Pool` semantics for `drop oldest`.
 6. Grow Canvas with events, text/images, and additional presenters.
-7. Resolve remaining lexer-only reservations and package/module ergonomics.
+7. Continue package/module ergonomics and the first bounded C ABI slice. The
+   accepted direction is manifest plus lockfile, explicit imports, fixed-width
+   ABI values, explicit struct layout, opaque handles, and visible ownership of
+   buffers/resources. Exact declaration syntax must be tested against real C
+   libraries before it is frozen. The obsolete `fixed`/`const` lexer-only
+   reservation has been removed.
 
 In parallel, the tooling track now has its first structured analysis facts and a
 source-order ownership/resource/Task/Memory lifecycle chain in the TUI. Next are

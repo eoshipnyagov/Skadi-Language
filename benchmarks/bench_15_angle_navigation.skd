@@ -8,7 +8,10 @@ new Angle target = steer(heading, correction, 0.5)
 new Float x = cos(target)
 new Float y = sin(target)
 new Angle measured = atan2(y, x)
+new Angle normalized = normalize_angle(measured + 360deg)
 new Float measured_degrees = rad_to_deg(measured)
+new Float slope = tan(normalized)
+new Angle recovered = atan(slope)
 new Angle List checkpoints = [heading, target, measured]
 new Bool stable = abs(rad_to_deg(target) - measured_degrees) < 0.001
 
@@ -16,3 +19,5 @@ output("Angle navigation ready")
 output(measured_degrees)
 output(len(checkpoints))
 output(stable)
+output("normalized radians: ", as_radians(normalized))
+output("recovered degrees: ", rad_to_deg(recovered))

@@ -26,7 +26,7 @@ new Int count = len(samples)
     assert!(c.contains("for (size_t __i = 0; __i < samples.len; ++__i) {"));
     assert!(c.contains("int32_t item = samples.data[__i];"));
     assert!(c.contains("sk_list_i32_push(&samples, 40)"));
-    assert!(c.contains("int64_t count = ((int64_t)samples.len);"));
+    assert!(c.contains("SkInt count = ((int64_t)samples.len);"));
 }
 
 #[test]
@@ -77,7 +77,7 @@ when mode {
 "#;
     let c = compile_pipeline(src);
     assert!(c.contains("typedef enum ErrorCode"));
-    assert!(c.contains("int safe_div(int64_t a, int64_t b, int64_t *out)"));
+    assert!(c.contains("int safe_div(SkInt a, SkInt b, SkInt *out)"));
     assert!(c.contains("return ErrorCode_ZeroDivision;"));
     assert!(c.contains("else if ((__when_tmp_1 == 2) || (__when_tmp_1 == 3)) {"));
 }
@@ -137,10 +137,10 @@ fn program_meteostation_showcase_compiles() {
 fn program_small_language_features_example_compiles() {
     let src = include_str!("../examples/language/01_small_features.skd");
     let c = compile_pipeline(src);
-    assert!(c.contains("int64_t quotient = (17 / 2);"));
+    assert!(c.contains("SkInt quotient = (17 / 2);"));
     assert!(c.contains("bool odd = (!(remainder == 0));"));
     assert!(c.contains("#include <math.h>"));
-    assert!(c.contains("double squared = pow(3, 2);"));
+    assert!(c.contains("float squared = powf(3, 2);"));
     assert!(c.contains("Sample_doubled(&sample)"));
     assert!(c.contains("if (positive_half(doubled, &safe_value) != 0)"));
 }

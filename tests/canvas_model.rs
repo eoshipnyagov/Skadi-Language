@@ -191,8 +191,8 @@ output(checksum)
 "#,
     );
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("int64_t paint(SkCanvas * frame)"));
-    assert!(c.contains("int64_t fingerprint(const SkCanvas * frame)"));
+    assert!(c.contains("SkInt paint(SkCanvas * frame)"));
+    assert!(c.contains("SkInt fingerprint(const SkCanvas * frame)"));
     assert!(c.contains("sk_canvas_clear(frame, Color_terminal_black)"));
     assert!(c.contains("sk_canvas_checksum(frame)"));
 }

@@ -53,6 +53,7 @@ The repository includes:
   opt-in probe debugger with source breakpoints, continue/step, call stacks,
   scalar locals, thread-aware cooperative stops, and a TUI debug workspace,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
+- target-configurable `Int`, fixed-width integer literals, and checked bit builtins,
 - experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,
 - showcase programs,
@@ -113,9 +114,9 @@ Examples of the current intended style:
 
 ```skadi
 label ErrorCode {
-    Ok
-    ZeroDivision
-    InvalidInput
+    Ok = 0
+    ZeroDivision = 1
+    InvalidInput = 2
 }
 ```
 
@@ -304,7 +305,7 @@ Task sensor_task = run collect(readings)
 new Int sample = readings.receive()
 stop sensor_task
 wait sensor_task
-output(sample)
+output("sample: ", sample)
 ```
 
 The intended model:
@@ -378,19 +379,22 @@ Current and future unit syntax:
 
 ```skadi
 delay(500ms)
+new Duration hardware_tick = 1ns
 sleep(10min)
 
 new ByteSize log_capacity = 32kb
+new ByteSize archive_capacity = 1tb
 Memory log_memory = memory(log_capacity)
 
 new Angle heading = 30deg
 new Float direction_x = cos(heading)
 ```
 
-`Time`, `Duration`, `ms`, `s`, `min`, `now`, `elapsed`, `sleep`, and `delay` are
+`Time`, `Duration`, `ns`, `us`, `ms`, `s`, `min`, `h`, `now`, `elapsed`, `sleep`, and `delay` are
 implemented. `ByteSize` is implemented as a nominal byte-count type with
-`b/kb/mb/gb` literals and `memory(ByteSize)` integration. `Angle` adds
-`deg/rad` literals, nominal arithmetic, and trigonometry integration. Broader
+`b/kb/mb/gb/tb` literals and `memory(ByteSize)` integration. `Angle` adds
+`deg/rad` literals, nominal arithmetic, complete basic trigonometry, and explicit
+degree/radian conversion. Broader
 physical units remain design direction.
 
 The goal is to reduce mistakes like:
@@ -556,6 +560,7 @@ User-facing docs:
 - [Time and Duration](docs/SKADI_TIME_DURATION_RU.md)
 - [Byte Sizes](docs/SKADI_BYTE_SIZE_RU.md)
 - [Angles](docs/SKADI_ANGLE_RU.md)
+- [Integer model and bit operations](docs/SKADI_BITS_RU.md)
 - [Ownership and borrowing](docs/SKADI_OWNERSHIP_RU.md)
 - [Concurrency](docs/SKADI_CONCURRENCY_GUIDE_RU.md)
 - [Canvas and Visual Core](docs/SKADI_VISUAL_CORE_MVP_CONTRACT_RU.md)
@@ -634,6 +639,10 @@ future language goals
 Skadi should stay small enough to understand.
 
 Core features should earn their place by serving deterministic systems with visible state and predictable behavior.
+
+Where a mature technical standard exists, Skadi follows it and makes deliberate
+differences explicit. Where no useful UX is standardized, the language favors
+practical completeness and readable behavior without hiding cost or ownership.
 
 A feature belongs close to the core only if it helps express one of these things clearly:
 

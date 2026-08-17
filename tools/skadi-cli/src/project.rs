@@ -5,6 +5,7 @@ pub struct ProjectConfig {
     pub root: PathBuf,
     pub name: String,
     pub entry: PathBuf,
+    pub int_width: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -13,9 +14,10 @@ pub struct ManifestConfig {
     pub version: String,
     pub edition: String,
     pub entry: String,
+    pub int_width: String,
 }
 
-const TEMPLATE_MAIN: &str = "new Text greeting = concat(\"Hello\", \" from Skadi\")\n\noutput(greeting)\n\nnew Angle quarter_turn = 90deg\n\noutput(rad_to_deg(quarter_turn))\n";
+const TEMPLATE_MAIN: &str = "new Text greeting = \"Hello from Skadi\"\n\noutput(greeting)\n\nnew Angle quarter_turn = 90deg\n\noutput(\"Quarter turn: \", rad_to_deg(quarter_turn), \" degrees\")\n";
 
 pub fn load_project_at(root: &Path) -> Result<ProjectConfig, String> {
     let manifest = load_manifest_config_at(root)?;
@@ -25,6 +27,7 @@ pub fn load_project_at(root: &Path) -> Result<ProjectConfig, String> {
         root: root.to_path_buf(),
         name: manifest.name,
         entry,
+        int_width: manifest.int_width,
     })
 }
 
@@ -44,6 +47,8 @@ pub fn load_manifest_config_at(root: &Path) -> Result<ManifestConfig, String> {
         edition: extract_string_value(&content, "edition").unwrap_or_else(|| "v1".to_string()),
         entry: extract_string_value(&content, "entry")
             .unwrap_or_else(|| "src/main.skd".to_string()),
+        int_width: extract_section_string_value(&content, "numeric", "int")
+            .unwrap_or_else(|| "target".to_string()),
     })
 }
 
@@ -83,6 +88,26 @@ fn extract_string_value(content: &str, key: &str) -> Option<String> {
     None
 }
 
+fn extract_section_string_value(content: &str, section: &str, key: &str) -> Option<String> {
+    let mut current_section = "";
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            current_section = &trimmed[1..trimmed.len() - 1];
+            continue;
+        }
+        if current_section != section || !trimmed.starts_with(key) {
+            continue;
+        }
+        let (_, right) = trimmed.split_once('=')?;
+        let right = right.trim();
+        if right.starts_with('"') && right.ends_with('"') && right.len() >= 2 {
+            return Some(right[1..right.len() - 1].to_string());
+        }
+    }
+    None
+}
+
 pub fn ensure_build_dir(root: &Path) -> Result<PathBuf, String> {
     let dir = root.join("build");
     fs::create_dir_all(&dir).map_err(|e| format!("create {} failed: {e}", dir.display()))?;
@@ -102,6 +127,7 @@ pub fn create_project(root: &Path, name: &str) -> Result<(), String> {
         version: "0.1.0".to_string(),
         edition: "v1".to_string(),
         entry: "src/main.skd".to_string(),
+        int_width: "target".to_string(),
     };
     fs::write(&toml_path, render_manifest_config(&manifest))
         .map_err(|e| format!("write {} failed: {e}", toml_path.display()))?;
@@ -136,6 +162,7 @@ pub fn init_project(root: &Path) -> Result<(), String> {
             version: "0.1.0".to_string(),
             edition: "v1".to_string(),
             entry: "src/main.skd".to_string(),
+            int_width: "target".to_string(),
         };
         fs::write(&toml_path, render_manifest_config(&manifest))
             .map_err(|e| format!("write {} failed: {e}", toml_path.display()))?;
@@ -152,8 +179,8 @@ pub fn init_project(root: &Path) -> Result<(), String> {
 
 fn render_manifest_config(manifest: &ManifestConfig) -> String {
     format!(
-        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"{}\"\n\n[build]\nentry = \"{}\"\n",
-        manifest.name, manifest.version, manifest.edition, manifest.entry
+        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"{}\"\n\n[build]\nentry = \"{}\"\n\n[numeric]\nint = \"{}\"\n",
+        manifest.name, manifest.version, manifest.edition, manifest.entry, manifest.int_width
     )
 }
 
@@ -169,6 +196,14 @@ fn validate_manifest_config(manifest: &ManifestConfig) -> Result<(), String> {
     }
     if manifest.entry.trim().is_empty() {
         return Err("manifest field 'entry' cannot be empty".to_string());
+    }
+    if !matches!(
+        manifest.int_width.trim(),
+        "target" | "i8" | "i16" | "i32" | "i64"
+    ) {
+        return Err(
+            "manifest field 'numeric.int' must be target, i8, i16, i32, or i64".to_string(),
+        );
     }
     Ok(())
 }
@@ -202,6 +237,7 @@ mod tests {
             version: "1.2.3".to_string(),
             edition: "v1".to_string(),
             entry: "src/app.skd".to_string(),
+            int_width: "i16".to_string(),
         };
         save_manifest_config_at(&temp, &updated).expect("save");
         let loaded = load_manifest_config_at(&temp).expect("load");

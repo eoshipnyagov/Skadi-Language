@@ -5,7 +5,7 @@ This is the compact inventory of the current public language surface.
 - **Stable**: the `v1.1` base;
 - **Experimental**: executable `v1.2` MVP with an unfrozen API;
 - **Compatibility**: accepted for old source, not recommended;
-- **Reserved**: recognized by part of the frontend but not compilable;
+- **Reserved**: held for a separate contract but not part of the compilable surface;
 - **Future**: design only.
 
 ## Declarations and types
@@ -19,18 +19,18 @@ This is the compact inventory of the current public language surface.
 | Assignment | `count = count + 1` | Stable |
 | Compound assignment | `count += 1` | Compatibility; formatter expands it |
 | Increment/decrement | `count++`, `count--` | Stable statements |
-| `fixed` / `const` | `fixed Int n = 1` | Reserved |
+| Constant binding | `constant Int n = 1` | Stable |
 | `;` and `:` | Punctuation tokens | Reserved outside legacy C-style `for` |
 
 | Family | Types/literals | Status |
 |---|---|---:|
-| Integer | `Int`, `i8..i64`, `u8..u64`, `42` | Stable |
-| Floating point | `Float`, `f32`, `f64`, `0.5` | Stable |
+| Integer | `Int`, `i8..i64`, `u8..u64`; `0b`, `0o`, `0x`, `_` | Stable |
+| Floating point | `Float`/`f32` (32-bit), explicit `f64`, `0.5` | Stable |
 | Boolean/character | `Bool`, `Char`, `true`, `'a'` | Stable |
 | Text/path | `Text`, `Path`, `"hello"` | Stable |
 | Collections/data | `Element List`, `struct Name` | Stable |
-| Time | `Time`, `Duration`, `5ms`, `2s`, `3min` | Experimental |
-| Memory size | `ByteSize`, `64b`, `4kb`, `8mb`, `1gb` | Experimental |
+| Time | `Time`, `Duration`, `1ns`, `10us`, `5ms`, `2s`, `3min`, `1h` | Experimental |
+| Memory size | `ByteSize`, `64b`, `4kb`, `8mb`, `1gb`, `1tb` | Experimental |
 | Angle | `Angle`, `90deg`, `0.25rad` | Experimental |
 | Vector | `Vec2`, `Vec3`, `Vec4` | Experimental |
 | Runtime capabilities | `Memory`, `Task(T)`, `Channel(T)` | Experimental |
@@ -46,7 +46,7 @@ This is the compact inventory of the current public language surface.
 | Logic | `and or xor not`; compatible `&& \|\| !`; single `&`/`\|` are lexer-only |
 | Access | `value.field`, `my.field`, `items[index]` |
 | Calls | `function(args)`, `value.method(args)` |
-| Branching | `if/else if/else`, `when/is/else` |
+| Branching | `if/else if/else`, `when/is/else`; nominal cases allow `is Ready` |
 | Loops | `iterate items as item`, `for item in items`, `while`, `loop` |
 | Loop control | `break`, `continue`, `pass` |
 
@@ -60,22 +60,25 @@ is rejected by semantic analysis.
 | Function | `fn add(Int a, Int b) returns Int { ... }` | Stable |
 | Danger function | `danger fn load(Path path) returns Text { ... }` | Stable |
 | Local symbol | `local fn/struct` | Stable |
-| Local general label | `local label Status { Ready Busy }` | Partial |
+| Local numeric label | `local label Code { Ok = 0 }` | Stable |
+| Local symbolic tag | `local tag Status { Ready Busy }` | Stable |
 | Return | `return value`, `return` | Stable |
 | Error return | `return error Missing` | Stable in `danger fn` |
-| Error label | `label ErrorCode { Ok Missing }` | Stable |
+| Error label | `label ErrorCode { Ok = 0 Missing = 1 }` | Stable |
 | Recovery | `value = danger_call() on error { ... }` | Stable |
 | Read-only borrow | `fn inspect(view Canvas frame)`, `inspect(view frame)` | Experimental |
 | Mutable borrow | `fn paint(direct Canvas frame)`, `paint(direct frame)` | Experimental |
 | Ownership transfer | `fn consume(move Canvas frame)`, `consume(move frame)` | Experimental |
 | Ownership return | `return move frame` | Experimental |
 | Struct | `struct Point { Float x Float y }` | Stable |
-| General `label` | `label Status { Ready Busy }` | Partial: declaration/visibility only |
+| General `label` | `label ExitCode { Success = 0 Failed = 1 }` | Stable numeric nominal type |
+| General `tag` | `tag Status { Ready Busy }` | Stable symbolic nominal type |
 | Hidden field/self | `hide Int secret`, `my.secret` | Stable |
 | Struct literal | `{x = 1.0, y = 2.0}`, `{x, y}` | Stable |
 | Relative import | `import "./math.skd"` | Stable |
 | Qualification | `math.add()`, `math.Point`, `math.Error` | Stable |
-| Named/aliased import | `import module`, `import "./x" as x` | Future |
+| Aliased path import | `import "./x.skd" as x` | Stable; alias is file-local |
+| Package-name import | `import module` | Future |
 
 The first `ErrorCode` variant must be `Ok`.
 
@@ -93,7 +96,7 @@ call and cannot cross a `run` boundary.
 | `slice` | `Text, Int, Int` | `Text` |
 | `concat` | `Text, Text` | `Text` |
 | `args` | none | `Text List` |
-| `output` | scalar/Text | `Int` |
+| `output` | one or more `Int\|Float\|Bool\|Char\|Text` values | `Int`; no implicit separators, one newline |
 | `input` | `Text` | `Text` |
 | `read` | `Text\|Path` | `Text` |
 | `write` | `Text\|Path, Text` | `Int` |
@@ -112,18 +115,33 @@ Constants: `PI`, `TAU`, `E`, `EPSILON`.
 |---|---|
 | `abs`, `min`, `max`, `clamp` | Integer-preserving when all inputs are integers |
 | `floor`, `ceil`, `round`, `sqrt`, `root` | `Float` |
-| `sin`, `cos` | `Float`; prefer `Angle` input |
-| `atan2`, `deg_to_rad` | `Angle` |
-| `rad_to_deg` | `Float` |
+| `sign` | Integer-preserving for `Int`, otherwise `Float` |
+| `trunc`, `fract` | `Float` |
+| `lerp`, `inverse_lerp`, `remap`, `smoothstep` | `Float` |
+| `sin`, `cos`, `tan` | `Float`; require `Angle` |
+| `asin`, `acos`, `atan`, `atan2`, `deg_to_rad` | `Angle` |
+| `normalize_angle` | `Angle` in `[-PI, PI)` |
+| `is_nan`, `is_finite`, `is_infinite` | `Bool` |
+| `rad_to_deg`, `as_radians` | `Float` |
 | `dot`, `length`, `length_sq`, `distance`, `distance_sq` | `Float` |
 | `normalize` | Same vector type |
 | `cross` | `Vec3` |
+
+## Bit operations
+
+`bit_and`, `bit_or`, `bit_xor`, `bit_not`, `bit_shift_left`,
+`bit_shift_right`, `bit_is_set`, `bit_set`, `bit_clear`, `bit_toggle`, and
+`bit_write` accept only `i8..i64` and `u8..u64`. Binary operands have the same
+type; a fitting literal adopts the typed operand's type. `Int` is rejected,
+right shift is logical, and indexes are checked. See
+[platform Int and bit operations](bits.en.md).
 
 ## Systems surface
 
 | Form | Meaning | Status |
 |---|---|---:|
 | `now`, `elapsed`, `sleep`, `delay` | Monotonic time and blocking delay | Experimental |
+| `as_nanoseconds`, `as_bytes` | Exact underlying `i64` magnitude | Experimental |
 | `Memory m = memory(4kb)` | Fixed-capacity region | Experimental |
 | `memory(4kb, allow grow)` | Segmented growing region | Experimental |
 | `memory(..., allow drop)` | Policy marker without implicit reclamation | Experimental |

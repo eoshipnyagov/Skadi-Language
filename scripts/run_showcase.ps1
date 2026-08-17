@@ -27,7 +27,8 @@ $benches = @(
     @{ name = "bench_14_byte_size_budget"; file = "benchmarks/bench_14_byte_size_budget.skd"; args = @() },
     @{ name = "bench_15_angle_navigation"; file = "benchmarks/bench_15_angle_navigation.skd"; args = @() },
     @{ name = "bench_16_vector_navigation"; file = "benchmarks/bench_16_vector_navigation.skd"; args = @() },
-    @{ name = "bench_17_canvas_palette"; file = "benchmarks/bench_17_canvas_palette.skd"; args = @() }
+    @{ name = "bench_17_canvas_palette"; file = "benchmarks/bench_17_canvas_palette.skd"; args = @() },
+    @{ name = "bench_18_bit_registers"; file = "benchmarks/bench_18_bit_registers.skd"; args = @() }
 )
 
 function Invoke-Step {

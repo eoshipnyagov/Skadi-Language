@@ -24,6 +24,7 @@ new ByteSize header = 64b
 new ByteSize page = 4kb
 new ByteSize arena = 8mb
 new ByteSize archive = 1gb
+new ByteSize dataset = 1tb
 ```
 
 Множители бинарные:
@@ -34,6 +35,7 @@ new ByteSize archive = 1gb
 | `kb` | 1 024 |
 | `mb` | 1 048 576 |
 | `gb` | 1 073 741 824 |
+| `tb` | 1 099 511 627 776 |
 
 Литерал пишется слитно. `1.5kb` и самостоятельное `1 kb` не входят в текущий
 контракт. Старый `memory(8 mb)` принимается только как compatibility-вход Memory
@@ -50,9 +52,14 @@ Compiler проверяет переполнение при переводе lit
 |---|---|
 | `ByteSize + ByteSize` | `ByteSize` |
 | `ByteSize - ByteSize` | `ByteSize` |
+| `ByteSize * Int`, `Int * ByteSize` | `ByteSize` |
+| `ByteSize / Int` | `ByteSize`, целочисленное деление байтов |
+| `ByteSize / ByteSize` | `Float` |
 | сравнения двух `ByteSize` | `Bool` |
 
-Смешивание с `Int/Float`, умножение, деление и неявные conversions запрещены.
+Сложение/вычитание с `Int/Float`, scalar-операции с `Float` и неявные
+conversions запрещены. `as_bytes(ByteSize) returns i64` явно возвращает точное
+количество байтов.
 Вычитание может дать отрицательный `ByteSize`; такое значение допустимо для
 промежуточного расчёта, но не является валидной ёмкостью `Memory`.
 
@@ -103,7 +110,6 @@ new ByteSize List options = [2kb, capacity]
 
 - нет decimal `kB/MB` и отдельной IEC-нотации `KiB/MiB`;
 - нет fractional literals;
-- нет scalar multiplication/division;
 - нет автоматического форматирования `ByteSize` для `output`;
 - нет общей dimensional algebra;
 - allocator policies описаны в отдельном Memory contract.

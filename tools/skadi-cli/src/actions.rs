@@ -14,7 +14,7 @@ use v01::formatter::format_source;
 
 use crate::debug_session::{DebugCommand, DebugEvent, DebugIoMode, DebugStop, start_debug_session};
 use crate::pipeline::{
-    DebugSourceMapEntry, compile_c_to_exe_detailed, compile_frontend, compile_frontend_with_options,
+    DebugSourceMapEntry, compile_c_to_exe_detailed, compile_frontend_with_options,
 };
 use crate::project::{
     ManifestConfig, create_project, ensure_build_dir, ensure_entry_file_at, init_project,
@@ -22,7 +22,7 @@ use crate::project::{
 };
 use crate::targets::{
     OutputKind, builtin_profiles, candidate_invocations, detect_compiler, os_install_hint,
-    resolve_profile, shell_probe_hint, target_hint,
+    resolve_int_width, resolve_profile, shell_probe_hint, target_hint,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -262,6 +262,7 @@ pub struct ManifestConfigResult {
     pub version: String,
     pub edition: String,
     pub entry: String,
+    pub int_width: String,
 }
 
 pub fn project_summary() -> ProjectSummary {
@@ -563,7 +564,16 @@ pub fn run_check_at(root: &Path) -> Result<CheckResult, ActionError> {
         name: Some(project.name),
         entry: Some(project.entry.clone()),
     };
-    let frontend = compile_frontend(&project.entry).map_err(|e| {
+    let int_width = resolve_int_width("host", &project.int_width)
+        .map_err(|e| ActionError::new(FailureSource::Project, e))?;
+    let frontend = compile_frontend_with_options(
+        &project.entry,
+        CodegenOptions {
+            int_width,
+            ..CodegenOptions::default()
+        },
+    )
+    .map_err(|e| {
         ActionError::new(
             FailureSource::Frontend,
             format!("Skadi frontend error: {e}"),
@@ -607,8 +617,16 @@ fn run_build_at_mode(
         name: Some(project.name.clone()),
         entry: Some(project.entry.clone()),
     };
-    let frontend = compile_frontend_with_options(&project.entry, CodegenOptions { debug_probes })
-        .map_err(|e| {
+    let int_width = resolve_int_width(&options.target, &project.int_width)
+        .map_err(|e| ActionError::new(FailureSource::Project, e))?;
+    let frontend = compile_frontend_with_options(
+        &project.entry,
+        CodegenOptions {
+            debug_probes,
+            int_width,
+        },
+    )
+    .map_err(|e| {
         ActionError::new(
             FailureSource::Frontend,
             format!("Skadi frontend error: {e}"),
@@ -1027,7 +1045,16 @@ pub fn prepare_quick_run(options: &QuickRunOptions) -> Result<QuickRunPrepared, 
         ));
     }
 
-    let frontend = compile_frontend(&source).map_err(|e| {
+    let int_width = resolve_int_width(&options.build.target, "target")
+        .map_err(|e| ActionError::new(FailureSource::Usage, e))?;
+    let frontend = compile_frontend_with_options(
+        &source,
+        CodegenOptions {
+            int_width,
+            ..CodegenOptions::default()
+        },
+    )
+    .map_err(|e| {
         ActionError::new(
             FailureSource::Frontend,
             format!("Skadi frontend error: {e}"),
@@ -1221,6 +1248,7 @@ pub fn load_manifest_config(root: &Path) -> Result<ManifestConfigResult, ActionE
         version: manifest.version,
         edition: manifest.edition,
         entry: manifest.entry,
+        int_width: manifest.int_width,
     })
 }
 
@@ -1233,6 +1261,7 @@ pub fn save_manifest_config(
         version: manifest.version.trim().to_string(),
         edition: manifest.edition.trim().to_string(),
         entry: manifest.entry.trim().to_string(),
+        int_width: manifest.int_width.trim().to_string(),
     };
     save_manifest_config_at(root, &updated).map_err(|e| ActionError::new(FailureSource::Io, e))?;
     load_manifest_config(root)

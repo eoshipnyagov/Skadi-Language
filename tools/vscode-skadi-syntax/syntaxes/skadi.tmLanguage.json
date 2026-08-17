@@ -52,15 +52,18 @@
     },
     "numbers": {
       "patterns": [
-        { "name": "constant.numeric.float.skd", "match": "\\b\\d+\\.\\d+\\b" },
-        { "name": "constant.numeric.integer.skd", "match": "\\b\\d+\\b" }
+        { "name": "constant.numeric.float.skd", "match": "\\b\\d(?:_?\\d)*\\.\\d(?:_?\\d)*\\b" },
+        { "name": "constant.numeric.integer.binary.skd", "match": "\\b0[bB][01](?:_?[01])*\\b" },
+        { "name": "constant.numeric.integer.octal.skd", "match": "\\b0[oO][0-7](?:_?[0-7])*\\b" },
+        { "name": "constant.numeric.integer.hex.skd", "match": "\\b0[xX][0-9A-Fa-f](?:_?[0-9A-Fa-f])*\\b" },
+        { "name": "constant.numeric.integer.skd", "match": "\\b\\d(?:_?\\d)*\\b" }
       ]
     },
     "memory-size-literals": {
       "patterns": [
         {
           "name": "constant.numeric.memory-size.skd",
-          "match": "\\b\\d+(?:b|kb|mb|gb)\\b"
+          "match": "\\b\\d+(?:b|kb|mb|gb|tb)\\b"
         }
       ]
     },
@@ -68,7 +71,7 @@
       "patterns": [
         {
           "name": "constant.numeric.duration.skd",
-          "match": "\\b\\d+(?:ms|s|min)\\b"
+          "match": "\\b\\d+(?:ns|us|ms|s|min|h)\\b"
         }
       ]
     },
@@ -273,7 +276,7 @@
       "patterns": [
         {
           "name": "storage.modifier.skd",
-          "match": "\\b(danger|new|constant|fixed|const|hide|local|allow|grow|drop|direct|view|move)\\b"
+          "match": "\\b(danger|new|constant|hide|local|allow|grow|drop|direct|view|move)\\b"
         }
       ]
     },
@@ -337,7 +340,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.skd",
-          "match": "\\b(output|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg|dot|length|length_sq|normalize|distance|distance_sq|cross|color|color_hex|rect|canvas)\\b(?=\\s*\\()"
+          "match": "\\b(output|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|as_nanoseconds|as_bytes|abs|min|max|clamp|floor|ceil|round|sign|trunc|fract|lerp|inverse_lerp|remap|smoothstep|sin|cos|tan|asin|acos|atan|atan2|normalize_angle|sqrt|root|is_nan|is_finite|is_infinite|deg_to_rad|rad_to_deg|as_radians|dot|length|length_sq|normalize|distance|distance_sq|cross|bit_and|bit_or|bit_xor|bit_not|bit_shift_left|bit_shift_right|bit_is_set|bit_set|bit_clear|bit_toggle|bit_write|color|color_hex|rect|canvas)\\b(?=\\s*\\()"
         },
         {
           "name": "meta.namespace.fs.skd",

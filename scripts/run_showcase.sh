@@ -24,6 +24,7 @@ BENCHES=(
   "bench_15_angle_navigation|benchmarks/bench_15_angle_navigation.skd|.|"
   "bench_16_vector_navigation|benchmarks/bench_16_vector_navigation.skd|.|"
   "bench_17_canvas_palette|benchmarks/bench_17_canvas_palette.skd|.|"
+  "bench_18_bit_registers|benchmarks/bench_18_bit_registers.skd|.|"
 )
 
 build_bench() {

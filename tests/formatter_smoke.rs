@@ -188,3 +188,13 @@ wait worker_task
     let tokens = lex(&formatted).expect("formatted timed task wait should lex");
     parse_program(&tokens).expect("formatted timed task wait should parse");
 }
+
+#[test]
+fn formats_variadic_output_without_changing_argument_spacing() {
+    let source = "output(\"count: \",count,\", ready=\",true)\n";
+    let formatted = format_source(source).expect("format should succeed");
+    assert_eq!(
+        formatted,
+        "output(\"count: \", count, \", ready=\", true)\n"
+    );
+}

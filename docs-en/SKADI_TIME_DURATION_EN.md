@@ -27,9 +27,13 @@ The first MVP accepts joined integer literals:
 new Duration debounce = 25ms
 new Duration timeout = 2s
 new Duration maintenance = 3min
+new Duration hardware_tick = 1ns
+new Duration sensor_pulse = 10us
+new Duration session = 1h
 ```
 
-Supported units are `ms`, `s`, and `min`. Fractional values such as `1.5s` and
+Supported units are `ns`, `us`, `ms`, `s`, `min`, and `h`. `us` is the portable
+ASCII spelling for microseconds. Fractional values such as `1.5s` and
 spaced forms such as `1 s` are not part of the current contract. Literal
 conversion to the internal representation is overflow-checked.
 
@@ -38,6 +42,10 @@ conversion to the internal representation is overflow-checked.
 Both values lower to signed `i64` nanoseconds. `Time` is monotonic and has no
 public epoch: it is suitable for intervals and deadlines, not dates or Unix
 timestamps.
+
+Nanoseconds are representation precision, not a promise about physical wait
+resolution. `sleep(1ns)` is rounded by the backend to the resolution of the
+platform timer.
 
 Builtins:
 
@@ -57,14 +65,18 @@ Supported combinations:
 |---|---|
 | `Duration + Duration` | `Duration` |
 | `Duration - Duration` | `Duration` |
+| `Duration * Int`, `Int * Duration` | `Duration` |
+| `Duration / Int` | `Duration`, using integer nanosecond division |
+| `Duration / Duration` | `Float` |
 | `Time + Duration` | `Time` |
 | `Duration + Time` | `Time` |
 | `Time - Duration` | `Time` |
 | `Time - Time` | `Duration` |
 
-Comparisons are supported between values of the same nominal type. Arithmetic
-with `Int/Float`, `Time + Time`, multiplication, division, and implicit numeric
-conversions are rejected.
+Comparisons are supported between values of the same nominal type.
+`as_nanoseconds(Duration) returns i64` exposes the exact representation.
+Addition/subtraction with ordinary numbers, `Float` scaling, `Time + Time`, and
+implicit numeric conversions are rejected.
 
 ## Containers and concurrency
 
@@ -88,7 +100,7 @@ The C runtime uses `QueryPerformanceCounter`/`Sleep` on Windows and
 `clock_gettime(CLOCK_MONOTONIC)`/`nanosleep` on POSIX. Runtime failures use
 `SC-RT-320`.
 
-Wall-clock/calendar APIs, `Timer`, fractional literals, broader units, and an
+Wall-clock/calendar APIs, `Timer`, fractional literals, and an
 ESP32/FreeRTOS backend remain future work. Channel `send_for`/`receive_for` and
 `wait task for Duration` use the nominal duration as their bounded-wait contract.
 

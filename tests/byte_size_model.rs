@@ -29,6 +29,7 @@ new ByteSize bytes = 7b
 new ByteSize kibibytes = 2kb
 new ByteSize mebibytes = 3mb
 new ByteSize gibibytes = 4gb
+new ByteSize tebibytes = 1tb
 "#,
     );
 
@@ -37,6 +38,7 @@ new ByteSize gibibytes = 4gb
         (2, "kb", 2 * 1024),
         (3, "mb", 3 * 1024 * 1024),
         (4, "gb", 4 * 1024 * 1024 * 1024),
+        (1, "tb", 1024_i64 * 1024 * 1024 * 1024),
     ];
     for (statement, (magnitude, unit, bytes)) in program.statements.iter().zip(expected) {
         assert!(matches!(
@@ -81,6 +83,10 @@ new ByteSize base = 4kb
 new ByteSize overhead = 512b
 new ByteSize capacity = base + overhead
 new ByteSize remaining = capacity - 1kb
+new ByteSize doubled = remaining * 2
+new ByteSize half = doubled / 2
+new Float usage = half / capacity
+new Int exact_bytes = as_bytes(half)
 new Bool enough = remaining >= 3kb
 Memory scratch_memory = memory(capacity)
 scratch_memory.clear()
@@ -101,6 +107,9 @@ fn semantic_rejects_numeric_mixing_and_non_byte_memory_capacity() {
         mixed.contains("operator '+' is not defined for ByteSize and Int"),
         "{mixed}"
     );
+
+    let fractional_scale = semantic_err("new ByteSize value = 1kb * 0.5\n");
+    assert!(fractional_scale.contains("operator '*' is not defined for ByteSize and Float"));
 
     let invalid_memory = semantic_err("Memory arena = memory(4096)\n");
     assert!(

@@ -1,6 +1,6 @@
 # Token/Construct Coverage Matrix (current `develop`)
 
-Date: 2026-07-30
+Date: 2026-08-17
 Purpose: traceability across stable `v1.1` and experimental `v1.2` systems surface.
 
 Legend:
@@ -32,7 +32,7 @@ Legend:
 | `on error` | P (`on` token + parse pattern) | Y | Y | Y | Y | danger/list-pop contracts covered |
 | `on interrupt` | P (`on` + `interrupt`) | Y | Y | Y | Y | typed periodic host Interrupt with strict handler subset |
 | `constant` | Y | Y | Y | Y | Y | immutable binding with assignment rejection |
-| `fixed` / `const` | Y | N | N | N | N | reserved/tokenized, statement parser rejects the form |
+| `fixed` / `const` | identifier | Y | Y | Y | Y | ordinary identifier names; immutable binding keyword is `constant` |
 | `hide` | Y | Y | Y | P | P | hidden-field access checks implemented; broader struct-lowering depth is ongoing |
 | `local` | Y | Y | Y | P | P | local visibility enforced in import pipeline via symbol isolation |
 | `direct` / `view` | Y | Y | Y | Y | Y | explicit mutable/read-only function borrow contract |
@@ -59,16 +59,18 @@ Legend:
 | `try_send` / `close` | Y | Y | Y | Y | Y | fallible non-blocking send and owner-controlled close/drain |
 | `send_for` / `receive_for` / `timed_out` | P | Y | Y | Y | Y | contextual timeout handling, Win32/pthread runtime |
 | `Time` / `Duration` | P (type identifiers) | Y | Y | Y | Y | experimental nominal value types |
-| `5ms` / `2s` / `3min` | P (number + adjacent unit) | Y | Y | Y | Y | integer and overflow-checked literals |
+| `1ns` / `10us` / `5ms` / `2s` / `3min` / `1h` | P (number + adjacent unit) | Y | Y | Y | Y | integer and overflow-checked literals |
 | `now` / `elapsed` | P (identifiers) | Y | Y | Y | Y | monotonic clock runtime |
 | `sleep` / `delay` | P (identifiers) | Y | Y | Y | Y | blocking host runtime |
 | `ByteSize` | P (type identifier) | Y | Y | Y | Y | experimental nominal byte-count type |
-| `64b` / `4kb` / `8mb` / `1gb` | P (number + adjacent unit) | Y | Y | Y | Y | binary, integer and overflow-checked literals |
+| `64b` / `4kb` / `8mb` / `1gb` / `1tb` | P (number + adjacent unit) | Y | Y | Y | Y | binary, integer and overflow-checked literals |
 | `memory(ByteSize)` | Y | Y | Y | Y | Y | expression capacity with non-positive runtime guard |
-| `Angle` | P (type identifier) | Y | Y | Y | Y | experimental nominal f64-radian value type |
+| `Angle` | P (type identifier) | Y | Y | Y | Y | experimental nominal f32-radian value type |
 | `90deg` / `0.25rad` | P (number + adjacent unit) | Y | Y | Y | Y | integer/fractional finite literals |
-| Angle math integration | P (builtin identifiers) | Y | Y | Y | Y | `sin/cos/atan2`, conversions and scalar operations |
-| `Vec2` / `Vec3` / `Vec4` | P (type identifiers) | Y | Y | Y | Y | bounded f64 vector MVP |
+| Angle math integration | P (builtin identifiers) | Y | Y | Y | Y | complete basic trigonometry, normalization, conversions and scalar operations |
+| `Vec2` / `Vec3` / `Vec4` | P (type identifiers) | Y | Y | Y | Y | bounded f32 vector MVP |
+| `0b` / `0o` / `0x` integer literals and `_` separators | Y | Y | Y | Y | Y | radix-aware fixed-width register literals |
+| `bit_*` builtins | P (builtin identifiers) | Y | Y | Y | Y | fixed-width signed/unsigned values; checked indexes |
 | Vector math integration | P (builtin identifiers) | Y | Y | Y | Y | dot/length/normalize/distance and Vec3 cross |
 | `Color` / `Rect` | P (type identifiers) | Y | Y | Y | Y | Canvas v0 value-safe visual types |
 | `Canvas` / drawing methods | P (type identifiers) | Y | Y | Y | Y | linear software framebuffer, primitives and checksum |
@@ -111,6 +113,6 @@ Legend:
 
 ## 4. Synchronization rules
 
-1. Keep reserved `fixed/const` separated from implemented `constant`, `view`,
-   `direct`, `move`, and contextual Memory policies.
+1. Keep `constant` as the only immutable-binding keyword; `fixed` and `const`
+   remain ordinary identifiers rather than speculative reservations.
 2. Keep this matrix synchronized with the [Test Coverage Matrix](test-coverage.md) after each feature merge.

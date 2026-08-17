@@ -125,8 +125,22 @@ impl<'a> Lexer<'a> {
     /// Consume a numeric literal (int or float). Returns the text.
     fn scan_number(&mut self) -> String {
         let start = self.current_pos;
+        if self.peek() == Some('0')
+            && matches!(self.peek_next(), Some('b' | 'B' | 'o' | 'O' | 'x' | 'X'))
+        {
+            self.advance();
+            self.advance();
+            while let Some(c) = self.peek() {
+                if c.is_ascii_alphanumeric() || c == '_' {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            return self.lexeme_from_range(start, self.current_pos);
+        }
         while let Some(c) = self.peek() {
-            if c.is_ascii_digit() || c == '.' {
+            if c.is_ascii_digit() || c == '.' || c == '_' {
                 self.advance();
             } else {
                 break;

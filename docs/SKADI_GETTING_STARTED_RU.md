@@ -69,11 +69,11 @@ hello_skadi/
 `src/main.skd`:
 
 ```skadi
-new Text greeting = concat("Hello", " from Skadi")
+new Text greeting = "Hello from Skadi"
 output(greeting)
 
 new Angle quarter_turn = 90deg
-output(rad_to_deg(quarter_turn))
+output("Quarter turn: ", rad_to_deg(quarter_turn), " degrees")
 ```
 
 ## Повседневный цикл
@@ -125,8 +125,8 @@ output(sum_positive(samples))
 
 ```skadi
 label ErrorCode {
-    Ok
-    InvalidValue
+    Ok = 0
+    InvalidValue = 1
 }
 
 danger fn require_positive(Int value) returns Int {

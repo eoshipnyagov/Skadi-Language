@@ -632,7 +632,7 @@ new Float x = sin(t)
     let program = parse_program(&tokens).expect("parse should succeed");
     let err = semantic_analyze(&program).expect_err("semantic analysis should fail");
     assert!(err.contains("SC-SEM-020"));
-    assert!(err.contains("builtin 'sin' expects Angle or legacy numeric radians"));
+    assert!(err.contains("builtin 'sin' expects Angle, got Text"));
 }
 
 #[test]

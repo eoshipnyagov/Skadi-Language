@@ -33,13 +33,15 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-PARSE-161..162` `local` prefix declaration contract errors
 
 ### Expression parser ranges
-- `SC-PARSE-201..222` expression grammar errors
+- `SC-PARSE-201..226` expression grammar errors
   - grouped expr / call args / list literal / index / struct literal issues
   - `SC-PARSE-216` invalid, fractional or overflowing Duration literal
   - `SC-PARSE-219` invalid, fractional, unsupported or overflowing ByteSize literal
   - `SC-PARSE-220` invalid, unsupported or non-finite Angle literal
   - `SC-PARSE-221` invalid, empty, multi-character, unsupported escape or non-ASCII Char literal
   - `SC-PARSE-222` timed Task wait missing its Duration expression
+  - `SC-PARSE-225` invalid radix or decimal integer literal
+  - `SC-PARSE-226` invalid or non-finite default `f32` literal
 
 ## 3. Semantic Codes (`SC-SEM-*`)
 
@@ -69,6 +71,7 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-RT-311..313` Channel allocation/capacity/synchronization failures
 - `SC-RT-314` unhandled closed Channel operation
 - `SC-RT-315` unhandled cancelled blocking Channel operation
+- `SC-RT-340` dynamic bit index or shift count outside the fixed-width value
 
 ### Analysis codes
 
@@ -102,6 +105,10 @@ Wrapper/stage codes used by CLI pipeline:
   - stage: native C compiler invocation after transpilation
   - meaning: all compiler attempts failed
   - contract: message includes target and attempts matrix (`- <compiler>: <detail>`)
+- `SC-CG-302`
+  - stage: target-aware frontend/codegen validation
+  - meaning: an `Int` literal does not fit `[numeric] int`
+  - hint: use an explicit fixed-width type or widen the project `Int`
 
 ## 5. Output Format Contract
 

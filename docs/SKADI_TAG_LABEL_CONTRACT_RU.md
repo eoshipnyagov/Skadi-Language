@@ -1,6 +1,6 @@
 # Контракт `tag` и `label`
 
-Статус: **Accepted design, implementation track**.
+Статус: **Implemented stable contract**.
 
 ## 1. Разделение сущностей
 
@@ -63,4 +63,3 @@ error-flow контрактом:
 - string serialization names;
 - open/extensible tags;
 - автоматические числовые discriminants.
-

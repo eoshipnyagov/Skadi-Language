@@ -24,8 +24,8 @@ Readability and ownership-transfer scenarios are evaluated in the
   resource globally immutable;
 - `view`, `direct`, and `move` remain fully reserved words rather than
   contextual keywords;
-- `fixed`, abbreviated `const`, and the former `constant direct` form are not
-  language forms.
+- `fixed` and `const` are ordinary identifiers, not declaration modifiers;
+  the former `constant direct` form is not a language form.
 
 `.close()` is not a universal resource interface. It is currently meaningful
 for `Window` and `Channel`; future `File`, `Port`, and `Socket` handles may use

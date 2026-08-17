@@ -31,8 +31,8 @@ local fn normalize_name(Text raw) returns Text {
 
 ```skadi
 label ErrorCode {
-    Ok
-    InvalidInput
+    Ok = 0
+    InvalidInput = 1
 }
 
 danger fn parse_positive(Int value) returns Int {

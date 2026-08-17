@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::process::Command;
 
+use v01::codegen::IntWidth;
+
 #[derive(Clone, Debug)]
 pub struct CompilerInvocation {
     pub program: String,
@@ -67,6 +69,24 @@ pub fn resolve_profile(target: &str) -> Result<TargetProfile, String> {
         .find(|p| p.triple == target)
         .cloned()
         .ok_or_else(|| format!("unknown target '{target}'. Use: skadi target list"))
+}
+
+pub fn resolve_int_width(target: &str, configured: &str) -> Result<IntWidth, String> {
+    match configured.trim() {
+        "target" => match target {
+            "host" | "x86_64-w64-mingw32" | "x86_64-unknown-linux-gnu" => Ok(IntWidth::I32),
+            other => Err(format!(
+                "target '{other}' does not define a default Int width yet"
+            )),
+        },
+        "i8" => Ok(IntWidth::I8),
+        "i16" => Ok(IntWidth::I16),
+        "i32" => Ok(IntWidth::I32),
+        "i64" => Ok(IntWidth::I64),
+        other => Err(format!(
+            "unsupported numeric.int '{other}'; expected target, i8, i16, i32, or i64"
+        )),
+    }
 }
 
 pub fn candidate_invocations(

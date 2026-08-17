@@ -2,7 +2,7 @@
 
 Status: experimental `Vec2/Vec3/Vec4` MVP in the current `v1.2` line.
 
-`Vec2`, `Vec3`, and `Vec4` are built-in value types with `f64` components. The
+`Vec2`, `Vec3`, and `Vec4` are built-in value types with `f32` components. The
 dimension is part of the type, so vectors of different dimensions never mix
 implicitly.
 
@@ -42,7 +42,7 @@ supported.
 
 Vectors are value-safe in structs, Lists, function arguments/results,
 `Task(VecN)`, and `Channel(VecN)`. They lower to small C structs containing
-`double` components.
+`float` components.
 
 Matrices, generic vectors, SIMD-specific lowering, swizzling, user-defined
 operator overloading, and separate `f32` vectors are outside this MVP.

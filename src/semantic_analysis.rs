@@ -4,13 +4,24 @@ use crate::ast_nodes::{
     BlockStatement, BorrowMode, Expression, ForLoopStyle, FunctionParam, LabelVariant, Program,
     Statement,
 };
-use crate::builtins::{Builtin, builtin_arity, builtin_from_name};
+use crate::builtins::{
+    Builtin, builtin_accepts_arity, builtin_arity_description, builtin_from_name,
+};
 use crate::diagnostics::{DiagnosticKind, format_diagnostic};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ValueType {
     Int,
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
     Float,
+    F64,
     Bool,
     Char,
     Text,
@@ -1272,8 +1283,17 @@ fn validate_nominal_sets(
 
 fn parse_primitive_type_name(name: &str) -> ValueType {
     match name {
-        "Int" | "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" => ValueType::Int,
-        "Float" | "f64" | "f32" => ValueType::Float,
+        "Int" => ValueType::Int,
+        "i8" => ValueType::I8,
+        "i16" => ValueType::I16,
+        "i32" => ValueType::I32,
+        "i64" => ValueType::I64,
+        "u8" => ValueType::U8,
+        "u16" => ValueType::U16,
+        "u32" => ValueType::U32,
+        "u64" => ValueType::U64,
+        "Float" | "f32" => ValueType::Float,
+        "f64" => ValueType::F64,
         "bool" | "Bool" => ValueType::Bool,
         "char" | "Char" => ValueType::Char,
         "Memory" => ValueType::Memory,
@@ -1343,13 +1363,42 @@ fn interrupt_safe_expression(expr: &Expression) -> bool {
                     | "floor"
                     | "ceil"
                     | "round"
+                    | "sign"
+                    | "trunc"
+                    | "fract"
+                    | "lerp"
+                    | "inverse_lerp"
+                    | "remap"
+                    | "smoothstep"
                     | "sin"
                     | "cos"
+                    | "tan"
+                    | "asin"
+                    | "acos"
+                    | "atan"
                     | "atan2"
+                    | "normalize_angle"
                     | "sqrt"
                     | "root"
+                    | "is_nan"
+                    | "is_finite"
+                    | "is_infinite"
                     | "deg_to_rad"
                     | "rad_to_deg"
+                    | "as_radians"
+                    | "as_nanoseconds"
+                    | "as_bytes"
+                    | "bit_and"
+                    | "bit_or"
+                    | "bit_xor"
+                    | "bit_not"
+                    | "bit_shift_left"
+                    | "bit_shift_right"
+                    | "bit_is_set"
+                    | "bit_set"
+                    | "bit_clear"
+                    | "bit_toggle"
+                    | "bit_write"
             ) && args.iter().all(interrupt_safe_expression)
         }
         Expression::LiteralString(_)
@@ -1632,8 +1681,132 @@ fn is_color_constant(name: &str) -> bool {
     )
 }
 
+fn is_integer_type(ty: &ValueType) -> bool {
+    matches!(
+        ty,
+        ValueType::Int
+            | ValueType::I8
+            | ValueType::I16
+            | ValueType::I32
+            | ValueType::I64
+            | ValueType::U8
+            | ValueType::U16
+            | ValueType::U32
+            | ValueType::U64
+    )
+}
+
+fn is_fixed_integer_type(ty: &ValueType) -> bool {
+    matches!(
+        ty,
+        ValueType::I8
+            | ValueType::I16
+            | ValueType::I32
+            | ValueType::I64
+            | ValueType::U8
+            | ValueType::U16
+            | ValueType::U32
+            | ValueType::U64
+    )
+}
+
+fn is_float_type(ty: &ValueType) -> bool {
+    matches!(ty, ValueType::Float | ValueType::F64)
+}
+
+fn integer_width(ty: &ValueType) -> Option<u32> {
+    match ty {
+        ValueType::I8 | ValueType::U8 => Some(8),
+        ValueType::I16 | ValueType::U16 => Some(16),
+        ValueType::Int | ValueType::I32 | ValueType::U32 => Some(32),
+        ValueType::I64 | ValueType::U64 => Some(64),
+        _ => None,
+    }
+}
+
+fn integer_literal_fits(value: i64, ty: &ValueType) -> bool {
+    match ty {
+        ValueType::I8 => i8::try_from(value).is_ok(),
+        ValueType::I16 => i16::try_from(value).is_ok(),
+        ValueType::I32 | ValueType::Int => i32::try_from(value).is_ok(),
+        ValueType::I64 => true,
+        ValueType::U8 => u8::try_from(value).is_ok(),
+        ValueType::U16 => u16::try_from(value).is_ok(),
+        ValueType::U32 => u32::try_from(value).is_ok(),
+        ValueType::U64 => value >= 0,
+        _ => false,
+    }
+}
+
+fn constant_integer_value(expr: &Expression) -> Option<i64> {
+    match expr {
+        Expression::LiteralInt(value) => Some(*value),
+        Expression::BinaryOp { op, left, right } if op == "neg" => {
+            constant_integer_value(right.as_deref().unwrap_or(left)).and_then(i64::checked_neg)
+        }
+        _ => None,
+    }
+}
+
+fn bit_binary_result_type(
+    name: &str,
+    args: &[Expression],
+    left: ValueType,
+    right: ValueType,
+) -> Result<ValueType, String> {
+    if left == right && is_fixed_integer_type(&left) {
+        return Ok(left);
+    }
+    if is_fixed_integer_type(&right)
+        && constant_integer_value(&args[0]).is_some_and(|value| integer_literal_fits(value, &right))
+    {
+        return Ok(right);
+    }
+    if is_fixed_integer_type(&left)
+        && constant_integer_value(&args[1]).is_some_and(|value| integer_literal_fits(value, &left))
+    {
+        return Ok(left);
+    }
+    if !is_fixed_integer_type(&left) || !is_fixed_integer_type(&right) {
+        return Err(sem_err(
+            SEM_TYPE_MISMATCH,
+            format!(
+                "builtin '{}' expects fixed-width integer arguments, got ({:?}, {:?}).",
+                name, left, right
+            ),
+        ));
+    }
+    Err(sem_err(
+        SEM_TYPE_MISMATCH,
+        format!(
+            "builtin '{}' requires equal integer widths and signedness, got ({:?}, {:?}).",
+            name, left, right
+        ),
+    ))
+}
+
+fn validate_bit_index(name: &str, value_ty: &ValueType, index: &Expression) -> Result<(), String> {
+    let Some(index) = constant_integer_value(index) else {
+        return Ok(());
+    };
+    let width = integer_width(value_ty).expect("validated integer bit value");
+    if index < 0 || index >= i64::from(width) {
+        return Err(sem_err(
+            SEM_TYPE_MISMATCH,
+            format!(
+                "builtin '{}' bit index {} is outside 0..{} for {:?}.",
+                name,
+                index,
+                width - 1,
+                value_ty
+            ),
+        ));
+    }
+    Ok(())
+}
+
 fn is_numeric_type(ty: &ValueType) -> bool {
-    matches!(ty, ValueType::Int | ValueType::Float)
+    is_integer_type(ty) || is_float_type(ty)
 }
 
 fn vector_dimension(ty: &ValueType) -> Option<usize> {
@@ -1728,8 +1901,14 @@ fn ensure_numeric_args(name: &str, arg_tys: &[ValueType]) -> Result<(), String> 
 }
 
 fn numeric_result_type(arg_tys: &[ValueType], preserve_int: bool) -> ValueType {
-    if preserve_int && arg_tys.iter().all(|ty| *ty == ValueType::Int) {
-        ValueType::Int
+    if preserve_int && arg_tys.iter().all(is_integer_type) {
+        arg_tys
+            .first()
+            .filter(|first| arg_tys.iter().all(|ty| ty == *first))
+            .cloned()
+            .unwrap_or(ValueType::Int)
+    } else if arg_tys.contains(&ValueType::F64) {
+        ValueType::F64
     } else {
         ValueType::Float
     }
@@ -1743,7 +1922,8 @@ fn can_assign(target: &ValueType, source: &ValueType) -> bool {
         return true;
     }
     match (target, source) {
-        (ValueType::Float, ValueType::Int) => true,
+        (target, source) if is_integer_type(target) && is_integer_type(source) => true,
+        (target, source) if is_float_type(target) && is_numeric_type(source) => true,
         (ValueType::List(t), ValueType::List(s)) => **s == ValueType::Unknown || can_assign(t, s),
         (ValueType::Task(None), ValueType::Task(None)) => true,
         (ValueType::Task(Some(t)), ValueType::Task(Some(s))) => can_assign(t, s),
@@ -1974,7 +2154,16 @@ fn is_task_safe_boundary_type(
 ) -> bool {
     match ty {
         ValueType::Int
+        | ValueType::I8
+        | ValueType::I16
+        | ValueType::I32
+        | ValueType::I64
+        | ValueType::U8
+        | ValueType::U16
+        | ValueType::U32
+        | ValueType::U64
         | ValueType::Float
+        | ValueType::F64
         | ValueType::Bool
         | ValueType::Char
         | ValueType::Text
@@ -2680,16 +2869,17 @@ fn analyze_statement(
                     format!("{} '{}' cannot be modified.", kind, target),
                 ));
             }
-            match target_ty {
-                ValueType::Int | ValueType::Float => Ok(()),
-                other => Err(err_at_code(
+            if is_numeric_type(&target_ty) {
+                Ok(())
+            } else {
+                Err(err_at_code(
                     stmt,
                     SEM_TYPE_MISMATCH,
                     format!(
                         "increment/decrement requires numeric variable, got {:?}.",
-                        other
+                        target_ty
                     ),
-                )),
+                ))
             }
         }
         Statement::FieldAssignment {
@@ -3130,14 +3320,52 @@ fn analyze_statement(
             let mut branch_states = Vec::new();
             for (case_exprs, block) in cases {
                 for expr in case_exprs {
-                    let case_ty = infer_expression_type(
-                        expr,
-                        scope,
-                        memory_state,
-                        functions,
-                        structs,
-                        fn_ctx.as_ref(),
-                    )?;
+                    let case_ty = match (&when_ty, expr) {
+                        (ValueType::Label(name), Expression::VariableReference(variant)) => {
+                            if !memory_state
+                                .labels
+                                .get(name)
+                                .map(|variants| variants.contains(variant))
+                                .unwrap_or(false)
+                            {
+                                return Err(err_at_code(
+                                    stmt,
+                                    SEM_TYPE_MISMATCH,
+                                    format!(
+                                        "variant '{}' does not belong to label '{}'.",
+                                        variant, name
+                                    ),
+                                ));
+                            }
+                            ValueType::Label(name.clone())
+                        }
+                        (ValueType::Tag(name), Expression::VariableReference(variant)) => {
+                            if !memory_state
+                                .tags
+                                .get(name)
+                                .map(|variants| variants.contains(variant))
+                                .unwrap_or(false)
+                            {
+                                return Err(err_at_code(
+                                    stmt,
+                                    SEM_TYPE_MISMATCH,
+                                    format!(
+                                        "variant '{}' does not belong to tag '{}'.",
+                                        variant, name
+                                    ),
+                                ));
+                            }
+                            ValueType::Tag(name.clone())
+                        }
+                        _ => infer_expression_type(
+                            expr,
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx.as_ref(),
+                        )?,
+                    };
                     if !can_assign(&when_ty, &case_ty) && !can_assign(&case_ty, &when_ty) {
                         return Err(err_at_code(
                             stmt,
@@ -5411,7 +5639,7 @@ fn infer_expression_type(
                 infer_expression_type(base, scope, memory_state, functions, structs, fn_ctx)?;
             let idx_ty =
                 infer_expression_type(index, scope, memory_state, functions, structs, fn_ctx)?;
-            if idx_ty != ValueType::Int {
+            if !is_integer_type(&idx_ty) {
                 return Err(sem_err(
                     SEM_TYPE_MISMATCH,
                     format!("index access requires Int index, got {:?}.", idx_ty),
@@ -5546,7 +5774,7 @@ fn infer_expression_type(
                     structs,
                     fn_ctx,
                 )?;
-                if capacity_ty != ValueType::Int {
+                if !is_integer_type(&capacity_ty) {
                     return Err(sem_err(
                         SEM_CHANNEL_RULE,
                         format!("channel(N) expects Int capacity, got {:?}.", capacity_ty),
@@ -5827,14 +6055,13 @@ fn infer_expression_type(
                 }
             }
             if let Some(builtin) = builtin_from_name(name) {
-                let expected_arity = builtin_arity(builtin);
-                if args.len() != expected_arity {
+                if !builtin_accepts_arity(builtin, args.len()) {
                     return Err(sem_err(
                         SEM_BUILTIN_ARG,
                         format!(
-                            "builtin '{}' expects {} arguments, got {}.",
+                            "builtin '{}' expects {}, got {}.",
                             name,
-                            expected_arity,
+                            builtin_arity_description(builtin),
                             args.len()
                         ),
                     ));
@@ -5939,8 +6166,8 @@ fn infer_expression_type(
                             fn_ctx,
                         )?;
                         if text_ty != ValueType::Text
-                            || start_ty != ValueType::Int
-                            || end_ty != ValueType::Int
+                            || !is_integer_type(&start_ty)
+                            || !is_integer_type(&end_ty)
                         {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
@@ -6044,25 +6271,32 @@ fn infer_expression_type(
                     }
                     Builtin::Args => Ok(ValueType::List(Box::new(ValueType::Text))),
                     Builtin::Output => {
-                        let ty = infer_expression_type(
-                            &args[0],
-                            scope,
-                            memory_state,
-                            functions,
-                            structs,
-                            fn_ctx,
-                        )?;
-                        match ty {
-                            ValueType::Int
-                            | ValueType::Float
-                            | ValueType::Bool
-                            | ValueType::Char
-                            | ValueType::Text => Ok(ValueType::Int),
-                            _ => Err(sem_err(
-                                SEM_TYPE_MISMATCH,
-                                format!("builtin 'output' unsupported argument type: {:?}.", ty),
-                            )),
+                        for (index, arg) in args.iter().enumerate() {
+                            let ty = infer_expression_type(
+                                arg,
+                                scope,
+                                memory_state,
+                                functions,
+                                structs,
+                                fn_ctx,
+                            )?;
+                            if !(is_numeric_type(&ty)
+                                || matches!(
+                                    ty,
+                                    ValueType::Bool | ValueType::Char | ValueType::Text
+                                ))
+                            {
+                                return Err(sem_err(
+                                    SEM_TYPE_MISMATCH,
+                                    format!(
+                                        "builtin 'output' argument {} has unsupported type {:?}.",
+                                        index + 1,
+                                        ty
+                                    ),
+                                ));
+                            }
                         }
+                        Ok(ValueType::Int)
                     }
                     Builtin::Input => {
                         let ty = infer_expression_type(
@@ -6161,6 +6395,157 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Int)
                     }
+                    Builtin::AsNanoseconds => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if ty != ValueType::Duration {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin '{}' expects Duration, got {:?}.", name, ty),
+                            ));
+                        }
+                        Ok(ValueType::I64)
+                    }
+                    Builtin::AsBytes => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if ty != ValueType::ByteSize {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin '{}' expects ByteSize, got {:?}.", name, ty),
+                            ));
+                        }
+                        Ok(ValueType::I64)
+                    }
+                    Builtin::BitAnd | Builtin::BitOr | Builtin::BitXor => {
+                        let left = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        let right = infer_expression_type(
+                            &args[1],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        bit_binary_result_type(name, args, left, right)
+                    }
+                    Builtin::BitNot => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if !is_fixed_integer_type(&ty) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects a fixed-width integer, got {:?}.",
+                                    name, ty
+                                ),
+                            ));
+                        }
+                        Ok(ty)
+                    }
+                    Builtin::BitShiftLeft
+                    | Builtin::BitShiftRight
+                    | Builtin::BitIsSet
+                    | Builtin::BitSet
+                    | Builtin::BitClear
+                    | Builtin::BitToggle => {
+                        let value_ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        let index_ty = infer_expression_type(
+                            &args[1],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if !is_fixed_integer_type(&value_ty) || !is_integer_type(&index_ty) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects (fixed-width integer, integer), got ({:?}, {:?}).",
+                                    name, value_ty, index_ty
+                                ),
+                            ));
+                        }
+                        validate_bit_index(name, &value_ty, &args[1])?;
+                        if builtin == Builtin::BitIsSet {
+                            Ok(ValueType::Bool)
+                        } else {
+                            Ok(value_ty)
+                        }
+                    }
+                    Builtin::BitWrite => {
+                        let value_ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        let index_ty = infer_expression_type(
+                            &args[1],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        let enabled_ty = infer_expression_type(
+                            &args[2],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if !is_fixed_integer_type(&value_ty)
+                            || !is_integer_type(&index_ty)
+                            || enabled_ty != ValueType::Bool
+                        {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects (fixed-width integer, integer, Bool), got ({:?}, {:?}, {:?}).",
+                                    name, value_ty, index_ty, enabled_ty
+                                ),
+                            ));
+                        }
+                        validate_bit_index(name, &value_ty, &args[1])?;
+                        Ok(value_ty)
+                    }
                     Builtin::Abs => {
                         let ty = infer_expression_type(
                             &args[0],
@@ -6221,7 +6606,24 @@ fn infer_expression_type(
                         ensure_numeric_args(name, &[x.clone(), lo.clone(), hi.clone()])?;
                         Ok(numeric_result_type(&[x, lo, hi], true))
                     }
-                    Builtin::Floor | Builtin::Ceil | Builtin::Round | Builtin::Sqrt => {
+                    Builtin::Sign => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        ensure_numeric_args(name, std::slice::from_ref(&ty))?;
+                        Ok(numeric_result_type(&[ty], true))
+                    }
+                    Builtin::Floor
+                    | Builtin::Ceil
+                    | Builtin::Round
+                    | Builtin::Trunc
+                    | Builtin::Fract
+                    | Builtin::Sqrt => {
                         let ty = infer_expression_type(
                             &args[0],
                             scope,
@@ -6241,7 +6643,41 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Float)
                     }
-                    Builtin::Sin | Builtin::Cos => {
+                    Builtin::Lerp | Builtin::InverseLerp | Builtin::Smoothstep => {
+                        let arg_tys = args
+                            .iter()
+                            .map(|arg| {
+                                infer_expression_type(
+                                    arg,
+                                    scope,
+                                    memory_state,
+                                    functions,
+                                    structs,
+                                    fn_ctx,
+                                )
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        ensure_numeric_args(name, &arg_tys)?;
+                        Ok(ValueType::Float)
+                    }
+                    Builtin::Remap => {
+                        let arg_tys = args
+                            .iter()
+                            .map(|arg| {
+                                infer_expression_type(
+                                    arg,
+                                    scope,
+                                    memory_state,
+                                    functions,
+                                    structs,
+                                    fn_ctx,
+                                )
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        ensure_numeric_args(name, &arg_tys)?;
+                        Ok(ValueType::Float)
+                    }
+                    Builtin::Sin | Builtin::Cos | Builtin::Tan => {
                         let ty = infer_expression_type(
                             &args[0],
                             scope,
@@ -6250,16 +6686,42 @@ fn infer_expression_type(
                             structs,
                             fn_ctx,
                         )?;
-                        if ty != ValueType::Angle && !is_numeric_type(&ty) {
+                        if ty != ValueType::Angle {
                             return Err(sem_err(
                                 SEM_TYPE_MISMATCH,
-                                format!(
-                                    "builtin '{}' expects Angle or legacy numeric radians, got {:?}.",
-                                    name, ty
-                                ),
+                                format!("builtin '{}' expects Angle, got {:?}.", name, ty),
                             ));
                         }
                         Ok(ValueType::Float)
+                    }
+                    Builtin::Asin | Builtin::Acos | Builtin::Atan => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        ensure_numeric_args(name, std::slice::from_ref(&ty))?;
+                        Ok(ValueType::Angle)
+                    }
+                    Builtin::NormalizeAngle => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if ty != ValueType::Angle {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!("builtin '{}' expects Angle, got {:?}.", name, ty),
+                            ));
+                        }
+                        Ok(ValueType::Angle)
                     }
                     Builtin::DegToRad => {
                         let ty = infer_expression_type(
@@ -6281,7 +6743,7 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::Angle)
                     }
-                    Builtin::RadToDeg => {
+                    Builtin::RadToDeg | Builtin::AsRadians => {
                         let ty = infer_expression_type(
                             &args[0],
                             scope,
@@ -6353,6 +6815,26 @@ fn infer_expression_type(
                             ));
                         }
                         Ok(ValueType::Float)
+                    }
+                    Builtin::IsNan | Builtin::IsFinite | Builtin::IsInfinite => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if ty != ValueType::Angle && !is_numeric_type(&ty) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects numeric or Angle argument, got {:?}.",
+                                    name, ty
+                                ),
+                            ));
+                        }
+                        Ok(ValueType::Bool)
                     }
                     Builtin::Dot | Builtin::Distance | Builtin::DistanceSq => {
                         let a = infer_expression_type(
@@ -6775,10 +7257,7 @@ fn infer_expression_type(
                     structs,
                     fn_ctx,
                 )?;
-                if lt == ValueType::Int
-                    || lt == ValueType::Float
-                    || lt == ValueType::Angle
-                    || vector_dimension(&lt).is_some()
+                if is_numeric_type(&lt) || lt == ValueType::Angle || vector_dimension(&lt).is_some()
                 {
                     return Ok(lt);
                 }
@@ -6797,7 +7276,7 @@ fn infer_expression_type(
                     structs,
                     fn_ctx,
                 )?;
-                if lt == ValueType::Bool || lt == ValueType::Int {
+                if lt == ValueType::Bool || is_integer_type(&lt) {
                     return Ok(ValueType::Bool);
                 }
                 return Err(sem_err(
@@ -6821,6 +7300,16 @@ fn infer_expression_type(
                     ("-", ValueType::Duration, ValueType::Duration)
                     | ("-", ValueType::Time, ValueType::Time) => Some(ValueType::Duration),
                     ("-", ValueType::Time, ValueType::Duration) => Some(ValueType::Time),
+                    ("*", ValueType::Duration, ty) if is_integer_type(ty) => {
+                        Some(ValueType::Duration)
+                    }
+                    ("*", ty, ValueType::Duration) if is_integer_type(ty) => {
+                        Some(ValueType::Duration)
+                    }
+                    ("/", ValueType::Duration, ty) if is_integer_type(ty) => {
+                        Some(ValueType::Duration)
+                    }
+                    ("/", ValueType::Duration, ValueType::Duration) => Some(ValueType::Float),
                     (
                         "==" | "!=" | "<" | ">" | "<=" | ">=",
                         ValueType::Duration,
@@ -6846,6 +7335,16 @@ fn infer_expression_type(
                     ("+" | "-", ValueType::ByteSize, ValueType::ByteSize) => {
                         Some(ValueType::ByteSize)
                     }
+                    ("*", ValueType::ByteSize, ty) if is_integer_type(ty) => {
+                        Some(ValueType::ByteSize)
+                    }
+                    ("*", ty, ValueType::ByteSize) if is_integer_type(ty) => {
+                        Some(ValueType::ByteSize)
+                    }
+                    ("/", ValueType::ByteSize, ty) if is_integer_type(ty) => {
+                        Some(ValueType::ByteSize)
+                    }
+                    ("/", ValueType::ByteSize, ValueType::ByteSize) => Some(ValueType::Float),
                     (
                         "==" | "!=" | "<" | ">" | "<=" | ">=",
                         ValueType::ByteSize,
@@ -6864,7 +7363,7 @@ fn infer_expression_type(
                 });
             }
             if lt == ValueType::Angle || rt == ValueType::Angle {
-                let scalar = |ty: &ValueType| matches!(ty, ValueType::Int | ValueType::Float);
+                let scalar = is_numeric_type;
                 let result = match (op.as_str(), &lt, &rt) {
                     ("+" | "-", ValueType::Angle, ValueType::Angle) => Some(ValueType::Angle),
                     ("*", ValueType::Angle, ty) if scalar(ty) => Some(ValueType::Angle),
@@ -6887,7 +7386,7 @@ fn infer_expression_type(
                 });
             }
             if vector_dimension(&lt).is_some() || vector_dimension(&rt).is_some() {
-                let scalar = |ty: &ValueType| matches!(ty, ValueType::Int | ValueType::Float);
+                let scalar = is_numeric_type;
                 let result = match (op.as_str(), &lt, &rt) {
                     ("+" | "-", left, right)
                         if vector_dimension(left).is_some() && left == right =>
@@ -6917,11 +7416,15 @@ fn infer_expression_type(
             }
             match op.as_str() {
                 "+" | "-" | "*" | "/" | "div" | "mod" | "^" => {
-                    if (lt == ValueType::Int || lt == ValueType::Float)
-                        && (rt == ValueType::Int || rt == ValueType::Float)
-                    {
-                        if lt == ValueType::Float || rt == ValueType::Float {
-                            Ok(ValueType::Float)
+                    if is_numeric_type(&lt) && is_numeric_type(&rt) {
+                        if is_float_type(&lt) || is_float_type(&rt) {
+                            if lt == ValueType::F64 || rt == ValueType::F64 {
+                                Ok(ValueType::F64)
+                            } else {
+                                Ok(ValueType::Float)
+                            }
+                        } else if lt == rt {
+                            Ok(lt)
                         } else {
                             Ok(ValueType::Int)
                         }
@@ -6934,8 +7437,8 @@ fn infer_expression_type(
                 }
                 "==" | "!=" | "<" | ">" | "<=" | ">=" => Ok(ValueType::Bool),
                 "and" | "or" | "xor" => {
-                    if (lt == ValueType::Bool || lt == ValueType::Int)
-                        && (rt == ValueType::Bool || rt == ValueType::Int)
+                    if (lt == ValueType::Bool || is_integer_type(&lt))
+                        && (rt == ValueType::Bool || is_integer_type(&rt))
                     {
                         Ok(ValueType::Bool)
                     } else {

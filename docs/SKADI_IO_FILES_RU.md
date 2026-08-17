@@ -9,10 +9,19 @@ new Text List cli_args = args()
 output("Skadi")
 
 new Text name = input("Name: ")
-output(concat("Hello, ", name))
+output("Hello, ", name)
 ```
 
-`output` принимает `Int`, `Float`, `Bool`, `Char` и `Text`. `args()` возвращает
+`output` принимает один или несколько аргументов типов `Int`, `Float`, `Bool`,
+`Char` и `Text`. Значения печатаются подряд без скрытых пробелов и получают один
+перевод строки после последнего аргумента. Нужные разделители задаются явно:
+
+```skadi
+output("count: ", count, ", ready: ", ready)
+```
+
+Такой вывод не создаёт промежуточный `Text`. Для получения текстового значения
+по-прежнему используйте `concat` там, где он подходит. `args()` возвращает
 `Text List`.
 
 ## Файлы
@@ -36,9 +45,9 @@ new Text List names = fs.list(root)
 iterate names as name {
     new Path full = fs.join(root, name)
     if fs.is_dir(full) {
-        output(concat("dir: ", name))
+        output("dir: ", name)
     } else {
-        output(concat("file: ", name))
+        output("file: ", name)
     }
 }
 ```
@@ -47,7 +56,7 @@ iterate names as name {
 |---|---|
 | `args()` | `Text List` |
 | `input(prompt)` | `Text` |
-| `output(value)` | `Int` |
+| `output(value, ...)` | `Int`; минимум один printable-аргумент |
 | `read(path)` | `Text` |
 | `write(path, text)` | `Int` |
 | `fs.list(path)` | `Text List` |

@@ -3,8 +3,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+typedef int32_t SkInt;
+
 int main(void) {
     /* SK-STMT@1:1#1 */
-    int64_t x = (1 + 2);
+    SkInt x = (1 + 2);
     return 0;
 }

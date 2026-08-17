@@ -70,7 +70,7 @@ project-level policy hooks
 ## 5. Time / Duration contract
 
 Реализационный статус: первый bounded slice выполнен. Поддерживаются nominal
-`Time/Duration`, integer `ms/s/min`, monotonic `now/elapsed` и blocking
+`Time/Duration`, integer `ns/us/ms/s/min/h`, monotonic `now/elapsed` и blocking
 `sleep/delay` на Win32/POSIX. Расширения этого раздела остаются future work.
 
 Реализованный bounded MVP использует следующий минимальный контракт:
@@ -117,7 +117,7 @@ sleep(1s)
 ### Required early units
 
 ```text
-time: ms, s, min
+time: ns, us, ms, s, min, h
 memory: b, kb, mb
 angle: deg, rad
 ```

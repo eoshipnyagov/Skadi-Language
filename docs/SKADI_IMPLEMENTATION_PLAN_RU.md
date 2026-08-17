@@ -4,7 +4,7 @@
 
 Исходный план: 2026-05-20
 
-Последняя сверка статусов: 2026-07-30
+Последняя сверка статусов: 2026-08-17
 
 Документ сохраняет историю этапов. Текущая release-линия и открытые решения
 ведутся в [плане v1.2](v1-2-plan.md).
@@ -142,11 +142,9 @@
 - использовать `docs/SKADI_SYSTEMS_ADDITIONS_MVP_CONTRACT_RU.md` как ближайший future implementation contract для time/units/resource/context/policy planning;
 - заморозить урезанный `Skadi Core v1` и жёстко привязать compiler milestones к нему;
 - синхронизировать syntax decisions с `docs/SKADI_STYLE_PRINCIPLES.md`;
-- добавить TODO-трек для human-readable output formatting API, чтобы не уходить в низкоуровневый `%...` formatting noise.
-
-Кандидатное направление:
-
-- читабельный formatter helper для mixed numeric/text output в `v1.x`.
+- поддерживать реализованный human-readable mixed output: `output` принимает
+  1+ printable-значений, печатает их без неявных разделителей и добавляет один
+  перевод строки без низкоуровневого `%...` formatting noise.
 
 ## Отдельный трек — компиляция под target
 

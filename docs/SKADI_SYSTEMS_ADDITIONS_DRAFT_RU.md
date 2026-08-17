@@ -88,7 +88,7 @@ if elapsed(started) > 2s {
 Наиболее естественные ранние единицы:
 
 ```text
-time: ms, s, min
+time: ns, us, ms, s, min, h
 memory: b, kb, mb
 angle: deg, rad
 rate: Hz

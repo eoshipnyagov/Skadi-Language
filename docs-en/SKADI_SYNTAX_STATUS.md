@@ -1,13 +1,13 @@
 # Skadi Syntax Status
 
-Date: 2026-07-30
+Date: 2026-08-17
 
 ## Stable `v1.1`
 
 - declarations, assignments, functions, `danger fn`, `ErrorCode`, and `on error`;
 - `if`, `when`, `while`, `loop`, `iterate`, `for ... in`;
 - structs, methods, hidden fields, Text, Path, List;
-- the special `label ErrorCode` contract;
+- numeric `label`, symbolic `tag`, nominal values, and the special `ErrorCode` contract;
 - relative path imports, direct-import visibility, qualified symbols;
 - I/O, filesystem, scalar math, constants, formatter, CLI, and TUI.
 
@@ -33,17 +33,28 @@ Date: 2026-07-30
 - compound assignments are expanded;
 - C-style `for` is parsed/formatted but rejected semantically.
 
-General `label Name` declarations are partial: parser/module visibility works,
-but only `ErrorCode` has a complete value/type/C-lowering contract.
+General `label Name` and `tag Name` declarations are complete nominal types.
+They work in variables, function parameters/results, comparisons, and `when`;
+inside a nominal `when`, `is Ready` is the short form of `Type.Ready`.
+
+`output` accepts one or more printable scalar/Text values, writes them without
+implicit separators, and appends one newline.
+
+Math includes scalar selection/rounding, `sign`, `trunc`, `fract`, interpolation
+and range mapping, complete basic trigonometry with nominal `Angle`, IEEE result
+checks, and explicit angle/unit representation access. Duration literals cover
+`ns/us/ms/s/min/h`; ByteSize literals cover binary `b/kb/mb/gb/tb`.
 
 ## Reserved or future
 
-- `fixed`, `const`;
 - automatic `allow drop` reclamation;
-- named/aliased imports and packages;
+- package-name imports and re-exports;
 - Channel `select`/`try_receive`, and async/task groups;
 - ESP32/RTOS backend;
 - Matrix2D, Canvas events/text/images, non-Windows presenters, and generic units/vectors.
 
 The [quick reference](language-quick-reference.en.md) lists every public form and
 builtin.
+
+`fixed` and `const` are ordinary identifiers. `constant` is the only immutable
+binding keyword.

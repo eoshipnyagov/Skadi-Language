@@ -151,8 +151,8 @@ new Int x = 10
 new Int y = add(x, 2)
 "#;
     let c = pipeline_ok(src);
-    assert!(c.contains("int64_t add(int64_t a, int64_t b)"));
-    assert!(c.contains("int64_t y = add(x, 2);"));
+    assert!(c.contains("SkInt add(SkInt a, SkInt b)"));
+    assert!(c.contains("SkInt y = add(x, 2);"));
 }
 
 #[test]
