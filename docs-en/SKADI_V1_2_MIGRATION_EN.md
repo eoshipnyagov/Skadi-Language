@@ -24,6 +24,8 @@ the project and does not need to match the toolchain version.
 - native `Task`, `Task(T)`, `run`, `wait`, `stop`, and `stopping`;
 - bounded `Channel(T)` with blocking `send/receive`, `try_send`, close/drain,
   cancellation, and Duration-bounded `send_for/receive_for`;
+- path-sensitive `wait task for Duration on error { ... }` with handle
+  preservation on timeout;
 - nominal `Time`, `Duration`, `ByteSize`, and `Angle`;
 - `Vec2`, `Vec3`, `Vec4`, and a bounded vector math slice;
 - updated CLI/TUI with structured lifecycle analysis, documentation, and release

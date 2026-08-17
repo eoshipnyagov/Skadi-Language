@@ -3,6 +3,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub use v01::analysis::{AnalysisFact, AnalysisFactLevel};
 use v01::formatter::format_source;
@@ -108,6 +109,42 @@ pub struct RunResult {
     pub exit_status: String,
     pub stdout: String,
     pub stderr: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct QuickRunOptions {
+    pub source: PathBuf,
+    pub build: BuildOptions,
+    pub program_args: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct QuickRunPrepared {
+    pub source: PathBuf,
+    pub target: String,
+    pub selected_compiler: String,
+    pub program_args: Vec<String>,
+    exe_path: PathBuf,
+    _build_dir: TemporaryBuildDir,
+}
+
+#[derive(Clone, Debug)]
+pub struct QuickRunResult {
+    pub source: PathBuf,
+    pub target: String,
+    pub selected_compiler: String,
+    pub exit_status: String,
+}
+
+#[derive(Debug)]
+struct TemporaryBuildDir {
+    path: PathBuf,
+}
+
+impl Drop for TemporaryBuildDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -299,6 +336,78 @@ pub fn parse_build_options(args: &[String]) -> Result<BuildOptions, ActionError>
     Ok(BuildOptions { target, cc })
 }
 
+pub fn parse_quick_run_options(args: &[String]) -> Result<QuickRunOptions, ActionError> {
+    let split = args
+        .iter()
+        .position(|arg| arg == "--")
+        .unwrap_or(args.len());
+    let command_args = &args[..split];
+    let program_args = if split < args.len() {
+        args[(split + 1)..].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    let mut source = None;
+    let mut target = "host".to_string();
+    let mut cc = None;
+    let mut index = 0usize;
+    while index < command_args.len() {
+        match command_args[index].as_str() {
+            "--target" => {
+                let Some(value) = command_args.get(index + 1) else {
+                    return Err(ActionError::new(
+                        FailureSource::Usage,
+                        "--target requires value",
+                    ));
+                };
+                target = value.clone();
+                index += 2;
+            }
+            "--cc" => {
+                let Some(value) = command_args.get(index + 1) else {
+                    return Err(ActionError::new(
+                        FailureSource::Usage,
+                        "--cc requires value",
+                    ));
+                };
+                cc = Some(value.clone());
+                index += 2;
+            }
+            flag if flag.starts_with('-') => {
+                return Err(ActionError::new(
+                    FailureSource::Usage,
+                    format!("unknown quick-run option: {flag}"),
+                ));
+            }
+            path if source.is_none() => {
+                source = Some(PathBuf::from(path));
+                index += 1;
+            }
+            extra => {
+                return Err(ActionError::new(
+                    FailureSource::Usage,
+                    format!(
+                        "unexpected quick-run argument '{extra}'; pass program arguments after '--'"
+                    ),
+                ));
+            }
+        }
+    }
+
+    let source = source.ok_or_else(|| {
+        ActionError::new(
+            FailureSource::Usage,
+            "Usage: skadi-cli quick-run <file.skd> [--cc compiler] [-- <args ...>]",
+        )
+    })?;
+    Ok(QuickRunOptions {
+        source,
+        build: BuildOptions { target, cc },
+        program_args,
+    })
+}
+
 pub fn run_check() -> Result<CheckResult, ActionError> {
     let cwd = std::env::current_dir()
         .map_err(|e| ActionError::new(FailureSource::Io, format!("cwd failed: {e}")))?;
@@ -376,34 +485,7 @@ pub fn run_build_at(root: &Path, options: &BuildOptions) -> Result<BuildResult, 
     };
     let exe_path = build_dir.join(exe_name);
 
-    let toolchain = match compile_c_to_exe_detailed(
-        &c_path,
-        &exe_path,
-        &options.target,
-        options.cc.as_deref(),
-    ) {
-        Ok(ok) => ok,
-        Err(e) => {
-            let compiler_info = options
-                .cc
-                .as_ref()
-                .map(|v| format!("requested compiler: {v}"))
-                .unwrap_or_else(|| {
-                    "auto-detect order: gcc -> clang -> cc (and cl on Windows host)".to_string()
-                });
-            return Err(ActionError::new(
-                FailureSource::Toolchain,
-                format!(
-                    "C toolchain error: {}\n{}\nhint: {}\ninstall: {}\nprobe: try 'gcc --version', 'clang --version', and '{}'",
-                    e,
-                    compiler_info,
-                    target_hint(profile.triple),
-                    os_install_hint(),
-                    shell_probe_hint(),
-                ),
-            ));
-        }
-    };
+    let toolchain = compile_native(&c_path, &exe_path, options)?;
 
     Ok(BuildResult {
         project: summary,
@@ -474,6 +556,119 @@ pub fn run_project_at(root: &Path, options: &BuildOptions) -> Result<RunResult, 
         exit_status: output.status.to_string(),
         stdout,
         stderr,
+    })
+}
+
+pub fn prepare_quick_run(options: &QuickRunOptions) -> Result<QuickRunPrepared, ActionError> {
+    if options.build.target != "host" {
+        return Err(ActionError::new(
+            FailureSource::Usage,
+            format!(
+                "quick-run executes host programs only, got target '{}'; use a project build for cross-target artifacts",
+                options.build.target
+            ),
+        ));
+    }
+
+    let source = if options.source.is_absolute() {
+        options.source.clone()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| ActionError::new(FailureSource::Io, format!("cwd failed: {e}")))?
+            .join(&options.source)
+    };
+    if !source.exists() {
+        return Err(ActionError::new(
+            FailureSource::Io,
+            format!("quick-run source '{}' does not exist", source.display()),
+        ));
+    }
+    if !source.is_file() {
+        return Err(ActionError::new(
+            FailureSource::Usage,
+            format!("quick-run source '{}' is not a file", source.display()),
+        ));
+    }
+    if !source
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("skd"))
+    {
+        return Err(ActionError::new(
+            FailureSource::Usage,
+            format!("quick-run expects a .skd file, got '{}'", source.display()),
+        ));
+    }
+
+    let frontend = compile_frontend(&source).map_err(|e| {
+        ActionError::new(
+            FailureSource::Frontend,
+            format!("Skadi frontend error: {e}"),
+        )
+    })?;
+    let build_dir = create_temporary_build_dir()?;
+    let artifact_name = quick_artifact_name(&source);
+    let c_path = build_dir.path.join(format!("{artifact_name}.c"));
+    fs::write(&c_path, frontend.c_code).map_err(|e| {
+        ActionError::new(
+            FailureSource::Io,
+            format!(
+                "quick-run staging error: write {} failed: {e}",
+                c_path.display()
+            ),
+        )
+    })?;
+
+    let profile = resolve_profile(&options.build.target)
+        .map_err(|e| ActionError::new(FailureSource::Usage, e))?;
+    let exe_name = match profile.output_kind {
+        OutputKind::WindowsExe => format!("{artifact_name}.exe"),
+        OutputKind::LinuxElf => artifact_name,
+    };
+    let exe_path = build_dir.path.join(exe_name);
+    let toolchain = compile_native(&c_path, &exe_path, &options.build)?;
+
+    Ok(QuickRunPrepared {
+        source,
+        target: options.build.target.clone(),
+        selected_compiler: toolchain.invocation.program,
+        program_args: options.program_args.clone(),
+        exe_path,
+        _build_dir: build_dir,
+    })
+}
+
+pub fn execute_quick_run(prepared: &QuickRunPrepared) -> Result<QuickRunResult, ActionError> {
+    let status = Command::new(&prepared.exe_path)
+        .args(&prepared.program_args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(|e| {
+            ActionError::new(
+                FailureSource::Runtime,
+                format!(
+                    "runtime execution error: failed to run {}: {e}",
+                    prepared.source.display()
+                ),
+            )
+        })?;
+    if !status.success() {
+        return Err(ActionError::new(
+            FailureSource::Runtime,
+            format!(
+                "runtime execution error: '{}' exited with status {}",
+                prepared.source.display(),
+                status
+            ),
+        ));
+    }
+    Ok(QuickRunResult {
+        source: prepared.source.clone(),
+        target: prepared.target.clone(),
+        selected_compiler: prepared.selected_compiler.clone(),
+        exit_status: status.to_string(),
     })
 }
 
@@ -620,6 +815,94 @@ pub fn ensure_project_entry_file(root: &Path) -> Result<PathBuf, ActionError> {
     let manifest =
         load_manifest_config_at(root).map_err(|e| ActionError::new(FailureSource::Project, e))?;
     ensure_entry_file_at(root, &manifest.entry).map_err(|e| ActionError::new(FailureSource::Io, e))
+}
+
+fn compile_native(
+    c_path: &Path,
+    exe_path: &Path,
+    options: &BuildOptions,
+) -> Result<crate::pipeline::ToolchainOutput, ActionError> {
+    let profile =
+        resolve_profile(&options.target).map_err(|e| ActionError::new(FailureSource::Usage, e))?;
+    compile_c_to_exe_detailed(
+        c_path,
+        exe_path,
+        &options.target,
+        options.cc.as_deref(),
+    )
+    .map_err(|e| {
+        let compiler_info = options
+            .cc
+            .as_ref()
+            .map(|value| format!("requested compiler: {value}"))
+            .unwrap_or_else(|| {
+                "auto-detect order: gcc -> clang -> cc (and cl on Windows host)".to_string()
+            });
+        ActionError::new(
+            FailureSource::Toolchain,
+            format!(
+                "C toolchain error: {}\n{}\nhint: {}\ninstall: {}\nprobe: try 'gcc --version', 'clang --version', and '{}'",
+                e,
+                compiler_info,
+                target_hint(profile.triple),
+                os_install_hint(),
+                shell_probe_hint(),
+            ),
+        )
+    })
+}
+
+fn create_temporary_build_dir() -> Result<TemporaryBuildDir, ActionError> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| ActionError::new(FailureSource::Io, format!("clock failed: {e}")))?
+        .as_nanos();
+    let parent = std::env::temp_dir();
+    for attempt in 0..16u8 {
+        let path = parent.join(format!(
+            "skadi-quick-run-{}-{stamp}-{attempt}",
+            std::process::id()
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => return Ok(TemporaryBuildDir { path }),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(ActionError::new(
+                    FailureSource::Io,
+                    format!(
+                        "quick-run temporary directory '{}' failed: {error}",
+                        path.display()
+                    ),
+                ));
+            }
+        }
+    }
+    Err(ActionError::new(
+        FailureSource::Io,
+        "quick-run could not allocate a unique temporary build directory",
+    ))
+}
+
+fn quick_artifact_name(source: &Path) -> String {
+    let stem = source
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("script");
+    let sanitized = stem
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    if sanitized.is_empty() {
+        "script".to_string()
+    } else {
+        sanitized
+    }
 }
 
 pub fn parse_diagnostics(input: &str) -> Vec<DiagnosticSummary> {

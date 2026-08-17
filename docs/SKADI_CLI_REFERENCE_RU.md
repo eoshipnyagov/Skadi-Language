@@ -15,6 +15,13 @@ skadi-cli check
 skadi-cli run
 ```
 
+Одиночный файл без manifest:
+
+```powershell
+skadi-cli quick-run hello.skd
+skadi-cli quick-run hello.skd -- first second
+```
+
 Обычный цикл:
 
 ```powershell
@@ -41,6 +48,7 @@ skadi-cli tui
 | `format [--check] [path ...]` | Форматировать или проверить `.skd` | Нет |
 | `build [--target name] [--cc compiler]` | Собрать native binary | Да |
 | `run [--target name] [--cc compiler]` | Собрать и запустить | Да |
+| `quick-run <file.skd> [-- <args ...>]` | Собрать и запустить один файл без manifest | Да |
 | `doctor` | Проверить host/cross toolchains | Нет |
 | `target list` | Показать target profiles | Нет |
 | `tui` | Открыть full-screen project workflow | Зависит от action |
@@ -119,6 +127,21 @@ skadi-cli run --target host --cc gcc
 Артефакты находятся в `build/`. `run` передаёт stdout/stderr программы и
 сохраняет её exit status.
 
+## `quick-run`
+
+Короткий путь для примеров и небольших независимых программ:
+
+```powershell
+skadi-cli quick-run examples/hello.skd
+skadi-cli quick-run tools/inspect.skd -- input.txt --verbose
+```
+
+Команда не ищет `Skadi.toml`. Imports по-прежнему разрешаются относительно
+исходного файла. Сгенерированные C и executable размещаются во временной папке
+и удаляются после завершения. Используется host target, C compiler можно выбрать
+через `--cc`, а аргументы программы передаются только после `--`. Установленному
+`skadi-cli` Cargo для этого не нужен.
+
 ## Targets и doctor
 
 ```powershell
@@ -165,8 +188,8 @@ TUI восстанавливает terminal state при выходе и пок�
 editor отсутствуют.
 
 После успешного `check/build` тот же compiler core передаёт TUI structured
-analysis facts. Текущий slice показывает blocking/timed Channel operations,
-учитывает task-entry context и `on error`, отмечает `when` без `else` и строит
+analysis facts. Текущий slice показывает blocking/timed Channel operations и
+path-sensitive timed Task wait, учитывает task-entry context и `on error`, отмечает `when` без `else` и строит
 source-order lifecycle chains для ownership/resources/Task/Memory. Это
 информационный workbench, а не новый класс hard errors.
 

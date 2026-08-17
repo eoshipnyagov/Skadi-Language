@@ -21,6 +21,16 @@ skadi-cli build
 skadi-cli run
 ```
 
+Для одиночного `.skd` без manifest и постоянных build-артефактов:
+
+```bash
+skadi-cli quick-run hello.skd
+skadi-cli quick-run hello.skd -- first second
+```
+
+`--` отделяет аргументы `skadi-cli` от аргументов запускаемой программы. Cargo
+после установки не нужен; для native-сборки по-прежнему нужен host C compiler.
+
 Интерактивный режим:
 
 ```bash
@@ -41,6 +51,7 @@ cargo run -p skadi-cli -- check
 - `format` форматирует проект или проверяет стиль через `--check`;
 - `build` выполняет `Skadi -> C -> executable`;
 - `run` собирает и запускает программу;
+- `quick-run` собирает и запускает один `.skd` без `Skadi.toml`;
 - `doctor` проверяет host и cross toolchains;
 - `target list` показывает поддерживаемые target profiles;
 - `tui` открывает полноэкранный интерфейс проекта.
@@ -54,8 +65,8 @@ TUI поддерживает:
 
 - dashboard проекта;
 - диагностику с кодами и stage;
-- structured analysis facts для blocking/timed Channel, incomplete `when` и
-  ownership/resource lifecycle chains с explain/next-action detail;
+- structured analysis facts для blocking/timed Channel и timed Task wait,
+  incomplete `when` и ownership/resource lifecycle chains с explain/next-action detail;
 - `check`, `format`, `build`, `run`, `doctor`;
 - редактор каноничных полей `Skadi.toml`;
 - выбор target и компилятора для текущего сеанса;

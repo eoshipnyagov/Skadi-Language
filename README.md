@@ -44,9 +44,10 @@ The repository includes:
 - explicit `view`/`direct` borrows and `move` ownership transfer for current
   linear resources,
 - experimental native Task/Channel runtime and periodic host Interrupts for
-  `v1.2`, including cancellation-aware and Duration-bounded Channel operations,
-- structured analysis facts for blocking/timed Channel operations, incomplete
-  `when`, and resource lifecycle chains displayed in the TUI diagnostics workbench,
+  `v1.2`, including cancellation-aware Channel operations and Duration-bounded
+  Channel/Task waits,
+- structured analysis facts for blocking/timed operations, incomplete `when`,
+  and resource lifecycle chains displayed in the TUI diagnostics workbench,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
 - experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,
@@ -318,9 +319,9 @@ non-blocking `try_send`, explicit channel close, and typed periodic host
 Interrupts. `stop` also wakes a task blocked in Channel `send/receive` without
 closing or draining the channel. `send_for`/`receive_for` bound waits with a
 `Duration`; their `on error` handlers distinguish cancellation with `stopping`
-and deadlines with `timed_out`. Timed Task wait, cancellation of file I/O,
-hardware IRQ binding, advanced scheduling, and embedded/RTOS targets remain
-future work. See the
+and deadlines with `timed_out`. Timed Task wait consumes the handle on success
+and preserves it in the timeout handler. Cancellation of file I/O, hardware IRQ
+binding, advanced scheduling, and embedded/RTOS targets remain future work. See the
 [Concurrency Guide](https://eoshipnyagov.github.io/Skadi-Language/en/user/concurrency/).
 
 ### 3. Canvas
@@ -488,6 +489,16 @@ requiring Rust. A host C compiler is still required for `build` and `run`;
 Then, from a working directory:
 
 ```bash
+skadi-cli quick-run hello.skd
+```
+
+`quick-run` builds and executes one `.skd` file without `Skadi.toml`, Cargo, or
+persistent build artifacts. A host C compiler is still required. Use `--` to
+forward program arguments: `skadi-cli quick-run hello.skd -- first second`.
+
+For a regular project:
+
+```bash
 skadi-cli new hello_skadi
 cd hello_skadi
 skadi-cli check
@@ -517,6 +528,7 @@ skadi-cli init
 skadi-cli check
 skadi-cli build
 skadi-cli run
+skadi-cli quick-run <file.skd> [-- <args>]
 skadi-cli format
 skadi-cli tui
 skadi-cli target list
@@ -585,7 +597,7 @@ The repository already includes:
 - experimental fixed/growing/child/root-static Memory regions and explicit
   resource ownership for `v1.2`,
 - experimental native Task/Channel runtime and periodic host Interrupts for
-  `v1.2`, including blocking Channel cancellation,
+  `v1.2`, including blocking Channel cancellation and timed Channel/Task waits,
 - structured compiler analysis facts surfaced by CLI actions and TUI,
 - experimental nominal Time/Duration runtime for `v1.2`,
 - experimental nominal ByteSize and dynamic Memory capacity for `v1.2`,

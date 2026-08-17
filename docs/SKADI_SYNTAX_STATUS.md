@@ -223,7 +223,9 @@
     требует literal capacity и разрешён только на program root;
   - C backend доводит весь bounded surface до `Skadi -> C -> native`.
 - task/channel systems MVP - `Experimental / Runtime MVP`
-  - parser принимает `Task`, `Task(T)`, `run worker(...)`, `wait task`, `stop task`, `stopping`, `Channel(T)`, `channel(N)`, blocking и timed Channel operations;
+  - parser принимает `Task`, `Task(T)`, `run worker(...)`, `wait task`, timed
+    `wait task for Duration on error`, `stop task`, `stopping`, `Channel(T)`,
+    `channel(N)`, blocking и timed Channel operations;
   - semantic layer проверяет task handle lifecycle, запрет `Task` как обычного value-type, task-context для `stopping` и value-safe channel messages;
   - игнорирование результата `run worker()` является hard error;
   - semantic pass требует `wait` на всех путях и проверяет task-safe boundary;
@@ -238,8 +240,10 @@
   - `stop` пробуждает task, заблокированную в `send/receive`; cancellation
     обрабатывается через `on error` и не закрывает Channel;
   - `send_for(value, Duration)` и `receive_for(Duration)` требуют `on error`;
-    `timed_out` доступен только в их handler и не является lexer keyword;
-  - timed `Task.wait`, `try_receive` и `select` отложены.
+  - `wait task for Duration on error { ... }` выполняет path-sensitive timed
+    join: success поглощает handle, timeout сохраняет его живым в handler;
+  - `timed_out` доступен только в handler timed Channel/Task и не является lexer keyword;
+  - `try_receive` и `select` отложены.
   - практические шаблоны и платформенный статус описаны в
     [руководстве по многопоточности](concurrency.md).
 - Canvas v0 - `Experimental / Runtime MVP`

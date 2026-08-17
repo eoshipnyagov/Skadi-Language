@@ -68,7 +68,7 @@ stop worker_task
     assert!(matches!(
         &program.statements[5],
         Statement::ExpressionStatement { expr, .. }
-            if matches!(expr.as_ref(), Expression::WaitTask { task_name } if task_name == "worker_task")
+            if matches!(expr.as_ref(), Expression::WaitTask { task_name, .. } if task_name == "worker_task")
     ));
     assert!(matches!(
         program.statements.last(),
@@ -158,7 +158,92 @@ jobs.send_for(7, 25ms) on error {
     assert!(generated.contains("SleepConditionVariableCS"));
     assert!(generated.contains("sk_channel_receive_for_Int"));
     assert!(generated.contains("sk_channel_send_for_Int"));
-    assert!(generated.contains("sk_channel_timed_out()"));
+    assert!(generated.contains("sk_operation_timed_out()"));
+}
+
+#[test]
+fn timed_task_wait_requires_duration_handler_and_complete_timeout_cleanup() {
+    semantic_ok(
+        r#"
+fn calculate() returns Int {
+    sleep(20ms)
+    return 42
+}
+
+Task(Int) worker_task = run calculate()
+new Int result = 0
+result = wait worker_task for 1ms on error {
+    if timed_out {
+        output("deadline")
+    }
+    stop worker_task
+    result = wait worker_task
+}
+output(result)
+"#,
+    );
+
+    let wrong_timeout = semantic_err(
+        r#"
+fn worker() {
+    pass
+}
+Task worker_task = run worker()
+wait worker_task for 1 on error {
+    wait worker_task
+}
+"#,
+    );
+    assert!(wrong_timeout.contains("timed wait expects Duration"));
+
+    let missing_handler = semantic_err(
+        r#"
+fn worker() {
+    pass
+}
+Task worker_task = run worker()
+wait worker_task for 1ms
+"#,
+    );
+    assert!(missing_handler.contains("timed wait requires an 'on error' handler"));
+
+    let leaked_timeout_path = semantic_err(
+        r#"
+fn worker() {
+    sleep(20ms)
+}
+Task worker_task = run worker()
+wait worker_task for 1ms on error {
+    pass
+}
+"#,
+    );
+    assert!(leaked_timeout_path.contains("must be waited on all paths"));
+}
+
+#[test]
+fn backend_lowers_timed_task_wait_with_platform_completion_paths() {
+    let program = parse_ok(
+        r#"
+fn worker() {
+    sleep(20ms)
+}
+Task worker_task = run worker()
+wait worker_task for 1ms on error {
+    if timed_out {
+        output("deadline")
+    }
+    stop worker_task
+    wait worker_task
+}
+"#,
+    );
+    semantic_analyze(&program).expect("semantic timed Task source");
+    let generated = v01::codegen::transpile_program_to_c(&program);
+    assert!(generated.contains("sk_task_join_for"));
+    assert!(generated.contains("WaitForSingleObject(task->thread, timeout_ms)"));
+    assert!(generated.contains("pthread_cond_timedwait(&task->completed_cv"));
+    assert!(generated.contains("sk_operation_timed_out_state = true"));
 }
 
 #[test]

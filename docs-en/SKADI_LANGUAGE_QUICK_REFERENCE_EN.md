@@ -133,6 +133,7 @@ Constants: `PI`, `TAU`, `E`, `EPSILON`.
 | `m.clear()` | Clear a region | Experimental |
 | `Task t = run worker()` | Spawn a native task | Experimental |
 | `value = wait t` | Join and retrieve result | Experimental |
+| `value = wait t for 250ms on error { ... }` | Timed wait; success consumes the handle, timeout preserves it in the handler | Experimental |
 | `stop t`, `stopping` | Cooperative stop | Experimental |
 | `Channel(Int) q = channel(8)` | Bounded channel | Experimental |
 | `q.send(value)`, `q.receive()` | Blocking message passing | Experimental |
@@ -142,10 +143,10 @@ Constants: `PI`, `TAU`, `E`, `EPSILON`.
 | `q.close()` | Owner closes the stream; queued values remain readable | Experimental |
 | `q.send_for(value, 250ms) on error { ... }` | Blocking send with a deadline | Experimental |
 | `value = q.receive_for(250ms) on error { ... }` | Blocking receive with a deadline | Experimental |
-| `timed_out` | Timed Channel handler reason; contextual identifier | Experimental |
+| `timed_out` | Timed Channel/Task handler reason; contextual identifier | Experimental |
 
 Standalone `on error { ... }`, automatic `allow drop` reclamation, channel
-`select`, timed `Task.wait`, `try_receive`, async/await, Matrix2D, Canvas
+`select`, `try_receive`, async/await, Matrix2D, Canvas
 events/text/images, non-Windows window presenters, and package imports are not
 implemented.
 

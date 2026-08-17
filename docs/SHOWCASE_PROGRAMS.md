@@ -38,7 +38,11 @@
 - `examples/memory/positive/06_extended_regions.skd` — `allow grow/drop`,
   child и static regions;
 - `examples/ownership/01_move_canvas_factory.skd` — factory return и передача
-  Canvas owner через `move`.
+  Canvas owner через `move`;
+- `examples/concurrency/03_cancel_blocked_channel.skd` — cancellation task,
+  заблокированной на пустом Channel;
+- `examples/concurrency/04_timed_channel.skd` — Duration-bounded Channel waits;
+- `examples/concurrency/05_timed_task_wait.skd` — path-sensitive timed Task wait.
 
 ## Репозиторные входные данные
 

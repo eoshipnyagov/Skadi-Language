@@ -318,6 +318,7 @@ pub enum Expression {
     },
     WaitTask {
         task_name: String,
+        timeout: Option<Box<Expression>>,
     },
     Stopping,
     TimedOut,

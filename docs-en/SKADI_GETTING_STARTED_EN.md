@@ -29,6 +29,18 @@ skadi-cli doctor
 
 Skadi emits C, so `build` and `run` need a supported C compiler. `check` does not.
 
+## First standalone file
+
+Small examples and utilities do not need a manifest:
+
+```powershell
+skadi-cli quick-run hello.skd
+```
+
+`quick-run` uses a temporary native build and removes its artifacts after
+execution. An installed user does not need Cargo. Put program arguments after
+`--`.
+
 ## First project
 
 From your working directory:

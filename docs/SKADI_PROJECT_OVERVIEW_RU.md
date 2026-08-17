@@ -127,8 +127,8 @@ GitHub Pages.
 
 - module-name imports и re-exports поверх path-imports с рабочими aliases;
 - автоматическая reclamation по `allow drop` и полный lifetime calculus;
-- timed `Task.wait`, `select` и task groups поверх стабилизированных Channel
-  cancellation и timeout boundaries;
+- `select` и task groups поверх стабилизированных Channel/Task cancellation и
+  timeout boundaries;
 - Canvas events, text/images, transforms и non-Windows presenters;
 - systems additions;
 - hardware/RTOS backend для `on interrupt` поверх готового host periodic MVP;

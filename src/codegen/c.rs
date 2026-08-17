@@ -1552,16 +1552,33 @@ fn emit_task_runtime(out: &mut String) {
     out.push_str("    volatile LONG stop_requested;\n");
     out.push_str("#else\n");
     out.push_str("    pthread_mutex_t stop_mutex;\n");
+    out.push_str("    pthread_cond_t completed_cv;\n");
     out.push_str("    bool stop_requested;\n");
+    out.push_str("    bool completed;\n");
     out.push_str("#endif\n");
     out.push_str("    void *wait_context;\n");
     out.push_str("    SkTaskWake wake_wait;\n");
     out.push_str("};\n\n");
-    out.push_str("static SK_THREAD_LOCAL SkTask *sk_current_task = NULL;\n\n");
+    out.push_str("static SK_THREAD_LOCAL SkTask *sk_current_task = NULL;\n");
+    out.push_str("static SK_THREAD_LOCAL bool sk_operation_timed_out_state = false;\n\n");
+    out.push_str("static bool sk_operation_timed_out(void) {\n");
+    out.push_str("    return sk_operation_timed_out_state;\n");
+    out.push_str("}\n\n");
     out.push_str("typedef struct {\n");
     out.push_str("    SkTask *task;\n");
     out.push_str("    SkTaskEntry entry;\n");
     out.push_str("} SkTaskLaunch;\n\n");
+    out.push_str("static void sk_task_panic(const char *code, const char *message);\n\n");
+    out.push_str("static void sk_task_mark_completed(SkTask *task) {\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    (void)task;\n");
+    out.push_str("#else\n");
+    out.push_str("    if (pthread_mutex_lock(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-305\", \"task completion synchronization failed\");\n");
+    out.push_str("    task->completed = true;\n");
+    out.push_str("    if (pthread_cond_broadcast(&task->completed_cv) != 0) sk_task_panic(\"SC-RT-305\", \"task completion notification failed\");\n");
+    out.push_str("    if (pthread_mutex_unlock(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-305\", \"task completion synchronization failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("}\n\n");
     out.push_str("static void sk_task_panic(const char *code, const char *message) {\n");
     out.push_str("    fprintf(stderr, \"Runtime error: [%s] %s\\n\", code, message);\n");
     out.push_str("    exit(1);\n");
@@ -1574,6 +1591,7 @@ fn emit_task_runtime(out: &mut String) {
     out.push_str("    free(launch);\n");
     out.push_str("    sk_current_task = task;\n");
     out.push_str("    entry(task, task->context);\n");
+    out.push_str("    sk_task_mark_completed(task);\n");
     out.push_str("    sk_current_task = NULL;\n");
     out.push_str("    return 0;\n");
     out.push_str("}\n");
@@ -1585,6 +1603,7 @@ fn emit_task_runtime(out: &mut String) {
     out.push_str("    free(launch);\n");
     out.push_str("    sk_current_task = task;\n");
     out.push_str("    entry(task, task->context);\n");
+    out.push_str("    sk_task_mark_completed(task);\n");
     out.push_str("    sk_current_task = NULL;\n");
     out.push_str("    return NULL;\n");
     out.push_str("}\n");
@@ -1601,14 +1620,16 @@ fn emit_task_runtime(out: &mut String) {
     out.push_str("    task->stop_requested = 0;\n");
     out.push_str("#else\n");
     out.push_str("    task->stop_requested = false;\n");
+    out.push_str("    task->completed = false;\n");
     out.push_str("    if (pthread_mutex_init(&task->stop_mutex, NULL) != 0) return false;\n");
+    out.push_str("    if (pthread_cond_init(&task->completed_cv, NULL) != 0) { pthread_mutex_destroy(&task->stop_mutex); return false; }\n");
     out.push_str("#endif\n");
     out.push_str("    SkTaskLaunch *launch = (SkTaskLaunch*)malloc(sizeof(SkTaskLaunch));\n");
     out.push_str("    if (!launch) {\n");
     out.push_str("#if defined(_WIN32)\n");
     out.push_str("        DeleteCriticalSection(&task->stop_lock);\n");
     out.push_str("#else\n");
-    out.push_str("        pthread_mutex_destroy(&task->stop_mutex);\n");
+    out.push_str("        pthread_cond_destroy(&task->completed_cv); pthread_mutex_destroy(&task->stop_mutex);\n");
     out.push_str("#endif\n");
     out.push_str("        return false;\n");
     out.push_str("    }\n");
@@ -1620,7 +1641,7 @@ fn emit_task_runtime(out: &mut String) {
     );
     out.push_str("    if (!task->thread) { free(launch); DeleteCriticalSection(&task->stop_lock); return false; }\n");
     out.push_str("#else\n");
-    out.push_str("    if (pthread_create(&task->thread, NULL, sk_task_platform_entry, launch) != 0) { free(launch); pthread_mutex_destroy(&task->stop_mutex); return false; }\n");
+    out.push_str("    if (pthread_create(&task->thread, NULL, sk_task_platform_entry, launch) != 0) { free(launch); pthread_cond_destroy(&task->completed_cv); pthread_mutex_destroy(&task->stop_mutex); return false; }\n");
     out.push_str("#endif\n");
     out.push_str("    task->started = true;\n");
     out.push_str("    return true;\n");
@@ -1696,9 +1717,49 @@ fn emit_task_runtime(out: &mut String) {
     out.push_str("    DeleteCriticalSection(&task->stop_lock);\n");
     out.push_str("#else\n");
     out.push_str("    if (pthread_join(task->thread, NULL) != 0) sk_task_panic(\"SC-RT-302\", \"task join failed\");\n");
+    out.push_str("    if (pthread_cond_destroy(&task->completed_cv) != 0) sk_task_panic(\"SC-RT-305\", \"task completion synchronization teardown failed\");\n");
     out.push_str("    if (pthread_mutex_destroy(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-304\", \"task stop synchronization teardown failed\");\n");
     out.push_str("#endif\n");
     out.push_str("    task->joined = true;\n");
+    out.push_str("}\n\n");
+    out.push_str("static bool sk_task_join_for(SkTask *task, int64_t timeout_ns) {\n");
+    out.push_str("    if (!task || !task->started || task->joined) sk_task_panic(\"SC-RT-303\", \"invalid task state at timed wait\");\n");
+    out.push_str("    if (timeout_ns < 0) timeout_ns = 0;\n");
+    out.push_str("#if defined(_WIN32)\n");
+    out.push_str("    uint64_t rounded_ms = timeout_ns == 0 ? 0 : ((uint64_t)timeout_ns + 999999ULL) / 1000000ULL;\n");
+    out.push_str("    ULONGLONG deadline = GetTickCount64() + rounded_ms;\n");
+    out.push_str("    for (;;) {\n");
+    out.push_str("        ULONGLONG now = GetTickCount64();\n");
+    out.push_str(
+        "        uint64_t remaining = now >= deadline ? 0 : (uint64_t)(deadline - now);\n",
+    );
+    out.push_str("        DWORD timeout_ms = remaining >= (uint64_t)(INFINITE - 1) ? INFINITE - 1 : (DWORD)remaining;\n");
+    out.push_str("        DWORD result = WaitForSingleObject(task->thread, timeout_ms);\n");
+    out.push_str("        if (result == WAIT_OBJECT_0) break;\n");
+    out.push_str(
+        "        if (result == WAIT_TIMEOUT && GetTickCount64() >= deadline) return false;\n",
+    );
+    out.push_str("        if (result != WAIT_TIMEOUT) sk_task_panic(\"SC-RT-302\", \"timed task wait failed\");\n");
+    out.push_str("    }\n");
+    out.push_str("#else\n");
+    out.push_str("    struct timespec deadline;\n");
+    out.push_str("    if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) sk_task_panic(\"SC-RT-305\", \"task deadline clock read failed\");\n");
+    out.push_str("    deadline.tv_sec += (time_t)(timeout_ns / 1000000000LL);\n");
+    out.push_str("    deadline.tv_nsec += (long)(timeout_ns % 1000000000LL);\n");
+    out.push_str("    if (deadline.tv_nsec >= 1000000000L) { deadline.tv_sec += 1; deadline.tv_nsec -= 1000000000L; }\n");
+    out.push_str("    if (pthread_mutex_lock(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-305\", \"task completion synchronization failed\");\n");
+    out.push_str("    while (!task->completed) {\n");
+    out.push_str(
+        "        if (timeout_ns == 0) { pthread_mutex_unlock(&task->stop_mutex); return false; }\n",
+    );
+    out.push_str("        int wait_result = pthread_cond_timedwait(&task->completed_cv, &task->stop_mutex, &deadline);\n");
+    out.push_str("        if (wait_result == ETIMEDOUT && !task->completed) { pthread_mutex_unlock(&task->stop_mutex); return false; }\n");
+    out.push_str("        if (wait_result != 0 && wait_result != ETIMEDOUT) { pthread_mutex_unlock(&task->stop_mutex); sk_task_panic(\"SC-RT-305\", \"timed task wait failed\"); }\n");
+    out.push_str("    }\n");
+    out.push_str("    if (pthread_mutex_unlock(&task->stop_mutex) != 0) sk_task_panic(\"SC-RT-305\", \"task completion synchronization failed\");\n");
+    out.push_str("#endif\n");
+    out.push_str("    sk_task_join(task);\n");
+    out.push_str("    return true;\n");
     out.push_str("}\n\n");
     out.push_str("static void sk_task_release_context(SkTask *task) {\n");
     out.push_str("    if (!task || !task->joined || !task->context) sk_task_panic(\"SC-RT-303\", \"invalid task state at context release\");\n");
@@ -1714,9 +1775,6 @@ fn emit_channel_runtime(out: &mut String) {
     out.push_str("    SK_CHANNEL_CANCELLED = 2,\n");
     out.push_str("    SK_CHANNEL_TIMED_OUT = 3\n");
     out.push_str("} SkChannelStatus;\n\n");
-    out.push_str(
-        "static SK_THREAD_LOCAL SkChannelStatus sk_channel_last_status = SK_CHANNEL_OK;\n\n",
-    );
     out.push_str("typedef struct SkChannel {\n");
     out.push_str("    unsigned char *buffer;\n");
     out.push_str("    size_t capacity;\n");
@@ -1738,9 +1796,6 @@ fn emit_channel_runtime(out: &mut String) {
     out.push_str("static void sk_channel_panic(const char *code, const char *message) {\n");
     out.push_str("    fprintf(stderr, \"Runtime error: [%s] %s\\n\", code, message);\n");
     out.push_str("    exit(1);\n");
-    out.push_str("}\n\n");
-    out.push_str("static bool sk_channel_timed_out(void) {\n");
-    out.push_str("    return sk_channel_last_status == SK_CHANNEL_TIMED_OUT;\n");
     out.push_str("}\n\n");
     out.push_str("#if defined(_WIN32)\n");
     out.push_str("static DWORD sk_channel_remaining_millis(ULONGLONG deadline) {\n");
@@ -2221,7 +2276,11 @@ pub fn transpile_program_to_c(program: &Program) -> String {
         if needs_task_runtime || needs_channel_runtime || needs_interrupt_runtime {
             out.push_str("#include <pthread.h>\n");
         }
-        if needs_channel_runtime || needs_time_runtime || needs_interrupt_runtime {
+        if needs_task_runtime
+            || needs_channel_runtime
+            || needs_time_runtime
+            || needs_interrupt_runtime
+        {
             out.push_str("#include <errno.h>\n");
             out.push_str("#include <time.h>\n");
         }
@@ -4299,6 +4358,31 @@ fn emit_statement(
             declared.insert(name.clone(), "Memory@owned".to_string());
         }
         Statement::Assignment { target, value, .. } => {
+            if let Expression::WaitTask {
+                task_name,
+                timeout: None,
+            } = value.as_ref()
+                && let Some((_, call_name)) = declared
+                    .get(task_name)
+                    .and_then(|task_type| task_type.split_once('@'))
+            {
+                out.push_str(&pad);
+                out.push_str("sk_task_join(&");
+                out.push_str(task_name);
+                out.push_str(");\n");
+                out.push_str(&pad);
+                out.push_str(target);
+                out.push_str(" = ((SkTaskContext_");
+                out.push_str(call_name);
+                out.push_str("*)");
+                out.push_str(task_name);
+                out.push_str(".context)->result;\n");
+                out.push_str(&pad);
+                out.push_str("sk_task_release_context(&");
+                out.push_str(task_name);
+                out.push_str(");\n");
+                return;
+            }
             let expr = if let Expression::StructConstruction { fields } = value.as_ref() {
                 emit_struct_literal(fields, declared.get(target).map(String::as_str), declared)
             } else {
@@ -4568,6 +4652,58 @@ fn emit_statement(
             on_error,
             ..
         } => {
+            if call_name == "__task_wait_for"
+                && let [Expression::VariableReference(task_name), timeout] = args.as_slice()
+                && let Some((_, entry_name)) = declared
+                    .get(task_name)
+                    .and_then(|task_type| task_type.split_once('@'))
+            {
+                let id = state.next_id();
+                out.push_str(&pad);
+                out.push_str(&format!(
+                    "bool sk_task_wait_ok_{id} = sk_task_join_for(&{task_name}, {});\n",
+                    emit_expr(timeout, declared)
+                ));
+                out.push_str(&pad);
+                out.push_str(&format!("if (sk_task_wait_ok_{id}) {{\n"));
+                out.push_str(&pad);
+                out.push_str("    ");
+                out.push_str(target);
+                out.push_str(" = ((SkTaskContext_");
+                out.push_str(entry_name);
+                out.push_str("*)");
+                out.push_str(task_name);
+                out.push_str(".context)->result;\n");
+                out.push_str(&pad);
+                out.push_str("    sk_task_release_context(&");
+                out.push_str(task_name);
+                out.push_str(");\n");
+                out.push_str(&pad);
+                out.push_str("} else {\n");
+                out.push_str(&pad);
+                out.push_str(&format!(
+                    "    bool sk_previous_timed_out_{id} = sk_operation_timed_out_state;\n"
+                ));
+                out.push_str(&pad);
+                out.push_str("    sk_operation_timed_out_state = true;\n");
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str(&format!(
+                    "    sk_operation_timed_out_state = sk_previous_timed_out_{id};\n"
+                ));
+                out.push_str(&pad);
+                out.push_str("}\n");
+                return;
+            }
             if let Some((channel, "receive_for")) = call_name.split_once('.')
                 && let Some(element) = declared
                     .get(channel)
@@ -4583,11 +4719,11 @@ fn emit_statement(
                 ));
                 out.push_str(&pad);
                 out.push_str(&format!(
-                    "    SkChannelStatus sk_previous_status_{id} = sk_channel_last_status;\n"
+                    "    bool sk_previous_timed_out_{id} = sk_operation_timed_out_state;\n"
                 ));
                 out.push_str(&pad);
                 out.push_str(&format!(
-                    "    sk_channel_last_status = sk_channel_status_{id};\n"
+                    "    sk_operation_timed_out_state = sk_channel_status_{id} == SK_CHANNEL_TIMED_OUT;\n"
                 ));
                 let mut inner = declared.clone();
                 emit_block(
@@ -4601,7 +4737,7 @@ fn emit_statement(
                 );
                 out.push_str(&pad);
                 out.push_str(&format!(
-                    "    sk_channel_last_status = sk_previous_status_{id};\n"
+                    "    sk_operation_timed_out_state = sk_previous_timed_out_{id};\n"
                 ));
                 out.push_str(&pad);
                 out.push_str("}\n");
@@ -4671,6 +4807,51 @@ fn emit_statement(
             on_error,
             ..
         } => {
+            if call_name == "__task_wait_for"
+                && let [Expression::VariableReference(task_name), timeout] = args.as_slice()
+                && declared
+                    .get(task_name)
+                    .and_then(|task_type| task_type.split_once('@'))
+                    .is_some()
+            {
+                let id = state.next_id();
+                out.push_str(&pad);
+                out.push_str(&format!(
+                    "bool sk_task_wait_ok_{id} = sk_task_join_for(&{task_name}, {});\n",
+                    emit_expr(timeout, declared)
+                ));
+                out.push_str(&pad);
+                out.push_str(&format!("if (sk_task_wait_ok_{id}) {{\n"));
+                out.push_str(&pad);
+                out.push_str("    sk_task_release_context(&");
+                out.push_str(task_name);
+                out.push_str(");\n");
+                out.push_str(&pad);
+                out.push_str("} else {\n");
+                out.push_str(&pad);
+                out.push_str(&format!(
+                    "    bool sk_previous_timed_out_{id} = sk_operation_timed_out_state;\n"
+                ));
+                out.push_str(&pad);
+                out.push_str("    sk_operation_timed_out_state = true;\n");
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str(&format!(
+                    "    sk_operation_timed_out_state = sk_previous_timed_out_{id};\n"
+                ));
+                out.push_str(&pad);
+                out.push_str("}\n");
+                return;
+            }
             if let Some((channel, "send_for")) = call_name.split_once('.')
                 && let Some(element) = declared
                     .get(channel)
@@ -4686,11 +4867,11 @@ fn emit_statement(
                 ));
                 out.push_str(&pad);
                 out.push_str(&format!(
-                    "    SkChannelStatus sk_previous_status_{id} = sk_channel_last_status;\n"
+                    "    bool sk_previous_timed_out_{id} = sk_operation_timed_out_state;\n"
                 ));
                 out.push_str(&pad);
                 out.push_str(&format!(
-                    "    sk_channel_last_status = sk_channel_status_{id};\n"
+                    "    sk_operation_timed_out_state = sk_channel_status_{id} == SK_CHANNEL_TIMED_OUT;\n"
                 ));
                 let mut inner = declared.clone();
                 emit_block(
@@ -4704,7 +4885,7 @@ fn emit_statement(
                 );
                 out.push_str(&pad);
                 out.push_str(&format!(
-                    "    sk_channel_last_status = sk_previous_status_{id};\n"
+                    "    sk_operation_timed_out_state = sk_previous_timed_out_{id};\n"
                 ));
                 out.push_str(&pad);
                 out.push_str("}\n");
@@ -5085,7 +5266,11 @@ fn emit_statement(
         }
         Statement::ExpressionStatement { expr, .. } => {
             out.push_str(&pad);
-            if let Expression::WaitTask { task_name } = expr.as_ref() {
+            if let Expression::WaitTask {
+                task_name,
+                timeout: None,
+            } = expr.as_ref()
+            {
                 out.push_str("sk_task_join(&");
                 out.push_str(task_name);
                 out.push_str(");\n");
@@ -5228,7 +5413,10 @@ fn emit_statement(
                 declared.insert(name.clone(), format!("Channel({channel_element})@owned"));
                 return;
             }
-            if let Expression::WaitTask { task_name } = value.as_ref()
+            if let Expression::WaitTask {
+                task_name,
+                timeout: None,
+            } = value.as_ref()
                 && let Some((_, call_name)) = declared
                     .get(task_name)
                     .and_then(|task_type| task_type.split_once('@'))
@@ -6114,7 +6302,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             format!("{}({})", map_function_name(name), rendered.join(", "))
         }
         Expression::Stopping => "sk_task_is_stopping()".to_string(),
-        Expression::TimedOut => "sk_channel_timed_out()".to_string(),
+        Expression::TimedOut => "sk_operation_timed_out()".to_string(),
         Expression::RunTask { .. } | Expression::WaitTask { .. } => "0".to_string(),
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {

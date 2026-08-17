@@ -105,6 +105,15 @@ RC-бинарники пока не подписаны Apple Developer ID и н�
 
 ## Первый проект
 
+Проверить установленный toolchain на одном файле без Cargo и manifest:
+
+```bash
+printf 'output("Skadi is ready")\n' > hello.skd
+skadi-cli quick-run hello.skd
+```
+
+Для постоянной разработки создайте проект:
+
 В рабочей директории:
 
 ```bash

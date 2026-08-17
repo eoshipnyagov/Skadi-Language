@@ -1,0 +1,33 @@
+fn slow_value() returns Int {
+    sleep(30ms)
+    return 41
+}
+
+fn fast_value() returns Int {
+    return 7
+}
+
+Task(Int) slow_task = run slow_value()
+
+new Int slow_result = 0
+
+slow_result = wait slow_task for 1ms on error {
+    if timed_out {
+        output("slow task exceeded its budget")
+    }
+    stop slow_task
+    slow_result = wait slow_task
+}
+
+output(slow_result)
+
+Task(Int) fast_task = run fast_value()
+
+new Int fast_result = 0
+
+fast_result = wait fast_task for 1s on error {
+    output("unexpected timeout")
+    fast_result = wait fast_task
+}
+
+output(fast_result)

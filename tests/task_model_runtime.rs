@@ -95,6 +95,89 @@ output("joined")
 }
 
 #[test]
+fn timed_task_wait_preserves_handle_on_timeout_and_consumes_it_on_success() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping timed Task e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = include_str!("../examples/concurrency/05_timed_task_wait.skd");
+    let tokens = lex(source).expect("lex timed Task source");
+    let program = parse_program(&tokens).expect("parse timed Task source");
+    semantic_analyze(&program).expect("semantic timed Task source");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "timed Task binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let lines = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, ["slow task exceeded its budget", "41", "7"]);
+}
+
+#[test]
+fn zero_duration_task_wait_is_an_immediate_completion_check() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping zero-duration Task e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = r#"
+fn slow_value() returns Int {
+    sleep(30ms)
+    return 41
+}
+
+fn ready_value() returns Int {
+    return 7
+}
+
+Task(Int) slow_task = run slow_value()
+new Int slow_result = 0
+slow_result = wait slow_task for 0ms on error {
+    if timed_out {
+        output("pending")
+    }
+    stop slow_task
+    slow_result = wait slow_task
+}
+output(slow_result)
+
+Task(Int) ready_task = run ready_value()
+sleep(50ms)
+new Int ready_result = 0
+ready_result = wait ready_task for 0ms on error {
+    output("unexpected timeout")
+    ready_result = wait ready_task
+}
+output(ready_result)
+"#;
+    let tokens = lex(source).expect("lex zero-duration Task source");
+    let program = parse_program(&tokens).expect("parse zero-duration Task source");
+    semantic_analyze(&program).expect("semantic zero-duration Task source");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "zero-duration Task binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let lines = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, ["pending", "41", "7"]);
+}
+
+#[test]
 fn timed_channel_operations_distinguish_timeout_close_and_success() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping timed Channel e2e: no clang/gcc/cc in PATH.");

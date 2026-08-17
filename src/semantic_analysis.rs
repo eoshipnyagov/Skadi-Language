@@ -3553,6 +3553,69 @@ fn analyze_statement(
             on_error,
             ..
         } => {
+            if call_name == "__task_wait_for" {
+                let (task_name, result_type) = validate_timed_task_wait(
+                    stmt,
+                    args,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
+                let Some(result_type) = result_type else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TASK_RULE,
+                        format!(
+                            "timed wait for void task '{}' cannot assign a result.",
+                            task_name
+                        ),
+                    ));
+                };
+                let Some(target_type) = scope.get(target) else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_USE_BEFORE_DEF,
+                        format!("use-before-definition: '{}' is not defined.", target),
+                    ));
+                };
+                if let Some(kind) = read_only_binding_kind(memory_state, target) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!("{} '{}' cannot be reassigned.", kind, target),
+                    ));
+                }
+                if !can_assign(target_type, &result_type) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "timed wait target mismatch: '{}' expects {:?}, task returns {:?}.",
+                            target, target_type, result_type
+                        ),
+                    ));
+                }
+                let mut handler_state = memory_state.clone();
+                memory_state
+                    .tasks
+                    .get_mut(&task_name)
+                    .expect("validated timed task must exist")
+                    .waited = true;
+                let mut handler_scope = scope.clone();
+                return analyze_block(
+                    on_error,
+                    &mut handler_scope,
+                    &mut handler_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    timed_error_context(fn_ctx, true),
+                    in_loop,
+                );
+            }
             if let Some((channel, method @ ("receive" | "receive_for"))) = call_name.split_once('.')
                 && let Some(element_ty) = memory_state.channels.get(channel).cloned()
             {
@@ -3689,6 +3752,35 @@ fn analyze_statement(
             on_error,
             ..
         } => {
+            if call_name == "__task_wait_for" {
+                let (task_name, _) = validate_timed_task_wait(
+                    stmt,
+                    args,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
+                let mut handler_state = memory_state.clone();
+                memory_state
+                    .tasks
+                    .get_mut(&task_name)
+                    .expect("validated timed task must exist")
+                    .waited = true;
+                let mut handler_scope = scope.clone();
+                return analyze_block(
+                    on_error,
+                    &mut handler_scope,
+                    &mut handler_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    timed_error_context(fn_ctx, true),
+                    in_loop,
+                );
+            }
             if let Some((window, method @ ("present" | "close"))) = call_name.split_once('.')
                 && matches!(scope.get(window), Some(ValueType::Window))
             {
@@ -4330,6 +4422,69 @@ fn timed_error_context(fn_ctx: Option<FnContext>, enabled: bool) -> Option<FnCon
     Some(context)
 }
 
+#[allow(clippy::too_many_arguments)]
+fn validate_timed_task_wait(
+    stmt: &Statement,
+    args: &[Expression],
+    scope: &HashMap<String, ValueType>,
+    memory_state: &MemoryState,
+    functions: &HashMap<String, FunctionSig>,
+    structs: &HashMap<String, StructInfo>,
+    fn_ctx: Option<&FnContext>,
+) -> Result<(String, Option<ValueType>), String> {
+    let [Expression::VariableReference(task_name), timeout] = args else {
+        return Err(err_at_code(
+            stmt,
+            SEM_TASK_RULE,
+            "internal timed wait shape is invalid.".to_string(),
+        ));
+    };
+    let Some(task_ty) = scope.get(task_name) else {
+        return Err(err_at_code(
+            stmt,
+            SEM_USE_BEFORE_DEF,
+            format!(
+                "use-before-definition: '{}' is not defined in current scope.",
+                task_name
+            ),
+        ));
+    };
+    if !matches!(task_ty, ValueType::Task(_)) {
+        return Err(err_at_code(
+            stmt,
+            SEM_TASK_RULE,
+            format!("timed wait expects Task handle, got {:?}.", task_ty),
+        ));
+    }
+    let Some(binding) = memory_state.tasks.get(task_name) else {
+        return Err(err_at_code(
+            stmt,
+            SEM_TASK_RULE,
+            format!(
+                "task handle '{}' is not available in current scope.",
+                task_name
+            ),
+        ));
+    };
+    if binding.waited {
+        return Err(err_at_code(
+            stmt,
+            SEM_TASK_RULE,
+            format!("task handle '{}' was already waited.", task_name),
+        ));
+    }
+    let timeout_ty =
+        infer_expression_type(timeout, scope, memory_state, functions, structs, fn_ctx)?;
+    if timeout_ty != ValueType::Duration {
+        return Err(err_at_code(
+            stmt,
+            SEM_TASK_RULE,
+            format!("timed wait expects Duration, got {:?}.", timeout_ty),
+        ));
+    }
+    Ok((task_name.clone(), binding.result_type.clone()))
+}
+
 fn param_type_or_default(param: &FunctionParam) -> ValueType {
     param
         .param_type
@@ -4345,7 +4500,7 @@ fn record_task_effects_in_expr(
     memory_state: &mut MemoryState,
 ) -> Result<(), String> {
     match expr {
-        Expression::WaitTask { task_name } => {
+        Expression::WaitTask { task_name, .. } => {
             let Some(task_ty) = scope.get(task_name) else {
                 return Err(err_at_code(
                     stmt,
@@ -4493,7 +4648,7 @@ fn apply_task_flow_expression(
             "task handle ignored: 'run' is only allowed as the initializer of an owning Task declaration."
                 .to_string(),
         )),
-        Expression::WaitTask { task_name } => {
+        Expression::WaitTask { task_name, .. } => {
             if state.remove(task_name).is_none() {
                 return Err(err_at_code(
                     stmt,
@@ -4560,7 +4715,13 @@ fn apply_task_flow_expressions(
 
 fn expression_uses_task_handle(expr: &Expression, names: &HashSet<String>) -> bool {
     match expr {
-        Expression::WaitTask { task_name } => names.contains(task_name),
+        Expression::WaitTask { task_name, timeout } => {
+            names.contains(task_name)
+                || timeout
+                    .as_deref()
+                    .map(|timeout| expression_uses_task_handle(timeout, names))
+                    .unwrap_or(false)
+        }
         Expression::Call { args, .. }
         | Expression::RunTask { args, .. }
         | Expression::ListLiteral(args) => args
@@ -4881,10 +5042,51 @@ fn process_task_flow_statement(
                 Ok(states)
             }
         }
-        Statement::DangerAssignOnError { args, on_error, .. }
-        | Statement::DangerCallOnError { args, on_error, .. } => {
+        Statement::DangerAssignOnError {
+            call_name,
+            args,
+            on_error,
+            ..
+        }
+        | Statement::DangerCallOnError {
+            call_name,
+            args,
+            on_error,
+            ..
+        } => {
             let mut outputs = Vec::new();
             for mut state in states {
+                if call_name == "__task_wait_for" {
+                    let [Expression::VariableReference(task_name), timeout] = args.as_slice()
+                    else {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TASK_RULE,
+                            "internal timed wait shape is invalid.".to_string(),
+                        ));
+                    };
+                    apply_task_flow_expression(stmt, timeout, &mut state)?;
+                    if !state.contains_key(task_name) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TASK_RULE,
+                            format!(
+                                "task handle '{}' is not live on every path at this timed wait.",
+                                task_name
+                            ),
+                        ));
+                    }
+
+                    let mut success_state = state.clone();
+                    success_state.remove(task_name);
+                    outputs.push(success_state);
+
+                    let error_outputs =
+                        process_task_flow_statements(&on_error.statements, vec![state.clone()])?;
+                    ensure_no_new_task_bindings(&state, &error_outputs)?;
+                    outputs.extend(error_outputs);
+                    continue;
+                }
                 apply_task_flow_expressions(stmt, args, &mut state)?;
                 outputs.push(state.clone());
                 let error_outputs =
@@ -6490,7 +6692,7 @@ fn infer_expression_type(
             };
             Ok(ValueType::Task(result_type))
         }
-        Expression::WaitTask { task_name } => {
+        Expression::WaitTask { task_name, timeout } => {
             let Some(task_ty) = scope.get(task_name).cloned() else {
                 return Err(sem_err(
                     SEM_USE_BEFORE_DEF,
@@ -6521,6 +6723,26 @@ fn infer_expression_type(
                     format!("task handle '{}' was already waited.", task_name),
                 ));
             }
+            if let Some(timeout) = timeout {
+                let timeout_ty = infer_expression_type(
+                    timeout,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx,
+                )?;
+                if timeout_ty != ValueType::Duration {
+                    return Err(sem_err(
+                        SEM_TASK_RULE,
+                        format!("timed wait expects Duration, got {:?}.", timeout_ty),
+                    ));
+                }
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    "timed wait requires an 'on error' handler.".to_string(),
+                ));
+            }
             Ok(binding.result_type.clone().unwrap_or(ValueType::Unknown))
         }
         Expression::Stopping => {
@@ -6536,7 +6758,7 @@ fn infer_expression_type(
             if fn_ctx.map(|ctx| ctx.is_timed_error_context) != Some(true) {
                 return Err(sem_err(
                     SEM_CHANNEL_RULE,
-                    "timed_out is only available inside the 'on error' handler of send_for or receive_for."
+                    "timed_out is only available inside the 'on error' handler of a timed Channel operation or timed Task wait."
                         .to_string(),
                 ));
             }
@@ -6782,9 +7004,7 @@ fn infer_expression_memory_provenance(
             }
             Ok(memory_state.active_memory.clone())
         }
-        Expression::WaitTask { task_name } => {
-            Ok(memory_state.variable_memory.get(task_name).cloned())
-        }
+        Expression::WaitTask { .. } => Ok(None),
         Expression::RunTask { .. } | Expression::Stopping | Expression::TimedOut => Ok(None),
         Expression::LiteralString(_)
         | Expression::ListLiteral(_)
@@ -6848,7 +7068,13 @@ fn contains_variable(expr: &Expression, name: &str) -> bool {
         Expression::Call { args, .. } | Expression::RunTask { args, .. } => {
             args.iter().any(|a| contains_variable(a, name))
         }
-        Expression::WaitTask { task_name } => task_name == name,
+        Expression::WaitTask { task_name, timeout } => {
+            task_name == name
+                || timeout
+                    .as_deref()
+                    .map(|timeout| contains_variable(timeout, name))
+                    .unwrap_or(false)
+        }
         Expression::Index { base, index } => {
             contains_variable(base, name) || contains_variable(index, name)
         }

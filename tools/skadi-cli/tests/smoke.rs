@@ -155,6 +155,52 @@ fn new_check_and_optional_build_run_smoke() {
 }
 
 #[test]
+fn quick_run_executes_one_file_without_manifest_and_forwards_arguments() {
+    let temp = unique_temp_dir("quick_run");
+    let help = run_cli(&temp, &["quick-run", "--help"]);
+    assert!(help.status.success(), "quick-run help failed");
+    assert!(stdout_text(&help).contains("without Skadi.toml"));
+
+    if !host_compiler_ready() {
+        eprintln!("Skipping quick-run native smoke: no host C compiler.");
+        let _ = fs::remove_dir_all(temp);
+        return;
+    }
+
+    fs::write(
+        temp.join("hello.skd"),
+        r#"new Text List cli_args = args()
+output("single file")
+output(len(cli_args))
+iterate cli_args as cli_arg {
+    output(cli_arg)
+}
+"#,
+    )
+    .expect("single-file source should be writable");
+
+    let run = run_cli(
+        &temp,
+        &["quick-run", "hello.skd", "--", "first", "--second"],
+    );
+    assert!(
+        run.status.success(),
+        "quick-run failed: {}",
+        stderr_text(&run)
+    );
+    let stdout = stdout_text(&run);
+    assert!(stdout.contains("single file"), "{stdout}");
+    assert!(stdout.contains("2"), "{stdout}");
+    assert!(stdout.contains("first"), "{stdout}");
+    assert!(stdout.contains("--second"), "{stdout}");
+    assert!(stderr_text(&run).contains("quick-run [host]"));
+    assert!(!temp.join("Skadi.toml").exists());
+    assert!(!temp.join("build").exists());
+
+    let _ = fs::remove_dir_all(temp);
+}
+
+#[test]
 fn task_runtime_builds_and_runs_through_official_cli() {
     if !host_compiler_ready() {
         eprintln!("Skipping CLI Task runtime smoke: no host C compiler.");

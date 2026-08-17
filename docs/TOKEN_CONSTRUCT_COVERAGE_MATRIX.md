@@ -53,6 +53,7 @@ Legend:
 | `memory.clear()` | Y | Y | Y | Y | Y | use-after-clear and active-region rules covered |
 | `Task` / `Task(T)` / `run` | Y | Y | Y | Y | Y | experimental native Win32/pthread runtime |
 | `wait` / `stop` / `stopping` | Y | Y | Y | Y | Y | path-sensitive lifecycle; stop wakes blocking Channel waits |
+| `wait task for Duration on error` | P (`wait`/`for` + identifiers) | Y | Y | Y | Y | success consumes handle; timeout preserves it in handler |
 | `Channel(T)` / `channel(N)` | Y | Y | Y | Y | Y | bounded blocking FIFO runtime |
 | `send` / `receive` | Y | Y | Y | Y | Y | value-safe payload, backpressure and cancellation covered |
 | `try_send` / `close` | Y | Y | Y | Y | Y | fallible non-blocking send and owner-controlled close/drain |

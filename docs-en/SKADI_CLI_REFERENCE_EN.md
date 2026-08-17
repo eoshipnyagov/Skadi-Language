@@ -13,6 +13,13 @@ skadi-cli build
 skadi-cli run
 ```
 
+For one-file experiments without a manifest:
+
+```powershell
+skadi-cli quick-run hello.skd
+skadi-cli quick-run hello.skd -- first second
+```
+
 ```powershell
 skadi-cli doctor
 skadi-cli tui
@@ -28,6 +35,7 @@ skadi-cli tui
 | `format [--check] [path ...]` | Write or verify canonical formatting | No |
 | `build [--target name] [--cc compiler]` | Build a native binary | Yes |
 | `run [--target name] [--cc compiler]` | Build and execute | Yes |
+| `quick-run <file.skd> [-- <args ...>]` | Build and run one file without a manifest | Yes |
 | `doctor` | Inspect host and cross toolchains | No |
 | `target list` | List target profiles | No |
 | `tui` | Open the full-screen project workflow | Per action |
@@ -58,6 +66,20 @@ skadi-cli run --target host --cc gcc
 Failures identify their source: Skadi frontend, project configuration, C
 toolchain, runtime execution, or I/O. Build artifacts are written to `build/`.
 
+## Quick run
+
+`quick-run` is the short path for examples and small independent programs:
+
+```powershell
+skadi-cli quick-run examples/hello.skd
+skadi-cli quick-run tools/inspect.skd -- input.txt --verbose
+```
+
+It does not look for `Skadi.toml`. Imports still resolve relative to the source
+file. The generated C and executable live in a temporary directory and are
+removed after execution. The command uses the host target, accepts `--cc`, and
+forwards arguments only after `--`. Cargo is not required by an installed CLI.
+
 ## TUI
 
 Screens cover project status, diagnostics, build/run output, doctor, bootstrap,
@@ -76,7 +98,7 @@ browser. CLI commands remain canonical for scripts and CI.
 
 After a successful `check` or `build`, the compiler core supplies structured
 analysis facts to the TUI. The current workbench shows blocking and timed Channel
-operations, task-entry and `on error` context, incomplete `when`, and source-order
+operations, path-sensitive timed Task wait, task-entry and `on error` context, incomplete `when`, and source-order
 lifecycle chains for ownership, resources, Task, and Memory. These are
 explanatory facts, not a second class of hard compiler errors.
 

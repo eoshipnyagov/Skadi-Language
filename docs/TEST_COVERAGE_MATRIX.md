@@ -93,12 +93,15 @@
   - `tests/systems_contract_frontend.rs` закрепляет Channel/Window/Interrupt
     transfer и соответствующие C move/cleanup helpers
 - experimental task/channel frontend coverage
-  - `tests/task_model_frontend.rs` проверяет parser/semantic contract для `Task`, `run`, `wait`, `stop`, `stopping`, `Channel(T)`, `channel(N)`, `send` и `receive`
+  - `tests/task_model_frontend.rs` проверяет parser/semantic contract для `Task`,
+    `run`, обычного/timed `wait`, `stop`, `stopping`, `Channel(T)`, `channel(N)`,
+    blocking/timed `send` и `receive`
   - тот же suite проверяет ignored-run hard error, all-path lifecycle,
     task-safe boundaries и value-safe channel messages, включая запрет mutable `List`
   - memory suites проверяют TLS shape и native Win32/pthread isolation active regions
   - `tests/task_model_runtime.rs` проверяет native void и result-bearing tasks,
-    typed arguments, scalar/struct/Text result transfer, `stop -> stopping -> wait`,
+    typed arguments, scalar/struct/Text result transfer, обычный и timed join,
+    `stop -> stopping -> wait`,
     bounded FIFO, backpressure, 1000-message producer/consumer stress, local owner
     cleanup и `SC-RT-312`
   - тот же suite проверяет cancellation task, заблокированной на пустом
@@ -160,12 +163,12 @@
 - task/channel backend/runtime
   - void и `Task(T)` run/wait, `stop`, `stopping`, bounded Channel и cancellation
     blocking `send/receive` реализованы через Win32/pthread backend
-  - `send_for/receive_for`, `timed_out`, success/close/stop/timeout precedence
-    покрыты native e2e; timed Task wait, `select`, task groups и embedded APIs
-    остаются TODO
+  - `send_for/receive_for`, timed Task wait, `timed_out` и
+    success/close/stop/timeout precedence покрыты native e2e; `select`, task
+    groups и embedded APIs остаются TODO
 - structured analysis foundation
   - `tests/analysis_facts.rs` закрепляет task-aware blocking/timed Channel facts,
-    explainable incomplete `when` и subject-linked lifecycle chains
+    timed Task wait, explainable incomplete `when` и subject-linked lifecycle chains
   - CLI action pipeline передаёт facts в TUI Diagnostics / Analysis view,
     который показывает source-order lifecycle выбранного ресурса
 - module ergonomics

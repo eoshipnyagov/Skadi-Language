@@ -2263,7 +2263,7 @@ mod tests {
     }
 
     #[test]
-    fn diagnostics_detail_renders_subject_lifecycle_chain() {
+    fn diagnostics_detail_renders_timed_task_lifecycle_chain() {
         let mut app = App::new();
         app.screen = AppScreen::Diagnostics;
         app.push_diagnostics_record(DiagnosticsRecord {
@@ -2274,28 +2274,28 @@ mod tests {
             diagnostics: Vec::new(),
             analysis: vec![
                 AnalysisFact {
-                    kind: AnalysisFactKind::ResourceCreated,
+                    kind: AnalysisFactKind::TaskLifecycle,
                     level: AnalysisFactLevel::Info,
-                    code: "SC-AN-301",
+                    code: "SC-AN-311",
                     line: 1,
                     col: 1,
                     context: "top-level workflow".to_string(),
-                    subject: Some("jobs".to_string()),
-                    summary: "'jobs' becomes the owner of Channel(Int)".to_string(),
-                    explanation: "owner created".to_string(),
+                    subject: Some("worker_task".to_string()),
+                    summary: "task 'worker_task' starts".to_string(),
+                    explanation: "task owner created".to_string(),
                     action: "follow lifecycle".to_string(),
                 },
                 AnalysisFact {
-                    kind: AnalysisFactKind::ResourceClosed,
+                    kind: AnalysisFactKind::TimedTaskWait,
                     level: AnalysisFactLevel::Info,
-                    code: "SC-AN-304",
+                    code: "SC-AN-314",
                     line: 8,
                     col: 1,
                     context: "top-level workflow".to_string(),
-                    subject: Some("jobs".to_string()),
-                    summary: "resource 'jobs' is explicitly closed".to_string(),
-                    explanation: "owner closed".to_string(),
-                    action: "avoid later use".to_string(),
+                    subject: Some("worker_task".to_string()),
+                    summary: "task 'worker_task' is waited with a deadline".to_string(),
+                    explanation: "timeout preserves the handle".to_string(),
+                    action: "finish timeout cleanup".to_string(),
                 },
             ],
             detail: Vec::new(),
@@ -2313,8 +2313,8 @@ mod tests {
             .iter()
             .map(|cell| cell.symbol())
             .collect::<String>();
-        assert!(rendered.contains("Lifecycle: jobs"));
-        assert!(rendered.contains("SC-AN-304"));
+        assert!(rendered.contains("Lifecycle: worker_task"));
+        assert!(rendered.contains("SC-AN-314"));
     }
 
     #[test]

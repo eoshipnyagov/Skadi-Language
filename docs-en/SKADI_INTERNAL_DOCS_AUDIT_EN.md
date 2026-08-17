@@ -73,9 +73,9 @@ remains a non-movable region capability and `Task` retains consume-through-
 The runtime uses Win32/pthread native threads, linear owning handles, mandatory
 `wait`, cooperative stop, and bounded FIFO channels with
 `send/receive/try_send/close`, drain-after-close, cancellation-aware blocking
-operations, and Duration-bounded `send_for/receive_for`. Scheduler abstraction,
-async/await, task groups, timed `Task.wait`, select, and RTOS backends remain
-future work.
+operations, Duration-bounded `send_for/receive_for`, and path-sensitive timed
+Task wait. Scheduler abstraction, async/await, task groups, select, and RTOS
+backends remain future work.
 
 ### Specialized types
 
@@ -108,8 +108,7 @@ remain future.
 
 ## Priority after the 2026-07-30 checkpoint
 
-1. Add a separate path-sensitive lifecycle contract for timed `Task.wait`, which
-   preserves the handle on timeout but consumes it on success.
+1. Extend the first lifecycle explain-chain with path reasons and scope cleanup.
 2. Consider `select` only after the ordinary and timed blocking boundaries are
    stable.
 3. Add long-lived File/Port/device handles only together with concrete APIs.

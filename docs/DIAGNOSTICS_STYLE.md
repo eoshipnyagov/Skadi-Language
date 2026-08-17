@@ -66,12 +66,12 @@ Backend/runtime error без source location использует форму:
 
 - `SC-CG-301` — зарезервирован для будущей frontend-формы без lowering; в текущем
   Task/Channel MVP активного backend gate нет
-- `SC-RT-301..304` — task creation/join/state/stop-synchronization failures
+- `SC-RT-301..305` — task creation/join/state/stop/completion-synchronization failures
 - `SC-RT-311..313` — channel allocation/capacity/synchronization failures
 - `SC-RT-314` — unhandled operation on a closed Channel
 - `SC-RT-315` — unhandled cancellation of a blocking Channel operation
 - `SC-AN-101..104` — structured blocking/timed Channel analysis facts
-- `SC-AN-301..322` — ownership, resource, Task и Memory lifecycle facts
+- `SC-AN-301..322` — ownership, resource, Task и Memory lifecycle facts, включая timed Task wait
 - `SC-AN-201` — structured incomplete `when` analysis fact
 
 Runtime code считается публичным только после появления соответствующего runtime
@@ -81,7 +81,7 @@ Runtime code считается публичным только после по�
 
 - `SC-PARSE-001..003` — parser entry/wrapper diagnostics (`parser/mod.rs`)
 - `SC-PARSE-101..148` — statement-level parser diagnostics (`parser/statements.rs`)
-- `SC-PARSE-201..206` — expression parser diagnostics (`parser/expressions.rs`)
+- `SC-PARSE-201..222` — expression parser diagnostics (`parser/expressions.rs`)
 
 ### Диапазоны parse codes
 

@@ -33,12 +33,13 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-PARSE-161..162` `local` prefix declaration contract errors
 
 ### Expression parser ranges
-- `SC-PARSE-201..221` expression grammar errors
+- `SC-PARSE-201..222` expression grammar errors
   - grouped expr / call args / list literal / index / struct literal issues
   - `SC-PARSE-216` invalid, fractional or overflowing Duration literal
   - `SC-PARSE-219` invalid, fractional, unsupported or overflowing ByteSize literal
   - `SC-PARSE-220` invalid, unsupported or non-finite Angle literal
   - `SC-PARSE-221` invalid, empty, multi-character, unsupported escape or non-ASCII Char literal
+  - `SC-PARSE-222` timed Task wait missing its Duration expression
 
 ## 3. Semantic Codes (`SC-SEM-*`)
 
@@ -64,6 +65,7 @@ Wrapper/stage codes used by CLI pipeline:
 ### Runtime codes
 
 - `SC-RT-301..304` Task allocation/start/join/stop synchronization failures
+- `SC-RT-305` Task completion/deadline synchronization failure
 - `SC-RT-311..313` Channel allocation/capacity/synchronization failures
 - `SC-RT-314` unhandled closed Channel operation
 - `SC-RT-315` unhandled cancelled blocking Channel operation
@@ -77,6 +79,7 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-AN-201` `when` without an explicit `else` path
 - `SC-AN-301..304` resource create/borrow/move/close lifecycle facts
 - `SC-AN-311..313` Task start/stop/wait lifecycle facts
+- `SC-AN-314` Duration-bounded Task wait with conditional handle consumption
 - `SC-AN-321..322` Memory create/clear lifecycle facts
 - `SC-RT-320` monotonic clock or blocking sleep runtime failure
 

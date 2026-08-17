@@ -4,6 +4,7 @@ pub mod doctor_cmd;
 pub mod format_cmd;
 pub mod init_cmd;
 pub mod new_cmd;
+pub mod quick_run_cmd;
 pub mod run_cmd;
 pub mod target_cmd;
 pub mod tui_cmd;

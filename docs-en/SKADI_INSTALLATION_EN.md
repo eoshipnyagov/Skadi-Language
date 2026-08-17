@@ -93,6 +93,15 @@ or wait for a signed release.
 
 ## First project
 
+Verify the installed toolchain with one file and no Cargo or manifest:
+
+```bash
+printf 'output("Skadi is ready")\n' > hello.skd
+skadi-cli quick-run hello.skd
+```
+
+For ongoing work, create a project:
+
 From a working directory:
 
 ```bash

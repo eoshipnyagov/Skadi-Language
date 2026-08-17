@@ -200,6 +200,7 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `Task work = run worker()` | Запуск void task | Experimental |
 | `Task(Int) work = run compute()` | Запуск task с результатом | Experimental |
 | `result = wait work` | Join и получение результата | Experimental |
+| `result = wait work for 250ms on error { ... }` | Timed wait; success поглощает handle, timeout сохраняет его в handler | Experimental |
 | `stop work` | Cooperative stop request; будит blocking Channel operation | Experimental |
 | `stopping` | Флаг внутри task function | Experimental |
 | `Channel(Int) jobs = channel(8)` | Bounded channel owner | Experimental |
@@ -211,7 +212,7 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `jobs.close()` | Owner закрывает поток; буфер дочитывается | Experimental |
 | `jobs.send_for(value, 250ms) on error { ... }` | Blocking send с deadline | Experimental |
 | `value = jobs.receive_for(250ms) on error { ... }` | Blocking receive с deadline | Experimental |
-| `timed_out` | Причина timed Channel handler; контекстный identifier | Experimental |
+| `timed_out` | Причина timed Channel/Task handler; контекстный identifier | Experimental |
 
 ## Specialized arithmetic
 
@@ -262,7 +263,7 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `fixed`, `const` | Lexer-only reservations |
 | Одинарные `&`, `\|` и общий `:` | Lexer-only tokens без текущей semantic формы |
 | `allow grow`, `allow drop` вне `memory(...)` | Не является общей языковой формой |
-| Timed `Task.wait` и Channel `select` | Future |
+| Channel `select` и `try_receive` | Future |
 | async/await, futures, task groups | Future |
 | `Matrix2D`, Canvas text/images/events и non-Windows Window | Future |
 | Generics, decorators, operator overloading | Conscious non-goals текущего языка |

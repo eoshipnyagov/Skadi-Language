@@ -124,3 +124,28 @@ wait worker_task
     assert!(task_chain.contains(&"SC-AN-312"));
     assert!(task_chain.contains(&"SC-AN-313"));
 }
+
+#[test]
+fn timed_task_wait_explains_conditional_handle_consumption() {
+    let facts = analyze(
+        r#"
+fn worker() {
+    sleep(20ms)
+}
+
+Task worker_task = run worker()
+wait worker_task for 1ms on error {
+    stop worker_task
+    wait worker_task
+}
+"#,
+    );
+
+    let timed_wait = facts
+        .iter()
+        .find(|fact| fact.kind == AnalysisFactKind::TimedTaskWait)
+        .expect("timed Task wait fact");
+    assert_eq!(timed_wait.code, "SC-AN-314");
+    assert_eq!(timed_wait.subject.as_deref(), Some("worker_task"));
+    assert!(timed_wait.explanation.contains("handle remains live"));
+}

@@ -75,6 +75,7 @@ pub fn candidate_invocations(
 ) -> Result<Vec<CompilerInvocation>, String> {
     let c = c_path.display().to_string();
     let out = exe_path.display().to_string();
+    let object = c_path.with_extension("obj").display().to_string();
     let inv = match target {
         "host" => {
             let mut xs = vec![
@@ -98,6 +99,7 @@ pub fn candidate_invocations(
                         "/nologo".to_string(),
                         c.clone(),
                         "gdi32.lib".to_string(),
+                        format!("/Fo:{object}"),
                         format!("/Fe:{out}"),
                     ],
                 });
@@ -144,6 +146,7 @@ pub fn single_compiler_invocation(
 ) -> Result<CompilerInvocation, String> {
     let c = c_path.display().to_string();
     let out = exe_path.display().to_string();
+    let object = c_path.with_extension("obj").display().to_string();
     let inv = match compiler {
         "cl" => {
             if target != "host" {
@@ -157,6 +160,7 @@ pub fn single_compiler_invocation(
                     "/nologo".to_string(),
                     c,
                     "gdi32.lib".to_string(),
+                    format!("/Fo:{object}"),
                     format!("/Fe:{out}"),
                 ],
             }
@@ -304,5 +308,22 @@ mod tests {
         )
         .expect_err("cl should be host-only");
         assert!(err.contains("only supported for host"));
+    }
+
+    #[test]
+    fn host_cl_places_object_beside_staged_c_source() {
+        let invocation = single_compiler_invocation(
+            "host",
+            "cl",
+            Path::new("temp/script.c"),
+            Path::new("temp/script.exe"),
+        )
+        .expect("host cl invocation should be created");
+        assert!(
+            invocation
+                .args
+                .iter()
+                .any(|arg| arg == "/Fo:temp/script.obj" || arg == "/Fo:temp\\script.obj")
+        );
     }
 }

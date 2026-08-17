@@ -1,5 +1,16 @@
 # CLI Quick Start
 
+Run one file without creating a project:
+
+```powershell
+skadi-cli quick-run hello.skd
+```
+
+This needs a host C compiler, but does not need Cargo or `Skadi.toml` after
+`skadi-cli` is installed.
+
+For a regular project:
+
 ```powershell
 skadi-cli doctor
 skadi-cli new hello_skadi

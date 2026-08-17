@@ -8,6 +8,14 @@ versions.
 
 ## Unreleased
 
+- Added `skadi-cli quick-run <file.skd> [-- <args>]` for manifest-free scripts
+  and examples, with temporary native artifacts, inherited standard streams,
+  and no Cargo requirement after installation.
+- Added path-sensitive `wait task for Duration on error { ... }`: success joins
+  and consumes the Task handle, while timeout preserves it for explicit cleanup.
+- Added portable timed Task waiting on Win32/POSIX, `SC-AN-314` lifecycle facts,
+  TUI explain-chain coverage, and a focused concurrency example.
+
 ### Added
 
 - Explicit `move` ownership transfer for Canvas, Window, Interrupt, and owning

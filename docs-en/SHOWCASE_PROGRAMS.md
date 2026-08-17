@@ -61,7 +61,9 @@ Focused native examples also cover:
 - `examples/concurrency/03_cancel_blocked_channel.skd` for stopping a task that
   is blocked on an empty channel;
 - `examples/concurrency/04_timed_channel.skd` for Duration-bounded
-  `send_for`/`receive_for` and `timed_out` handling.
+  `send_for`/`receive_for` and `timed_out` handling;
+- `examples/concurrency/05_timed_task_wait.skd` for conditional Task-handle
+  consumption across success and timeout paths.
 
 ## Stable showcase fixtures
 

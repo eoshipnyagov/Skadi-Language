@@ -288,8 +288,9 @@ registry, что противоречит явному lifecycle Skadi.
 
 Task/Channel runtime уже является исполняемым, но всё ещё experimental slice.
 Stress, sanitizer/TSan, cross-platform CI matrix и showcase coverage выполнены;
-Timed Channel `send_for/receive_for` реализованы последующим slice; timed
-`Task.wait` и `select` остаются будущими контрактами.
+Timed Channel `send_for/receive_for` и path-sensitive
+`wait task for Duration on error { ... }` реализованы последующими slices;
+`select` остаётся будущим контрактом.
 
 Path-sensitive semantic pass принимает `wait` во всех ветках, отвергает cleanup
 только в части веток, ранний `return` с живым handle и lifecycle, зависящий от
@@ -330,8 +331,8 @@ MVP был реализован в таком порядке:
 2. Затем определить semantic rules для task handle и task context.
 3. Затем зафиксировать ограничение на value-safe channel messages.
 4. Затем решить, как эта модель будет стыковаться с `Memory`.
-5. После `close/try_send`, cancellation и timed Channel отдельно обсуждать
-   timed `Task.wait`, `try_receive`, `select`, task groups и event sugar.
+5. После `close/try_send`, cancellation, timed Channel и timed Task wait отдельно
+   обсуждать `try_receive`, `select`, task groups и event sugar.
 
 ## 19. Короткая формула MVP-контракта
 

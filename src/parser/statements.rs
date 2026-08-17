@@ -1104,6 +1104,35 @@ fn parse_call_expression(
     Ok((call_name, args))
 }
 
+fn parse_timed_wait_expression(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+) -> Result<Option<(String, Expression)>, String> {
+    if start >= end
+        || tokens[start].kind() != TokenKind::Identifier
+        || tokens[start].lexeme != "wait"
+    {
+        return Ok(None);
+    }
+    if start + 2 >= end
+        || tokens[start + 1].kind() != TokenKind::Identifier
+        || tokens[start + 2].lexeme != "for"
+    {
+        return Ok(None);
+    }
+    if start + 3 >= end {
+        return Err(parse_err(
+            "SC-PARSE-222",
+            "timed wait expected Duration expression after 'for'.",
+        ));
+    }
+    Ok(Some((
+        tokens[start + 1].lexeme.clone(),
+        parse_expression_range(tokens, start + 3, end)?,
+    )))
+}
+
 pub fn parse_identifier_led_statement(
     tokens: &[Token],
     start_index: usize,
@@ -1244,6 +1273,43 @@ pub fn parse_identifier_led_statement(
         }
         let block_end = find_block_end(tokens, block_open)?;
         let on_error_statements = parse_statements_range(tokens, block_open + 1, block_end)?;
+
+        if start_index + 2 < on_idx
+            && tokens[start_index].kind() == TokenKind::Identifier
+            && tokens[start_index + 1].kind() == TokenKind::OpAssignment
+            && tokens[start_index + 1].lexeme == "="
+            && let Some((task_name, timeout)) =
+                parse_timed_wait_expression(tokens, start_index + 2, on_idx)?
+        {
+            return Ok((
+                Statement::DangerAssignOnError {
+                    target: tokens[start_index].lexeme.clone(),
+                    call_name: "__task_wait_for".to_string(),
+                    args: vec![Expression::VariableReference(task_name), timeout],
+                    on_error: Box::new(BlockStatement {
+                        statements: on_error_statements,
+                    }),
+                    loc,
+                },
+                block_end + 1 - start_index,
+            ));
+        }
+
+        if let Some((task_name, timeout)) =
+            parse_timed_wait_expression(tokens, start_index, on_idx)?
+        {
+            return Ok((
+                Statement::DangerCallOnError {
+                    call_name: "__task_wait_for".to_string(),
+                    args: vec![Expression::VariableReference(task_name), timeout],
+                    on_error: Box::new(BlockStatement {
+                        statements: on_error_statements,
+                    }),
+                    loc,
+                },
+                block_end + 1 - start_index,
+            ));
+        }
 
         if start_index + 7 <= on_idx
             && tokens[start_index].kind() == TokenKind::Identifier

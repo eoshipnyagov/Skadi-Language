@@ -24,7 +24,7 @@ Time/Duration как выражаются интервалы и monotonic-вре
 `v1.2` наследует stable base из `v1.1`:
 
 - `skadi-cli` и `skadi-cli tui`;
-- `check`, `build`, `run`, `format`, `doctor`, `target list`;
+- `check`, `build`, `run`, `quick-run`, `format`, `doctor`, `target list`;
 - parser / semantic / C codegen для текущего core surface;
 - diagnostics в форме `Lex`, `Parse`, `Semantic`, `Codegen`;
 - formatter для текущего поддержанного синтаксиса;
@@ -447,7 +447,8 @@ vector slice до матриц или transform framework.
 2. `stop`, `close` и drain semantics едины на Win32/pthread;
 3. `send_for/receive_for` используют `Duration`, обязательный `on error` и
    контекстный `timed_out` на Win32/pthread;
-4. timed `Task.wait` отложен до отдельного path-sensitive lifecycle-контракта;
+4. `wait task for Duration on error { ... }` реализован: success поглощает
+   handle, timeout сохраняет его живым в handler;
 5. `select`, task groups и implicit async runtime не входят в ближайший slice.
 
 Параллельный tooling checkpoint:
@@ -507,8 +508,8 @@ Release evidence:
 - добавить tag-driven GitHub Actions workflow, который сначала создаёт draft
   Release и не обходит обычные quality gates;
 - запускать distribution smoke tests из чистого временного HOME/PATH через
-  установленный бинарник: `new`, `check`, `format`, `build`, `run`, `doctor`,
-  `target list`;
+  установленный бинарник: `new`, `check`, `format`, `build`, `run`, `quick-run`,
+  `doctor`, `target list`;
 - документировать ручную/offline установку из скачанного архива.
 
 #### Контракт release-артефактов

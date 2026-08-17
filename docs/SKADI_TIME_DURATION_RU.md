@@ -158,7 +158,7 @@ ESP32/FreeRTOS backend пока не реализован; desktop API не сл
 - нет fractional duration literals;
 - нет general units algebra;
 - `output(Time/Duration)` не добавляет скрытое форматирование;
-- `send_for` и `receive_for` используют `Duration`; timed-вариант `Task.wait`
-  ещё не реализован.
+- `send_for`, `receive_for` и `wait task for Duration` используют один nominal
+  тип длительности и обязательную явную timeout-границу.
 
 Проверяемый пример: `benchmarks/bench_13_time_budget.skd`.

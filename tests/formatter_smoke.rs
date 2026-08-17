@@ -169,3 +169,22 @@ jobs.send_for(7,25ms) on error{pass}
     let tokens = lex(&formatted).expect("formatted timed channels should lex");
     parse_program(&tokens).expect("formatted timed channels should parse");
 }
+
+#[test]
+fn formats_timed_task_wait_and_preserves_handler() {
+    let source = r#"
+fn worker(){sleep(20ms)}
+Task worker_task=run worker()
+wait worker_task for 1ms on error{
+if timed_out{output("deadline")}
+stop worker_task
+wait worker_task
+}
+"#;
+
+    let formatted = format_source(source).expect("format timed task wait");
+    assert!(formatted.contains("wait worker_task for 1ms on error {"));
+    assert!(formatted.contains("if timed_out {"));
+    let tokens = lex(&formatted).expect("formatted timed task wait should lex");
+    parse_program(&tokens).expect("formatted timed task wait should parse");
+}

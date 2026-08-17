@@ -51,7 +51,6 @@ closed state under the channel lock before returning `TimedOut`.
 
 ## Deferred
 
-- timed `Task.wait`;
 - `select` and `try_receive`;
 - cancellation of file and arbitrary platform I/O;
 - fairness guarantees and detached channel ownership.

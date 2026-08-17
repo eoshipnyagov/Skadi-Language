@@ -192,6 +192,37 @@ that no task will send causes a deadlock.
 The compiler rejects an ignored `run worker()` because it could not guarantee
 join and cleanup.
 
+### Timed task wait
+
+`wait task for Duration on error { ... }` bounds completion waiting:
+
+```skadi
+Task(Int) worker_task = run calculate()
+new Int result = 0
+result = wait worker_task for 250ms on error {
+    if timed_out {
+        output("task exceeded its budget")
+    }
+    stop worker_task
+    result = wait worker_task
+}
+```
+
+The lifecycle is intentionally path-sensitive:
+
+- success joins the task, retrieves its result, and consumes the handle;
+- timeout enters `on error` with the handle still live;
+- the timeout handler must finish that live path with `wait` or `stop` plus
+  `wait`;
+- code after the handler cannot use the handle unconditionally because the
+  success path has already consumed it;
+- `0ms` performs an immediate check: an already completed task succeeds,
+  otherwise the operation times out.
+
+`timed_out` in this handler means deadline expiry. The runtime neither kills the
+task nor loses its result. Windows uses a bounded thread wait; POSIX uses a task
+completion condition variable followed by ordinary `pthread_join` on success.
+
 ## Cooperative stop
 
 `stop` publishes a stop request and `stopping` reads it inside the task entry:
@@ -360,7 +391,7 @@ The following features are not available yet:
 - task groups and structured-concurrency syntax;
 - thread pool, work stealing, and async/await;
 - detached tasks and hard kill;
-- timed `Task.wait`, `select`, and `try_receive`;
+- `select` and `try_receive`;
 - cancellation of file or arbitrary platform I/O;
 - general-purpose scheduling beyond typed host `interrupts.periodic`;
 - affinity, priority, and stack-size configuration;
@@ -377,3 +408,4 @@ The following features are not available yet:
 - `examples/concurrency/02_restart_task.skd`
 - `examples/concurrency/03_cancel_blocked_channel.skd`
 - `examples/concurrency/04_timed_channel.skd`
+- `examples/concurrency/05_timed_task_wait.skd`

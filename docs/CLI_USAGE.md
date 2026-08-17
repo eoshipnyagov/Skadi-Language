@@ -25,6 +25,7 @@
 - `check`
 - `build`
 - `run`
+- `quick-run <file.skd> [-- <args ...>]`
 - `format`
 - `doctor`
 - `target list`

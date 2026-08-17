@@ -41,7 +41,7 @@ Channel runtime следует отдельным вторым slice, но ег�
 - detached tasks;
 - task groups и structured-concurrency sugar;
 - hard kill;
-- `select`, timed `Task.wait` и `try_receive`;
+- `select` и `try_receive`;
 - shared mutable values, mutex/atomic API на уровне языка;
 - RTOS и bare-metal backend;
 - настройка affinity, priority и stack size.
@@ -56,8 +56,9 @@ Channel runtime следует отдельным вторым slice, но ег�
 - отменяемые blocking `send/receive` реализованы;
 - связь `stop` с автоматическим пробуждением Channel реализована без polling;
 - `send_for/receive_for` с `Duration` и `timed_out` реализованы;
-- timed `Task.wait`, `select`, `try_receive` и cancellation произвольного I/O
-  отложены.
+- `wait task for Duration on error { ... }` реализован с сохранением handle на
+  timeout-пути и поглощением на success-пути;
+- `select`, `try_receive` и cancellation произвольного I/O отложены.
 
 Это не окончательный отказ от возможностей. Решения по ним принимаются после
 появления работающих `run -> wait`, `stop -> wait` и bounded `send/receive`, когда

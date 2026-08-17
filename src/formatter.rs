@@ -395,10 +395,19 @@ impl Formatter {
                 self.write_indent(indent);
                 self.out.push_str(target);
                 self.out.push_str(" = ");
-                self.out.push_str(call_name);
-                self.out.push('(');
-                self.out.push_str(&self.render_arg_list(args));
-                self.out.push(')');
+                if call_name == "__task_wait_for"
+                    && let [Expression::VariableReference(task_name), timeout] = args.as_slice()
+                {
+                    self.out.push_str("wait ");
+                    self.out.push_str(task_name);
+                    self.out.push_str(" for ");
+                    self.out.push_str(&self.render_expression(timeout, 0));
+                } else {
+                    self.out.push_str(call_name);
+                    self.out.push('(');
+                    self.out.push_str(&self.render_arg_list(args));
+                    self.out.push(')');
+                }
                 self.out.push_str(" on error ");
                 self.render_block(on_error, indent)?;
             }
@@ -409,10 +418,19 @@ impl Formatter {
                 ..
             } => {
                 self.write_indent(indent);
-                self.out.push_str(call_name);
-                self.out.push('(');
-                self.out.push_str(&self.render_arg_list(args));
-                self.out.push(')');
+                if call_name == "__task_wait_for"
+                    && let [Expression::VariableReference(task_name), timeout] = args.as_slice()
+                {
+                    self.out.push_str("wait ");
+                    self.out.push_str(task_name);
+                    self.out.push_str(" for ");
+                    self.out.push_str(&self.render_expression(timeout, 0));
+                } else {
+                    self.out.push_str(call_name);
+                    self.out.push('(');
+                    self.out.push_str(&self.render_arg_list(args));
+                    self.out.push(')');
+                }
                 self.out.push_str(" on error ");
                 self.render_block(on_error, indent)?;
             }
@@ -603,7 +621,15 @@ impl Formatter {
             Expression::RunTask { call_name, args } => {
                 format!("run {call_name}({})", self.render_arg_list(args))
             }
-            Expression::WaitTask { task_name } => format!("wait {task_name}"),
+            Expression::WaitTask { task_name, timeout } => timeout.as_deref().map_or_else(
+                || format!("wait {task_name}"),
+                |timeout| {
+                    format!(
+                        "wait {task_name} for {}",
+                        self.render_expression(timeout, 0)
+                    )
+                },
+            ),
             Expression::Stopping => "stopping".to_string(),
             Expression::TimedOut => "timed_out".to_string(),
             Expression::BinaryOp { op, left, right } if op == "neg" => {

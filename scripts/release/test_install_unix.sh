@@ -88,6 +88,10 @@ export PATH
 [ "$(skadi-cli --version)" = "skadi-cli $expected_version" ]
 
 cd "$workspace"
+if [ -n "$compiler" ]; then
+    printf 'output("installed quick-run ok")\n' > quick_smoke.skd
+    skadi-cli quick-run quick_smoke.skd --cc "$compiler"
+fi
 skadi-cli new distribution_smoke
 cd distribution_smoke
 skadi-cli check

@@ -137,7 +137,19 @@ impl<'a> ExprParser<'a> {
             }
             let task_name = self.tokens[self.idx].lexeme.clone();
             self.idx += 1;
-            return Ok(Expression::WaitTask { task_name });
+            let timeout = if self.idx < self.end && self.tokens[self.idx].lexeme == "for" {
+                self.idx += 1;
+                if self.idx >= self.end {
+                    return Err(parse_err(
+                        "SC-PARSE-222",
+                        "timed wait expected Duration expression after 'for'.",
+                    ));
+                }
+                Some(Box::new(self.parse_bp(0)?))
+            } else {
+                None
+            };
+            return Ok(Expression::WaitTask { task_name, timeout });
         }
 
         if tok.kind == TokenKind::Identifier && tok.lexeme == "run" {

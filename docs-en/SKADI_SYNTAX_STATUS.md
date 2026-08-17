@@ -22,6 +22,7 @@ Date: 2026-07-30
 - periodic `Interrupt` sources and `on interrupt`;
 - Channel `try_send`, `close`/drain, cancellation-aware blocking operations,
   `send_for`/`receive_for`, and contextual `timed_out`;
+- path-sensitive `wait task for Duration on error { ... }`;
 - Canvas v0 with a Win32 presenter and portable headless rasterizer.
 
 ## Compatibility
@@ -40,7 +41,7 @@ but only `ErrorCode` has a complete value/type/C-lowering contract.
 - `fixed`, `const`;
 - automatic `allow drop` reclamation;
 - named/aliased imports and packages;
-- timed `Task.wait`, Channel `select`/`try_receive`, and async/task groups;
+- Channel `select`/`try_receive`, and async/task groups;
 - ESP32/RTOS backend;
 - Matrix2D, Canvas events/text/images, non-Windows presenters, and generic units/vectors.
 

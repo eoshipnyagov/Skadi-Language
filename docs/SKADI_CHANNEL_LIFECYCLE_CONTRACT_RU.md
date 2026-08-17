@@ -89,7 +89,6 @@ Timed operation использует один абсолютный deadline: л�
 
 ## 6. Отложено
 
-- timed `Task.wait`;
 - `select`;
 - автоматический sender counting;
 - cancellation файлового и платформенного I/O;

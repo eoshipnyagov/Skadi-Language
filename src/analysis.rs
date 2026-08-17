@@ -8,6 +8,7 @@ pub enum AnalysisFactKind {
     BlockingChannelReceive,
     TimedChannelSend,
     TimedChannelReceive,
+    TimedTaskWait,
     IncompleteWhen,
     ResourceCreated,
     ResourceBorrowed,
@@ -392,7 +393,24 @@ fn collect_statement_facts(
                 on_error,
                 loc,
             } => {
-                collect_call_fact(call_name, loc, true, function, task_entries, facts);
+                if call_name == "__task_wait_for"
+                    && let [Expression::VariableReference(task_name), _] = args.as_slice()
+                {
+                    push_lifecycle_fact(
+                        facts,
+                        AnalysisFactKind::TimedTaskWait,
+                        "SC-AN-314",
+                        loc,
+                        function,
+                        task_entries,
+                        task_name,
+                        format!("task '{task_name}' is waited with a deadline"),
+                        "success joins and consumes the handle; timeout enters on error while the handle remains live",
+                        "finish the live timeout path with stop/wait or another path-proven ownership action",
+                    );
+                } else {
+                    collect_call_fact(call_name, loc, true, function, task_entries, facts);
+                }
                 for argument in args {
                     collect_expression_facts(argument, loc, false, function, task_entries, facts);
                 }
@@ -483,7 +501,7 @@ fn collect_expression_facts(
                 collect_expression_facts(value, loc, handled, function, task_entries, facts);
             }
         }
-        Expression::WaitTask { task_name } => push_lifecycle_fact(
+        Expression::WaitTask { task_name, .. } => push_lifecycle_fact(
             facts,
             AnalysisFactKind::TaskLifecycle,
             "SC-AN-313",

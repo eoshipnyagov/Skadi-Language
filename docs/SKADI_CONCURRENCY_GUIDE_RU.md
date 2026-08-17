@@ -213,6 +213,37 @@ run worker()
 Компилятор отклоняет проигнорированный handle, потому что иначе невозможно
 гарантировать join и cleanup.
 
+### Timed wait задачи
+
+`wait task for Duration on error { ... }` ограничивает ожидание завершения:
+
+```skadi
+Task(Int) worker_task = run calculate()
+new Int result = 0
+result = wait worker_task for 250ms on error {
+    if timed_out {
+        output("task exceeded its budget")
+    }
+    stop worker_task
+    result = wait worker_task
+}
+```
+
+Здесь lifecycle намеренно path-sensitive:
+
+- при успехе timed wait выполняет join, получает результат и поглощает handle;
+- при timeout управление входит в `on error`, а handle остаётся живым;
+- timeout-handler обязан завершить живой путь через `wait` либо `stop` + `wait`;
+- после handler нельзя безусловно использовать handle: на success-пути он уже
+  поглощён;
+- `0ms` выполняет немедленную проверку: уже завершённая task считается успехом,
+  иначе возникает timeout.
+
+`timed_out` внутри такого handler всегда означает именно истечение deadline.
+Runtime не убивает task и не теряет её результат. Windows использует bounded
+thread wait, POSIX — condition variable завершения и обычный `pthread_join`
+после успеха.
+
 ## Кооперативная остановка
 
 `stop` публикует запрос на остановку, а `stopping` читает его внутри task entry:
@@ -432,7 +463,7 @@ latency и deterministic allocation, необходимых для серьёз�
 - thread pool, work stealing и async/await;
 - detached tasks;
 - hard kill;
-- timed `Task.wait`, `select`, `try_receive`;
+- `select`, `try_receive`;
 - отмена файлового и произвольного платформенного I/O;
 - general-purpose timer/scheduler beyond typed host `interrupts.periodic`;
 - affinity, priority и stack-size configuration;
@@ -449,3 +480,4 @@ latency и deterministic allocation, необходимых для серьёз�
 - `examples/concurrency/02_restart_task.skd`
 - `examples/concurrency/03_cancel_blocked_channel.skd`
 - `examples/concurrency/04_timed_channel.skd`
+- `examples/concurrency/05_timed_task_wait.skd`

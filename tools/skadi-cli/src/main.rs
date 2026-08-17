@@ -20,6 +20,7 @@ fn help_text() -> String {
         "  check              Run frontend checks",
         "  build [--target] [--cc]  Build project",
         "  run [--target] [--cc]    Build and run project",
+        "  quick-run <file.skd> [-- <args>]  Run one file without a manifest",
         "  target list        List supported targets",
         "  tui                Full-screen interactive workflow",
         "  format [--check] [path ...]  Format Skadi source files",
@@ -49,6 +50,7 @@ fn main() {
         "check" => commands::check_cmd::run(&args[2..]),
         "build" => commands::build_cmd::run(&args[2..]),
         "run" => commands::run_cmd::run(&args[2..]),
+        "quick-run" => commands::quick_run_cmd::run(&args[2..]),
         "target" => commands::target_cmd::run(&args[2..]),
         "tui" => commands::tui_cmd::run(&args[2..]),
         "format" => commands::format_cmd::run(&args[2..]),
@@ -82,6 +84,7 @@ mod tests {
         assert!(help.contains("skadi-cli <command> [args]"));
         assert!(help.contains("-V, --version"));
         assert!(help.contains("format [--check] [path ...]  Format Skadi source files"));
+        assert!(help.contains("quick-run <file.skd> [-- <args>]"));
         assert!(help.contains("tui                Full-screen interactive workflow"));
     }
 }

@@ -84,6 +84,15 @@ try {
 
     Push-Location $projectParent
     try {
+        if ($Compiler) {
+            $quickSource = Join-Path $projectParent "quick_smoke.skd"
+            [System.IO.File]::WriteAllText(
+                $quickSource,
+                "output(`"installed quick-run ok`")`n",
+                [System.Text.UTF8Encoding]::new($false)
+            )
+            Invoke-Checked "skadi-cli" @("quick-run", $quickSource, "--cc", $Compiler)
+        }
         Invoke-Checked "skadi-cli" @("new", "distribution_smoke")
         Set-Location (Join-Path $projectParent "distribution_smoke")
         Invoke-Checked "skadi-cli" @("check")

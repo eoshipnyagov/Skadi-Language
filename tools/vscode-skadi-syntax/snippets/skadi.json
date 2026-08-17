@@ -76,6 +76,19 @@
     ],
     "description": "Receive with a Duration deadline and explicit error causes"
   },
+  "Timed task wait": {
+    "prefix": "taskwaitfor",
+    "body": [
+      "${1:result} = wait ${2:worker_task} for ${3:250ms} on error {",
+      "    if timed_out {",
+      "        ${4:output(\"task timeout\")}",
+      "    }",
+      "    stop ${2:worker_task}",
+      "    ${1:result} = wait ${2:worker_task}",
+      "}"
+    ],
+    "description": "Wait for a Task deadline while preserving ownership on timeout"
+  },
   "Periodic interrupt": {
     "prefix": "interrupt",
     "body": [
