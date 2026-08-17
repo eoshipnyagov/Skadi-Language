@@ -57,6 +57,10 @@ cargo run -p skadi-cli -- check
 - `target list` показывает поддерживаемые target profiles;
 - `tui` открывает полноэкранный интерфейс проекта.
 
+`build` также создаёт `<project>.skadi-debug.json` со statement-level mapping
+между исходными `.skd` и generated C. Sidecar уже учитывает imports и является
+основой будущего Skadi-level debugger; breakpoints/step/locals пока не готовы.
+
 `build` и `run` принимают `--target` и `--cc`. C-компилятор является внешней
 зависимостью и не устанавливается вместе со Skadi.
 

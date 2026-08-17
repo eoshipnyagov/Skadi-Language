@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde_json::json;
+
 pub use v01::analysis::{AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind};
 use v01::formatter::format_source;
 
@@ -100,6 +102,7 @@ pub struct BuildResult {
     pub toolchain_stdout: String,
     pub toolchain_stderr: String,
     pub c_path: PathBuf,
+    pub debug_map_path: PathBuf,
     pub exe_path: PathBuf,
 }
 
@@ -478,6 +481,14 @@ pub fn run_build_at(root: &Path, options: &BuildOptions) -> Result<BuildResult, 
             ),
         )
     })?;
+    let debug_map_path = build_dir.join(format!("{}.skadi-debug.json", project.name));
+    write_debug_map(
+        &debug_map_path,
+        &project.root,
+        &project.entry,
+        &c_path,
+        &frontend.debug_map,
+    )?;
 
     let exe_name = match profile.output_kind {
         OutputKind::WindowsExe => format!("{}.exe", project.name),
@@ -503,8 +514,66 @@ pub fn run_build_at(root: &Path, options: &BuildOptions) -> Result<BuildResult, 
         toolchain_stdout: toolchain.stdout,
         toolchain_stderr: toolchain.stderr,
         c_path,
+        debug_map_path,
         exe_path,
     })
+}
+
+fn write_debug_map(
+    output_path: &Path,
+    project_root: &Path,
+    entry_path: &Path,
+    c_path: &Path,
+    entries: &[crate::pipeline::DebugSourceMapEntry],
+) -> Result<(), ActionError> {
+    let entry = portable_project_path(project_root, entry_path);
+    let generated_c = portable_project_path(project_root, c_path);
+    let entries = entries
+        .iter()
+        .map(|item| {
+            json!({
+                "statement_id": item.statement_id,
+                "kind": item.statement_kind,
+                "source": {
+                    "path": portable_project_path(project_root, &item.source_path),
+                    "line": item.source_line,
+                    "col": item.source_col,
+                },
+                "generated": {
+                    "start_line": item.generated_start_line,
+                    "end_line": item.generated_end_line,
+                },
+            })
+        })
+        .collect::<Vec<_>>();
+    let document = json!({
+        "schema": "skadi.debug-map.v1",
+        "entry": entry,
+        "generated_c": generated_c,
+        "entries": entries,
+    });
+    let encoded = serde_json::to_string_pretty(&document).map_err(|error| {
+        ActionError::new(
+            FailureSource::Io,
+            format!("debug metadata serialization failed: {error}"),
+        )
+    })?;
+    fs::write(output_path, encoded).map_err(|error| {
+        ActionError::new(
+            FailureSource::Io,
+            format!(
+                "build staging error: write {} failed: {error}",
+                output_path.display()
+            ),
+        )
+    })
+}
+
+fn portable_project_path(project_root: &Path, path: &Path) -> String {
+    path.strip_prefix(project_root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
 }
 
 pub fn run_project(options: &BuildOptions) -> Result<RunResult, ActionError> {

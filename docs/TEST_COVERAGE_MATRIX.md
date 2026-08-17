@@ -173,6 +173,10 @@
     а Lifecycle workspace показывает typed subjects и source-order timeline
   - `skadi-cli analyze --json` покрыт success/failure smoke и закрепляет схему
     `skadi.analysis.v1`, IDs, source anchors и subject kinds
+- debugger foundation
+  - codegen-тест закрепляет `SK-STMT` IDs и generated C ranges
+  - module pipeline проверяет source origin для entry и imported `.skd`
+  - CLI build smoke проверяет sidecar `skadi.debug-map.v1`
 - module ergonomics
   - относительный path-import и правила видимости покрыты полноценно
   - path import aliases реализованы; module-name imports и re-export остаются TODO

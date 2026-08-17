@@ -295,7 +295,9 @@ TUI action history и связывает факты по typed subject. Кажд
 
 ### Фаза C - первый отладчик
 
-- debug build с mapping `Skadi source -> generated C/runtime`;
+- debug build с mapping `Skadi source -> generated C` — выполнен первый
+  statement-level slice: `SK-STMT` markers, multi-file origins и sidecar
+  `skadi.debug-map.v1`;
 - compiler-inserted debug probes и метаданные известных Skadi-типов;
 - breakpoints по `.skd`, continue, step, locals и call stack;
 - runtime views для Task, Channel, Memory и linear resources;

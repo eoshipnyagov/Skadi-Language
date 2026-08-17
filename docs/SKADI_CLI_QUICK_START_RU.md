@@ -92,6 +92,10 @@ skadi-cli build
 skadi-cli run
 ```
 
+После `build` в `build/` лежат executable, generated C и
+`<project>.skadi-debug.json`. Последний нужен tooling/debugger и обычно не
+редактируется вручную.
+
 Рекомендуемый ритм:
 
 - `check` для фронтенда языка;

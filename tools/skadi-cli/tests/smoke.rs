@@ -141,8 +141,26 @@ fn new_check_and_optional_build_run_smoke() {
             stderr_text(&build)
         );
         assert!(stdout_text(&build).contains("build ok [host]:"));
+        assert!(stdout_text(&build).contains("debug map:"));
         let build_dir = project_dir.join("build");
         assert!(build_dir.exists());
+        let debug_map_path = build_dir.join("hello_smoke.skadi-debug.json");
+        assert!(debug_map_path.exists());
+        let debug_map: serde_json::Value = serde_json::from_slice(
+            &fs::read(&debug_map_path).expect("debug map should be readable"),
+        )
+        .expect("debug map should be valid JSON");
+        assert_eq!(debug_map["schema"], "skadi.debug-map.v1");
+        assert!(
+            debug_map["entries"]
+                .as_array()
+                .is_some_and(|entries| !entries.is_empty())
+        );
+        assert!(debug_map["entries"].as_array().is_some_and(|entries| {
+            entries
+                .iter()
+                .all(|entry| entry["statement_id"].is_string())
+        }));
 
         let run = run_cli(&project_dir, &["run"]);
         assert!(run.status.success(), "run failed: {}", stderr_text(&run));

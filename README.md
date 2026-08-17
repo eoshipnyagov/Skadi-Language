@@ -49,6 +49,8 @@ The repository includes:
 - structured analysis facts with stable IDs/source anchors for blocking/timed
   operations, incomplete `when`, and resource lifecycle chains displayed in a
   dedicated TUI workspace and exported by `analyze --json`,
+- statement-level Skadi-to-C debug maps with multi-file source origins emitted
+  beside native build artifacts,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
 - experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,

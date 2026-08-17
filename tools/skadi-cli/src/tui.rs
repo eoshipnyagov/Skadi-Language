@@ -775,6 +775,7 @@ impl App {
                         format!("target: {}", result.target),
                         format!("toolchain: {}", result.selected_compiler),
                         format!("c: {}", result.c_path.display()),
+                        format!("debug map: {}", result.debug_map_path.display()),
                         format!("exe: {}", result.exe_path.display()),
                     ],
                 });
@@ -1134,6 +1135,7 @@ impl App {
                 format!("toolchain status: {}", result.toolchain_status),
                 format!("exe: {}", result.exe_path.display()),
                 format!("c: {}", result.c_path.display()),
+                format!("debug map: {}", result.debug_map_path.display()),
             ],
         });
     }
@@ -2115,6 +2117,7 @@ fn render_build_run(frame: &mut Frame<'_>, area: Rect, app: &App) {
             Line::from(format!("selected cc: {}", build.selected_compiler)),
             Line::from(format!("status: {}", build.toolchain_status)),
             Line::from(format!("c path: {}", build.c_path.display())),
+            Line::from(format!("debug map: {}", build.debug_map_path.display())),
             Line::from(format!("exe path: {}", build.exe_path.display())),
             Line::from(format!("warnings: {}", build.warnings.len())),
             Line::from("Press 'b' to rebuild the current project."),

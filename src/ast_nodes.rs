@@ -260,6 +260,43 @@ pub enum Statement {
     }, // For 'on error' context
 }
 
+impl Statement {
+    pub fn location(&self) -> &Location {
+        match self {
+            Self::VarDecl { loc, .. }
+            | Self::MemoryDecl { loc, .. }
+            | Self::Assignment { loc, .. }
+            | Self::IncDec { loc, .. }
+            | Self::FieldAssignment { loc, .. }
+            | Self::FunctionDef { loc, .. }
+            | Self::IfStatement { loc, .. }
+            | Self::ForLoop { loc, .. }
+            | Self::WhenBlock { loc, .. }
+            | Self::WhileLoop { loc, .. }
+            | Self::LoopStatement { loc, .. }
+            | Self::BreakStatement { loc }
+            | Self::ContinueStatement { loc }
+            | Self::PassStatement { loc }
+            | Self::LabelDecl { loc, .. }
+            | Self::TagDecl { loc, .. }
+            | Self::StructDecl { loc, .. }
+            | Self::OnBlock { loc, .. }
+            | Self::DangerAssignOnError { loc, .. }
+            | Self::DangerCallOnError { loc, .. }
+            | Self::ListPush { loc, .. }
+            | Self::ListPopOnError { loc, .. }
+            | Self::PlaceIn { loc, .. }
+            | Self::MemoryClear { loc, .. }
+            | Self::StopTask { loc, .. }
+            | Self::ReturnError { loc, .. }
+            | Self::ReturnStatement { loc, .. }
+            | Self::ExpressionStatement { loc, .. }
+            | Self::BlockStatement { loc, .. }
+            | Self::OnErrorBlock { loc, .. } => loc,
+        }
+    }
+}
+
 /// Represents a sequence of statements executed together (function body, if/else block).
 #[derive(Debug)]
 pub struct BlockStatement {

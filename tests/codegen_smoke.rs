@@ -1,4 +1,4 @@
-use v01::codegen::transpile_program_to_c;
+use v01::codegen::{transpile_program_to_c, transpile_program_to_c_with_map};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::semantic_analyze;
@@ -12,6 +12,31 @@ fn codegen_emits_main_and_assignment() {
     let c = transpile_program_to_c(&program);
     assert!(c.contains("int main(void)"));
     assert!(c.contains("int64_t x = (1 + 2);"));
+}
+
+#[test]
+fn codegen_source_map_points_to_generated_statement_ranges() {
+    let src = "new Int value = 1\nif value > 0 {\n    value = value + 1\n}\n";
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let output = transpile_program_to_c_with_map(&program);
+
+    assert_eq!(output.source_map.len(), 3);
+    let assignment = output
+        .source_map
+        .iter()
+        .find(|entry| entry.statement_kind == "assignment")
+        .expect("assignment mapping");
+    assert_eq!(assignment.source_line, 3);
+    assert!(assignment.statement_id.starts_with("SK-STMT@3:"));
+    let generated = output
+        .c_code
+        .lines()
+        .nth(assignment.generated_start_line as usize - 1)
+        .expect("mapped generated line");
+    assert!(generated.contains("value = (value + 1);"));
+    assert!(output.c_code.contains("/* SK-STMT@1:1#1 */"));
 }
 
 #[test]

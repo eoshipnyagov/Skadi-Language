@@ -10,6 +10,8 @@ pub struct Lexer<'a> {
     current_pos: usize,
     current_line: u32,
     current_col: u32,
+    token_start_line: u32,
+    token_start_col: u32,
 }
 
 impl<'a> Lexer<'a> {
@@ -21,6 +23,8 @@ impl<'a> Lexer<'a> {
             current_pos: 0,
             current_line: 1,
             current_col: 1,
+            token_start_line: 1,
+            token_start_col: 1,
         }
     }
 
@@ -202,6 +206,8 @@ impl<'a> Lexer<'a> {
 
         let line = self.current_line;
         let col = self.current_col;
+        self.token_start_line = line;
+        self.token_start_col = col;
 
         // Record the starting position before peeking
         let _start_pos = self.current_pos;
@@ -468,14 +474,10 @@ impl<'a> Iterator for Lexer<'a> {
             }
 
             let (k, lexeme) = kind;
-            let line = self.current_line;
-            let col = self.current_col;
+            let line = self.token_start_line;
+            let col = self.token_start_col;
 
-            // Recalculate the position at which this token STARTED
-            // We need to restore: we advanced past the token in next_token,
-            // so the start_line/col are from when we entered next_token.
-            // For simplicity, just record current as end — but we want start position.
-            // Fix: track start before calling next_token.
+            // next_token records the start before consuming the token.
 
             return Some(Ok(Token {
                 kind: k,

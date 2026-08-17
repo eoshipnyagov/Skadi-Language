@@ -147,6 +147,9 @@ Tooling stages добавляют собственные `SC-MOD`, `SC-CG`, `SC-
 - direct-import-only visibility;
 - public symbol collision detection;
 - `local` isolation и `module.symbol` qualification;
+- line-origin table для раскрытого multi-file source;
+- statement-level `Skadi -> generated C` mapping и sidecar
+  `skadi.debug-map.v1`;
 - вызов host/cross C toolchain.
 
 ### `project.rs`
@@ -172,9 +175,12 @@ TUI, CI и будущий LSP. Планируемые views: ownership/resource 
 Task/Channel state, Memory regions, explain-chain diagnostics и source-level
 debugger.
 
-Первый debugger строится поверх C pipeline через source mapping, compiler
-probes и Skadi type metadata. GDB/LLDB допустимы как нижний native layer;
-собственный machine debugger не является целью.
+Первый debugger строится поверх C pipeline. Foundation уже реализован: lexer
+сохраняет start location токена, C-emitter вставляет `SK-STMT` markers и
+возвращает generated-line ranges, import pipeline восстанавливает исходный
+`.skd`, а `build` пишет portable JSON sidecar. Compiler probes, Skadi type
+metadata, breakpoints и step/locals ещё впереди. GDB/LLDB допустимы как нижний
+native layer; собственный machine debugger не является целью.
 
 ## 5. Реализованные уровни языка
 

@@ -140,8 +140,12 @@ skadi-cli run --target host --cc gcc
 - runtime execution;
 - I/O.
 
-Артефакты находятся в `build/`. `run` передаёт stdout/stderr программы и
-сохраняет её exit status.
+Артефакты находятся в `build/`: executable, generated `.c` и
+`<project>.skadi-debug.json`. Debug map использует схему `skadi.debug-map.v1` и
+связывает statement ID, исходный `.skd`/line/col и диапазон строк generated C.
+Для imports сохраняется реальный файл происхождения, а не только entry. Это
+foundation для будущих breakpoints/step/locals, но отдельной команды debugger
+пока нет. `run` передаёт stdout/stderr программы и сохраняет её exit status.
 
 ## `quick-run`
 
@@ -182,6 +186,7 @@ skadi-cli tui
   рекомендуемым действием;
 - отдельный lifecycle workspace для Tasks, Channels, Memory и Resources;
 - build/run output;
+- путь к generated debug map после build/run;
 - doctor/environment;
 - project bootstrap;
 - `Skadi.toml` config editor;

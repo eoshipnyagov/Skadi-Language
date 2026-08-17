@@ -323,7 +323,7 @@ impl<'a> ExprParser<'a> {
         {
             let unit = &self.tokens[self.idx + 1];
             let is_adjacent =
-                unit.line == tok.line && unit.col == tok.col + unit.lexeme.chars().count() as u32;
+                unit.line == tok.line && unit.col == tok.col + tok.lexeme.chars().count() as u32;
             if unit.kind == TokenKind::Identifier
                 && is_adjacent
                 && matches!(unit.lexeme.as_str(), "ms" | "s" | "min")

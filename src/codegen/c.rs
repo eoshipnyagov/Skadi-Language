@@ -20,6 +20,8 @@ struct CodegenState {
     next_label_id: usize,
     function_returns: HashMap<String, String>,
     interrupt_handler_index: usize,
+    statement_collisions: HashMap<(u32, u32), usize>,
+    source_map: Vec<CodegenSourceMapEntry>,
 }
 
 impl CodegenState {
@@ -28,6 +30,22 @@ impl CodegenState {
         self.next_label_id += 1;
         id
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodegenSourceMapEntry {
+    pub statement_id: String,
+    pub statement_kind: &'static str,
+    pub source_line: u32,
+    pub source_col: u32,
+    pub generated_start_line: u32,
+    pub generated_end_line: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodegenOutput {
+    pub c_code: String,
+    pub source_map: Vec<CodegenSourceMapEntry>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2197,6 +2215,10 @@ fn emit_task_entry_prototypes(program: &Program, entries: &HashSet<String>, out:
 }
 
 pub fn transpile_program_to_c(program: &Program) -> String {
+    transpile_program_to_c_with_map(program).c_code
+}
+
+pub fn transpile_program_to_c_with_map(program: &Program) -> CodegenOutput {
     let mut out = String::new();
     let mut codegen_state = CodegenState {
         function_returns: program
@@ -2386,7 +2408,13 @@ pub fn transpile_program_to_c(program: &Program) -> String {
     out.push_str("    return 0;\n");
     out.push_str("}\n");
 
-    out
+    codegen_state
+        .source_map
+        .sort_by_key(|entry| entry.generated_start_line);
+    CodegenOutput {
+        c_code: out,
+        source_map: codegen_state.source_map,
+    }
 }
 
 fn emit_top_level_cleanup(program: &Program, out: &mut String) {
@@ -4260,6 +4288,82 @@ fn infer_scalar_declaration_type(
 }
 
 fn emit_statement(
+    stmt: &Statement,
+    out: &mut String,
+    indent: usize,
+    declared: &mut HashMap<String, String>,
+    fn_ctx: Option<&FunctionContext>,
+    place_ctx: Option<&PlaceContext>,
+    state: &mut CodegenState,
+) {
+    let loc = stmt.location();
+    let collision = state
+        .statement_collisions
+        .entry((loc.line, loc.column))
+        .and_modify(|count| *count += 1)
+        .or_insert(1);
+    let statement_id = format!("SK-STMT@{}:{}#{}", loc.line, loc.column, collision);
+    out.push_str(&"    ".repeat(indent));
+    out.push_str("/* ");
+    out.push_str(&statement_id);
+    out.push_str(" */\n");
+    let generated_start_line = generated_line(out);
+
+    emit_statement_body(stmt, out, indent, declared, fn_ctx, place_ctx, state);
+
+    let generated_end_line = generated_line(out)
+        .saturating_sub(1)
+        .max(generated_start_line);
+    state.source_map.push(CodegenSourceMapEntry {
+        statement_id,
+        statement_kind: statement_kind(stmt),
+        source_line: loc.line,
+        source_col: loc.column,
+        generated_start_line,
+        generated_end_line,
+    });
+}
+
+fn generated_line(out: &str) -> u32 {
+    out.bytes().filter(|byte| *byte == b'\n').count() as u32 + 1
+}
+
+fn statement_kind(statement: &Statement) -> &'static str {
+    match statement {
+        Statement::VarDecl { .. } => "variable_declaration",
+        Statement::MemoryDecl { .. } => "memory_declaration",
+        Statement::Assignment { .. } => "assignment",
+        Statement::IncDec { .. } => "increment_decrement",
+        Statement::FieldAssignment { .. } => "field_assignment",
+        Statement::FunctionDef { .. } => "function_declaration",
+        Statement::IfStatement { .. } => "if",
+        Statement::ForLoop { .. } => "loop_iteration",
+        Statement::WhenBlock { .. } => "when",
+        Statement::WhileLoop { .. } => "while",
+        Statement::LoopStatement { .. } => "loop",
+        Statement::BreakStatement { .. } => "break",
+        Statement::ContinueStatement { .. } => "continue",
+        Statement::PassStatement { .. } => "pass",
+        Statement::LabelDecl { .. } => "label_declaration",
+        Statement::TagDecl { .. } => "tag_declaration",
+        Statement::StructDecl { .. } => "struct_declaration",
+        Statement::OnBlock { .. } => "event_handler",
+        Statement::DangerAssignOnError { .. } => "danger_assignment",
+        Statement::DangerCallOnError { .. } => "danger_call",
+        Statement::ListPush { .. } => "list_push",
+        Statement::ListPopOnError { .. } => "list_pop",
+        Statement::PlaceIn { .. } => "memory_scope",
+        Statement::MemoryClear { .. } => "memory_clear",
+        Statement::StopTask { .. } => "task_stop",
+        Statement::ReturnError { .. } => "error_return",
+        Statement::ReturnStatement { .. } => "return",
+        Statement::ExpressionStatement { .. } => "expression",
+        Statement::BlockStatement { .. } => "block",
+        Statement::OnErrorBlock { .. } => "error_handler",
+    }
+}
+
+fn emit_statement_body(
     stmt: &Statement,
     out: &mut String,
     indent: usize,

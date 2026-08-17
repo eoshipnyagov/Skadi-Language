@@ -9,7 +9,7 @@ use crate::targets::{
     CompilerInvocation, candidate_invocations, resolve_profile, single_compiler_invocation,
 };
 use v01::analysis::{AnalysisFact, collect_analysis_facts};
-use v01::codegen::{ensure_codegen_supported, transpile_program_to_c};
+use v01::codegen::{ensure_codegen_supported, transpile_program_to_c_with_map};
 use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
@@ -26,6 +26,30 @@ pub struct FrontendOutput {
     pub c_code: String,
     pub warnings: Vec<String>,
     pub analysis: Vec<AnalysisFact>,
+    pub debug_map: Vec<DebugSourceMapEntry>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DebugSourceMapEntry {
+    pub statement_id: String,
+    pub statement_kind: &'static str,
+    pub source_path: PathBuf,
+    pub source_line: u32,
+    pub source_col: u32,
+    pub generated_start_line: u32,
+    pub generated_end_line: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SourceOrigin {
+    path: PathBuf,
+    line: u32,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct LoadedSource {
+    text: String,
+    origins: Vec<SourceOrigin>,
 }
 
 #[derive(Clone, Debug)]
@@ -37,12 +61,12 @@ pub struct ToolchainOutput {
 }
 
 pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
-    let source = load_source_with_imports(entry_path).map_err(|e| {
+    let loaded = load_source_bundle(entry_path).map_err(|e| {
         format!(
             "[SC-MOD-001] stage=module-import: {e}\nhint: use only path imports like import \"./file.skd\" and verify import graph paths/cycles."
         )
     })?;
-    let tokens = lex(&source).map_err(|e| {
+    let tokens = lex(&loaded.text).map_err(|e| {
         format!(
             "[SC-LEX-000] stage=lex: {e}\nhint: inspect the reported source position and remove unsupported characters/tokens."
         )
@@ -64,10 +88,30 @@ pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
     })?;
     let warnings = semantic_style_warnings(&program);
     let analysis = collect_analysis_facts(&program);
+    let codegen = transpile_program_to_c_with_map(&program);
+    let debug_map = codegen
+        .source_map
+        .into_iter()
+        .filter_map(|entry| {
+            let origin = loaded
+                .origins
+                .get(entry.source_line.saturating_sub(1) as usize)?;
+            Some(DebugSourceMapEntry {
+                statement_id: entry.statement_id,
+                statement_kind: entry.statement_kind,
+                source_path: origin.path.clone(),
+                source_line: origin.line,
+                source_col: entry.source_col,
+                generated_start_line: entry.generated_start_line,
+                generated_end_line: entry.generated_end_line,
+            })
+        })
+        .collect();
     Ok(FrontendOutput {
-        c_code: transpile_program_to_c(&program),
+        c_code: codegen.c_code,
         warnings,
         analysis,
+        debug_map,
     })
 }
 
@@ -80,7 +124,12 @@ pub fn compile_to_c(entry_path: &Path) -> Result<String, String> {
     Ok(frontend.c_code)
 }
 
+#[cfg(test)]
 fn load_source_with_imports(entry_path: &Path) -> Result<String, String> {
+    Ok(load_source_bundle(entry_path)?.text)
+}
+
+fn load_source_bundle(entry_path: &Path) -> Result<LoadedSource, String> {
     let entry_abs = fs::canonicalize(entry_path).map_err(|e| {
         format!(
             "import path resolution failed for '{}': {e}. {}",
@@ -104,7 +153,7 @@ fn load_source_recursive(
     seen: &mut HashSet<PathBuf>,
     stack: &mut Vec<PathBuf>,
     decl_index: &mut BTreeMap<String, BTreeSet<String>>,
-) -> Result<String, String> {
+) -> Result<LoadedSource, String> {
     let abs = fs::canonicalize(path).map_err(|e| {
         format!(
             "import path resolution failed for '{}': {e}. {}",
@@ -127,7 +176,7 @@ fn load_source_recursive(
     }
 
     if seen.contains(&abs) {
-        return Ok(String::new());
+        return Ok(LoadedSource::default());
     }
 
     stack.push(abs.clone());
@@ -141,10 +190,10 @@ fn load_source_recursive(
     let source = rewrite_local_symbols(&raw_source, &abs)?;
     index_public_top_level_declarations(&source, &abs, decl_index)?;
     let base_dir = abs.parent().unwrap_or(Path::new("."));
-    let mut merged = String::new();
+    let mut merged = LoadedSource::default();
 
     let mut aliases: Vec<(String, String)> = Vec::new();
-    for line in source.lines() {
+    for (line_index, line) in source.lines().enumerate() {
         if let Some(import) = parse_import_line(line)? {
             let import_abs = base_dir.join(&import.path);
             if let Some(alias) = import.alias {
@@ -157,11 +206,9 @@ fn load_source_recursive(
                 aliases.push((alias, canonical.to_string()));
             }
             let imported = load_source_recursive(&import_abs, seen, stack, decl_index)?;
-            if !imported.is_empty() {
-                merged.push_str(&imported);
-                if !imported.ends_with('\n') {
-                    merged.push('\n');
-                }
+            if !imported.text.is_empty() {
+                merged.text.push_str(&imported.text);
+                merged.origins.extend(imported.origins);
             }
             continue;
         }
@@ -173,8 +220,12 @@ fn load_source_recursive(
                 .replace_all(&rewritten_line, format!("{canonical}."))
                 .to_string();
         }
-        merged.push_str(&rewritten_line);
-        merged.push('\n');
+        merged.text.push_str(&rewritten_line);
+        merged.text.push('\n');
+        merged.origins.push(SourceOrigin {
+            path: abs.clone(),
+            line: line_index as u32 + 1,
+        });
     }
 
     stack.pop();
@@ -485,8 +536,8 @@ pub fn compile_c_to_exe(c_path: &Path, exe_path: &Path, target: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::{
-        compile_c_to_exe, compile_to_c, load_source_with_imports, parse_import_line,
-        rewrite_local_symbols,
+        compile_c_to_exe, compile_frontend, compile_to_c, load_source_with_imports,
+        parse_import_line, rewrite_local_symbols,
     };
     use crate::targets::detect_compiler;
     use std::fs;
@@ -574,6 +625,36 @@ local label State {
         let merged = load_source_with_imports(&entry).expect("merge");
         assert!(merged.contains("fn helper() Int"));
         assert!(merged.contains("new Int x = helper()"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn debug_map_preserves_imported_source_origins() {
+        let root = temp_case_dir("debug_map_imports");
+        let entry = root.join("main.skd");
+        let util = root.join("util.skd");
+        fs::write(
+            &util,
+            "fn helper() Int {\n    new Int answer = 7\n    return answer\n}\n",
+        )
+        .expect("write util");
+        fs::write(&entry, "import \"./util.skd\"\nnew Int result = helper()\n")
+            .expect("write entry");
+
+        let frontend = compile_frontend(&entry).expect("frontend output");
+        let util_abs = fs::canonicalize(&util).expect("canonical util");
+        let entry_abs = fs::canonicalize(&entry).expect("canonical entry");
+        assert!(frontend.debug_map.iter().any(|item| {
+            item.source_path == util_abs
+                && item.source_line == 2
+                && item.statement_kind == "variable_declaration"
+        }));
+        assert!(frontend.debug_map.iter().any(|item| {
+            item.source_path == entry_abs
+                && item.source_line == 2
+                && item.statement_kind == "variable_declaration"
+        }));
 
         let _ = fs::remove_dir_all(root);
     }

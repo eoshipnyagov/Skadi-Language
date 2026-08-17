@@ -17,6 +17,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             result.exe_path.display()
         );
     }
+    println!("debug map: {}", result.debug_map_path.display());
     Ok(())
 }
 
