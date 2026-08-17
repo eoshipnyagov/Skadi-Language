@@ -95,6 +95,150 @@ output("joined")
 }
 
 #[test]
+fn timed_channel_operations_distinguish_timeout_close_and_success() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping timed Channel e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = r#"
+Channel(Int) values = channel(1)
+new Int value = 0
+
+value = values.receive_for(20ms) on error {
+    if timed_out {
+        output(101)
+    }
+}
+
+values.send(7)
+value = values.receive_for(0ms) on error {
+    output(-1)
+}
+output(value)
+
+values.send(11)
+values.send_for(22, 20ms) on error {
+    if timed_out {
+        output(102)
+    }
+}
+output(values.receive())
+
+values.close()
+value = values.receive_for(1ms) on error {
+    if timed_out {
+        output(-2)
+    } else {
+        output(103)
+    }
+}
+"#;
+    let tokens = lex(source).expect("lex timed Channel source");
+    let program = parse_program(&tokens).expect("parse timed Channel source");
+    semantic_analyze(&program).expect("semantic timed Channel source");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "timed Channel binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let lines = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, ["101", "7", "102", "11", "103"]);
+}
+
+#[test]
+fn stop_wins_over_long_channel_timeout() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping timed cancellation e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = r#"
+fn wait_for_value(Channel(Int) values, Channel(Int) ready) returns Int {
+    ready.send(1)
+    new Int value = 0
+    value = values.receive_for(5s) on error {
+        if stopping {
+            return 201
+        }
+        if timed_out {
+            return 202
+        }
+        return 203
+    }
+    return value
+}
+
+Channel(Int) values = channel(1)
+Channel(Int) ready = channel(1)
+Task(Int) worker = run wait_for_value(values, ready)
+new Int signal = ready.receive()
+stop worker
+new Int result = wait worker
+output(result)
+"#;
+    let tokens = lex(source).expect("lex timed cancellation source");
+    let program = parse_program(&tokens).expect("parse timed cancellation source");
+    semantic_analyze(&program).expect("semantic timed cancellation source");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "timed cancellation binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "201");
+}
+
+#[test]
+fn close_wakes_timed_receive_as_close_not_timeout() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping timed close e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = r#"
+fn wait_for_close(Channel(Int) values, Channel(Int) ready) returns Int {
+    ready.send(1)
+    new Int value = 0
+    value = values.receive_for(5s) on error {
+        if timed_out {
+            return 302
+        }
+        return 301
+    }
+    return value
+}
+
+Channel(Int) values = channel(1)
+Channel(Int) ready = channel(1)
+Task(Int) worker = run wait_for_close(values, ready)
+new Int signal = ready.receive()
+values.close()
+new Int result = wait worker
+output(result)
+"#;
+    let tokens = lex(source).expect("lex timed close source");
+    let program = parse_program(&tokens).expect("parse timed close source");
+    semantic_analyze(&program).expect("semantic timed close source");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "timed close binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "301");
+}
+
+#[test]
 fn task_results_move_to_waiting_scope_end_to_end() {
     let Some(compiler) = find_c_compiler() else {
         eprintln!("Skipping Task(T) runtime e2e: no clang/gcc/cc in PATH.");
@@ -181,6 +325,87 @@ output("stopped and joined")
     let stdout = String::from_utf8_lossy(&run.stdout);
     assert!(stdout.contains("73"), "{stdout}");
     assert!(stdout.contains("stopped and joined"), "{stdout}");
+}
+
+#[test]
+fn stop_cancels_blocked_receive_without_closing_or_draining_channel() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping blocked receive cancellation e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = include_str!("../examples/concurrency/03_cancel_blocked_channel.skd");
+    let tokens = lex(source).expect("lex blocked receive cancellation source");
+    let program = parse_program(&tokens).expect("parse blocked receive cancellation source");
+    semantic_analyze(&program).expect("semantic blocked receive cancellation source");
+    ensure_codegen_supported(&program).expect("blocked receive cancellation should reach codegen");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "blocked receive cancellation binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout)
+            .lines()
+            .collect::<Vec<_>>(),
+        ["1", "41", "7"]
+    );
+}
+
+#[test]
+fn stop_cancels_blocked_send_without_closing_or_mutating_channel() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping blocked send cancellation e2e: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = r#"
+fn send_value(Channel(Int) values, Channel(Int) ready) returns Int {
+    ready.send(1)
+    values.send(20) on error {
+        if stopping {
+            return 51
+        }
+        return 52
+    }
+    return 0
+}
+
+Channel(Int) values = channel(1)
+Channel(Int) ready = channel(1)
+values.send(10)
+Task(Int) worker_task = run send_value(values, ready)
+new Int signal = ready.receive()
+stop worker_task
+new Int result = wait worker_task
+
+new Int original = values.receive()
+values.send(30)
+new Int next = values.receive()
+output(signal)
+output(result)
+output(original)
+output(next)
+"#;
+    let tokens = lex(source).expect("lex blocked send cancellation source");
+    let program = parse_program(&tokens).expect("parse blocked send cancellation source");
+    semantic_analyze(&program).expect("semantic blocked send cancellation source");
+    ensure_codegen_supported(&program).expect("blocked send cancellation should reach codegen");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "blocked send cancellation binary failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout)
+            .lines()
+            .collect::<Vec<_>>(),
+        ["1", "51", "10", "30"]
+    );
 }
 
 #[test]
@@ -507,4 +732,28 @@ output(tick)
         String::from_utf8_lossy(&run.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "1");
+}
+
+#[test]
+fn timed_channel_showcase_builds_and_runs() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping timed Channel showcase: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let source = include_str!("../examples/concurrency/04_timed_channel.skd");
+    let tokens = lex(source).expect("lex timed Channel showcase");
+    let program = parse_program(&tokens).expect("parse timed Channel showcase");
+    semantic_analyze(&program).expect("semantic timed Channel showcase");
+    ensure_codegen_supported(&program).expect("timed Channel showcase should reach codegen");
+    let generated = transpile_program_to_c(&program);
+    let run = compile_and_run(compiler, &generated);
+
+    assert!(
+        run.status.success(),
+        "timed Channel showcase failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.lines().any(|line| line.trim() == "42"), "{stdout}");
+    assert!(stdout.contains("no reading before deadline"), "{stdout}");
 }

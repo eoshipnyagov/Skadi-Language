@@ -146,8 +146,38 @@ new Reading next_reading = readings.receive()
 Channel(Int) values = channel(1)
 ```
 
-Это встроенный backpressure. В текущем surface нет `try_send`, `try_receive`,
-timeout, `select` и `close`.
+Это встроенный backpressure. `try_send` позволяет не ждать свободного места,
+`close` завершает поток данных, а timed-формы ограничивают ожидание. Пока нет
+`try_receive` и `select`.
+
+### Ограниченное ожидание
+
+`send_for` и `receive_for` принимают `Duration` и требуют `on error`:
+
+```skadi
+new Int value = 0
+value = jobs.receive_for(250ms) on error {
+    if stopping {
+        return
+    }
+    if timed_out {
+        output("deadline reached")
+        return
+    }
+    output("channel closed")
+    return
+}
+```
+
+Порядок причин намеренно прост:
+
+- `stopping` означает cooperative cancellation текущей task;
+- `timed_out` означает истечение переданного `Duration`;
+- оставшийся путь означает закрытый Channel.
+
+Если операция возможна сразу, она выполняется даже при `0ms`. Неположительный
+timeout не ждёт изменения состояния. Timeout не закрывает канал, не добавляет и
+не извлекает сообщения. Ложные пробуждения не продлевают deadline.
 
 ### Завершение consumer
 
@@ -200,13 +230,29 @@ stop worker_task
 wait worker_task
 ```
 
-`stop` не является принудительным убийством потока. Задача должна сама снова
-дойти до проверки `stopping` и завершиться. После `stop` всё равно обязателен
-`wait`.
+`stop` не является принудительным убийством потока. Вычислительная задача должна
+сама снова дойти до проверки `stopping`. Если task заблокирована в Channel
+`send/receive`, runtime будит ожидание и переводит операцию в `on error`. После
+`stop` всё равно обязателен `wait`.
 
-Текущие блокирующие `receive`, `send` и файловый I/O не прерываются запросом
-`stop`. Поэтому нельзя строить остановку worker так, чтобы он бесконечно ждал
-пустой канал без отдельного сообщения завершения.
+```skadi
+fn consume(Channel(Int) jobs) returns Int {
+    new Int job = 0
+    job = jobs.receive() on error {
+        if stopping {
+            return 0
+        }
+        return 1
+    }
+
+    return job
+}
+```
+
+Cancellation не закрывает Channel и не очищает его буфер. Отменённый `send` не
+добавляет значение, отменённый `receive` не забирает значение. Если операция
+успела изменить очередь до `stop`, результат считается успешным и не
+откатывается. Файловый I/O пока не является cancellation point.
 
 `stopping` разрешён только внутри функции, которую текущая программа запускает
 через `run`. Повторный `stop` одного handle является semantic error.
@@ -231,10 +277,10 @@ while index < 5 {
 создать handle вне цикла, а `wait` или `stop` выполнять в зависимости от
 количества итераций: compiler не сможет доказать единственный cleanup.
 
-Этот шаблон повторяет работу, но не задаёт временной период. Стабильного
-`sleep`/`delay`, timer API и единиц времени в текущем runtime ещё нет. Busy-wait
-не рекомендуется. Настоящий периодический scheduler относится к будущему systems
-time contract.
+Этот шаблон повторяет работу, но сам по себе не задаёт временной период. Для
+обычной задержки доступен `sleep(Duration)`, например `sleep(250ms)`. Для
+периодического event-source на host доступен `interrupts.periodic`; полноценный
+общий scheduler и hard real-time guarantees пока не обещаются.
 
 ## Данные на границе задачи
 
@@ -314,7 +360,8 @@ Compiler предотвращает потерю handle и небезопасн�
 - producer заблокирован на полном канале, а caller вызывает `wait producer` до
   чтения канала;
 - две задачи ждут сообщения друг от друга;
-- после `stop` worker остаётся в блокирующем `receive`;
+- blocking `send/receive` внутри stoppable task не имеет `on error`, поэтому
+  фактическая cancellation завершится `SC-RT-315`;
 - channel owner выходит из scope раньше задачи-пользователя.
 
 Для диагностики проекта используйте:
@@ -342,7 +389,8 @@ MVP выдаёт coded runtime diagnostic и завершает процесс. 
   mutex/condition variable и thread-local context;
 - один `Task` отображается на один native thread;
 - `Channel` использует mutex и condition variables;
-- `stop` публикуется потокобезопасно.
+- `stop` публикуется потокобезопасно и будит зарегистрированное Channel
+  ожидание без polling.
 
 Это implementation detail текущего backend, а не вечное обещание языка. На
 одноядерной системе задачи конкурентны, но не исполняются физически параллельно.
@@ -384,8 +432,8 @@ latency и deterministic allocation, необходимых для серьёз�
 - thread pool, work stealing и async/await;
 - detached tasks;
 - hard kill;
-- channel timeout, `select`, `try_receive`;
-- отмена блокирующего I/O или channel operation;
+- timed `Task.wait`, `select`, `try_receive`;
+- отмена файлового и произвольного платформенного I/O;
 - general-purpose timer/scheduler beyond typed host `interrupts.periodic`;
 - affinity, priority и stack-size configuration;
 - RTOS, ESP32 и bare-metal backend;
@@ -399,3 +447,5 @@ latency и deterministic allocation, необходимых для серьёз�
 - `benchmarks/bench_12_systems_pipeline.skd`
 - `examples/concurrency/01_five_workers.skd`
 - `examples/concurrency/02_restart_task.skd`
+- `examples/concurrency/03_cancel_blocked_channel.skd`
+- `examples/concurrency/04_timed_channel.skd`

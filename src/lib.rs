@@ -1,6 +1,7 @@
 pub mod common_types;
 pub mod lexer;
 
+pub mod analysis;
 pub mod ast_nodes;
 pub mod builtins;
 pub mod codegen;

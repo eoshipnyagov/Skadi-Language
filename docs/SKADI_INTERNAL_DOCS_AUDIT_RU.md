@@ -70,7 +70,7 @@ Draft описывает направление мысли, но не являе
 | Plans v1/v1.1 | История релиза | Historical | Не использовать как текущий backlog |
 | Plan v1.2 | Текущий release ledger | Living | Реализованные milestones остаются историей выполнения |
 | Memory MVP | Experimental runtime contract | Реализованный bounded runtime slice | Есть fixed/grow/child/static regions; полная lifetime theory из Draft не реализована |
-| Task/Channel MVP | Experimental runtime contract | Реализованный bounded MVP | Есть close/drain/try_send; нет async, select, timeout и task groups |
+| Task/Channel MVP | Experimental runtime contract | Реализованный bounded MVP | Есть close/drain/try_send и timed Channel; нет async, select, timed Task wait и task groups |
 | Time/Duration, ByteSize, Angle, Vector | Experimental user/runtime contracts | Реализованы end-to-end | API ещё не объявлен stable |
 | Systems Additions MVP | Смешанный implementation/future ledger | Частично реализован | Time/units готовы; resources, context и devices впереди |
 | Visual Core Draft/MVP | Draft + accepted Canvas v0 | Реализован experimental Canvas/Win32 slice | Events, text/images, transforms и дополнительные backend впереди |
@@ -109,8 +109,10 @@ backend и автоматической стратегии reclamation для `a
 обязательный `wait`, cooperative `stop` и bounded FIFO channels с
 `send/receive/try_send/close` и drain-after-close.
 
-Пока нет scheduler abstraction, async/await, task groups, timeouts, `select`,
-отмены блокирующего `send/receive` и RTOS backend.
+Пока нет scheduler abstraction, async/await, task groups, timed `Task.wait`,
+`select`, cancellation произвольного I/O и RTOS backend. Blocking Channel
+`send/receive` отменяются через `stop`; `send_for/receive_for` используют
+`Duration` и контекстный `timed_out`.
 
 ### Systems types
 
@@ -228,9 +230,10 @@ backend и embedded display adapter.
 ### Следующая функциональная очередь
 
 1. Пробуждение blocking Channel operations при `stop`/`close` и единая
-   cancellation semantics на Win32/pthread.
-2. Timed Channel/Task operations на основе `Duration`; `select` обсуждать
-   только после стабилизации обычных blocking boundaries.
+   cancellation semantics на Win32/pthread — выполнено.
+2. Timed Channel operations на основе `Duration` — выполнено; timed `Task.wait`
+   требует отдельного path-sensitive lifecycle-контракта. `select` обсуждать
+   только после этого.
 3. Подключать Resource lifecycle для файлов, портов и device handles только
    вместе с появлением соответствующих долгоживущих API.
 4. Hardware interrupt binding поверх готового host periodic/semantic MVP.
@@ -244,9 +247,11 @@ backend и embedded display adapter.
 Tooling развивается параллельно runtime-очереди, не копируя semantic logic в
 TUI:
 
-1. structured analysis facts и explain-chain для ownership/resource lifecycle;
-2. incomplete `when`, blocking operations, Task/Channel/Memory analysis;
-3. TUI views ресурсов, задач, каналов и регионов;
+1. structured analysis foundation для incomplete `when` и blocking Channel —
+   выполнен первый slice;
+2. source-order explain-chain для ownership/resource lifecycle и
+   Task/Channel/Memory state — выполнен первый slice;
+3. отдельные TUI views ресурсов, задач, каналов и регионов;
 4. source mapping/debug probes и первый breakpoint/step/locals workflow;
 5. общий engine для CLI, TUI, будущего LSP и CI.
 

@@ -14,8 +14,9 @@ use ratatui::{
 use std::{fs, io, path::Path, time::Duration};
 
 use crate::actions::{
-    self, ActionError, BuildOptions, BuildResult, CheckResult, DiagnosticSummary, DoctorReport,
-    FailureSource, FormatOptions, FormatState, ManifestConfigResult, ProjectSummary, RunResult,
+    self, ActionError, AnalysisFact, AnalysisFactLevel, BuildOptions, BuildResult, CheckResult,
+    DiagnosticSummary, DoctorReport, FailureSource, FormatOptions, FormatState,
+    ManifestConfigResult, ProjectSummary, RunResult,
 };
 
 const MIN_WIDTH: u16 = 96;
@@ -197,6 +198,7 @@ struct DiagnosticsRecord {
     source: Option<FailureSource>,
     summary: String,
     diagnostics: Vec<DiagnosticSummary>,
+    analysis: Vec<AnalysisFact>,
     detail: Vec<String>,
 }
 
@@ -476,10 +478,10 @@ impl App {
                 }
                 AppFocus::DiagnosticsHistory => {}
                 AppFocus::DiagnosticsList => {
-                    let items = self.current_diagnostics();
-                    if !items.is_empty() {
+                    let item_count = self.current_diagnostic_items_len();
+                    if item_count > 0 {
                         self.diagnostics.selected =
-                            (self.diagnostics.selected + 1).min(items.len() - 1);
+                            (self.diagnostics.selected + 1).min(item_count - 1);
                     }
                 }
                 _ => {}
@@ -984,6 +986,7 @@ impl App {
                 )
             },
             diagnostics: result.warnings.clone(),
+            analysis: result.analysis.clone(),
             detail: vec![format!("entry: {}", result.entry.display())],
         });
     }
@@ -1004,6 +1007,7 @@ impl App {
                 )
             },
             diagnostics: result.warnings.clone(),
+            analysis: result.analysis.clone(),
             detail: vec![
                 format!("target: {}", result.target),
                 format!(
@@ -1031,6 +1035,7 @@ impl App {
             source: None,
             summary: format!("Runtime execution completed with {}", result.exit_status),
             diagnostics: Vec::new(),
+            analysis: Vec::new(),
             detail: vec![
                 format!("exe: {}", result.build.exe_path.display()),
                 format!("status: {}", result.exit_status),
@@ -1055,6 +1060,7 @@ impl App {
             source: Some(err.source),
             summary: compact_message(&err.message),
             diagnostics: err.diagnostics.clone(),
+            analysis: Vec::new(),
             detail: err.message.lines().map(|line| line.to_string()).collect(),
         });
     }
@@ -1082,6 +1088,16 @@ impl App {
         self.current_record()
             .map(|record| record.diagnostics.as_slice())
             .unwrap_or(&[])
+    }
+
+    fn current_analysis(&self) -> &[AnalysisFact] {
+        self.current_record()
+            .map(|record| record.analysis.as_slice())
+            .unwrap_or(&[])
+    }
+
+    fn current_diagnostic_items_len(&self) -> usize {
+        self.current_diagnostics().len() + self.current_analysis().len()
     }
 
     fn current_build_options(&self) -> BuildOptions {
@@ -1529,11 +1545,12 @@ fn render_diagnostics(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
             .map(|record| {
                 let counts = diagnostic_counts(&record.diagnostics);
                 ListItem::new(format!(
-                    "{} [{}] e:{} w:{} {}",
+                    "{} [{}] e:{} w:{} a:{} {}",
                     record.action,
                     if record.ok { "ok" } else { "fail" },
                     counts.errors,
                     counts.warnings,
+                    record.analysis.len(),
                     compact_message(&record.summary)
                 ))
             })
@@ -1557,43 +1574,59 @@ fn render_diagnostics(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
     }
     frame.render_stateful_widget(history, columns[0], &mut history_state);
 
-    let diagnostic_items = if app.current_diagnostics().is_empty() {
-        vec![ListItem::new("No structured diagnostics for this action.")]
-    } else {
-        app.current_diagnostics()
-            .iter()
-            .map(|diag| {
-                let level = if diag.is_warning { "WARN" } else { "ERR" };
-                let code = diag.code.as_deref().unwrap_or("-");
-                let line = diag
-                    .line
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| "-".to_string());
-                let col = diag
-                    .col
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| "-".to_string());
-                ListItem::new(format!(
-                    "[{}] {} {}:{} {}",
-                    level,
-                    code,
-                    line,
-                    col,
-                    compact_message(&diag.message)
-                ))
-            })
-            .collect()
-    };
+    let mut diagnostic_items = app
+        .current_diagnostics()
+        .iter()
+        .map(|diag| {
+            let level = if diag.is_warning { "WARN" } else { "ERR" };
+            let code = diag.code.as_deref().unwrap_or("-");
+            let line = diag
+                .line
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_string());
+            let col = diag
+                .col
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_string());
+            ListItem::new(format!(
+                "[{}] {} {}:{} {}",
+                level,
+                code,
+                line,
+                col,
+                compact_message(&diag.message)
+            ))
+        })
+        .collect::<Vec<_>>();
+    diagnostic_items.extend(app.current_analysis().iter().map(|fact| {
+        ListItem::new(format!(
+            "[{}] {} {}:{} {}",
+            analysis_level_label(fact.level),
+            fact.code,
+            fact.line,
+            fact.col,
+            compact_message(&fact.summary)
+        ))
+    }));
+    if diagnostic_items.is_empty() {
+        diagnostic_items.push(ListItem::new(
+            "No structured diagnostics or analysis facts for this action.",
+        ));
+    }
     let diagnostics_list = List::new(diagnostic_items)
-        .block(Block::default().borders(Borders::ALL).title("Diagnostics"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Diagnostics / Analysis"),
+        )
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
         .highlight_symbol(">> ");
     let mut diag_state = ListState::default();
-    if !app.current_diagnostics().is_empty() {
+    if app.current_diagnostic_items_len() > 0 {
         diag_state.select(Some(
             app.diagnostics
                 .selected
-                .min(app.current_diagnostics().len() - 1),
+                .min(app.current_diagnostic_items_len() - 1),
         ));
     }
     frame.render_stateful_widget(diagnostics_list, columns[1], &mut diag_state);
@@ -1639,6 +1672,45 @@ fn render_diagnostics(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
                 }
             }
             lines
+        } else if let Some(fact) = record.analysis.get(
+            app.diagnostics
+                .selected
+                .saturating_sub(record.diagnostics.len()),
+        ) {
+            let mut lines = vec![
+                Line::from(format!(
+                    "Analysis {} {}",
+                    analysis_level_label(fact.level),
+                    fact.code
+                )),
+                Line::from(format!("action: {}", record.action)),
+                Line::from(format!("context: {}", fact.context)),
+                Line::from(format!("location: line {}, col {}", fact.line, fact.col)),
+                Line::from(""),
+                Line::from(fact.summary.clone()),
+                Line::from(""),
+                Line::from("Why it matters"),
+                Line::from(fact.explanation.clone()),
+                Line::from(""),
+                Line::from("Next action"),
+                Line::from(fact.action.clone()),
+            ];
+            if let Some(subject) = &fact.subject {
+                lines.push(Line::from(""));
+                lines.push(Line::from(format!("Lifecycle: {subject}")));
+                for related in record
+                    .analysis
+                    .iter()
+                    .filter(|candidate| candidate.subject.as_ref() == Some(subject))
+                    .take(8)
+                {
+                    lines.push(Line::from(format!(
+                        "line {}  {}  {}",
+                        related.line, related.code, related.summary
+                    )));
+                }
+            }
+            lines
         } else {
             let counts = diagnostic_counts(&record.diagnostics);
             let mut lines = vec![
@@ -1653,6 +1725,7 @@ fn render_diagnostics(frame: &mut Frame<'_>, area: Rect, app: &mut App) {
                 )),
                 Line::from(format!("errors: {}", counts.errors)),
                 Line::from(format!("warnings: {}", counts.warnings)),
+                Line::from(format!("analysis facts: {}", record.analysis.len())),
                 Line::from(""),
                 Line::from(record.summary.clone()),
             ];
@@ -1919,7 +1992,7 @@ fn render_help(frame: &mut Frame<'_>, area: Rect) {
         Line::from("Tab / Shift+Tab switch screens"),
         Line::from("m open config editor"),
         Line::from("Left/Right switch diagnostics panes"),
-        Line::from("j/k or arrows navigate diagnostics/history"),
+        Line::from("j/k or arrows navigate diagnostics, analysis, and history"),
         Line::from(""),
         Line::from("Actions"),
         Line::from("c check"),
@@ -2038,6 +2111,13 @@ fn source_label(source: FailureSource) -> &'static str {
     }
 }
 
+fn analysis_level_label(level: AnalysisFactLevel) -> &'static str {
+    match level {
+        AnalysisFactLevel::Info => "INFO",
+        AnalysisFactLevel::Attention => "CHECK",
+    }
+}
+
 fn compact_message(message: &str) -> String {
     let first = message.lines().next().unwrap_or(message).trim();
     if first.chars().count() <= 96 {
@@ -2086,10 +2166,13 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{App, AppScreen, MIN_HEIGHT, MIN_WIDTH};
-    use crate::actions::{ActionError, FailureSource};
+    use super::{App, AppScreen, DiagnosticsRecord, MIN_HEIGHT, MIN_WIDTH};
+    use crate::actions::{
+        ActionError, AnalysisFact, AnalysisFactLevel, DiagnosticSummary, FailureSource,
+    };
     use crate::project::init_project;
     use ratatui::{Terminal, backend::TestBackend};
+    use v01::analysis::AnalysisFactKind;
 
     fn unique_temp_dir(stem: &str) -> std::path::PathBuf {
         let stamp = SystemTime::now()
@@ -2135,6 +2218,103 @@ mod tests {
         ))
         .expect("down should work");
         assert_eq!(app.diagnostics.selected, 1);
+    }
+
+    #[test]
+    fn analysis_facts_share_the_diagnostics_navigation_model() {
+        let mut app = App::new();
+        app.screen = AppScreen::Diagnostics;
+        app.push_diagnostics_record(DiagnosticsRecord {
+            action: "check".to_string(),
+            ok: true,
+            source: None,
+            summary: "check passed".to_string(),
+            diagnostics: vec![DiagnosticSummary {
+                stage: "Semantic".to_string(),
+                code: Some("SC-SEM-040".to_string()),
+                line: Some(1),
+                col: Some(1),
+                message: "style warning".to_string(),
+                is_warning: true,
+            }],
+            analysis: vec![AnalysisFact {
+                kind: AnalysisFactKind::BlockingChannelReceive,
+                level: AnalysisFactLevel::Attention,
+                code: "SC-AN-102",
+                line: 4,
+                col: 9,
+                context: "task entry 'worker'".to_string(),
+                subject: Some("jobs".to_string()),
+                summary: "'jobs.receive' may block".to_string(),
+                explanation: "cancellation needs an explicit path".to_string(),
+                action: "attach on error".to_string(),
+            }],
+            detail: Vec::new(),
+        });
+        app.focus = super::AppFocus::DiagnosticsList;
+
+        app.handle_key(crossterm::event::KeyEvent::from(
+            crossterm::event::KeyCode::Down,
+        ))
+        .expect("down should select analysis fact");
+
+        assert_eq!(app.diagnostics.selected, 1);
+        assert_eq!(app.current_analysis()[0].code, "SC-AN-102");
+    }
+
+    #[test]
+    fn diagnostics_detail_renders_subject_lifecycle_chain() {
+        let mut app = App::new();
+        app.screen = AppScreen::Diagnostics;
+        app.push_diagnostics_record(DiagnosticsRecord {
+            action: "check".to_string(),
+            ok: true,
+            source: None,
+            summary: "check passed".to_string(),
+            diagnostics: Vec::new(),
+            analysis: vec![
+                AnalysisFact {
+                    kind: AnalysisFactKind::ResourceCreated,
+                    level: AnalysisFactLevel::Info,
+                    code: "SC-AN-301",
+                    line: 1,
+                    col: 1,
+                    context: "top-level workflow".to_string(),
+                    subject: Some("jobs".to_string()),
+                    summary: "'jobs' becomes the owner of Channel(Int)".to_string(),
+                    explanation: "owner created".to_string(),
+                    action: "follow lifecycle".to_string(),
+                },
+                AnalysisFact {
+                    kind: AnalysisFactKind::ResourceClosed,
+                    level: AnalysisFactLevel::Info,
+                    code: "SC-AN-304",
+                    line: 8,
+                    col: 1,
+                    context: "top-level workflow".to_string(),
+                    subject: Some("jobs".to_string()),
+                    summary: "resource 'jobs' is explicitly closed".to_string(),
+                    explanation: "owner closed".to_string(),
+                    action: "avoid later use".to_string(),
+                },
+            ],
+            detail: Vec::new(),
+        });
+
+        let backend = TestBackend::new(120, 40);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal
+            .draw(|frame| super::render(frame, &mut app))
+            .expect("render lifecycle detail");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("Lifecycle: jobs"));
+        assert!(rendered.contains("SC-AN-304"));
     }
 
     #[test]

@@ -1,0 +1,23 @@
+Channel(Int) readings = channel(1)
+
+readings.send_for(42, 10ms) on error {
+    if timed_out {
+        output("producer timeout")
+    }
+}
+
+new Int reading = 0
+
+reading = readings.receive_for(10ms) on error {
+    if timed_out {
+        reading = -1
+    }
+}
+
+output(reading)
+
+reading = readings.receive_for(5ms) on error {
+    if timed_out {
+        output("no reading before deadline")
+    }
+}

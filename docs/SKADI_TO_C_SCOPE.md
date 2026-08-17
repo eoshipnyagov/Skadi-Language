@@ -179,7 +179,8 @@ roadmap, а не скрытым обещанием desktop C backend.
 
 - hardware interrupt backends поверх periodic host MVP;
 - wall-clock/calendar/timezone API;
-- task groups, `select`, channel timeout/cancellation;
+- task groups, `select` и timed `Task.wait`; cancellation и Duration-bounded
+  Channel operations реализованы как расширение `v1.2`;
 - shared mutable state primitives;
 - Canvas events, text/images, transforms, Matrix2D и non-Windows presenters;
 - automatic `allow drop` reclamation и user drop hooks;

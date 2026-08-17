@@ -74,6 +74,12 @@ manifest configuration, and help.
 Actions are currently synchronous. The TUI is not a source editor or showcase
 browser. CLI commands remain canonical for scripts and CI.
 
+After a successful `check` or `build`, the compiler core supplies structured
+analysis facts to the TUI. The current workbench shows blocking and timed Channel
+operations, task-entry and `on error` context, incomplete `when`, and source-order
+lifecycle chains for ownership, resources, Task, and Memory. These are
+explanatory facts, not a second class of hard compiler errors.
+
 ## Planned tooling
 
 - background TUI actions;

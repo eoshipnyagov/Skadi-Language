@@ -138,8 +138,39 @@ A small buffer deliberately slows a producer when its consumer cannot keep up:
 Channel(Int) values = channel(1)
 ```
 
-This is built-in backpressure. The current surface has no `try_send`,
-`try_receive`, timeout, `select`, or `close`.
+This is built-in backpressure. `try_send` avoids waiting for free capacity,
+`close` ends the message stream, and timed operations bound the wait. There is
+no `try_receive` or `select` yet.
+
+### Bounded waits
+
+`send_for` and `receive_for` accept a `Duration` and require `on error`:
+
+```skadi
+new Int value = 0
+value = jobs.receive_for(250ms) on error {
+    if stopping {
+        return
+    }
+    if timed_out {
+        output("deadline reached")
+        return
+    }
+    output("channel closed")
+    return
+}
+```
+
+The error reasons have an intentional order:
+
+- `stopping` means cooperative cancellation of the current task;
+- `timed_out` means that the supplied `Duration` expired;
+- the remaining path means that the channel is closed.
+
+If the operation can complete immediately, it succeeds even with `0ms`.
+A non-positive timeout does not wait for a state change. A timeout neither
+closes the channel nor adds or removes a message. Spurious wakeups do not extend
+the original deadline.
 
 ### Consumer completion
 
@@ -178,12 +209,29 @@ stop worker_task
 wait worker_task
 ```
 
-`stop` does not forcibly kill a thread. The task must reach another `stopping`
-check and exit by itself. `wait` remains mandatory after `stop`.
+`stop` does not forcibly kill a thread. A compute-bound task must reach another
+`stopping` check and exit by itself. If a task is blocked in Channel
+`send/receive`, the runtime wakes that wait and transfers control to `on error`.
+`wait` remains mandatory after `stop`.
 
-Blocking `receive`, `send`, and file I/O are not interrupted by a stop request.
-Do not make a worker wait forever on an empty channel without a separate shutdown
-message.
+```skadi
+fn consume(Channel(Int) jobs) returns Int {
+    new Int job = 0
+    job = jobs.receive() on error {
+        if stopping {
+            return 0
+        }
+        return 1
+    }
+
+    return job
+}
+```
+
+Cancellation does not close the channel or clear its buffer. A cancelled send
+does not add a value, and a cancelled receive does not remove one. If the
+operation changed the queue atomically before `stop`, it remains successful and
+is not rolled back. File I/O is not a cancellation point yet.
 
 `stopping` is accepted only inside a function that the current program launches
 with `run`. Repeating `stop` on one handle is a semantic error.
@@ -208,9 +256,10 @@ A complete `run -> wait` lifecycle inside one iteration is supported. A handle
 cannot be created outside a loop while its `wait` or `stop` depends on the number
 of iterations, because the compiler could not prove unique cleanup.
 
-This repeats work but does not define a time interval. The runtime has no stable
-`sleep`/`delay`, timer API, or duration units yet. Busy waiting is discouraged. A
-real periodic scheduler belongs to the future systems time contract.
+This repeats work but does not define a time interval by itself. Ordinary delay
+uses `sleep(Duration)`, for example `sleep(250ms)`. The host runtime also has a
+typed periodic event source through `interrupts.periodic`; a general scheduler
+and hard real-time guarantees are not promised yet.
 
 ## Values crossing a task boundary
 
@@ -242,7 +291,8 @@ the absence of protocol deadlocks. Review these cases:
 - a producer blocks on a full channel while the caller waits for that producer
   before receiving;
 - two tasks wait for messages from each other;
-- a worker remains in blocking `receive` after `stop`;
+- blocking `send/receive` in a stoppable task has no `on error`, so an actual
+  cancellation terminates with `SC-RT-315`;
 - a channel owner ends before a task using it.
 
 Use the normal project workflow for diagnostics:
@@ -310,9 +360,9 @@ The following features are not available yet:
 - task groups and structured-concurrency syntax;
 - thread pool, work stealing, and async/await;
 - detached tasks and hard kill;
-- channel close, timeout, `select`, `try_send`, and `try_receive`;
-- cancellation of blocking I/O or channel operations;
-- timer, `sleep`/`delay`, and periodic scheduler;
+- timed `Task.wait`, `select`, and `try_receive`;
+- cancellation of file or arbitrary platform I/O;
+- general-purpose scheduling beyond typed host `interrupts.periodic`;
 - affinity, priority, and stack-size configuration;
 - RTOS, ESP32, and bare-metal backends;
 - hard real-time guarantees.
@@ -325,3 +375,5 @@ The following features are not available yet:
 - `benchmarks/bench_12_systems_pipeline.skd`
 - `examples/concurrency/01_five_workers.skd`
 - `examples/concurrency/02_restart_task.skd`
+- `examples/concurrency/03_cancel_blocked_channel.skd`
+- `examples/concurrency/04_timed_channel.skd`

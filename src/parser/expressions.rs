@@ -122,6 +122,11 @@ impl<'a> ExprParser<'a> {
             return Ok(Expression::Stopping);
         }
 
+        if tok.kind == TokenKind::Identifier && tok.lexeme == "timed_out" {
+            self.idx += 1;
+            return Ok(Expression::TimedOut);
+        }
+
         if tok.kind == TokenKind::Identifier && tok.lexeme == "wait" {
             self.idx += 1;
             if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {

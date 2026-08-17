@@ -111,7 +111,8 @@ GitHub Pages.
   linear resources.
 - Task/Channel MVP проходит parser/semantic/codegen/runtime путь: native `run/wait`,
   cooperative `stop/stopping`, bounded blocking Channel, `try_send` и
-  close/drain работают на Win32/pthread.
+  close/drain работают на Win32/pthread; `stop` пробуждает блокирующий
+  `send/receive`, не закрывая Channel.
 - Time/Duration MVP проходит parser/semantic/codegen/runtime путь: nominal-типы,
   literals `ms/s/min` и monotonic Win32/POSIX runtime исполняются end-to-end.
 - Dedicated TSan и GCC/Clang/MinGW/MSVC jobs в remote CI проходят; systems API
@@ -126,11 +127,13 @@ GitHub Pages.
 
 - module-name imports и re-exports поверх path-imports с рабочими aliases;
 - автоматическая reclamation по `allow drop` и полный lifetime calculus;
-- cancellation блокирующих Channel operations, timeout, `select`, task groups;
+- timed `Task.wait`, `select` и task groups поверх стабилизированных Channel
+  cancellation и timeout boundaries;
 - Canvas events, text/images, transforms и non-Windows presenters;
 - systems additions;
 - hardware/RTOS backend для `on interrupt` поверх готового host periodic MVP;
-- structured analysis engine, lifecycle views и Skadi-level debugger в TUI.
+- расширенные path-sensitive ownership/lifecycle facts и Skadi-level debugger в TUI; первый
+  structured analysis slice для blocking Channel и incomplete `when` уже доступен.
 
 ## 10. Навигация по документам
 

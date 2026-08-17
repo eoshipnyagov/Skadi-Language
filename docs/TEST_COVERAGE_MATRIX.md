@@ -101,6 +101,8 @@
     typed arguments, scalar/struct/Text result transfer, `stop -> stopping -> wait`,
     bounded FIFO, backpressure, 1000-message producer/consumer stress, local owner
     cleanup и `SC-RT-312`
+  - тот же suite проверяет cancellation task, заблокированной на пустом
+    `receive` и полном `send`, сохранение буфера и открытого состояния Channel
   - тот же native suite закрепляет пять одновременно запущенных producers через
     bounded Channel и повторный `run -> wait` с новым handle внутри каждой
     итерации цикла
@@ -156,8 +158,16 @@
   - untyped scalar declarations получают корректный C type; composite declarations без типа отклоняются с `SC-SEM-020`
   - platform hardware binding для interrupts/events остаётся TODO
 - task/channel backend/runtime
-  - void и `Task(T)` run/wait, `stop`, `stopping` и bounded Channel реализованы через Win32/pthread backend
-  - timeout, cancellation, `select`, task groups и embedded APIs остаются TODO
+  - void и `Task(T)` run/wait, `stop`, `stopping`, bounded Channel и cancellation
+    blocking `send/receive` реализованы через Win32/pthread backend
+  - `send_for/receive_for`, `timed_out`, success/close/stop/timeout precedence
+    покрыты native e2e; timed Task wait, `select`, task groups и embedded APIs
+    остаются TODO
+- structured analysis foundation
+  - `tests/analysis_facts.rs` закрепляет task-aware blocking/timed Channel facts,
+    explainable incomplete `when` и subject-linked lifecycle chains
+  - CLI action pipeline передаёт facts в TUI Diagnostics / Analysis view,
+    который показывает source-order lifecycle выбранного ресурса
 - module ergonomics
   - относительный path-import и правила видимости покрыты полноценно
   - path import aliases реализованы; module-name imports и re-export остаются TODO

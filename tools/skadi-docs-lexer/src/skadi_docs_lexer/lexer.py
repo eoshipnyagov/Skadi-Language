@@ -58,6 +58,7 @@ class SkadiLexer(RegexLexer):
                         "wait",
                         "stop",
                         "stopping",
+                        "timed_out",
                         "place",
                     ),
                     suffix=r"\b",
@@ -120,7 +121,7 @@ class SkadiLexer(RegexLexer):
             (r"\b(?:windows\.open|interrupts\.periodic)\b", Name.Builtin.Pseudo),
             (r"\bmemory\.(?:child|static)\b(?=\s*\()", Name.Builtin.Pseudo),
             (
-                r"\b(output|print|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|memory|channel|send|receive|try_send|close|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg|dot|length|length_sq|normalize|distance|distance_sq|cross|color|color_hex|rect|canvas)\b(?=\s*\()",
+                r"\b(output|print|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|memory|channel|send|receive|send_for|receive_for|try_send|close|abs|min|max|clamp|floor|ceil|round|sin|cos|atan2|sqrt|root|deg_to_rad|rad_to_deg|dot|length|length_sq|normalize|distance|distance_sq|cross|color|color_hex|rect|canvas)\b(?=\s*\()",
                 Name.Builtin,
             ),
             (r"\bmy\b", Name.Variable.Instance),

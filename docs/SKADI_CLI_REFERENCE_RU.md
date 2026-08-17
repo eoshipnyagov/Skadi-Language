@@ -139,7 +139,8 @@ skadi-cli tui
 Экраны:
 
 - project dashboard;
-- diagnostics list/detail;
+- diagnostics / analysis list и detail с кодом, source location, контекстом и
+  рекомендуемым действием;
 - build/run output;
 - doctor/environment;
 - project bootstrap;
@@ -162,6 +163,12 @@ skadi-cli tui
 TUI восстанавливает terminal state при выходе и показывает отдельный fallback
 для слишком узкого terminal. Actions пока синхронны; showcase browser и source
 editor отсутствуют.
+
+После успешного `check/build` тот же compiler core передаёт TUI structured
+analysis facts. Текущий slice показывает blocking/timed Channel operations,
+учитывает task-entry context и `on error`, отмечает `when` без `else` и строит
+source-order lifecycle chains для ownership/resources/Task/Memory. Это
+информационный workbench, а не новый класс hard errors.
 
 ## Запуск из исходников
 

@@ -94,6 +94,74 @@ wait worker_task
 }
 
 #[test]
+fn timed_channel_operations_require_duration_and_expose_timed_out_in_handler() {
+    semantic_ok(
+        r#"
+Channel(Int) jobs = channel(1)
+new Int job = 0
+job = jobs.receive_for(25ms) on error {
+    if timed_out {
+        job = -1
+    }
+}
+jobs.send_for(7, 25ms) on error {
+    if timed_out {
+        pass
+    }
+}
+"#,
+    );
+
+    let wrong_timeout = semantic_err(
+        r#"
+Channel(Int) jobs = channel(1)
+new Int job = 0
+job = jobs.receive_for(25) on error {
+    pass
+}
+"#,
+    );
+    assert!(wrong_timeout.contains("receive_for expects Duration"));
+
+    let missing_handler = semantic_err(
+        r#"
+Channel(Int) jobs = channel(1)
+new Int job = jobs.receive_for(25ms)
+"#,
+    );
+    assert!(missing_handler.contains("receive_for requires an 'on error' handler"));
+
+    let outside_handler = semantic_err("new Bool expired = timed_out\n");
+    assert!(outside_handler.contains("timed_out is only available"));
+}
+
+#[test]
+fn backend_lowers_timed_channel_status_without_new_syntax_primitives() {
+    let program = parse_ok(
+        r#"
+Channel(Int) jobs = channel(1)
+new Int job = 0
+job = jobs.receive_for(25ms) on error {
+    if timed_out {
+        job = -1
+    }
+}
+jobs.send_for(7, 25ms) on error {
+    pass
+}
+"#,
+    );
+    semantic_analyze(&program).expect("semantic timed Channel source");
+    let generated = v01::codegen::transpile_program_to_c(&program);
+    assert!(generated.contains("SK_CHANNEL_TIMED_OUT"));
+    assert!(generated.contains("pthread_cond_timedwait"));
+    assert!(generated.contains("SleepConditionVariableCS"));
+    assert!(generated.contains("sk_channel_receive_for_Int"));
+    assert!(generated.contains("sk_channel_send_for_Int"));
+    assert!(generated.contains("sk_channel_timed_out()"));
+}
+
+#[test]
 fn semantic_accepts_result_task_and_value_safe_channel() {
     semantic_ok(
         r#"
@@ -546,7 +614,7 @@ new Text event = events.receive()
     semantic_analyze(&channel_program).expect("Channel frontend should remain accepted");
     ensure_codegen_supported(&channel_program).expect("Channel should reach codegen");
     let generated = v01::codegen::transpile_program_to_c(&channel_program);
-    assert!(generated.contains("typedef struct {\n    unsigned char *buffer;"));
+    assert!(generated.contains("typedef struct SkChannel {\n    unsigned char *buffer;"));
     assert!(generated.contains("SkChannel *events = sk_channel_create(4, sizeof(const char*))"));
     assert!(
         generated.contains("sk_channel_send_or_panic_Text(events, \"ready\")"),
@@ -558,6 +626,9 @@ new Text event = events.receive()
     );
     assert!(generated.contains("SleepConditionVariableCS"));
     assert!(generated.contains("pthread_cond_wait"));
+    assert!(generated.contains("SK_CHANNEL_CANCELLED"));
+    assert!(generated.contains("sk_task_register_wait(channel, sk_channel_wake_waiters)"));
+    assert!(generated.contains("wake_wait(wait_context)"));
     assert!(generated.contains("sk_channel_destroy(events)"));
 }
 

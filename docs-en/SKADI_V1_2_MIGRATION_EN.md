@@ -22,10 +22,12 @@ the project and does not need to match the toolchain version.
 - fixed/growing/child/root-static `Memory`, `place in`, and an explicit overflow boundary;
 - call-scoped `view`/`direct` and explicit `move` for current linear resources;
 - native `Task`, `Task(T)`, `run`, `wait`, `stop`, and `stopping`;
-- bounded `Channel(T)` with blocking `send/receive`;
+- bounded `Channel(T)` with blocking `send/receive`, `try_send`, close/drain,
+  cancellation, and Duration-bounded `send_for/receive_for`;
 - nominal `Time`, `Duration`, `ByteSize`, and `Angle`;
 - `Vec2`, `Vec3`, `Vec4`, and a bounded vector math slice;
-- updated CLI/TUI, documentation, and release installers.
+- updated CLI/TUI with structured lifecycle analysis, documentation, and release
+  installers.
 
 These language surfaces remain experimental in the `v1.2` line even though
 they are included in the distributed RC toolchain.

@@ -61,8 +61,17 @@ impl Formatter {
                 ..
             } => {
                 self.write_indent(indent);
-                self.out
-                    .push_str(if *is_constant { "constant " } else { "new " });
+                let owning_resource = declared_type.as_deref().is_some_and(|declared_type| {
+                    declared_type == "Task"
+                        || declared_type.starts_with("Task(")
+                        || declared_type.starts_with("Channel(")
+                        || matches!(declared_type, "Canvas" | "Window" | "Interrupt")
+                });
+                if *is_constant {
+                    self.out.push_str("constant ");
+                } else if !owning_resource {
+                    self.out.push_str("new ");
+                }
                 if let Some(declared_type) = declared_type {
                     self.out.push_str(declared_type);
                     self.out.push(' ');
@@ -596,6 +605,7 @@ impl Formatter {
             }
             Expression::WaitTask { task_name } => format!("wait {task_name}"),
             Expression::Stopping => "stopping".to_string(),
+            Expression::TimedOut => "timed_out".to_string(),
             Expression::BinaryOp { op, left, right } if op == "neg" => {
                 let value = right
                     .as_ref()

@@ -265,7 +265,7 @@
       "patterns": [
         {
           "name": "keyword.control.skd",
-          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|returns|break|continue|pass|on|event|interrupt|error|run|wait|stop|stopping|place)\\b"
+          "match": "\\b(if|else|when|is|while|for|in|iterate|as|loop|return|returns|break|continue|pass|on|event|interrupt|error|run|wait|stop|stopping|timed_out|place)\\b"
         }
       ]
     },
@@ -301,7 +301,7 @@
         },
         {
           "name": "support.function.task.channel.skd",
-          "match": "\\b(channel|send|receive|try_send|close|periodic)\\b(?=\\s*\\()"
+          "match": "\\b(channel|send|receive|send_for|receive_for|try_send|close|periodic)\\b(?=\\s*\\()"
         }
       ]
     },

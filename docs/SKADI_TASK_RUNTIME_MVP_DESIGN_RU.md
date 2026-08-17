@@ -41,20 +41,23 @@ Channel runtime следует отдельным вторым slice, но ег�
 - detached tasks;
 - task groups и structured-concurrency sugar;
 - hard kill;
-- `select`, timeouts, non-blocking channel operations и channel close;
+- `select`, timed `Task.wait` и `try_receive`;
 - shared mutable values, mutex/atomic API на уровне языка;
 - RTOS и bare-metal backend;
 - настройка affinity, priority и stack size.
 
 ### 2.1. Сознательно отложенные design decisions
 
-Следующие механизмы не требуются для `v1.2` и не должны задерживать Task/Channel
-runtime MVP:
+Эти механизмы не требовались для исходного Task/Channel runtime MVP. Текущий
+статус после последующих slices:
 
 - явный `detach` или другой fire-and-forget lifecycle;
-- `channel.close` и семантика чтения из закрытого канала;
-- отменяемый или прерываемый `receive`;
-- связь `stop` с автоматическим пробуждением channel operations.
+- `channel.close`, drain и `try_send` реализованы;
+- отменяемые blocking `send/receive` реализованы;
+- связь `stop` с автоматическим пробуждением Channel реализована без polling;
+- `send_for/receive_for` с `Duration` и `timed_out` реализованы;
+- timed `Task.wait`, `select`, `try_receive` и cancellation произвольного I/O
+  отложены.
 
 Это не окончательный отказ от возможностей. Решения по ним принимаются после
 появления работающих `run -> wait`, `stop -> wait` и bounded `send/receive`, когда
@@ -64,8 +67,8 @@ runtime MVP:
 - detached tasks отсутствуют;
 - каждый `run` имеет owning handle и завершается через `wait`;
 - Channel не закрывается неявно;
-- завершение consumer обеспечивается протоколом сообщений;
-- `stop` не прерывает блокирующую channel operation.
+- завершение consumer обеспечивается `close`, протоколом сообщений или `stop`;
+- `stop` отменяет только фактически ожидающую Channel operation выбранной task.
 
 ## 3. Модель исполнения
 
@@ -199,9 +202,10 @@ Trampoline:
 Visibility stop flag обеспечивается platform synchronization primitive или C11
 atomic с acquire/release semantics. `volatile` без синхронизации недостаточен.
 
-MVP не обещает, что `stop` прервёт блокирующий файловый I/O или channel operation.
-Программа обязана строить протокол завершения так, чтобы worker снова дошёл до
-проверки `stopping`. Channel cancellation/close является отдельным будущим контрактом.
+Текущий расширенный runtime пробуждает блокирующие Channel `send/receive` при
+`stop`: task регистрирует ожидаемый объект, а stop-path будит его condition
+variable после публикации флага. Файловый и произвольный платформенный I/O пока
+не прерываются. `stop` не выполняет cleanup вместо worker и не заменяет `wait`.
 
 ## 8. Аргументы и результаты
 
@@ -318,9 +322,9 @@ not_full condition
 - channel handle нельзя копировать обычным присваиванием, но generated task context
   может хранить внутреннюю ссылку на него как capability transfer.
 
-В MVP нет `close`. Следовательно, завершение consumer должно обеспечиваться
-протоколом сообщений, известным программе, либо гарантированным количеством
-сообщений. `stop` сам по себе не выводит task из `receive`.
+После исходного MVP реализованы `close`, drain, `try_send` и cancellation
+блокирующих `send/receive`. `close` завершает поток данных для всех сторон, а
+`stop` отменяет только ожидание выбранной task и сохраняет Channel открытым.
 
 ## 12. Ошибки и diagnostics
 
@@ -334,6 +338,8 @@ not_full condition
 - `SC-RT-301`: native task creation failed;
 - `SC-RT-302`: task join failed;
 - `SC-RT-303`: invalid task runtime state;
+- `SC-RT-314`: unhandled closed Channel operation;
+- `SC-RT-315`: unhandled cancelled blocking Channel operation;
 - `SC-RT-304`: task stop synchronization failed;
 - `SC-RT-311`: channel allocation/init failed;
 - `SC-RT-312`: invalid channel capacity;

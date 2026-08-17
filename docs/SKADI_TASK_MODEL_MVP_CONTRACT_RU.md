@@ -278,6 +278,8 @@ registry, что противоречит явному lifecycle Skadi.
   thread-local current-task context;
 - bounded `Channel(T)` исполняет blocking FIFO `send/receive` через
   Win32/pthread synchronization primitives;
+- `close/try_send` и drain semantics реализованы; `stop` пробуждает task,
+  заблокированную в `send/receive`, не закрывая Channel;
 - mutable `List` не считается value-safe сообщением до появления move/deep-copy
   контракта.
 - channel owner создаётся вне loop и `place in`, чтобы `break/continue` или
@@ -286,7 +288,8 @@ registry, что противоречит явному lifecycle Skadi.
 
 Task/Channel runtime уже является исполняемым, но всё ещё experimental slice.
 Stress, sanitizer/TSan, cross-platform CI matrix и showcase coverage выполнены;
-`close`, cancellation, timeout и `select` остаются будущими контрактами.
+Timed Channel `send_for/receive_for` реализованы последующим slice; timed
+`Task.wait` и `select` остаются будущими контрактами.
 
 Path-sensitive semantic pass принимает `wait` во всех ветках, отвергает cleanup
 только в части веток, ранний `return` с живым handle и lifecycle, зависящий от
@@ -316,7 +319,7 @@ MVP task model не обещает:
 - scheduler tuning;
 - task groups;
 - shared mutable state как норму;
-- общую сложную exception/cancellation model;
+- cancellation tokens и общую exception hierarchy;
 - богатую систему неблокирующих channel-операций.
 
 ## 18. Реализованный порядок и следующие расширения
@@ -327,8 +330,8 @@ MVP был реализован в таком порядке:
 2. Затем определить semantic rules для task handle и task context.
 3. Затем зафиксировать ограничение на value-safe channel messages.
 4. Затем решить, как эта модель будет стыковаться с `Memory`.
-5. Следующим отдельным design step обсуждать `try_send`, `try_receive`, `select`,
-   task groups и event sugar.
+5. После `close/try_send`, cancellation и timed Channel отдельно обсуждать
+   timed `Task.wait`, `try_receive`, `select`, task groups и event sugar.
 
 ## 19. Короткая формула MVP-контракта
 

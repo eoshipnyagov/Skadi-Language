@@ -62,6 +62,20 @@
     ],
     "description": "Start a task connected to a bounded channel"
   },
+  "Timed channel receive": {
+    "prefix": "channelreceivefor",
+    "body": [
+      "${1:value} = ${2:messages}.receive_for(${3:250ms}) on error {",
+      "    if stopping {",
+      "        ${4:return}",
+      "    }",
+      "    if timed_out {",
+      "        ${5:output(\"channel timeout\")}",
+      "    }",
+      "}"
+    ],
+    "description": "Receive with a Duration deadline and explicit error causes"
+  },
   "Periodic interrupt": {
     "prefix": "interrupt",
     "body": [

@@ -320,6 +320,7 @@ pub enum Expression {
         task_name: String,
     },
     Stopping,
+    TimedOut,
     BinaryOp {
         op: String, // Operator (+, -, etc.)
         left: Box<Expression>,

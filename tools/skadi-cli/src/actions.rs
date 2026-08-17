@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+pub use v01::analysis::{AnalysisFact, AnalysisFactLevel};
 use v01::formatter::format_source;
 
 use crate::pipeline::{compile_c_to_exe_detailed, compile_frontend};
@@ -75,6 +76,7 @@ pub struct ProjectSummary {
 pub struct CheckResult {
     pub project: ProjectSummary,
     pub warnings: Vec<DiagnosticSummary>,
+    pub analysis: Vec<AnalysisFact>,
     pub entry: PathBuf,
 }
 
@@ -88,6 +90,7 @@ pub struct BuildOptions {
 pub struct BuildResult {
     pub project: ProjectSummary,
     pub warnings: Vec<DiagnosticSummary>,
+    pub analysis: Vec<AnalysisFact>,
     pub target: String,
     pub requested_compiler: Option<String>,
     pub selected_compiler: String,
@@ -325,6 +328,7 @@ pub fn run_check_at(root: &Path) -> Result<CheckResult, ActionError> {
             .iter()
             .flat_map(|w| parse_warning(w))
             .collect(),
+        analysis: frontend.analysis,
         entry: project.entry,
     })
 }
@@ -408,6 +412,7 @@ pub fn run_build_at(root: &Path, options: &BuildOptions) -> Result<BuildResult, 
             .iter()
             .flat_map(|w| parse_warning(w))
             .collect(),
+        analysis: frontend.analysis,
         target: options.target.clone(),
         requested_compiler: options.cc.clone(),
         selected_compiler: toolchain.invocation.program,

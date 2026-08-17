@@ -89,6 +89,7 @@ The C runtime uses `QueryPerformanceCounter`/`Sleep` on Windows and
 `SC-RT-320`.
 
 Wall-clock/calendar APIs, `Timer`, fractional literals, broader units, timed
-Task/Channel operations, and an ESP32/FreeRTOS backend remain future work.
+`Task.wait`, and an ESP32/FreeRTOS backend remain future work. Channel
+`send_for`/`receive_for` already use `Duration` as their bounded-wait contract.
 
 Compile-checked showcase: `benchmarks/bench_13_time_budget.skd`.

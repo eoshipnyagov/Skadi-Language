@@ -65,6 +65,19 @@ Wrapper/stage codes used by CLI pipeline:
 
 - `SC-RT-301..304` Task allocation/start/join/stop synchronization failures
 - `SC-RT-311..313` Channel allocation/capacity/synchronization failures
+- `SC-RT-314` unhandled closed Channel operation
+- `SC-RT-315` unhandled cancelled blocking Channel operation
+
+### Analysis codes
+
+- `SC-AN-101` potentially blocking `Channel.send`
+- `SC-AN-102` potentially blocking `Channel.receive`
+- `SC-AN-103` Duration-bounded `Channel.send_for`
+- `SC-AN-104` Duration-bounded `Channel.receive_for`
+- `SC-AN-201` `when` without an explicit `else` path
+- `SC-AN-301..304` resource create/borrow/move/close lifecycle facts
+- `SC-AN-311..313` Task start/stop/wait lifecycle facts
+- `SC-AN-321..322` Memory create/clear lifecycle facts
 - `SC-RT-320` monotonic clock or blocking sleep runtime failure
 
 ## 4. Module / CLI Pipeline Codes

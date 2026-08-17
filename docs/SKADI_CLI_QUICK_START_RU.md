@@ -137,14 +137,15 @@ skadi-cli tui
 - `o` - открыть или переключить проект
 - `g` - создать отсутствующий `entry`-файл из `Config`
 - `p` - обзор проекта
-- `e` - diagnostics
+- `e` - diagnostics и structured analysis
 - `h` - help
 - `q` - выход
 
 Что уже умеет TUI:
 
 - обзор проекта;
-- экран диагностики;
+- экран diagnostics/analysis с объяснением следующего действия и lifecycle
+  выбранного ресурса;
 - build/run view с `stdout/stderr`;
 - `doctor` view;
 - редактирование `Skadi.toml`;

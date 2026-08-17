@@ -246,7 +246,7 @@ CI проверяет:
 
 - hardware `on interrupt` backends;
 - module name imports/re-exports;
-- channel timeout/select, task groups и async/await;
+- timed Task wait/channel select, task groups и async/await;
 - shared mutable state model;
 - ESP32/FreeRTOS и другие embedded runtime backends;
 - Canvas events/text/images, Matrix2D, generic units и operator overloading;

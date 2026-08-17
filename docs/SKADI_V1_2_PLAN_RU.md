@@ -441,19 +441,22 @@ vector slice до матриц или transform framework.
 - native examples, formatter, VS Code/Pygments highlighting, RU/EN docs и
   regression coverage.
 
-Следующий функциональный checkpoint:
+Завершённый функциональный checkpoint:
 
-1. cancellation должна пробуждать blocking Channel send/receive;
-2. `stop`, `close` и drain semantics должны быть едины на Win32/pthread;
-3. timeout surface обсуждается только после стабилизации существующих границ;
-4. `select`, task groups и implicit async runtime не входят в ближайший slice.
+1. cancellation пробуждает blocking Channel send/receive;
+2. `stop`, `close` и drain semantics едины на Win32/pthread;
+3. `send_for/receive_for` используют `Duration`, обязательный `on error` и
+   контекстный `timed_out` на Win32/pthread;
+4. timed `Task.wait` отложен до отдельного path-sensitive lifecycle-контракта;
+5. `select`, task groups и implicit async runtime не входят в ближайший slice.
 
 Параллельный tooling checkpoint:
 
-1. выделить structured analysis facts из compiler core без дублирования правил
-   в TUI;
-2. показать ownership/resource lifecycle, Task/Channel и Memory state;
-3. добавить explain-chain для diagnostics и incomplete `when`;
+1. structured analysis facts выделены из compiler core без дублирования правил
+   в TUI; первый slice покрывает blocking Channel и incomplete `when`;
+2. первый source-order explain-chain ownership/resource/Task/Memory state
+   реализован и показывается в TUI по общему subject;
+3. расширить explain-chain path-sensitive причинами и scope cleanup;
 4. подготовить source mapping/debug probes для первого Skadi-level debugger;
 5. сохранить общий engine для CLI, TUI, CI и будущего LSP.
 

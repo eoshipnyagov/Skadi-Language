@@ -1,0 +1,33 @@
+fn wait_for_job(Channel(Int) jobs, Channel(Int) ready) returns Int {
+    ready.send(1)
+    new Int job = 0
+    job = jobs.receive() on error {
+        if stopping {
+            return 41
+        }
+        return 42
+    }
+    return job
+}
+
+Channel(Int) jobs = channel(1)
+
+Channel(Int) ready = channel(1)
+
+Task(Int) worker_task = run wait_for_job(jobs, ready)
+
+new Int worker_ready = ready.receive()
+
+stop worker_task
+
+new Int stop_result = wait worker_task
+
+jobs.send(7)
+
+new Int preserved_job = jobs.receive()
+
+output(worker_ready)
+
+output(stop_result)
+
+output(preserved_job)

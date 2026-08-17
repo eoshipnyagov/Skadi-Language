@@ -22,7 +22,9 @@ Open -> Closed
 - после `close()` consumer дочитывает буфер;
 - `receive()` на пустом закрытом канале завершается через `on error`;
 - `send()` на закрытом канале завершается через `on error`;
-- `try_send()` на полном или закрытом канале возвращает `false`.
+- `try_send()` на полном или закрытом канале возвращает `false`;
+- `stop task` пробуждает именно эту task, если она заблокирована в `send` или
+  `receive`; операция завершается через `on error`, а `stopping` сообщает причину.
 
 ## 3. Ownership
 
@@ -58,11 +60,38 @@ wait consumer
 `stop` управляет task, а `close` завершает поток данных. Одна операция не
 подменяет другую.
 
-## 5. Отложено
+## 5. Cancellation blocking operation
 
-- timeout;
+Cancellation является состоянием task/операции, а не новым состоянием Channel:
+
+- запрос `stop` постоянен и не закрывает Channel;
+- ожидающая task регистрирует текущий Channel перед засыпанием;
+- `stop` будит condition variable без polling;
+- только операция остановленной task получает внутренний результат `Cancelled`;
+- другие producers/consumers продолжают работу;
+- отменённый `send` не добавляет сообщение, а отменённый `receive` не извлекает
+  сообщение;
+- если операция уже атомарно изменила очередь до `stop`, она считается успешно
+  завершённой и не откатывается;
+- после `stop` по-прежнему обязателен `wait`.
+
+`Closed`, `Cancelled` и `TimedOut` различаются внутри runtime. На языковой
+поверхности исходы входят в `on error`: внутри task `stopping == true` означает
+cancellation, а в handler `send_for`/`receive_for` признак `timed_out` означает
+deadline. Оставшийся путь соответствует `Closed`. Операция без handler при
+фактической отмене обычного blocking вызова завершается `SC-RT-315`; timed-формы
+требуют handler семантически.
+
+Timed operation использует один абсолютный deadline: ложные пробуждения его не
+продлевают. Успех уже доступной операции имеет приоритет над нулевым timeout;
+`stop` после регистрации ожидания имеет приоритет над timeout. Перед возвратом
+`TimedOut` runtime повторно проверяет очередь и `closed` под Channel lock.
+
+## 6. Отложено
+
+- timed `Task.wait`;
 - `select`;
 - автоматический sender counting;
-- cancellation blocking I/O;
+- cancellation файлового и платформенного I/O;
 - fairness guarantees;
 - detached channel ownership.

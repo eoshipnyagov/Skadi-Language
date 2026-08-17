@@ -251,8 +251,11 @@ Reference:
 - `v1.2.0-rc.1` опубликован как draft prerelease.
 
 Открытые задачи и границы текущего этапа ведутся в `docs/SKADI_V1_2_PLAN_RU.md`.
-Ближайший runtime slice: cancellation blocking Channel operations через
-существующие `stop`/`close` boundaries без преждевременного добавления `select`.
+Завершённые runtime slices: cancellation blocking Channel operations и
+Duration-bounded `send_for/receive_for` через существующие `stop`/`close`/`on
+error` boundaries без polling и без добавления `select`. Следующий изолированный
+runtime вопрос — timed `Task.wait` с path-sensitive сохранением handle после
+timeout.
 
 ## Отдельный трек - analysis-first TUI и Skadi-level debugger
 
@@ -264,6 +267,11 @@ loop TUI. Compiler core возвращает структурированные 
 будущий LSP и CI являются разными клиентами одного analysis engine.
 
 ### Фаза A - структурированный анализ
+
+Первые foundation slices выполнены: compiler core возвращает task-aware facts
+для blocking/timed Channel, incomplete `when` и source-order lifecycle facts
+для ownership/resources/Task/Memory; CLI action pipeline передаёт их в общий
+TUI view Diagnostics / Analysis и связывает факты по subject.
 
 - стабильные source spans и identifiers для statements/values/resources;
 - facts по creation/copy/borrow/move/close и scope cleanup;

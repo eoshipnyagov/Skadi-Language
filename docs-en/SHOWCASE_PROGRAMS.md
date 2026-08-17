@@ -57,7 +57,11 @@ Focused native examples also cover:
 - `examples/memory/positive/06_extended_regions.skd` for grow/drop policies,
   child regions, and static storage;
 - `examples/ownership/01_move_canvas_factory.skd` for resource factories and
-  explicit Canvas ownership transfer.
+  explicit Canvas ownership transfer;
+- `examples/concurrency/03_cancel_blocked_channel.skd` for stopping a task that
+  is blocked on an empty channel;
+- `examples/concurrency/04_timed_channel.skd` for Duration-bounded
+  `send_for`/`receive_for` and `timed_out` handling.
 
 ## Stable showcase fixtures
 
@@ -98,6 +102,7 @@ POSIX shell:
   - time, byte-size, angle, and vector coverage through `bench_13..16`.
 
 See the [Concurrency Guide](concurrency.md) for Task/Channel lifecycle,
-multi-worker patterns, platform details, and the ESP32/RTOS roadmap.
+multi-worker, cancellation, and timed-wait patterns, platform details, and the
+ESP32/RTOS roadmap.
 
 Russian remains the primary source of truth for the full showcase documentation.

@@ -136,10 +136,18 @@ Constants: `PI`, `TAU`, `E`, `EPSILON`.
 | `stop t`, `stopping` | Cooperative stop | Experimental |
 | `Channel(Int) q = channel(8)` | Bounded channel | Experimental |
 | `q.send(value)`, `q.receive()` | Blocking message passing | Experimental |
+| `q.send(value) on error { ... }` | Handle close or task cancellation | Experimental |
+| `value = q.receive() on error { ... }` | Handle drain or cancellation | Experimental |
+| `q.try_send(value)` | Non-blocking send attempt returning `Bool` | Experimental |
+| `q.close()` | Owner closes the stream; queued values remain readable | Experimental |
+| `q.send_for(value, 250ms) on error { ... }` | Blocking send with a deadline | Experimental |
+| `value = q.receive_for(250ms) on error { ... }` | Blocking receive with a deadline | Experimental |
+| `timed_out` | Timed Channel handler reason; contextual identifier | Experimental |
 
 Standalone `on error { ... }`, automatic `allow drop` reclamation, channel
-select/timeouts, async/await, Matrix2D, Canvas events/text/images, non-Windows
-window presenters, and package imports are not implemented.
+`select`, timed `Task.wait`, `try_receive`, async/await, Matrix2D, Canvas
+events/text/images, non-Windows window presenters, and package imports are not
+implemented.
 
 See the [topic reference](language-reference.en.md) and
 [syntax status](syntax-status.en.md).

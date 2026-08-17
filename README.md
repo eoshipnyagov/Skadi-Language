@@ -44,7 +44,9 @@ The repository includes:
 - explicit `view`/`direct` borrows and `move` ownership transfer for current
   linear resources,
 - experimental native Task/Channel runtime and periodic host Interrupts for
-  `v1.2`,
+  `v1.2`, including cancellation-aware and Duration-bounded Channel operations,
+- structured analysis facts for blocking/timed Channel operations, incomplete
+  `when`, and resource lifecycle chains displayed in the TUI diagnostics workbench,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
 - experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,
@@ -284,17 +286,20 @@ Skadi uses tasks for independent work and bounded channels for message passing.
 Current syntax:
 
 ```skadi
-Channel(SensorData) sensors = channel(8)
-
-Task sensor_task = run sensor_loop(sensors)
-
-loop {
-    new SensorData data = sensors.receive()
-    draw_status(canvas, data)
-    screen.present()
+fn collect(Channel(Int) readings) {
+    while not stopping {
+        readings.send(1) on error {
+            return
+        }
+    }
 }
 
+Channel(Int) readings = channel(1)
+Task sensor_task = run collect(readings)
+new Int sample = readings.receive()
+stop sensor_task
 wait sensor_task
+output(sample)
 ```
 
 The intended model:
@@ -310,7 +315,10 @@ shared mutable memory is not the default.
 The current C backend maps each task to a Win32 or pthread native thread. It
 supports multiple tasks, task restart after `wait`, bounded blocking channels,
 non-blocking `try_send`, explicit channel close, and typed periodic host
-Interrupts. Cancellation-aware blocking channel operations, timed operations,
+Interrupts. `stop` also wakes a task blocked in Channel `send/receive` without
+closing or draining the channel. `send_for`/`receive_for` bound waits with a
+`Duration`; their `on error` handlers distinguish cancellation with `stopping`
+and deadlines with `timed_out`. Timed Task wait, cancellation of file I/O,
 hardware IRQ binding, advanced scheduling, and embedded/RTOS targets remain
 future work. See the
 [Concurrency Guide](https://eoshipnyagov.github.io/Skadi-Language/en/user/concurrency/).
@@ -577,7 +585,8 @@ The repository already includes:
 - experimental fixed/growing/child/root-static Memory regions and explicit
   resource ownership for `v1.2`,
 - experimental native Task/Channel runtime and periodic host Interrupts for
-  `v1.2`,
+  `v1.2`, including blocking Channel cancellation,
+- structured compiler analysis facts surfaced by CLI actions and TUI,
 - experimental nominal Time/Duration runtime for `v1.2`,
 - experimental nominal ByteSize and dynamic Memory capacity for `v1.2`,
 - experimental nominal Angle and `deg/rad` math integration for `v1.2`,

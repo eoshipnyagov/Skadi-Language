@@ -15,6 +15,13 @@ versions.
   checks.
 - Segmented `allow grow`, declarative `allow drop`, child regions, and
   root-only static Memory regions.
+- Cooperative cancellation of blocking Channel `send` and `receive` on
+  Windows and POSIX, without closing the Channel or discarding buffered data.
+- Duration-bounded Channel `send_for` and `receive_for`, with contextual
+  `timed_out` handling and stable close/cancel/timeout precedence.
+- Structured `SC-AN-*` analysis facts for potentially blocking Channel
+  operations, incomplete `when` branches, and ownership/resource lifecycle
+  chains surfaced in the TUI diagnostics workspace.
 - Focused native examples and RU/EN ownership documentation.
 
 ### Safety
@@ -25,6 +32,8 @@ versions.
 - `memory.static` is restricted to program root to avoid recursive/concurrent
   aliasing of one static buffer.
 - `allow drop` never deletes live values implicitly.
+- Cancelled Channel operations preserve the buffer and report a distinct
+  runtime status; unhandled cancellation uses `SC-RT-315`.
 
 ## [1.2.0-rc.1] - 2026-07-29
 

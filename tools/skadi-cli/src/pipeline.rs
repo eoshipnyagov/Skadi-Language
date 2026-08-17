@@ -8,6 +8,7 @@ use regex::Regex;
 use crate::targets::{
     CompilerInvocation, candidate_invocations, resolve_profile, single_compiler_invocation,
 };
+use v01::analysis::{AnalysisFact, collect_analysis_facts};
 use v01::codegen::{ensure_codegen_supported, transpile_program_to_c};
 use v01::lexer::lex;
 use v01::parser::parse_program;
@@ -24,6 +25,7 @@ struct ImportSpec {
 pub struct FrontendOutput {
     pub c_code: String,
     pub warnings: Vec<String>,
+    pub analysis: Vec<AnalysisFact>,
 }
 
 #[derive(Clone, Debug)]
@@ -61,9 +63,11 @@ pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
         )
     })?;
     let warnings = semantic_style_warnings(&program);
+    let analysis = collect_analysis_facts(&program);
     Ok(FrontendOutput {
         c_code: transpile_program_to_c(&program),
         warnings,
+        analysis,
     })
 }
 

@@ -52,10 +52,11 @@ Legend:
 | `place in` / trailing `on error` | Y | Y | Y | Y | Y | placement and overflow recovery covered |
 | `memory.clear()` | Y | Y | Y | Y | Y | use-after-clear and active-region rules covered |
 | `Task` / `Task(T)` / `run` | Y | Y | Y | Y | Y | experimental native Win32/pthread runtime |
-| `wait` / `stop` / `stopping` | Y | Y | Y | Y | Y | path-sensitive lifecycle and cooperative stop covered |
+| `wait` / `stop` / `stopping` | Y | Y | Y | Y | Y | path-sensitive lifecycle; stop wakes blocking Channel waits |
 | `Channel(T)` / `channel(N)` | Y | Y | Y | Y | Y | bounded blocking FIFO runtime |
-| `send` / `receive` | Y | Y | Y | Y | Y | value-safe payload and backpressure covered |
+| `send` / `receive` | Y | Y | Y | Y | Y | value-safe payload, backpressure and cancellation covered |
 | `try_send` / `close` | Y | Y | Y | Y | Y | fallible non-blocking send and owner-controlled close/drain |
+| `send_for` / `receive_for` / `timed_out` | P | Y | Y | Y | Y | contextual timeout handling, Win32/pthread runtime |
 | `Time` / `Duration` | P (type identifiers) | Y | Y | Y | Y | experimental nominal value types |
 | `5ms` / `2s` / `3min` | P (number + adjacent unit) | Y | Y | Y | Y | integer and overflow-checked literals |
 | `now` / `elapsed` | P (identifiers) | Y | Y | Y | Y | monotonic clock runtime |

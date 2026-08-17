@@ -51,6 +51,7 @@ struct FnContext {
     return_type: Option<ValueType>,
     self_struct: Option<String>,
     is_task_context: bool,
+    is_timed_error_context: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -842,7 +843,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     visit_expression_style(arg, line, col, out);
                 }
             }
-            Expression::WaitTask { .. } | Expression::Stopping => {}
+            Expression::WaitTask { .. } | Expression::Stopping | Expression::TimedOut => {}
             Expression::BinaryOp { left, right, .. } => {
                 visit_expression_style(left, line, col, out);
                 if let Some(right) = right {
@@ -1360,6 +1361,7 @@ fn interrupt_safe_expression(expr: &Expression) -> bool {
         | Expression::RunTask { .. }
         | Expression::WaitTask { .. }
         | Expression::Stopping
+        | Expression::TimedOut
         | Expression::StructConstruction { .. } => false,
     }
 }
@@ -1468,6 +1470,7 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
             | Expression::MemberAccess { .. }
             | Expression::WaitTask { .. }
             | Expression::Stopping
+            | Expression::TimedOut
             | Expression::LiteralInt(_)
             | Expression::LiteralFloat(_)
             | Expression::LiteralBool(_)
@@ -2907,6 +2910,7 @@ fn analyze_statement(
                 return_type: sig.return_type.clone(),
                 self_struct: None,
                 is_task_context: task_context_functions.contains(name),
+                is_timed_error_context: false,
             };
             analyze_block(
                 body,
@@ -3549,16 +3553,40 @@ fn analyze_statement(
             on_error,
             ..
         } => {
-            if let Some((channel, "receive")) = call_name.split_once('.')
+            if let Some((channel, method @ ("receive" | "receive_for"))) = call_name.split_once('.')
                 && let Some(element_ty) = memory_state.channels.get(channel).cloned()
             {
                 require_owned_resource(memory_state, channel)?;
-                if !args.is_empty() {
+                let expected_args = usize::from(method == "receive_for");
+                if args.len() != expected_args {
                     return Err(err_at_code(
                         stmt,
                         SEM_CHANNEL_RULE,
-                        "Channel.receive() does not accept arguments.".to_string(),
+                        format!(
+                            "Channel.{method} expects {expected_args} argument(s), got {}.",
+                            args.len()
+                        ),
                     ));
+                }
+                if method == "receive_for" {
+                    let timeout_ty = infer_expression_type(
+                        &args[0],
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
+                    if timeout_ty != ValueType::Duration {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_CHANNEL_RULE,
+                            format!(
+                                "Channel.receive_for expects Duration, got {:?}.",
+                                timeout_ty
+                            ),
+                        ));
+                    }
                 }
                 let Some(target_ty) = scope.get(target) else {
                     return Err(err_at_code(
@@ -3587,7 +3615,7 @@ fn analyze_statement(
                     labels,
                     structs,
                     task_context_functions,
-                    fn_ctx,
+                    timed_error_context(fn_ctx, method == "receive_for"),
                     in_loop,
                 );
             }
@@ -3773,15 +3801,19 @@ fn analyze_statement(
                     in_loop,
                 );
             }
-            if let Some((channel, "send")) = call_name.split_once('.')
+            if let Some((channel, method @ ("send" | "send_for"))) = call_name.split_once('.')
                 && let Some(element_ty) = memory_state.channels.get(channel).cloned()
             {
                 require_owned_resource(memory_state, channel)?;
-                if args.len() != 1 {
+                let expected_args = if method == "send_for" { 2 } else { 1 };
+                if args.len() != expected_args {
                     return Err(err_at_code(
                         stmt,
                         SEM_CHANNEL_RULE,
-                        format!("Channel.send expects one argument, got {}.", args.len()),
+                        format!(
+                            "Channel.{method} expects {expected_args} argument(s), got {}.",
+                            args.len()
+                        ),
                     ));
                 }
                 let actual_ty = infer_expression_type(
@@ -3802,6 +3834,23 @@ fn analyze_statement(
                         ),
                     ));
                 }
+                if method == "send_for" {
+                    let timeout_ty = infer_expression_type(
+                        &args[1],
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
+                    if timeout_ty != ValueType::Duration {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_CHANNEL_RULE,
+                            format!("Channel.send_for expects Duration, got {:?}.", timeout_ty),
+                        ));
+                    }
+                }
                 let mut on_error_scope = scope.clone();
                 let mut on_error_memory_state = memory_state.clone();
                 return analyze_block(
@@ -3812,7 +3861,7 @@ fn analyze_statement(
                     labels,
                     structs,
                     task_context_functions,
-                    fn_ctx,
+                    timed_error_context(fn_ctx, method == "send_for"),
                     in_loop,
                 );
             }
@@ -4221,6 +4270,7 @@ fn analyze_statement(
                         .or(Some(ValueType::Int)),
                     self_struct: Some(name.clone()),
                     is_task_context: false,
+                    is_timed_error_context: false,
                 };
                 analyze_block(
                     &m.body,
@@ -4263,6 +4313,21 @@ fn analyze_block(
         fn_ctx,
         in_loop,
     )
+}
+
+fn timed_error_context(fn_ctx: Option<FnContext>, enabled: bool) -> Option<FnContext> {
+    if !enabled {
+        return fn_ctx;
+    }
+    let mut context = fn_ctx.unwrap_or(FnContext {
+        is_danger: false,
+        return_type: None,
+        self_struct: None,
+        is_task_context: false,
+        is_timed_error_context: false,
+    });
+    context.is_timed_error_context = true;
+    Some(context)
 }
 
 fn param_type_or_default(param: &FunctionParam) -> ValueType {
@@ -4367,6 +4432,7 @@ fn record_task_effects_in_expr(
         | Expression::ViewBorrow(_)
         | Expression::MemberAccess { .. }
         | Expression::Stopping
+        | Expression::TimedOut
         | Expression::LiteralInt(_)
         | Expression::LiteralFloat(_)
         | Expression::LiteralBool(_)
@@ -4476,7 +4542,8 @@ fn apply_task_flow_expression(
         | Expression::ViewBorrow(_)
         | Expression::Move(_)
         | Expression::MemberAccess { .. }
-        | Expression::Stopping => Ok(()),
+        | Expression::Stopping
+        | Expression::TimedOut => Ok(()),
     }
 }
 
@@ -5392,8 +5459,10 @@ fn infer_expression_type(
                         ));
                     }
                 }
-                if matches!(method, "send" | "receive" | "try_send" | "close")
-                    && !memory_state.channels.contains_key(base)
+                if matches!(
+                    method,
+                    "send" | "receive" | "send_for" | "receive_for" | "try_send" | "close"
+                ) && !memory_state.channels.contains_key(base)
                 {
                     let receiver_ty = scope.get(base).cloned().unwrap_or(ValueType::Unknown);
                     if !matches!(receiver_ty, ValueType::Unknown) {
@@ -5407,7 +5476,10 @@ fn infer_expression_type(
                     }
                 }
                 if let Some(channel_elem_ty) = memory_state.channels.get(base).cloned() {
-                    if matches!(method, "send" | "receive" | "close") {
+                    if matches!(
+                        method,
+                        "send" | "receive" | "send_for" | "receive_for" | "close"
+                    ) {
                         if method == "close" && !memory_state.channel_owners.contains(base) {
                             return Err(sem_err(
                                 SEM_CHANNEL_RULE,
@@ -5420,13 +5492,15 @@ fn infer_expression_type(
                         require_open_resource(memory_state, base, method)?;
                     }
                     return match method {
-                        "send" | "try_send" => {
-                            if args.len() != 1 {
+                        "send" | "send_for" | "try_send" => {
+                            let expected_args = if method == "send_for" { 2 } else { 1 };
+                            if args.len() != expected_args {
                                 return Err(sem_err(
                                     SEM_CHANNEL_RULE,
                                     format!(
-                                        "{} expects one message argument, got {}.",
+                                        "{} expects {} argument(s), got {}.",
                                         method,
+                                        expected_args,
                                         args.len()
                                     ),
                                 ));
@@ -5466,17 +5540,70 @@ fn infer_expression_type(
                                     ),
                                 ));
                             }
+                            if method == "send_for" {
+                                let timeout_ty = infer_expression_type(
+                                    &args[1],
+                                    scope,
+                                    memory_state,
+                                    functions,
+                                    structs,
+                                    fn_ctx,
+                                )?;
+                                if timeout_ty != ValueType::Duration {
+                                    return Err(sem_err(
+                                        SEM_CHANNEL_RULE,
+                                        format!(
+                                            "Channel.send_for expects Duration, got {:?}.",
+                                            timeout_ty
+                                        ),
+                                    ));
+                                }
+                                return Err(sem_err(
+                                    SEM_INVALID_CONTEXT,
+                                    "Channel.send_for requires an 'on error' handler.".to_string(),
+                                ));
+                            }
                             if method == "try_send" {
                                 Ok(ValueType::Bool)
                             } else {
                                 Ok(ValueType::Int)
                             }
                         }
-                        "receive" => {
-                            if !args.is_empty() {
+                        "receive" | "receive_for" => {
+                            let expected_args = usize::from(method == "receive_for");
+                            if args.len() != expected_args {
                                 return Err(sem_err(
                                     SEM_CHANNEL_RULE,
-                                    format!("receive expects no arguments, got {}.", args.len()),
+                                    format!(
+                                        "{} expects {} argument(s), got {}.",
+                                        method,
+                                        expected_args,
+                                        args.len()
+                                    ),
+                                ));
+                            }
+                            if method == "receive_for" {
+                                let timeout_ty = infer_expression_type(
+                                    &args[0],
+                                    scope,
+                                    memory_state,
+                                    functions,
+                                    structs,
+                                    fn_ctx,
+                                )?;
+                                if timeout_ty != ValueType::Duration {
+                                    return Err(sem_err(
+                                        SEM_CHANNEL_RULE,
+                                        format!(
+                                            "Channel.receive_for expects Duration, got {:?}.",
+                                            timeout_ty
+                                        ),
+                                    ));
+                                }
+                                return Err(sem_err(
+                                    SEM_INVALID_CONTEXT,
+                                    "Channel.receive_for requires an 'on error' handler."
+                                        .to_string(),
                                 ));
                             }
                             Ok(channel_elem_ty)
@@ -6405,6 +6532,16 @@ fn infer_expression_type(
             }
             Ok(ValueType::Bool)
         }
+        Expression::TimedOut => {
+            if fn_ctx.map(|ctx| ctx.is_timed_error_context) != Some(true) {
+                return Err(sem_err(
+                    SEM_CHANNEL_RULE,
+                    "timed_out is only available inside the 'on error' handler of send_for or receive_for."
+                        .to_string(),
+                ));
+            }
+            Ok(ValueType::Bool)
+        }
         Expression::BinaryOp { op, left, right } => {
             if op == "neg" {
                 let operand = right.as_deref().unwrap_or(left);
@@ -6648,7 +6785,7 @@ fn infer_expression_memory_provenance(
         Expression::WaitTask { task_name } => {
             Ok(memory_state.variable_memory.get(task_name).cloned())
         }
-        Expression::RunTask { .. } | Expression::Stopping => Ok(None),
+        Expression::RunTask { .. } | Expression::Stopping | Expression::TimedOut => Ok(None),
         Expression::LiteralString(_)
         | Expression::ListLiteral(_)
         | Expression::StructConstruction { .. } => Ok(memory_state.active_memory.clone()),

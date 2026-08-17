@@ -223,7 +223,7 @@
     требует literal capacity и разрешён только на program root;
   - C backend доводит весь bounded surface до `Skadi -> C -> native`.
 - task/channel systems MVP - `Experimental / Runtime MVP`
-  - parser принимает `Task`, `Task(T)`, `run worker(...)`, `wait task`, `stop task`, `stopping`, `Channel(T)`, `channel(N)`, `channel.send(value)` и `channel.receive()`;
+  - parser принимает `Task`, `Task(T)`, `run worker(...)`, `wait task`, `stop task`, `stopping`, `Channel(T)`, `channel(N)`, blocking и timed Channel operations;
   - semantic layer проверяет task handle lifecycle, запрет `Task` как обычного value-type, task-context для `stopping` и value-safe channel messages;
   - игнорирование результата `run worker()` является hard error;
   - semantic pass требует `wait` на всех путях и проверяет task-safe boundary;
@@ -232,9 +232,14 @@
   - bounded `Channel(T)` работает через blocking FIFO `send/receive` на Win32/pthread;
   - mutable `List`, Memory/capability и region-owned значения не являются value-safe сообщениями;
   - owner declaration внутри loop и `place in` запрещён ради deterministic cleanup;
-  - owner может вызвать `close()`, после чего receiver дренирует очередь и получает fail-soft default;
+  - owner может вызвать `close()`, после чего receiver дренирует очередь и
+    обрабатывает исчерпание через `on error`;
   - `try_send` возвращает `Bool` и не блокирует producer;
-  - timeout, `select` и отмена блокирующей channel operation отложены.
+  - `stop` пробуждает task, заблокированную в `send/receive`; cancellation
+    обрабатывается через `on error` и не закрывает Channel;
+  - `send_for(value, Duration)` и `receive_for(Duration)` требуют `on error`;
+    `timed_out` доступен только в их handler и не является lexer keyword;
+  - timed `Task.wait`, `try_receive` и `select` отложены.
   - практические шаблоны и платформенный статус описаны в
     [руководстве по многопоточности](concurrency.md).
 - Canvas v0 - `Experimental / Runtime MVP`

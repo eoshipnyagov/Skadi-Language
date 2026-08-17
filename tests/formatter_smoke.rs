@@ -1,4 +1,6 @@
 use v01::formatter::format_source;
+use v01::lexer::lex;
+use v01::parser::parse_program;
 
 #[test]
 fn formats_functions_control_flow_and_expressions() {
@@ -122,4 +124,48 @@ clear(direct frame)
     assert!(formatted.contains("inspect(view frame)"));
     assert!(formatted.contains("fn clear(direct Canvas frame)"));
     assert!(formatted.contains("clear(direct frame)"));
+}
+
+#[test]
+fn owning_resource_declarations_survive_format_parse_roundtrip() {
+    let source = r#"
+fn worker(){pass}
+Channel(Int) jobs=channel(1)
+Task worker_task=run worker()
+Canvas frame=canvas(8,8)
+Window window=windows.open("Skadi",8,8)
+Interrupt timer=interrupts.periodic(10ms)
+wait worker_task
+"#;
+
+    let formatted = format_source(source).expect("format resources");
+    assert!(formatted.contains("Channel(Int) jobs = channel(1)"));
+    assert!(formatted.contains("Task worker_task = run worker()"));
+    assert!(formatted.contains("Canvas frame = canvas(8, 8)"));
+    assert!(formatted.contains("Window window = windows.open(\"Skadi\", 8, 8)"));
+    assert!(formatted.contains("Interrupt timer = interrupts.periodic(10ms)"));
+    assert!(!formatted.contains("new Channel"));
+    assert!(!formatted.contains("new Task"));
+
+    let tokens = lex(&formatted).expect("formatted resources should lex");
+    parse_program(&tokens).expect("formatted resources should parse");
+}
+
+#[test]
+fn formats_timed_channel_handlers_and_context_status() {
+    let source = r#"
+Channel(Int) jobs=channel(1)
+new Int value=0
+value=jobs.receive_for(25ms) on error{
+if timed_out{value=-1}
+}
+jobs.send_for(7,25ms) on error{pass}
+"#;
+
+    let formatted = format_source(source).expect("format timed channels");
+    assert!(formatted.contains("value = jobs.receive_for(25ms) on error {"));
+    assert!(formatted.contains("if timed_out {"));
+    assert!(formatted.contains("jobs.send_for(7, 25ms) on error {"));
+    let tokens = lex(&formatted).expect("formatted timed channels should lex");
+    parse_program(&tokens).expect("formatted timed channels should parse");
 }

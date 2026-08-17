@@ -54,6 +54,8 @@ TUI поддерживает:
 
 - dashboard проекта;
 - диагностику с кодами и stage;
+- structured analysis facts для blocking/timed Channel, incomplete `when` и
+  ownership/resource lifecycle chains с explain/next-action detail;
 - `check`, `format`, `build`, `run`, `doctor`;
 - редактор каноничных полей `Skadi.toml`;
 - выбор target и компилятора для текущего сеанса;
