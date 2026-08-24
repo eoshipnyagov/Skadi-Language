@@ -14,7 +14,7 @@ fn codegen_emits_main_and_assignment() {
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("int main(void)"));
-    assert!(c.contains("SkInt x = (1 + 2);"));
+    assert!(c.contains("SkInt x = sk_num_add_int(1, 2);"));
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn codegen_source_map_points_to_generated_statement_ranges() {
         .lines()
         .nth(assignment.generated_start_line as usize - 1)
         .expect("mapped generated line");
-    assert!(generated.contains("value = (value + 1);"));
+    assert!(generated.contains("value = sk_num_add_int(value, 1);"));
     assert!(output.c_code.contains("/* SK-STMT@1:1#1 */"));
 }
 
@@ -612,7 +612,7 @@ new Int next = c.inc(2)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("SkInt Counter_inc(Counter *my, SkInt delta)"));
-    assert!(c.contains("my->value = (my->value + delta);"));
+    assert!(c.contains("my->value = sk_num_add_int(my->value, delta);"));
     assert!(c.contains("SkInt next = Counter_inc(&c, 2);"));
 }
 
@@ -718,8 +718,8 @@ i--
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("i += 1;"));
-    assert!(c.contains("i -= 1;"));
+    assert!(c.contains("i = sk_num_add_int(i, 1);"));
+    assert!(c.contains("i = sk_num_sub_int(i, 1);"));
 }
 
 #[test]
@@ -787,13 +787,39 @@ new Bool invalid = is_nan(sqrt(-1))
     assert!(c.contains("float a = atan2f(y, x);"));
     assert!(c.contains("float n = sqrtf(9);"));
     assert!(c.contains("float r = powf(27, (1.0f / 3));"));
-    assert!(c.contains("SkInt sg = sk_math_sign_int((-4));"));
-    assert!(c.contains("float fr = sk_math_fract((-1.25"));
-    assert!(c.contains("float mix = sk_math_lerp(10, 20, 0.25"));
-    assert!(c.contains("float mapped = sk_math_remap(50, 0, 100, (-1), 1);"));
+    assert!(c.contains("SkInt sg = sk_math_sign_int(sk_num_neg_int(4));"));
+    assert!(c.contains("float fr = sk_math_fract_float((-1.25"));
+    assert!(c.contains("float mix = sk_math_lerp_float(10, 20, 0.25"));
+    assert!(c.contains("float mapped = sk_math_remap_float(50, 0, 100, sk_num_neg_int(1), 1);"));
     assert!(c.contains("float tangent = tanf(angle);"));
     assert!(c.contains("float wrapped = sk_math_normalize_angle(arc);"));
     assert!(c.contains("bool valid = isfinite(wrapped);"));
+}
+
+#[test]
+fn codegen_preserves_explicit_f64_literals_and_math() {
+    let src = r#"
+new f64 precise = 1.23456789012345
+new f64 square_root = sqrt(precise)
+new f64 fraction = fract(precise)
+new f64 midpoint = lerp(precise, 3.0, 0.5)
+new f64 power = precise ^ 2.0
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("double precise = 1.23456789012345;"), "{c}");
+    assert!(c.contains("double square_root = sqrt(precise);"), "{c}");
+    assert!(
+        c.contains("double fraction = sk_math_fract_f64(precise);"),
+        "{c}"
+    );
+    assert!(
+        c.contains("double midpoint = sk_math_lerp_f64(precise, 3, 0.5);"),
+        "{c}"
+    );
+    assert!(c.contains("double power = pow(precise, 2);"), "{c}");
 }
 
 #[test]

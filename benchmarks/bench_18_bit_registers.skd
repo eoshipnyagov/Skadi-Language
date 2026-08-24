@@ -11,7 +11,31 @@ status = bit_clear(status, 9)
 new i8 signed_pattern = -1
 new i8 logical_half = bit_shift_right(signed_pattern, 1)
 
+new u16 sensor_value = 240
+new u8 compact_value = 0
+compact_value = as_u8(sensor_value) on error {
+    output("sensor value is outside u8")
+}
+
+new u8 sequence = 255
+sequence = wrapping_add(sequence, 1)
+
+new Float measured = 42.0
+new i8 whole = 0
+whole = as_i8(measured) on error {
+    output("measurement is not an exact i8")
+}
+
+new f64 precise = as_f64(whole)
+new f32 compact_float = 0.0
+compact_float = as_f32(precise) on error {
+    output("measurement is outside f32")
+}
+
 output("control=", control)
 output("ready=", bit_is_set(control, 3))
 output("status=", status)
 output("logical_half=", logical_half)
+output("compact_value=", compact_value)
+output("wrapped_sequence=", sequence)
+output("compact_float=", compact_float)

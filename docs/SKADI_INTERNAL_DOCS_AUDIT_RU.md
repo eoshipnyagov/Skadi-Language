@@ -138,8 +138,14 @@ experimental не из-за отсутствия runtime, а потому что
 Текущие desktop profiles разрешают `target` в `i32`. Fixed-width типы остаются
 независимыми от проекта. Bit builtins работают только с fixed-width signed и
 unsigned типами, используют logical right shift и checked indexes. Общая
-система явных numeric conversions пока не принята; width/signedness переменных
-не смешиваются неявно.
+система checked numeric conversions представлена builtins
+`as_i8..as_i64/as_u8..as_u64/as_f32` с обязательным `on error`; float-to-int
+принимается только для finite integral значений в диапазоне, а `as_f64` является
+safe widening. Width/signedness переменных не смешиваются неявно, литералы
+проверяются по диапазону target. Обычная integer arithmetic lowered через
+checked helpers и завершает выполнение с `SC-RT-350`; намеренное modulo
+поведение вынесено в fixed-width-only `wrapping_add/sub/mul/neg`. Explicit
+`f64` сохраняет double-точность литералов и выбирает double math.
 
 ### Modules
 

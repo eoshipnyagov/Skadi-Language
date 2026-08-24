@@ -473,15 +473,33 @@ vector slice до матриц или transform framework.
 - `Int` стал target/project-configured ABI type через `[numeric] int`;
 - desktop `target` default закреплён как `i32`, доступны overrides
   `i8/i16/i32/i64`;
-- `Float`, `Angle`, vectors и default math согласованы на `f32`, explicit `f64`
-  сохранён;
+- `Float`, `Angle`, vectors и default math согласованы на `f32`; explicit `f64`
+  сохраняет точность литералов и использует double math lowering;
 - radix integer literals (`0b/0o/0x`) и `_` separators;
 - fixed-width bit builtins для `i8..i64` и `u8..u64`, logical right shift и
   checked index contract с `SC-RT-340`;
+- fixed-width литералы проверяются по диапазону, implicit mixing переменных
+  запрещён, а `as_i8..as_i64/as_u8..as_u64` выполняют checked conversion через
+  обязательный `on error`;
 - parser/semantic/codegen/native tests, showcase, VS Code/Pygments и RU/EN docs.
 
-Отложено: явные numeric conversions с отдельными widening/narrowing/overflow
-правилами и реальные embedded target defaults.
+### Milestone 15: numeric reliability - functional slice выполнен
+
+Реализовано:
+
+- ordinary integer `+ - * / div mod % ^`, signed unary `-` и `++/--` используют
+  checked lowering без C undefined behavior; runtime failures имеют
+  `SC-RT-350`;
+- literal zero divisors и negative integer exponents отклоняются semantic;
+- intentional modulo arithmetic явно выражается fixed-width-only builtins
+  `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `wrapping_neg`;
+- checked `as_i*/as_u*` принимают integer и float, но не усекают fractional,
+  non-finite или out-of-range values;
+- `as_f32` является checked narrowing с `on error`, `as_f64` — safe widening;
+- native regression coverage, showcase, highlighters и RU/EN docs обновлены.
+
+Отложено: checked arithmetic overflow/division policy, float/integer
+conversions и реальные embedded target defaults.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 

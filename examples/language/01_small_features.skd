@@ -28,7 +28,7 @@ new Bool odd = not (remainder == 0)
 new Bool exactly_one = odd xor false
 new Float squared = 3.0 ^ 2.0
 
-new i32 List values = [2, 4, 6]
+new Int List values = [2, 4, 6]
 values.push(8)
 
 new Int total = 0

@@ -386,7 +386,7 @@ impl<'a> ExprParser<'a> {
                 Ok(Expression::LiteralInt(parsed))
             }
             TokenKind::TypeFloat => {
-                let parsed = tok.lexeme.replace('_', "").parse::<f32>().map_err(|_| {
+                let parsed = tok.lexeme.replace('_', "").parse::<f64>().map_err(|_| {
                     parse_err(
                         "SC-PARSE-226",
                         format!("invalid Float literal '{}'.", tok.lexeme),
@@ -395,7 +395,7 @@ impl<'a> ExprParser<'a> {
                 if !parsed.is_finite() {
                     return Err(parse_err(
                         "SC-PARSE-226",
-                        "Float literal must produce a finite f32 value.",
+                        "floating-point literal must produce a finite f64 value.",
                     ));
                 }
                 Ok(Expression::LiteralFloat(parsed))

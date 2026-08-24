@@ -89,6 +89,21 @@ on interrupt timer0 {
 }
 
 #[test]
+fn semantic_requires_f64_for_literals_outside_f32_range() {
+    let tokens = lex("new Float too_large = 3402824000000000000000000000000000000000.0\n")
+        .expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("Float range should be checked");
+    assert!(err.contains("SC-SEM-020"), "{err}");
+    assert!(err.contains("does not fit Float/f32"), "{err}");
+
+    let tokens = lex("new f64 supported = 3402824000000000000000000000000000000000.0\n")
+        .expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("f64 literal should be accepted");
+}
+
+#[test]
 fn semantic_fails_for_undefined_variable_in_return() {
     let src = r#"
 fn f() {
@@ -524,7 +539,7 @@ new Text s = slice(t, 5, 2)
 fn semantic_for_infers_item_type_from_list() {
     let src = r#"
 new i32 List samples = [10, 20, 30]
-new Int sum = 0
+new i32 sum = 0
 for item in samples {
     sum = sum + item
 }

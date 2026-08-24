@@ -41,7 +41,8 @@ Wrapper/stage codes used by CLI pipeline:
   - `SC-PARSE-221` invalid, empty, multi-character, unsupported escape or non-ASCII Char literal
   - `SC-PARSE-222` timed Task wait missing its Duration expression
   - `SC-PARSE-225` invalid radix or decimal integer literal
-  - `SC-PARSE-226` invalid or non-finite default `f32` literal
+- `SC-PARSE-226` invalid or non-finite floating-point literal (source parsing
+  preserves finite `f64`; a `Float/f32` range mismatch is `SC-SEM-020`)
 
 ## 3. Semantic Codes (`SC-SEM-*`)
 
@@ -109,6 +110,11 @@ Wrapper/stage codes used by CLI pipeline:
   - stage: target-aware frontend/codegen validation
   - meaning: an `Int` literal does not fit `[numeric] int`
   - hint: use an explicit fixed-width type or widen the project `Int`
+- `SC-RT-350`
+  - stage: generated numeric runtime
+  - meaning: checked integer arithmetic detected overflow, division/remainder by
+    zero, invalid negation, or a negative integer exponent
+  - contract: execution terminates instead of reaching C undefined behavior
 
 ## 5. Output Format Contract
 

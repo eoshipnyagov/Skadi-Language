@@ -996,7 +996,7 @@ local label State {
         .expect("write ops");
         fs::write(
             &entry,
-            "import \"./ops.skd\"\nnew i32 List xs = [1, 2, 3]\nnew Int s = score3(xs[0], xs[1], xs[2])\nwhen s {\n    is 9 {\n        output(s)\n    }\n    else {\n        output(0)\n    }\n}\n",
+            "import \"./ops.skd\"\nnew Int List xs = [1, 2, 3]\nnew Int s = score3(xs[0], xs[1], xs[2])\nwhen s {\n    is 9 {\n        output(s)\n    }\n    else {\n        output(0)\n    }\n}\n",
         )
         .expect("write entry");
 
@@ -1467,7 +1467,7 @@ local label State {
         let entry = root.join("main.skd");
         fs::write(
             &entry,
-            "new i32 List xs = [1, 2]\nnew Int v = 0\nv = xs.pop() on error {\n    v = -1\n}\n",
+            "new i32 List xs = [1, 2]\nnew i32 v = 0\nv = xs.pop() on error {\n    v = -1\n}\n",
         )
         .expect("write entry");
 

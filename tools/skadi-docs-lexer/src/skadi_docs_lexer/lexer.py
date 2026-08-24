@@ -122,7 +122,7 @@ class SkadiLexer(RegexLexer):
             (r"\b(?:windows\.open|interrupts\.periodic)\b", Name.Builtin.Pseudo),
             (r"\bmemory\.(?:child|static)\b(?=\s*\()", Name.Builtin.Pseudo),
             (
-                r"\b(output|print|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|as_nanoseconds|as_bytes|memory|channel|send|receive|send_for|receive_for|try_send|close|abs|min|max|clamp|floor|ceil|round|sign|trunc|fract|lerp|inverse_lerp|remap|smoothstep|sin|cos|tan|asin|acos|atan|atan2|normalize_angle|sqrt|root|is_nan|is_finite|is_infinite|deg_to_rad|rad_to_deg|as_radians|dot|length|length_sq|normalize|distance|distance_sq|cross|bit_and|bit_or|bit_xor|bit_not|bit_shift_left|bit_shift_right|bit_is_set|bit_set|bit_clear|bit_toggle|bit_write|color|color_hex|rect|canvas)\b(?=\s*\()",
+                r"\b(output|print|input|read|write|len|contains|find|slice|concat|args|now|elapsed|delay|sleep|as_nanoseconds|as_bytes|as_i8|as_i16|as_i32|as_i64|as_u8|as_u16|as_u32|as_u64|as_f32|as_f64|memory|channel|send|receive|send_for|receive_for|try_send|close|abs|min|max|clamp|floor|ceil|round|sign|trunc|fract|lerp|inverse_lerp|remap|smoothstep|sin|cos|tan|asin|acos|atan|atan2|normalize_angle|sqrt|root|is_nan|is_finite|is_infinite|deg_to_rad|rad_to_deg|as_radians|dot|length|length_sq|normalize|distance|distance_sq|cross|bit_and|bit_or|bit_xor|bit_not|bit_shift_left|bit_shift_right|bit_is_set|bit_set|bit_clear|bit_toggle|bit_write|wrapping_add|wrapping_sub|wrapping_mul|wrapping_neg|color|color_hex|rect|canvas)\b(?=\s*\()",
                 Name.Builtin,
             ),
             (r"\bmy\b", Name.Variable.Instance),

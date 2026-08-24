@@ -1714,6 +1714,28 @@ fn is_float_type(ty: &ValueType) -> bool {
     matches!(ty, ValueType::Float | ValueType::F64)
 }
 
+fn checked_numeric_conversion_target(builtin: Builtin) -> Option<ValueType> {
+    match builtin {
+        Builtin::AsI8 => Some(ValueType::I8),
+        Builtin::AsI16 => Some(ValueType::I16),
+        Builtin::AsI32 => Some(ValueType::I32),
+        Builtin::AsI64 => Some(ValueType::I64),
+        Builtin::AsU8 => Some(ValueType::U8),
+        Builtin::AsU16 => Some(ValueType::U16),
+        Builtin::AsU32 => Some(ValueType::U32),
+        Builtin::AsU64 => Some(ValueType::U64),
+        Builtin::AsF32 => Some(ValueType::Float),
+        _ => None,
+    }
+}
+
+fn is_unsigned_fixed_integer_type(ty: &ValueType) -> bool {
+    matches!(
+        ty,
+        ValueType::U8 | ValueType::U16 | ValueType::U32 | ValueType::U64
+    )
+}
+
 fn integer_width(ty: &ValueType) -> Option<u32> {
     match ty {
         ValueType::I8 | ValueType::U8 => Some(8),
@@ -1827,6 +1849,30 @@ fn validate_expression_for_target(
     structs: &HashMap<String, StructInfo>,
     fn_ctx: Option<&FnContext>,
 ) -> Result<(), String> {
+    if *target == ValueType::Float
+        && let Expression::LiteralFloat(value) = expr
+        && value.abs() > f32::MAX as f64
+    {
+        return Err(sem_err(
+            SEM_TYPE_MISMATCH,
+            format!(
+                "floating-point literal '{}' does not fit Float/f32; declare the value as f64.",
+                value
+            ),
+        ));
+    }
+    if is_fixed_integer_type(target)
+        && let Some(value) = constant_integer_value(expr)
+        && !integer_literal_fits(value, target)
+    {
+        return Err(sem_err(
+            SEM_TYPE_MISMATCH,
+            format!(
+                "integer literal '{}' does not fit target type {:?}.",
+                value, target
+            ),
+        ));
+    }
     if let Some(dimension) = vector_dimension(target) {
         if let Expression::StructConstruction { fields } = expr {
             let expected = ["x", "y", "z", "w"];
@@ -1922,8 +1968,8 @@ fn can_assign(target: &ValueType, source: &ValueType) -> bool {
         return true;
     }
     match (target, source) {
-        (target, source) if is_integer_type(target) && is_integer_type(source) => true,
-        (target, source) if is_float_type(target) && is_numeric_type(source) => true,
+        (ValueType::Float, source) if is_integer_type(source) => true,
+        (ValueType::F64, source) if is_numeric_type(source) => true,
         (ValueType::List(t), ValueType::List(s)) => **s == ValueType::Unknown || can_assign(t, s),
         (ValueType::Task(None), ValueType::Task(None)) => true,
         (ValueType::Task(Some(t)), ValueType::Task(Some(s))) => can_assign(t, s),
@@ -1931,6 +1977,38 @@ fn can_assign(target: &ValueType, source: &ValueType) -> bool {
             **s == ValueType::Unknown || can_assign(t, s)
         }
         _ => false,
+    }
+}
+
+fn can_assign_expression(target: &ValueType, source: &ValueType, expr: &Expression) -> bool {
+    if can_assign(target, source) {
+        return true;
+    }
+    if is_fixed_integer_type(target)
+        && let Some(value) = constant_integer_value(expr)
+    {
+        return integer_literal_fits(value, target);
+    }
+    if let (ValueType::List(element), Expression::ListLiteral(items)) = (target, expr) {
+        return items.iter().all(|item| {
+            infer_literal_type(item)
+                .is_some_and(|source| can_assign_expression(element, &source, item))
+        });
+    }
+    false
+}
+
+fn infer_literal_type(expr: &Expression) -> Option<ValueType> {
+    match expr {
+        Expression::LiteralInt(_) => Some(ValueType::Int),
+        Expression::LiteralFloat(_) => Some(ValueType::Float),
+        Expression::LiteralBool(_) => Some(ValueType::Bool),
+        Expression::LiteralChar(_) => Some(ValueType::Char),
+        Expression::LiteralString(_) => Some(ValueType::Text),
+        Expression::LiteralDuration { .. } => Some(ValueType::Duration),
+        Expression::LiteralByteSize { .. } => Some(ValueType::ByteSize),
+        Expression::LiteralAngle { .. } => Some(ValueType::Angle),
+        _ => None,
     }
 }
 
@@ -2008,7 +2086,7 @@ fn validate_call_args(
         }
         let actual_ty =
             infer_expression_type(arg, scope, memory_state, functions, structs, fn_ctx)?;
-        if !can_assign(&expected_ty, &actual_ty) {
+        if !can_assign_expression(&expected_ty, &actual_ty, arg) {
             return Err(sem_err(
                 SEM_ARG_TYPE,
                 format!(
@@ -2580,7 +2658,7 @@ fn analyze_statement(
                     "variable declaration type",
                     matches!(declared, ValueType::Channel(_)),
                 )?;
-                if !can_assign(&declared, &value_ty) {
+                if !can_assign_expression(&declared, &value_ty, value) {
                     return Err(err_at_code(
                         stmt,
                         SEM_TYPE_MISMATCH,
@@ -2592,6 +2670,15 @@ fn analyze_statement(
                 }
                 declared
             } else {
+                validate_expression_for_target(
+                    &value_ty,
+                    value,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
                 value_ty
             };
             if declared_type.is_none()
@@ -2822,7 +2909,7 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
-            if !can_assign(&target_ty, &value_ty) {
+            if !can_assign_expression(&target_ty, &value_ty, value) {
                 return Err(err_at_code(
                     stmt,
                     SEM_TYPE_MISMATCH,
@@ -3002,7 +3089,7 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
-            if !can_assign(&field_ty, &value_ty) {
+            if !can_assign_expression(&field_ty, &value_ty, value) {
                 return Err(err_at_code(
                     stmt,
                     SEM_TYPE_MISMATCH,
@@ -3910,6 +3997,76 @@ fn analyze_statement(
                     in_loop,
                 );
             }
+            if let Some(builtin) = builtin_from_name(call_name)
+                && let Some(converted_ty) = checked_numeric_conversion_target(builtin)
+            {
+                if args.len() != 1 {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_ARG_COUNT,
+                        format!(
+                            "builtin '{}' expects 1 argument, got {}.",
+                            call_name,
+                            args.len()
+                        ),
+                    ));
+                }
+                let Some(target_ty) = scope.get(target) else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_USE_BEFORE_DEF,
+                        format!("use-before-definition: '{}' is not defined.", target),
+                    ));
+                };
+                if let Some(kind) = read_only_binding_kind(memory_state, target) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!("{} '{}' cannot be reassigned.", kind, target),
+                    ));
+                }
+                if target_ty != &converted_ty {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "conversion target mismatch: '{}' returns {:?}, but '{}' has type {:?}.",
+                            call_name, converted_ty, target, target_ty
+                        ),
+                    ));
+                }
+                let source_ty = infer_expression_type(
+                    &args[0],
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
+                if !is_numeric_type(&source_ty) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "builtin '{}' expects a numeric argument, got {:?}.",
+                            call_name, source_ty
+                        ),
+                    ));
+                }
+                let mut on_error_scope = scope.clone();
+                let mut on_error_memory_state = memory_state.clone();
+                return analyze_block(
+                    on_error,
+                    &mut on_error_scope,
+                    &mut on_error_memory_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx,
+                    in_loop,
+                );
+            }
             if builtin_from_name(call_name).is_some() {
                 return Err(err_at_code(
                     stmt,
@@ -4144,7 +4301,7 @@ fn analyze_statement(
                     structs,
                     fn_ctx.as_ref(),
                 )?;
-                if !can_assign(&element_ty, &actual_ty) {
+                if !can_assign_expression(&element_ty, &actual_ty, &args[0]) {
                     return Err(err_at_code(
                         stmt,
                         SEM_CHANNEL_RULE,
@@ -4271,7 +4428,7 @@ fn analyze_statement(
                         structs,
                         fn_ctx.as_ref(),
                     )?;
-                    if !can_assign(&elem_ty, &value_ty) {
+                    if !can_assign_expression(&elem_ty, &value_ty, value) {
                         return Err(err_at_code(
                             stmt,
                             SEM_TYPE_MISMATCH,
@@ -4476,7 +4633,7 @@ fn analyze_statement(
                             structs,
                             fn_ctx.as_ref(),
                         )?;
-                        if !can_assign(expected, &actual) {
+                        if !can_assign_expression(expected, &actual, expr) {
                             return Err(err_at_code(
                                 stmt,
                                 SEM_TYPE_MISMATCH,
@@ -5712,7 +5869,7 @@ fn infer_expression_type(
                         structs,
                         fn_ctx,
                     )?;
-                    if !can_assign(&expected_ty, &actual) {
+                    if !can_assign_expression(&expected_ty, &actual, arg) {
                         return Err(sem_err(
                             SEM_ARG_TYPE,
                             format!(
@@ -5866,7 +6023,7 @@ fn infer_expression_type(
                                 structs,
                                 fn_ctx,
                             )?;
-                            if !can_assign(&expected_ty, &actual) {
+                            if !can_assign_expression(&expected_ty, &actual, arg) {
                                 return Err(sem_err(
                                     SEM_ARG_TYPE,
                                     format!(
@@ -5943,7 +6100,7 @@ fn infer_expression_type(
                                 structs,
                                 fn_ctx,
                             )?;
-                            if !can_assign(&channel_elem_ty, &actual_ty) {
+                            if !can_assign_expression(&channel_elem_ty, &actual_ty, &args[0]) {
                                 return Err(sem_err(
                                     SEM_CHANNEL_RULE,
                                     format!(
@@ -6429,6 +6586,72 @@ fn infer_expression_type(
                         }
                         Ok(ValueType::I64)
                     }
+                    Builtin::AsI8
+                    | Builtin::AsI16
+                    | Builtin::AsI32
+                    | Builtin::AsI64
+                    | Builtin::AsU8
+                    | Builtin::AsU16
+                    | Builtin::AsU32
+                    | Builtin::AsU64
+                    | Builtin::AsF32 => Err(sem_err(
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "checked numeric conversion '{}' requires assignment with 'on error'.",
+                            name
+                        ),
+                    )),
+                    Builtin::AsF64 => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        ensure_numeric_args(name, std::slice::from_ref(&ty))?;
+                        Ok(ValueType::F64)
+                    }
+                    Builtin::WrappingAdd | Builtin::WrappingSub | Builtin::WrappingMul => {
+                        let left = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        let right = infer_expression_type(
+                            &args[1],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        bit_binary_result_type(name, args, left, right)
+                    }
+                    Builtin::WrappingNeg => {
+                        let ty = infer_expression_type(
+                            &args[0],
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        if !is_fixed_integer_type(&ty) {
+                            return Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "builtin '{}' expects a fixed-width integer, got {:?}.",
+                                    name, ty
+                                ),
+                            ));
+                        }
+                        Ok(ty)
+                    }
                     Builtin::BitAnd | Builtin::BitOr | Builtin::BitXor => {
                         let left = infer_expression_type(
                             &args[0],
@@ -6641,7 +6864,7 @@ fn infer_expression_type(
                                 ),
                             ));
                         }
-                        Ok(ValueType::Float)
+                        Ok(numeric_result_type(&[ty], false))
                     }
                     Builtin::Lerp | Builtin::InverseLerp | Builtin::Smoothstep => {
                         let arg_tys = args
@@ -6658,7 +6881,7 @@ fn infer_expression_type(
                             })
                             .collect::<Result<Vec<_>, _>>()?;
                         ensure_numeric_args(name, &arg_tys)?;
-                        Ok(ValueType::Float)
+                        Ok(numeric_result_type(&arg_tys, false))
                     }
                     Builtin::Remap => {
                         let arg_tys = args
@@ -6675,7 +6898,7 @@ fn infer_expression_type(
                             })
                             .collect::<Result<Vec<_>, _>>()?;
                         ensure_numeric_args(name, &arg_tys)?;
-                        Ok(ValueType::Float)
+                        Ok(numeric_result_type(&arg_tys, false))
                     }
                     Builtin::Sin | Builtin::Cos | Builtin::Tan => {
                         let ty = infer_expression_type(
@@ -6814,7 +7037,7 @@ fn infer_expression_type(
                                 ),
                             ));
                         }
-                        Ok(ValueType::Float)
+                        Ok(numeric_result_type(&[a, b], false))
                     }
                     Builtin::IsNan | Builtin::IsFinite | Builtin::IsInfinite => {
                         let ty = infer_expression_type(
@@ -7024,7 +7247,7 @@ fn infer_expression_type(
                             structs,
                             fn_ctx,
                         )?;
-                        if !can_assign(expected_ty, &actual_ty) {
+                        if !can_assign_expression(expected_ty, &actual_ty, arg) {
                             return Err(sem_err(
                                 SEM_ARG_TYPE,
                                 format!(
@@ -7257,6 +7480,15 @@ fn infer_expression_type(
                     structs,
                     fn_ctx,
                 )?;
+                if is_unsigned_fixed_integer_type(&lt) {
+                    return Err(sem_err(
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "unary '-' is not defined for {:?}; use 'wrapping_neg' for intentional modulo arithmetic.",
+                            lt
+                        ),
+                    ));
+                }
                 if is_numeric_type(&lt) || lt == ValueType::Angle || vector_dimension(&lt).is_some()
                 {
                     return Ok(lt);
@@ -7290,6 +7522,32 @@ fn infer_expression_type(
             } else {
                 ValueType::Unknown
             };
+            if matches!(op.as_str(), "/" | "div" | "mod" | "%")
+                && is_integer_type(&lt)
+                && is_integer_type(&rt)
+                && right
+                    .as_deref()
+                    .and_then(constant_integer_value)
+                    .is_some_and(|value| value == 0)
+            {
+                return Err(sem_err(
+                    SEM_TYPE_MISMATCH,
+                    format!("integer operator '{}' has a zero divisor.", op),
+                ));
+            }
+            if op == "^"
+                && is_integer_type(&lt)
+                && is_integer_type(&rt)
+                && right
+                    .as_deref()
+                    .and_then(constant_integer_value)
+                    .is_some_and(|value| value < 0)
+            {
+                return Err(sem_err(
+                    SEM_TYPE_MISMATCH,
+                    "integer power requires a non-negative exponent.".to_string(),
+                ));
+            }
             if matches!(lt, ValueType::Time | ValueType::Duration)
                 || matches!(rt, ValueType::Time | ValueType::Duration)
             {
@@ -7423,10 +7681,27 @@ fn infer_expression_type(
                             } else {
                                 Ok(ValueType::Float)
                             }
-                        } else if lt == rt {
+                        } else if lt == rt
+                            || (is_fixed_integer_type(&lt)
+                                && right
+                                    .as_deref()
+                                    .and_then(constant_integer_value)
+                                    .is_some_and(|value| integer_literal_fits(value, &lt)))
+                        {
                             Ok(lt)
+                        } else if is_fixed_integer_type(&rt)
+                            && constant_integer_value(left)
+                                .is_some_and(|value| integer_literal_fits(value, &rt))
+                        {
+                            Ok(rt)
                         } else {
-                            Ok(ValueType::Int)
+                            Err(sem_err(
+                                SEM_TYPE_MISMATCH,
+                                format!(
+                                    "operator '{}' cannot mix integer types {:?} and {:?}; use an explicit checked conversion.",
+                                    op, lt, rt
+                                ),
+                            ))
                         }
                     } else {
                         Err(sem_err(

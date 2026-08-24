@@ -86,7 +86,7 @@ new ByteSize remaining = capacity - 1kb
 new ByteSize doubled = remaining * 2
 new ByteSize half = doubled / 2
 new Float usage = half / capacity
-new Int exact_bytes = as_bytes(half)
+new i64 exact_bytes = as_bytes(half)
 new Bool enough = remaining >= 3kb
 Memory scratch_memory = memory(capacity)
 scratch_memory.clear()
@@ -146,7 +146,10 @@ Memory scratch_memory = memory(capacity) on error {
     );
     let c = transpile_program_to_c(&program);
     assert!(c.contains("int64_t base = 2048;"), "{c}");
-    assert!(c.contains("int64_t capacity = (base + 512);"), "{c}");
+    assert!(
+        c.contains("int64_t capacity = sk_num_add_i64(base, 512);"),
+        "{c}"
+    );
     assert!(
         c.contains("int64_t scratch_memory_capacity = capacity;"),
         "{c}"

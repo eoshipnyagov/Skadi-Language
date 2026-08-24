@@ -25,7 +25,7 @@ This is the compact inventory of the current public language surface.
 | Family | Types/literals | Status |
 |---|---|---:|
 | Integer | `Int`, `i8..i64`, `u8..u64`; `0b`, `0o`, `0x`, `_` | Stable |
-| Floating point | `Float`/`f32` (32-bit), explicit `f64`, `0.5` | Stable |
+| Floating point | `Float`/`f32` (32-bit), explicit double-precision `f64`, `0.5` | Stable |
 | Boolean/character | `Bool`, `Char`, `true`, `'a'` | Stable |
 | Text/path | `Text`, `Path`, `"hello"` | Stable |
 | Collections/data | `Element List`, `struct Name` | Stable |
@@ -41,7 +41,7 @@ This is the compact inventory of the current public language surface.
 
 | Category | Forms |
 |---|---|
-| Arithmetic | `+ - * / % ^ div mod` |
+| Arithmetic | `+ - * / % ^ div mod`; integers are checked (`SC-RT-350`), floats retain IEEE behavior |
 | Comparison | `== != < > <= >=` |
 | Logic | `and or xor not`; compatible `&& \|\| !`; single `&`/`\|` are lexer-only |
 | Access | `value.field`, `my.field`, `items[index]` |
@@ -135,6 +135,17 @@ Constants: `PI`, `TAU`, `E`, `EPSILON`.
 type; a fitting literal adopts the typed operand's type. `Int` is rejected,
 right shift is logical, and indexes are checked. See
 [platform Int and bit operations](bits.en.md).
+
+`wrapping_add`, `wrapping_sub`, `wrapping_mul`, and `wrapping_neg` provide
+explicit modulo arithmetic for fixed-width integers only. Ordinary integer
+operators are checked, and unary `-` is rejected for unsigned values.
+
+| Conversion | Contract | Status |
+|---|---|---:|
+| `as_i8`, `as_i16`, `as_i32`, `as_i64` | Checked numeric conversion with `on error`; a float must be finite and integral | Experimental |
+| `as_u8`, `as_u16`, `as_u32`, `as_u64` | Checked numeric conversion with `on error`, without truncation or modulo conversion | Experimental |
+| `as_f32` | Checked finite numeric narrowing through assignment with `on error` | Experimental |
+| `as_f64` | Safe numeric widening to `f64` | Experimental |
 
 ## Systems surface
 

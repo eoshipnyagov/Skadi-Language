@@ -118,3 +118,94 @@ new u16 masked = bit_and(device.status, 0xff)
     let c = transpile_program_to_c(&program);
     assert!(c.contains("sk_bit_and_u16(device.status, 255)"), "{c}");
 }
+
+#[test]
+fn semantic_checks_fixed_integer_literal_bounds_and_variable_conversions() {
+    semantic_ok("new u8 mask = 0xff\nnew i8 offset = -128\n");
+
+    let literal = semantic_err("new u8 invalid = 256\n");
+    assert!(literal.contains("SC-SEM-020"), "{literal}");
+    assert!(literal.contains("does not fit target type U8"), "{literal}");
+
+    let implicit = semantic_err("new u16 wide = 255\nnew u8 narrow = wide\n");
+    assert!(implicit.contains("SC-SEM-020"), "{implicit}");
+    assert!(implicit.contains("cannot assign U16 to U8"), "{implicit}");
+}
+
+#[test]
+fn checked_integer_conversions_require_on_error_and_lower_range_checks() {
+    let ordinary = semantic_err("new u16 wide = 255\nnew u8 narrow = as_u8(wide)\n");
+    assert!(ordinary.contains("SC-SEM-040"), "{ordinary}");
+    assert!(
+        ordinary.contains("requires assignment with 'on error'"),
+        "{ordinary}"
+    );
+
+    let program = semantic_ok(
+        r#"
+new u16 wide = 255
+new u8 narrow = 0
+narrow = as_u8(wide) on error {
+    output("conversion failed")
+}
+new i16 signed = -1
+new u32 positive = 0
+positive = as_u32(signed) on error {
+    output("negative value")
+}
+"#,
+    );
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("uint64_t sk_convert_value_"), "{c}");
+    assert!(c.contains("<= UINT8_MAX"), "{c}");
+    assert!(c.contains("int64_t sk_convert_value_"), "{c}");
+    assert!(c.contains(">= 0"), "{c}");
+}
+
+#[test]
+fn semantic_distinguishes_checked_arithmetic_from_explicit_wrapping() {
+    semantic_ok(
+        r#"
+new u8 maximum = 255
+new u8 wrapped = wrapping_add(maximum, 1)
+new i16 minimum = -32768
+new i16 negated = wrapping_neg(minimum)
+"#,
+    );
+
+    let platform = semantic_err("new Int value = 1\nnew Int result = wrapping_add(value, 1)\n");
+    assert!(platform.contains("fixed-width"), "{platform}");
+
+    let unsigned_negation = semantic_err("new u8 value = 1\nnew u8 result = -value\n");
+    assert!(
+        unsigned_negation.contains("wrapping_neg"),
+        "{unsigned_negation}"
+    );
+
+    let zero = semantic_err("new Int value = 10 div 0\n");
+    assert!(zero.contains("zero divisor"), "{zero}");
+}
+
+#[test]
+fn semantic_supports_checked_float_integer_conversions_and_f64_widening() {
+    semantic_ok(
+        r#"
+new f64 source = 42.0
+new i32 integer = 0
+integer = as_i32(source) on error {
+    output("not integral")
+}
+new f64 widened = as_f64(integer)
+new Float compact = 0.0
+compact = as_f32(widened) on error {
+    output("outside f32")
+}
+"#,
+    );
+
+    let unchecked = semantic_err("new f64 source = 1.5\nnew i8 value = as_i8(source)\n");
+    assert!(
+        unchecked.contains("requires assignment with 'on error'"),
+        "{unchecked}"
+    );
+}

@@ -21,7 +21,7 @@ fn showcase_tree_compiles() {
     assert!(c.contains("int main(int argc, char **argv) {"));
     assert!(c.contains("cli_args = sk_args(argc, argv);"));
     assert!(c.contains("sk_fs_list("));
-    assert!(c.contains("walk(full, dirs_only, max_depth, (current_depth + 1));"));
+    assert!(c.contains("walk(full, dirs_only, max_depth, sk_num_add_int(current_depth, 1));"));
     assert!(c.contains("strcmp(__when_tmp_"));
 }
 
@@ -44,7 +44,7 @@ fn showcase_find_count_compiles() {
     assert!(!src.contains("for "));
     let c = compile_pipeline(src);
     assert!(c.contains("int main(int argc, char **argv) {"));
-    assert!(c.contains("needle = sk_list_text_get(&cli_args, (i + 1));"));
+    assert!(c.contains("needle = sk_list_text_get(&cli_args, sk_num_add_int(i, 1));"));
     assert!(c.contains("const char* data = sk_read_file(path);"));
     assert!(c.contains("sk_text_slice("));
     assert!(c.contains("sk_text_find("));
@@ -74,7 +74,7 @@ fn showcase_push_pop_compiles() {
     assert!(c.contains("sk_list_int_pop("));
     assert!(c.contains("if (sk_list_int_pop(&stack, &value) != 0) {"));
     assert!(c.contains("j = n;"));
-    assert!(c.contains("(i % 1024)"));
+    assert!(c.contains("sk_num_mod_int(i, 1024)"));
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn showcase_struct_account_compiles() {
     assert!(c.contains("SkInt Account_withdraw(Account *my, SkInt amount)"));
     assert!(c.contains("Account_deposit(&acc, 25)"));
     assert!(c.contains("Account_snapshot(&acc)"));
-    assert!(c.contains("my->balance = (my->balance - amount);"));
+    assert!(c.contains("my->balance = sk_num_sub_int(my->balance, amount);"));
 }
 
 #[test]

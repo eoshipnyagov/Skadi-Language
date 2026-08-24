@@ -104,7 +104,7 @@ new Duration remaining = frame - 5ms
 new Duration doubled = remaining * 2
 new Duration half = doubled / 2
 new Float ratio = doubled / frame
-new Int exact_ns = as_nanoseconds(half)
+new i64 exact_ns = as_nanoseconds(half)
 
 new Time started_at = now()
 new Time deadline = started_at + remaining

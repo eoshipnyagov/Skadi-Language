@@ -71,6 +71,8 @@ Backend/runtime error без source location использует форму:
 - `SC-RT-314` — unhandled operation on a closed Channel
 - `SC-RT-315` — unhandled cancellation of a blocking Channel operation
 - `SC-RT-340` — bit index/shift count outside the fixed-width value
+- `SC-RT-350` — integer overflow, division by zero или другая недопустимая
+  целочисленная арифметика во время выполнения
 - `SC-AN-101..104` — structured blocking/timed Channel analysis facts
 - `SC-AN-301..322` — ownership, resource, Task и Memory lifecycle facts, включая timed Task wait
 - `SC-AN-201` — structured incomplete `when` analysis fact

@@ -162,6 +162,17 @@
   - `u8`, `u16`, `u32`, `u64`
   - `f32`, `f64`
   - `Stable`
+  - fixed-width integer literals проверяются по диапазону;
+  - переменные разных integer widths/signedness не смешиваются неявно;
+  - `as_i8..as_i64` и `as_u8..as_u64` принимают numeric input и выполняют
+    checked conversion только в assignment-форме с `on error`; float должен
+    быть finite, integral и попадать в target range;
+  - `as_f32` выполняет checked narrowing через `on error`, `as_f64` — safe
+    widening;
+  - ordinary integer arithmetic checked и использует runtime `SC-RT-350`;
+    explicit modulo arithmetic доступна как `wrapping_add/sub/mul/neg` только
+    для fixed-width integers;
+  - `f64` literals и math lowering сохраняют double precision;
 
 ## Контракт индексации
 

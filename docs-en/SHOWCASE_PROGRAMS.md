@@ -27,7 +27,7 @@ They serve three roles:
 8. `bench_08_path_list_helpers.skd`
    Small path-list utility with `fs.list`, `fs.join`, and `fs.is_dir`.
 9. `bench_09_math_navigation.skd`
-   Compact math/navigation showcase.
+   Compact math/navigation showcase including an explicit `f64` computation.
 10. `bench_10_v1_1_toolbox.skd`
     Combined `v1.1` showcase for danger calls, lists, structs, `when`, and math.
 11. `bench_11_task_channel_pipeline.skd`
@@ -54,7 +54,9 @@ They serve three roles:
     blending, clipping, and a deterministic framebuffer checksum.
 18. `bench_18_bit_registers.skd`
     Fixed-width control-register operations with radix literals, checked bit
-    indexes, and a logical right shift of a signed bit pattern.
+    indexes, a logical right shift of a signed bit pattern, explicit wrapping,
+    checked float/integer conversion through `on error`, and safe `f64`
+    widening.
 
 Focused native examples also cover:
 

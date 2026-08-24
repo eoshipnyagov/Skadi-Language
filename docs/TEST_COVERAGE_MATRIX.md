@@ -151,10 +151,20 @@
   - `bench_17_canvas_palette.skd` входит в native showcase gate
 - fixed-width integer and bit coverage
   - `tests/bit_model.rs` проверяет radix literals, все signed/unsigned widths,
-    запрет platform `Int`, mixed-type errors и compile-time index bounds
-  - `tests/codegen_e2e.rs` закрепляет logical signed right shift и native output
+    запрет platform `Int`, literal ranges, mixed-type errors, checked
+    `as_i*/as_u* on error`, float conversion rules, wrapping builtins и
+    compile-time index bounds
+  - `tests/codegen_e2e.rs` закрепляет logical signed right shift, отсутствие
+    truncation при conversion, checked integer overflow/division-by-zero,
+    wrapping и native output
   - dynamic bounds используют runtime diagnostic `SC-RT-340`
+  - invalid dynamic integer arithmetic использует runtime diagnostic
+    `SC-RT-350`; literal zero divisor и negative integer exponent ловятся до C
   - `bench_18_bit_registers.skd` входит в showcase gate
+- explicit `f64` coverage
+  - parser сохраняет literal precision до semantic target selection
+  - semantic tests отделяют диапазоны `Float/f32` и `f64`
+  - codegen shape проверяет double helpers и `sqrt/pow` вместо `sqrtf/powf`
 
 ## 2. Что покрыто частично / что ещё требует углубления
 

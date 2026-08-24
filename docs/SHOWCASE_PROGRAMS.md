@@ -20,7 +20,7 @@
   <li><code>bench_06_struct_account.skd</code><ul><li>Минимальная модель счёта с методами.</li><li>Покрытие: <code>struct</code>, <code>my.field</code>, вызовы методов (<code>obj.method(...)</code>), типизированный struct literal.</li></ul></li>
   <li><code>bench_07_struct_list.skd</code><ul><li>Обход списка структур с проверками через методы.</li><li>Покрытие: <code>Struct List</code>, <code>push</code> структурных литералов, <code>iterate ... as ...</code>, вызовы методов на элементе списка.</li></ul></li>
   <li><code>bench_08_path_list_helpers.skd</code><ul><li>Утилита для обхода и фильтрации путей.</li><li>Покрытие: <code>Path List</code>, <code>fs.list</code>, <code>fs.join</code>, <code>fs.is_dir</code>, <code>iterate ... as ...</code>.</li></ul></li>
-  <li><code>bench_09_math_navigation.skd</code><ul><li>Небольшой showcase для math и навигации.</li><li>Покрытие: <code>deg_to_rad</code>, <code>sin</code>, <code>cos</code>, <code>atan2</code>, <code>sqrt</code>, <code>round</code>, <code>clamp</code>.</li></ul></li>
+  <li><code>bench_09_math_navigation.skd</code><ul><li>Небольшой showcase для math и навигации.</li><li>Покрытие: <code>deg_to_rad</code>, <code>sin</code>, <code>cos</code>, <code>atan2</code>, <code>sqrt</code>, <code>round</code>, <code>clamp</code> и explicit <code>f64</code>.</li></ul></li>
   <li><code>bench_10_v1_1_toolbox.skd</code><ul><li>Сборный showcase для ключевых обновлений <code>v1.1</code>.</li><li>Покрытие: <code>danger fn</code>, <code>on error</code>, <code>label ErrorCode</code>, <code>struct</code>, методы, <code>List</code>, <code>iterate ... as ...</code>, <code>when</code>, math core и cleanup generated C.</li></ul></li>
   <li><code>bench_11_task_channel_pipeline.skd</code><ul><li>Исполняемый showcase concurrency slice <code>v1.2</code>.</li><li>Покрытие: <code>Task</code>, <code>Task(Float)</code>, bounded <code>Channel(Reading)</code>, capacity-1 backpressure, struct messages, blocking <code>send/receive</code> и обязательный <code>wait</code>.</li></ul></li>
   <li><code>bench_12_systems_pipeline.skd</code><ul><li>Совместный systems showcase <code>v1.2</code>.</li><li>Покрытие: fixed-capacity <code>Memory</code>, <code>place in</code>, Task/Channel pipeline, thread-local runtime contexts и безопасная граница между region-owned данными и сообщениями.</li></ul></li>
@@ -125,7 +125,9 @@ Pop-Location
 - Для `bench_01` и `bench_08` smoke-скрипты временно меняют рабочую директорию на `benchmarks/showcase-data/tree_fixture`.
 - Для `bench_02` и `bench_03` smoke-скрипты используют `benchmarks/showcase-data/sample_weather.txt`.
 - `bench_17` остаётся headless и поэтому безопасно проверяет software Canvas в CI без открытия окна.
-- `bench_18` показывает fixed-width регистр, radix literals и проверяемые битовые операции.
+- `bench_18` показывает fixed-width регистр, radix literals, проверяемые битовые
+  операции, explicit wrapping, checked float/integer conversion через
+  `on error` и safe widening в `f64`.
 - В `v1.1` проверка showcase-программ остаётся CLI/script-driven, но теперь опирается на репозиторные fixture-данные.
 - `skadi-cli tui` можно использовать внутри showcase-проекта для ручного `check`, `build` и `run`, но отдельного браузера showcase-программ в TUI пока нет.
 

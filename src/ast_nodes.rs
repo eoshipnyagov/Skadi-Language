@@ -313,7 +313,8 @@ impl From<Vec<Statement>> for Box<BlockStatement> {
 #[derive(Debug)]
 pub enum Expression {
     LiteralInt(i64), // Parsed wide; semantic context chooses Int/i32 or an explicit width.
-    LiteralFloat(f32), // Float is the portable f32 default.
+    // Keep source precision until the declared Float/f32/f64 target is known.
+    LiteralFloat(f64),
     LiteralBool(bool),
     LiteralChar(char),
     LiteralString(String),

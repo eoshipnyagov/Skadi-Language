@@ -9,9 +9,12 @@ new Float bounded = clamp(restored_deg, 0.0, 90.0)
 new Float normalized = inverse_lerp(0.0, 90.0, bounded)
 new Float display_x = remap(normalized, 0.0, 1.0, -320.0, 320.0)
 new Float eased = smoothstep(0.0, 1.0, normalized)
+new f64 precise_distance = 123456.789012345
+new f64 precise_root = sqrt(precise_distance)
 
 output(restored_deg)
 output(snapped)
 output(bounded)
 output(display_x)
 output(eased)
+output(precise_root)

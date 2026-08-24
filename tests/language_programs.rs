@@ -14,7 +14,7 @@ fn compile_pipeline(src: &str) -> String {
 fn program_list_for_len_and_push() {
     let src = r#"
 new i32 List samples = [10, 20, 30]
-new Int sum = 0
+new i32 sum = 0
 for item in samples {
     sum = sum + item
 }
@@ -137,7 +137,7 @@ fn program_meteostation_showcase_compiles() {
 fn program_small_language_features_example_compiles() {
     let src = include_str!("../examples/language/01_small_features.skd");
     let c = compile_pipeline(src);
-    assert!(c.contains("SkInt quotient = (17 / 2);"));
+    assert!(c.contains("SkInt quotient = sk_num_div_int(17, 2);"));
     assert!(c.contains("bool odd = (!(remainder == 0));"));
     assert!(c.contains("#include <math.h>"));
     assert!(c.contains("float squared = powf(3, 2);"));

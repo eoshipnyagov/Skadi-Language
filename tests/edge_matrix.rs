@@ -67,9 +67,9 @@ new Text s0 = slice(t, -100, 100)
 new Text s1 = slice(t, 10, 2)
 "#;
     let c = pipeline_ok(src);
-    assert!(c.contains("char c0 = sk_text_char_at(t, (-1));"));
+    assert!(c.contains("char c0 = sk_text_char_at(t, sk_num_neg_int(1));"));
     assert!(c.contains("char c1 = sk_text_char_at(t, 99);"));
-    assert!(c.contains("const char* s0 = sk_text_slice(t, (-100), 100);"));
+    assert!(c.contains("const char* s0 = sk_text_slice(t, sk_num_neg_int(100), 100);"));
     assert!(c.contains("const char* s1 = sk_text_slice(t, 10, 2);"));
 }
 

@@ -672,7 +672,7 @@ impl Formatter {
         }
     }
 
-    fn render_float(&self, value: f32) -> String {
+    fn render_float(&self, value: f64) -> String {
         let mut text = value.to_string();
         if !text.contains('.') && !text.contains('e') && !text.contains('E') {
             text.push_str(".0");

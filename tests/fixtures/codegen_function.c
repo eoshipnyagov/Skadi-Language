@@ -7,7 +7,7 @@ typedef int32_t SkInt;
 
 SkInt add(SkInt a, SkInt b) {
     /* SK-STMT@2:5#1 */
-    SkInt c = (a + b);
+    SkInt c = sk_num_add_int(a, b);
     return 0;
 }
 

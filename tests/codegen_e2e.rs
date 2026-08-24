@@ -358,7 +358,7 @@ when mode {
         current = 2
     }
     else {
-        current = current + count
+        current = current + 1
     }
 }
 "#;
@@ -421,7 +421,7 @@ new i32 out = xs[42]
 new Text t = "xy"
 new char c_ok = t[1]
 new char c_out = t[10]
-new Int sum = ok + out
+new i32 sum = ok + out
 if c_ok == c_out {
     sum = sum + 1
 } else {
@@ -471,6 +471,162 @@ if c_ok == c_out {
 
     let _ = fs::remove_file(c_path);
     let _ = fs::remove_file(exe_path);
+}
+
+#[test]
+fn e2e_checked_integer_conversion_uses_on_error_without_truncation() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping e2e C build test: no clang/gcc/cc in PATH.");
+        return;
+    };
+    let src = r#"
+new u16 wide = 255
+new u8 narrow = 0
+narrow = as_u8(wide) on error {
+    output("unexpected")
+}
+new i16 negative = -1
+new u8 unsigned_value = 7
+unsigned_value = as_u8(negative) on error {
+    output("range")
+}
+output(narrow)
+output(unsigned_value)
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    let run = compile_c_and_execute(compiler, &c, "Skadi_e2e_integer_conversion", &[], &[], None);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let lines = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, ["range", "255", "7"]);
+}
+
+#[test]
+fn e2e_checked_integer_arithmetic_reports_overflow_and_zero_division() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping numeric runtime e2e: no host C compiler in PATH.");
+        return;
+    };
+    for (stem, source, expected) in [
+        (
+            "Skadi_e2e_integer_overflow",
+            "new i8 maximum = 127\nnew i8 one = 1\nnew i8 result = maximum + one\n",
+            "integer addition overflow",
+        ),
+        (
+            "Skadi_e2e_integer_division_zero",
+            "new Int divisor = 0\nnew Int result = 10 div divisor\n",
+            "integer division by zero",
+        ),
+        (
+            "Skadi_e2e_integer_increment_overflow",
+            "new i8 maximum = 127\nmaximum++\n",
+            "integer addition overflow",
+        ),
+    ] {
+        let tokens = lex(source).expect("lex should succeed");
+        let program = parse_program(&tokens).expect("parse should succeed");
+        semantic_analyze(&program).expect("semantic should pass");
+        let c = transpile_program_to_c(&program);
+        let run = compile_c_and_execute(compiler, &c, stem, &[], &[], None);
+        assert!(!run.status.success(), "numeric failure must stop execution");
+        let stderr = String::from_utf8_lossy(&run.stderr);
+        assert!(stderr.contains("SC-RT-350"), "{stderr}");
+        assert!(stderr.contains(expected), "{stderr}");
+    }
+}
+
+#[test]
+fn e2e_wrapping_and_float_conversions_are_explicit_and_deterministic() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping numeric runtime e2e: no host C compiler in PATH.");
+        return;
+    };
+    let source = r#"
+new u8 maximum = 255
+new u8 one = 1
+new u8 two = 2
+new u8 zero = 0
+new u8 wrapped_addition = wrapping_add(maximum, one)
+new u8 wrapped_subtraction = wrapping_sub(zero, one)
+new u8 wrapped_product = wrapping_mul(maximum, two)
+new i8 signed_maximum = 127
+new i8 minimum = -128
+new i8 signed_one = 1
+new i8 signed_two = 2
+new i8 signed_half = 64
+new i8 signed_addition = wrapping_add(signed_maximum, signed_one)
+new i8 signed_subtraction = wrapping_sub(minimum, signed_one)
+new i8 signed_product = wrapping_mul(signed_half, signed_two)
+new i8 wrapped_negation = wrapping_neg(minimum)
+new f64 fractional = 3.5
+new i8 converted = 7
+converted = as_i8(fractional) on error {
+    output("fractional")
+}
+new f64 widened = as_f64(maximum)
+new Float narrowed = 0.0
+narrowed = as_f32(widened) on error {
+    output("unexpected")
+}
+output(wrapped_addition)
+output(wrapped_subtraction)
+output(wrapped_product)
+output(signed_addition)
+output(signed_subtraction)
+output(signed_product)
+output(wrapped_negation)
+output(converted)
+output(narrowed)
+"#;
+    let tokens = lex(source).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_wrap_add_u8(maximum, one)"), "{c}");
+    assert!(c.contains("sk_wrap_sub_i8(minimum, signed_one)"), "{c}");
+    assert!(c.contains("sk_wrap_mul_i8(signed_half, signed_two)"), "{c}");
+    let run = compile_c_and_execute(
+        compiler,
+        &c,
+        "Skadi_e2e_wrapping_conversions",
+        &[],
+        &[],
+        None,
+    );
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let lines = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        lines,
+        [
+            "fractional",
+            "0",
+            "255",
+            "254",
+            "-128",
+            "127",
+            "-128",
+            "-128",
+            "7",
+            "255.000000"
+        ]
+    );
 }
 
 #[test]
@@ -625,7 +781,7 @@ output(total)
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
     assert!(c.contains("if ((__when_tmp_"));
-    assert!(c.contains("i += 1;"));
+    assert!(c.contains("i = sk_num_add_int(i, 1);"));
     assert!(c.contains("Meter_add(&m, total)"));
     compile_c_and_run(compiler, &c, "Skadi_e2e_mix_struct_when_iterate", &[]);
 }

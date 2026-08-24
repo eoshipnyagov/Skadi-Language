@@ -43,10 +43,10 @@ velocity.x += 1.0
     );
     semantic_analyze(&program).expect("compound assignment semantics");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("count = (count + 2);"), "{c}");
-    assert!(c.contains("count = (count - 1);"), "{c}");
-    assert!(c.contains("count = (count * 3);"), "{c}");
-    assert!(c.contains("count = (count / 9);"), "{c}");
+    assert!(c.contains("count = sk_num_add_int(count, 2);"), "{c}");
+    assert!(c.contains("count = sk_num_sub_int(count, 1);"), "{c}");
+    assert!(c.contains("count = sk_num_mul_int(count, 3);"), "{c}");
+    assert!(c.contains("count = sk_num_div_int(count, 9);"), "{c}");
     assert!(c.contains("velocity = sk_vec2_scale(velocity, 2"), "{c}");
     assert!(c.contains("velocity.x = (velocity.x + 1"), "{c}");
 }

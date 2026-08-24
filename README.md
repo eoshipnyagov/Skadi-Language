@@ -53,7 +53,9 @@ The repository includes:
   opt-in probe debugger with source breakpoints, continue/step, call stacks,
   scalar locals, thread-aware cooperative stops, and a TUI debug workspace,
 - experimental Time/Duration, ByteSize, Angle, and Vec2/Vec3/Vec4 types,
-- target-configurable `Int`, fixed-width integer literals, and checked bit builtins,
+- target-configurable `Int`, checked integer arithmetic and conversions,
+  explicit fixed-width wrapping/bit builtins, and a real double-precision `f64`
+  math path,
 - experimental software Canvas and Win32 window presenter,
 - deterministic release archives and user-local installers,
 - showcase programs,

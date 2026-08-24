@@ -35,7 +35,7 @@
 | Категория | Типы или формы | Статус | Примечание |
 |---|---|---:|---|
 | Целые | `Int`, `i8/i16/i32/i64`, `u8/u16/u32/u64`; `0b`, `0o`, `0x`, `_` | Stable | `Int` следует `[numeric] int`; fixed-width типы сохраняют ширину |
-| Вещественные | `Float`, `f32`, `f64` | Stable | `Float`/`f32` используют 32 бита; `f64` явный |
+| Вещественные | `Float`, `f32`, `f64` | Stable | `Float`/`f32` используют 32 бита; `f64` явный и использует double math |
 | Логические | `Bool`, alias `bool`; `true`, `false` | Stable | Канонически `Bool` |
 | Символ | `Char`, alias `char`; `'a'`, `'\n'` | Stable | Только ASCII и поддержанные escapes |
 | Текст/путь | `Text`, `Path`; `"hello"` | Stable | `Path` использует text representation |
@@ -55,7 +55,7 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 
 | Группа | Формы | Результат/правило |
 |---|---|---|
-| Арифметика | `+ - * / % ^` | Числовые правила; specialized types имеют отдельную матрицу |
+| Арифметика | `+ - * / % ^` | Целые операции checked (`SC-RT-350`); вещественные сохраняют IEEE-поведение; specialized types имеют отдельную матрицу |
 | Целочисленные слова | `div`, `mod` | Целочисленные операции |
 | Сравнение | `== != < > <= >=` | `Bool` |
 | Логика | `and or xor not` | Канонические word operators |
@@ -198,6 +198,18 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 иметь один тип; подходящий литерал получает тип второго операнда. `Int` не
 принимается, правый сдвиг всегда логический, индекс проверяется. Подробнее:
 [целочисленная модель и биты](bits.md).
+
+`wrapping_add`, `wrapping_sub`, `wrapping_mul` и `wrapping_neg` предоставляют
+явную modulo-арифметику только для fixed-width integer типов. Обычные
+`+ - * / div mod % ^` и signed unary `-` проверяют ошибки; unsigned unary `-`
+запрещён.
+
+| Преобразование | Контракт | Статус |
+|---|---|---:|
+| `as_i8`, `as_i16`, `as_i32`, `as_i64` | Проверяемое numeric-преобразование в signed fixed-width target через assignment с `on error`; float должен быть конечным и целым | Experimental |
+| `as_u8`, `as_u16`, `as_u32`, `as_u64` | Проверяемое numeric-преобразование в unsigned fixed-width target через assignment с `on error`; без усечения и modulo | Experimental |
+| `as_f32` | Проверяемое сужение конечного numeric-значения через assignment с `on error` | Experimental |
+| `as_f64` | Безопасное расширение numeric-значения в `f64` | Experimental |
 
 ## Time, Memory, Task и Channel
 
