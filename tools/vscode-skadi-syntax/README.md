@@ -21,7 +21,7 @@ Skadi surface.
 1. Build package:
    - `npx @vscode/vsce package --allow-missing-repository`
 2. Install in VS Code:
-   - `code --install-extension skadi-syntax-0.3.8.vsix`
+   - `code --install-extension skadi-syntax-0.3.9.vsix`
 
 ## File extensions and naming
 

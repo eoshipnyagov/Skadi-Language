@@ -1153,6 +1153,7 @@ pub fn parse_task_or_channel_declaration(
             value: Box::new(value),
             is_constant: false,
             declared_type: Some(declared_type),
+            on_error: None,
             loc,
         },
         cursor - start_index,
@@ -1629,6 +1630,7 @@ fn parse_variable_declaration(
     let name = tokens[idx].lexeme.clone();
     let expr_start = idx + 2;
     let mut cursor = expr_start;
+    let mut on_error_index = None;
     let mut depth_curly = 0usize;
     let mut depth_round = 0usize;
     let mut depth_square = 0usize;
@@ -1651,6 +1653,15 @@ fn parse_variable_declaration(
         } else if lx == "]" {
             depth_square = depth_square.saturating_sub(1);
         }
+        if depth_curly == 0
+            && depth_round == 0
+            && depth_square == 0
+            && tokens[cursor].kind() == TokenKind::KeywordOnError
+            && tokens.get(cursor + 1).map(|token| token.lexeme.as_str()) == Some("error")
+        {
+            on_error_index = Some(cursor);
+            break;
+        }
         if tokens[cursor].kind() == TokenKind::NewLine
             && depth_curly == 0
             && depth_round == 0
@@ -1661,15 +1672,30 @@ fn parse_variable_declaration(
         cursor += 1;
     }
     let value = parse_expression_range(tokens, expr_start, cursor)?;
+    let (on_error, consumed_end) = if let Some(on_index) = on_error_index {
+        let block_open = on_index + 2;
+        if tokens.get(block_open).map(|token| token.lexeme.as_str()) != Some("{") {
+            return Err(parse_err(
+                "SC-PARSE-234",
+                "fallible declaration expected '{' after 'on error'.",
+            ));
+        }
+        let block_end = find_block_end(tokens, block_open)?;
+        let statements = parse_statements_range(tokens, block_open + 1, block_end)?;
+        (Some(Box::new(BlockStatement { statements })), block_end + 1)
+    } else {
+        (None, cursor)
+    };
     Ok((
         Statement::VarDecl {
             name,
             value: Box::new(value),
             is_constant,
             declared_type,
+            on_error,
             loc,
         },
-        (cursor - start_index).max(4),
+        (consumed_end - start_index).max(4),
     ))
 }
 

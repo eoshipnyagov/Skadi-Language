@@ -72,6 +72,7 @@ is rejected by semantic analysis.
 | Error return | `return error Missing` | Stable in `danger fn` |
 | Error label | `label ErrorCode { Ok = 0 Missing = 1 }` | Stable |
 | Recovery | `value = danger_call() on error { ... }` | Stable |
+| Fallible declaration | `new Type value = create() on error { return ... }` | Experimental; handler must terminate, binding exists only on success |
 | Read-only borrow | `fn inspect(view Canvas frame)`, `inspect(view frame)` | Experimental |
 | Mutable borrow | `fn paint(edit Canvas frame)`, `paint(edit frame)` | Experimental |
 | Ownership transfer | `fn consume(move Canvas frame)`, `consume(move frame)` | Experimental |

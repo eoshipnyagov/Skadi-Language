@@ -58,6 +58,7 @@ impl Formatter {
                 value,
                 is_constant,
                 declared_type,
+                on_error,
                 ..
             } => {
                 self.write_indent(indent);
@@ -79,6 +80,10 @@ impl Formatter {
                 self.out.push_str(name);
                 self.out.push_str(" = ");
                 self.out.push_str(&self.render_expression(value, 0));
+                if let Some(on_error) = on_error {
+                    self.out.push_str(" on error ");
+                    self.render_block(on_error, indent)?;
+                }
             }
             Statement::MemoryDecl {
                 name,

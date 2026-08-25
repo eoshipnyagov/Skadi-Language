@@ -108,8 +108,15 @@ pub fn collect_analysis_facts(program: &Program) -> Vec<AnalysisFact> {
 fn collect_task_entries(statements: &[Statement], entries: &mut HashSet<String>) {
     for statement in statements {
         match statement {
-            Statement::VarDecl { value, .. }
-            | Statement::Assignment { value, .. }
+            Statement::VarDecl {
+                value, on_error, ..
+            } => {
+                collect_task_entries_from_expr(value, entries);
+                if let Some(on_error) = on_error {
+                    collect_task_entries(&on_error.statements, entries);
+                }
+            }
+            Statement::Assignment { value, .. }
             | Statement::FieldAssignment { value, .. }
             | Statement::ListPush { value, .. } => collect_task_entries_from_expr(value, entries),
             Statement::FunctionDef { body, .. } => collect_task_entries(&body.statements, entries),
@@ -273,10 +280,14 @@ fn collect_statement_facts(
                 name,
                 value,
                 declared_type,
+                on_error,
                 loc,
                 ..
             } => {
                 collect_expression_facts(value, loc, false, function, task_entries, facts);
+                if let Some(on_error) = on_error {
+                    collect_statement_facts(&on_error.statements, function, task_entries, facts);
+                }
                 if let Some(resource_type) = declared_type
                     && is_lifecycle_resource_type(resource_type)
                 {

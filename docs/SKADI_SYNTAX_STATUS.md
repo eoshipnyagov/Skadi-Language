@@ -84,6 +84,10 @@
 ## Поток ошибок
 
 - `x = danger_call(...) on error { ... }` - `Stable`
+- `new Type x = danger_call(...) on error { return ... }` - `Experimental`
+  - требует явный тип и непосредственный вызов `danger fn`;
+  - binding появляется только на success path;
+  - handler обязан завершить путь через `return` или `return error`.
 - `danger_call(...) on error { ... }` - `Stable`
 - `on error` только на danger-вызовах - `Stable`
 - контракт `label ErrorCode` - `Stable`

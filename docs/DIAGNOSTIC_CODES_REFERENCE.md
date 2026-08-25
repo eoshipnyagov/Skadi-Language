@@ -50,6 +50,7 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-PARSE-231` `external struct` contains a method instead of a pure field layout
 - `SC-PARSE-232` `external resource` is missing a valid type name
 - `SC-PARSE-233` `external resource` has trailing syntax after its type name
+- `SC-PARSE-234` fallible declaration is missing `{` after `on error`
 
 ## 3. Semantic Codes (`SC-SEM-*`)
 

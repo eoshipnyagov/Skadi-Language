@@ -144,18 +144,24 @@ Skadi:
 ```skadi
 external resource Sensor
 
-external fn sensor_open(i32 channel) returns Sensor
+external danger fn sensor_open(i32 channel) returns Sensor
 external fn sensor_read(view Sensor sensor) returns i32
 external danger fn sensor_adjust(edit Sensor sensor, i32 delta)
 external danger fn sensor_close(move Sensor sensor)
 
-new Sensor sensor = sensor_open(2)
-new i32 value = sensor_read(view sensor)
-sensor_adjust(edit sensor, 1) on error {
-    output("adjust failed")
-}
-sensor_close(move sensor) on error {
-    output("close failed")
+fn inspect_sensor() returns i32 {
+    new Sensor sensor = sensor_open(2) on error {
+        output("open failed")
+        return -1
+    }
+    new i32 value = sensor_read(view sensor)
+    sensor_adjust(edit sensor, 1) on error {
+        output("adjust failed")
+    }
+    sensor_close(move sensor) on error {
+        output("close failed")
+    }
+    return value
 }
 ```
 
@@ -170,9 +176,11 @@ may cast it to its private type, but Skadi code cannot inspect or convert it.
 - Every control-flow path must transfer the owner to a consuming `move`
   parameter before its scope ends.
 - Handles cannot be stored in lists/structs or cross Task/Channel boundaries.
-- The current factory must be a trusted non-danger `external fn`. A danger
-  factory returning a resource is deferred until typed declarations can carry
-  `on error`, avoiding nullable or uninitialized handles.
+- A fallible factory is a `danger fn` and must be used as
+  `new Resource name = create() on error { ... }`.
+- The binding is absent inside the error handler, and that handler must
+  terminate with `return` or `return error`. Only the successful path continues
+  with the single owner.
 
 Skadi does not infer a destructor from a function name. The binding declares an
 ordinary consuming external function; if it is `danger`, the call requires

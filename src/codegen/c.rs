@@ -228,6 +228,7 @@ fn statements_use_vector(statements: &[Statement]) -> bool {
         Statement::VarDecl {
             value,
             declared_type,
+            on_error,
             ..
         } => {
             declared_type
@@ -235,6 +236,7 @@ fn statements_use_vector(statements: &[Statement]) -> bool {
                 .map(type_uses_vector)
                 .unwrap_or(false)
                 || expression_uses_vector(value)
+                || on_error.as_deref().map(&block_uses_vector).unwrap_or(false)
         }
         Statement::MemoryDecl { size, on_error, .. } => {
             expression_uses_vector(size)
@@ -1314,6 +1316,7 @@ fn statement_uses_task_surface(stmt: &Statement) -> bool {
         Statement::VarDecl {
             declared_type,
             value,
+            on_error,
             ..
         } => {
             declared_type
@@ -1321,6 +1324,9 @@ fn statement_uses_task_surface(stmt: &Statement) -> bool {
                 .map(|ty| ty == "Task" || ty.starts_with("Task("))
                 .unwrap_or(false)
                 || expression_uses_task_surface(value)
+                || on_error
+                    .as_deref()
+                    .is_some_and(|block| statement_list_uses_task_surface(&block.statements))
         }
         Statement::StopTask { .. } => true,
         Statement::Assignment { value, .. }
@@ -1480,6 +1486,7 @@ fn statement_uses_deferred_task_surface(stmt: &Statement) -> bool {
         Statement::VarDecl {
             declared_type,
             value,
+            on_error,
             ..
         } => {
             declared_type
@@ -1487,6 +1494,12 @@ fn statement_uses_deferred_task_surface(stmt: &Statement) -> bool {
                 .map(|ty| ty.starts_with("Channel("))
                 .unwrap_or(false)
                 || expression_uses_deferred_task_surface(value)
+                || on_error.as_deref().is_some_and(|block| {
+                    block
+                        .statements
+                        .iter()
+                        .any(statement_uses_deferred_task_surface)
+                })
         }
         Statement::StopTask { .. } => false,
         Statement::Assignment { value, .. }
@@ -1833,8 +1846,15 @@ fn collect_task_entries_from_expression(expr: &Expression, entries: &mut HashSet
 fn collect_task_entries_from_statements(statements: &[Statement], entries: &mut HashSet<String>) {
     for stmt in statements {
         match stmt {
-            Statement::VarDecl { value, .. }
-            | Statement::Assignment { value, .. }
+            Statement::VarDecl {
+                value, on_error, ..
+            } => {
+                collect_task_entries_from_expression(value, entries);
+                if let Some(on_error) = on_error {
+                    collect_task_entries_from_statements(&on_error.statements, entries);
+                }
+            }
+            Statement::Assignment { value, .. }
             | Statement::FieldAssignment { value, .. }
             | Statement::ListPush { value, .. }
             | Statement::ExpressionStatement { expr: value, .. } => {
@@ -3188,10 +3208,17 @@ fn program_uses_text_runtime(program: &Program) -> bool {
     }
     fn statement_has_text(stmt: &Statement) -> bool {
         match stmt {
-            Statement::VarDecl { declared_type, .. } => declared_type
-                .as_deref()
-                .map(|t| t == "Text")
-                .unwrap_or(false),
+            Statement::VarDecl {
+                declared_type,
+                on_error,
+                ..
+            } => {
+                declared_type
+                    .as_deref()
+                    .map(|t| t == "Text")
+                    .unwrap_or(false)
+                    || on_error.as_deref().map(block_has_text).unwrap_or(false)
+            }
             Statement::FunctionDef { body, .. } => block_has_text(body),
             Statement::IfStatement {
                 then_block,
@@ -3247,10 +3274,17 @@ fn program_uses_list_runtime(program: &Program) -> bool {
     fn statement_needs_list(stmt: &Statement) -> bool {
         match stmt {
             Statement::ForLoop { .. } => true,
-            Statement::VarDecl { declared_type, .. } => declared_type
-                .as_deref()
-                .map(|t| t.ends_with(" List"))
-                .unwrap_or(false),
+            Statement::VarDecl {
+                declared_type,
+                on_error,
+                ..
+            } => {
+                declared_type
+                    .as_deref()
+                    .map(|t| t.ends_with(" List"))
+                    .unwrap_or(false)
+                    || on_error.as_deref().map(block_has_for).unwrap_or(false)
+            }
             Statement::ListPush { .. } | Statement::ListPopOnError { .. } => true,
             Statement::FunctionDef { body, .. } => block_has_for(body),
             Statement::IfStatement {
@@ -3369,7 +3403,18 @@ fn program_uses_fs_runtime(program: &Program) -> (bool, bool, bool) {
     }
     fn stmt_uses_fs(stmt: &Statement) -> (bool, bool, bool) {
         match stmt {
-            Statement::VarDecl { value, .. } => expression_uses_fs_call(value),
+            Statement::VarDecl {
+                value, on_error, ..
+            } => {
+                let (mut list, mut is_dir, mut join) = expression_uses_fs_call(value);
+                if let Some(on_error) = on_error {
+                    let (handler_list, handler_is_dir, handler_join) = block_uses_fs(on_error);
+                    list |= handler_list;
+                    is_dir |= handler_is_dir;
+                    join |= handler_join;
+                }
+                (list, is_dir, join)
+            }
             Statement::Assignment { value, .. } => expression_uses_fs_call(value),
             Statement::FunctionDef { body, .. } => block_uses_fs(body),
             Statement::IfStatement {
@@ -3541,7 +3586,14 @@ fn expression_uses_args_call(expr: &Expression) -> bool {
 fn program_uses_io_runtime(program: &Program) -> bool {
     fn stmt_uses_io(stmt: &Statement) -> bool {
         match stmt {
-            Statement::VarDecl { value, .. } => expression_uses_io_call(value),
+            Statement::VarDecl {
+                value, on_error, ..
+            } => {
+                expression_uses_io_call(value)
+                    || on_error
+                        .as_deref()
+                        .is_some_and(|block| block.statements.iter().any(stmt_uses_io))
+            }
             Statement::Assignment { value, .. } => expression_uses_io_call(value),
             Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_io),
             Statement::ExpressionStatement { expr, .. } => expression_uses_io_call(expr),
@@ -3621,7 +3673,14 @@ fn program_uses_io_runtime(program: &Program) -> bool {
 fn program_uses_args_runtime(program: &Program) -> bool {
     fn stmt_uses_args(stmt: &Statement) -> bool {
         match stmt {
-            Statement::VarDecl { value, .. } => expression_uses_args_call(value),
+            Statement::VarDecl {
+                value, on_error, ..
+            } => {
+                expression_uses_args_call(value)
+                    || on_error
+                        .as_deref()
+                        .is_some_and(|block| block.statements.iter().any(stmt_uses_args))
+            }
             Statement::Assignment { value, .. } => expression_uses_args_call(value),
             Statement::FunctionDef { body, .. } => body.statements.iter().any(stmt_uses_args),
             Statement::ExpressionStatement { expr, .. } => expression_uses_args_call(expr),
@@ -4269,6 +4328,7 @@ fn program_uses_visual_runtime(program: &Program) -> bool {
             Statement::VarDecl {
                 declared_type,
                 value,
+                on_error,
                 ..
             } => {
                 declared_type.as_deref().map(visual_type).unwrap_or(false)
@@ -4280,6 +4340,9 @@ fn program_uses_visual_runtime(program: &Program) -> bool {
                                 "color" | "color_hex" | "rect" | "canvas" | "windows.open"
                             )
                     )
+                    || on_error
+                        .as_deref()
+                        .is_some_and(|block| block.statements.iter().any(statement_uses_visual))
             }
             Statement::FunctionDef {
                 params,
@@ -4381,6 +4444,7 @@ fn program_uses_window_runtime(program: &Program) -> bool {
             Statement::VarDecl {
                 declared_type,
                 value,
+                on_error,
                 ..
             } => {
                 declared_type.as_deref().map(window_type).unwrap_or(false)
@@ -4388,6 +4452,9 @@ fn program_uses_window_runtime(program: &Program) -> bool {
                         value.as_ref(),
                         Expression::Call { name, .. } if name == "windows.open"
                     )
+                    || on_error
+                        .as_deref()
+                        .is_some_and(|block| block.statements.iter().any(statement_uses_window))
             }
             Statement::FunctionDef {
                 params,
@@ -6412,11 +6479,69 @@ fn emit_statement_body(
             value,
             is_constant,
             declared_type,
+            on_error,
             ..
         } => {
             let effective_type = declared_type
                 .clone()
                 .or_else(|| infer_scalar_declaration_type(value, declared, state));
+            if let Some(on_error) = on_error {
+                let declared_type = declared_type
+                    .as_deref()
+                    .expect("semantic analysis requires an explicit fallible declaration type");
+                let Expression::Call {
+                    name: call_name,
+                    args,
+                } = value.as_ref()
+                else {
+                    unreachable!("semantic analysis requires a danger call initializer");
+                };
+                out.push_str(&pad);
+                out.push_str(&map_skadi_type_to_c(Some(declared_type)));
+                out.push(' ');
+                out.push_str(name);
+                out.push_str(";\n");
+                out.push_str(&pad);
+                out.push_str("/* Skadi fallible declaration */\n");
+                out.push_str(&pad);
+                out.push_str("if (");
+                out.push_str(map_function_name(call_name));
+                out.push('(');
+                let rendered_args = emit_call_arguments(call_name, args, declared);
+                out.push_str(&rendered_args.join(", "));
+                if !rendered_args.is_empty() {
+                    out.push_str(", ");
+                }
+                out.push('&');
+                out.push_str(name);
+                out.push_str(") != 0) {\n");
+                let mut handler_declared = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut handler_declared,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str("}\n");
+
+                let mut tracked_type = declared_type.to_string();
+                if matches!(
+                    normalize_type_token(&tracked_type).as_str(),
+                    "Canvas" | "Window" | "Interrupt"
+                ) || channel_elem_from_decl(&tracked_type).is_some()
+                    || state
+                        .external_resources
+                        .contains(tracked_type.rsplit('.').next().unwrap_or(&tracked_type))
+                {
+                    tracked_type.push_str("@owned");
+                }
+                declared.insert(name.clone(), tracked_type);
+                return;
+            }
             if let Some(channel_element) = declared_type.as_deref().and_then(channel_elem_from_decl)
                 && let Expression::Call {
                     name: call_name,
@@ -8109,8 +8234,18 @@ fn expression_uses_math_call(expr: &Expression) -> bool {
 
 fn stmt_uses_expression(stmt: &Statement, expression_matches: fn(&Expression) -> bool) -> bool {
     match stmt {
-        Statement::VarDecl { value, .. }
-        | Statement::Assignment { value, .. }
+        Statement::VarDecl {
+            value, on_error, ..
+        } => {
+            expression_matches(value)
+                || on_error.as_deref().is_some_and(|block| {
+                    block
+                        .statements
+                        .iter()
+                        .any(|stmt| stmt_uses_expression(stmt, expression_matches))
+                })
+        }
+        Statement::Assignment { value, .. }
         | Statement::ExpressionStatement { expr: value, .. } => expression_matches(value),
         Statement::ReturnStatement { value, .. } => value
             .as_ref()
@@ -8326,8 +8461,15 @@ fn expression_uses_time_call(expr: &Expression) -> bool {
 
 fn stmt_uses_time(stmt: &Statement) -> bool {
     match stmt {
-        Statement::VarDecl { value, .. }
-        | Statement::Assignment { value, .. }
+        Statement::VarDecl {
+            value, on_error, ..
+        } => {
+            expression_uses_time_call(value)
+                || on_error
+                    .as_deref()
+                    .is_some_and(|block| block.statements.iter().any(stmt_uses_time))
+        }
+        Statement::Assignment { value, .. }
         | Statement::ExpressionStatement { expr: value, .. }
         | Statement::FieldAssignment { value, .. }
         | Statement::ListPush { value, .. } => expression_uses_time_call(value),

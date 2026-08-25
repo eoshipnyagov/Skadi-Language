@@ -127,9 +127,6 @@ def main() -> int:
     )
     unsupported_skadi_patterns = {
         "legacy List(T) type syntax": re.compile(r"\bList\s*\("),
-        "typed declaration combined with on error": re.compile(
-            r"\bnew\b[^\n]*\bon error\b"
-        ),
         "symbolic function return arrow": re.compile(r"\bfn\b[^\n{]*->"),
         "non-danger I/O call with on error": re.compile(
             r"\b(?:read|write|input|output|fs\.list|fs\.join|fs\.is_dir)\s*\([^\n]*\)\s+on error\b"

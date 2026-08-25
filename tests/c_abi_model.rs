@@ -168,6 +168,108 @@ fn formatter_preserves_external_resource_declarations() {
 }
 
 #[test]
+fn fallible_typed_declaration_creates_resource_only_on_success() {
+    let source = r#"
+external resource Sensor
+external danger fn sensor_open(i32 channel) returns Sensor
+external fn sensor_read(view Sensor sensor) returns i32
+external danger fn sensor_close(move Sensor sensor)
+
+fn inspect_sensor() returns i32 {
+    new Sensor sensor = sensor_open(2) on error {
+        output("open failed")
+        return -1
+    }
+    new i32 value = sensor_read(view sensor)
+    output(value)
+    sensor_close(move sensor) on error {
+        output("close failed")
+    }
+    return 0
+}
+"#;
+    let program = semantic_ok(source);
+    let formatted = format_source(source).expect("format fallible declaration");
+    assert!(
+        formatted.contains("new Sensor sensor = sensor_open(2) on error {\n"),
+        "{formatted}"
+    );
+
+    let c = transpile_program_to_c(&program);
+    assert!(
+        c.contains("int sensor_open(int32_t channel, Sensor *out);"),
+        "{c}"
+    );
+    assert!(c.contains("Sensor sensor;"), "{c}");
+    assert!(c.contains("if (sensor_open(2, &sensor) != 0)"), "{c}");
+}
+
+#[test]
+fn fallible_typed_declaration_requires_terminating_handler() {
+    let fallthrough = semantic_err(
+        r#"
+external resource Sensor
+external danger fn sensor_open() returns Sensor
+fn open_sensor() returns i32 {
+    new Sensor sensor = sensor_open() on error {
+        output("open failed")
+    }
+}
+"#,
+    );
+    assert!(
+        fallthrough.contains("requires its 'on error' handler to terminate"),
+        "{fallthrough}"
+    );
+
+    let premature_use = semantic_err(
+        r#"
+external resource Sensor
+external danger fn sensor_open() returns Sensor
+external fn sensor_read(view Sensor sensor) returns i32
+fn open_sensor() returns i32 {
+    new Sensor sensor = sensor_open() on error {
+        new i32 value = sensor_read(view sensor)
+        return -1
+    }
+}
+"#,
+    );
+    assert!(
+        premature_use.contains("'sensor' is not defined"),
+        "{premature_use}"
+    );
+
+    let untyped = semantic_err(
+        r#"
+external resource Sensor
+external danger fn sensor_open() returns Sensor
+fn open_sensor() returns i32 {
+    new sensor = sensor_open() on error {
+        return -1
+    }
+}
+"#,
+    );
+    assert!(untyped.contains("requires an explicit type"), "{untyped}");
+
+    let ordinary = semantic_err(
+        r#"
+fn sensor_open() returns i32 {
+    return 1
+}
+fn open_sensor() returns i32 {
+    new i32 sensor = sensor_open() on error {
+        return -1
+    }
+    return sensor
+}
+"#,
+    );
+    assert!(ordinary.contains("is not declared as danger"), "{ordinary}");
+}
+
+#[test]
 fn external_resource_declaration_reports_structural_errors() {
     let missing = lex("external resource\n").expect("lex missing resource name");
     let missing_error = parse_program(&missing).expect_err("resource name must be required");
@@ -201,13 +303,6 @@ fn external_resources_require_explicit_linear_ownership() {
         "external resource Sensor\nexternal fn sensor_open() returns Sensor\nexternal fn sensor_close(move Sensor sensor)\nnew Sensor first = sensor_open()\nnew Sensor second = first\nsensor_close(move first)\n",
     );
     assert!(copied.contains("would copy ownership"), "{copied}");
-
-    let fallible_factory =
-        semantic_err("external resource Sensor\nexternal danger fn sensor_open() returns Sensor\n");
-    assert!(
-        fallible_factory.contains("typed declaration recovery"),
-        "{fallible_factory}"
-    );
 
     let stored_in_struct =
         semantic_err("external resource Sensor\nstruct Holder {\n    Sensor sensor\n}\n");

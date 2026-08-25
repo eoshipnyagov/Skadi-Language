@@ -99,6 +99,7 @@ pub enum Statement {
         value: Box<Expression>,
         is_constant: bool,
         declared_type: Option<String>,
+        on_error: Option<Box<BlockStatement>>,
         loc: Location,
     },
     MemoryDecl {

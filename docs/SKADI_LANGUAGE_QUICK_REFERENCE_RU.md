@@ -87,6 +87,7 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 | Числовая метка | `label ErrorCode { Ok = 0 MissingFile = 1 }` | Stable; дискриминанты обязательны |
 | Символический набор | `tag Status { Ready Busy }` | Stable; числовой контракт отсутствует |
 | Danger recovery | `value = load(path) on error { ... }` | Stable |
+| Fallible declaration | `new Type value = create() on error { return ... }` | Experimental; handler обязан завершить путь, binding существует только при success |
 | Danger call без результата | `save() on error { ... }` | Stable |
 | Read-only borrow | `fn inspect(view Canvas frame)`, `inspect(view frame)` | Experimental |
 | Mutable borrow | `fn paint(edit Canvas frame)`, `paint(edit frame)` | Experimental |

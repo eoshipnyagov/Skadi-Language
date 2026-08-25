@@ -90,6 +90,11 @@ owner внутри итерации, верните ресурс или пере
 `move`; обычно это `external danger fn ...close(move Resource value)` с
 обязательным `on error`.
 
+Fallible factory не требует nullable или заранее фиктивного handle:
+`new Resource value = create() on error { return ... }` создаёт owner только
+при success. В error-handler имя `value` ещё не существует, поэтому handler
+обязан завершить этот путь через `return` или `return error`.
+
 Закрытый ресурс и moved resource различаются:
 
 - операцию над `closed`/`maybe closed` можно обработать через `on error`;

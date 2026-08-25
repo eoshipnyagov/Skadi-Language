@@ -31,9 +31,9 @@ Legend:
 | `return` | Y | Y | Y | Y | Y | includes empty return in danger fn |
 | `return error` | Y | Y | Y | Y | Y | requires `label ErrorCode` |
 | `returns` | Y | Y | Y | Y | Y | canonical typed return syntax |
-| `new` | Y | Y | Y | Y | Y | scalar inference covered; composites require explicit type (`SC-SEM-020`) |
+| `new` | Y | Y | Y | Y | Y | scalar inference covered; composites require explicit type; typed danger declarations bind only on success |
 | `my` | Y | Y | P | P | P | struct method subset covered |
-| `on error` | P (`on` token + parse pattern) | Y | Y | Y | Y | danger/list-pop contracts covered |
+| `on error` | P (`on` token + parse pattern) | Y | Y | Y | Y | danger/list-pop and terminating typed-declaration recovery covered |
 | `on interrupt` | P (`on` + `interrupt`) | Y | Y | Y | Y | typed periodic host Interrupt with strict handler subset |
 | `constant` | Y | Y | Y | Y | Y | immutable binding with assignment rejection |
 | `fixed` / `const` | identifier | Y | Y | Y | Y | ordinary identifier names; immutable binding keyword is `constant` |

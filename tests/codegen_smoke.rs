@@ -18,6 +18,36 @@ fn codegen_emits_main_and_assignment() {
 }
 
 #[test]
+fn typed_danger_declaration_uses_status_out_without_dummy_value() {
+    let src = r#"
+label ErrorCode {
+    Ok = 0
+    Invalid = 1
+}
+
+danger fn checked(i32 value) returns i32 {
+    if value < 0 {
+        return error Invalid
+    }
+    return value
+}
+
+fn use_checked(i32 value) returns i32 {
+    new i32 result = checked(value) on error {
+        return -1
+    }
+    return result
+}
+"#;
+    let tokens = lex(src).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    semantic_analyze(&program).expect("semantic should pass");
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("int32_t result;"), "{c}");
+    assert!(c.contains("if (checked(value, &result) != 0)"), "{c}");
+}
+
+#[test]
 fn codegen_configures_platform_int_without_changing_fixed_width_types() {
     let src = "new Int platform_value = 1\nnew i64 fixed_value = 2\n";
     let tokens = lex(src).expect("lex should succeed");

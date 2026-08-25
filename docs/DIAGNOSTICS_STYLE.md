@@ -92,6 +92,7 @@ Runtime code считается публичным только после по�
 - `SC-PARSE-231` — `external struct` содержит метод вместо чистого field layout
 - `SC-PARSE-232` — у `external resource` отсутствует корректное имя типа
 - `SC-PARSE-233` — после имени `external resource` обнаружен лишний синтаксис
+- `SC-PARSE-234` — после `on error` типизированного объявления отсутствует `{`
 
 ### Диапазоны parse codes
 

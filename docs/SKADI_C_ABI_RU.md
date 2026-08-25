@@ -166,18 +166,24 @@ Skadi не видит:
 ```skadi
 external resource Sensor
 
-external fn sensor_open(i32 channel) returns Sensor
+external danger fn sensor_open(i32 channel) returns Sensor
 external fn sensor_read(view Sensor sensor) returns i32
 external danger fn sensor_adjust(edit Sensor sensor, i32 delta)
 external danger fn sensor_close(move Sensor sensor)
 
-new Sensor sensor = sensor_open(2)
-new i32 value = sensor_read(view sensor)
-sensor_adjust(edit sensor, 1) on error {
-    output("adjust failed")
-}
-sensor_close(move sensor) on error {
-    output("close failed")
+fn inspect_sensor() returns i32 {
+    new Sensor sensor = sensor_open(2) on error {
+        output("open failed")
+        return -1
+    }
+    new i32 value = sensor_read(view sensor)
+    sensor_adjust(edit sensor, 1) on error {
+        output("adjust failed")
+    }
+    sensor_close(move sensor) on error {
+        output("close failed")
+    }
+    return value
 }
 ```
 
@@ -196,9 +202,11 @@ sensor_close(move sensor) on error {
   `move Sensor` на каждом control-flow path;
 - `external resource` нельзя хранить в `List`, struct, `Task` или `Channel` и
   нельзя преобразовывать в integer/raw pointer.
-- в текущем срезе factory должна быть trusted non-danger `external fn`:
-  `external danger fn ... returns Resource` отложена до typed declaration с
-  `on error`, чтобы не вводить nullable/uninitialized handle.
+- fallible factory объявляется как `danger fn` и используется только в форме
+  `new Resource name = create() on error { ... }`;
+- binding не существует внутри error-handler, а сам handler обязан завершить
+  путь через `return` или `return error`; после блока продолжается только
+  success path с единственным owner.
 
 Skadi намеренно не угадывает destructor по имени и не выполняет скрытый
 `sensor_close`. Освобождающая функция является обычным явно объявленным

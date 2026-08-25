@@ -580,9 +580,20 @@ header: совпадение layout остаётся явным контракт
 - parser/semantic/formatter/C-shape negative coverage и native compile-run
   добавлены в `examples/c-abi`.
 
-Отложены typed declaration recovery для fallible resource factory, borrowed
-handles с lifetime внешней библиотеки, nullable handles, callbacks, destructor
-metadata/автоматический cleanup и header generation.
+Отложены borrowed handles с lifetime внешней библиотеки, nullable handles,
+callbacks, destructor metadata/автоматический cleanup и header generation.
+
+### Milestone 20: fallible resource factories - выполнен
+
+Реализовано:
+
+- общая форма `new Type name = danger_call() on error { ... }` для
+  типизированного объявления без dummy/uninitialized value;
+- binding существует только на success path и недоступен внутри handler;
+- handler обязан завершить путь через `return` или `return error`;
+- `external danger fn ... returns Resource` понижается в существующий C
+  status/out ABI и создаёт единственного owner только при success;
+- parser/semantic/formatter/C-shape tests и native `examples/c-abi` smoke.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 

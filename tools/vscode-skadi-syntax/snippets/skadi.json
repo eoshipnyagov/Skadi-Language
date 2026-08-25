@@ -26,6 +26,15 @@
     ],
     "description": "Handle a danger expression"
   },
+  "Fallible typed declaration": {
+    "prefix": "skadi-fallible-new",
+    "body": [
+      "new ${1:Type} ${2:value} = ${3:create}(${4}) on error {",
+      "    ${5:return -1}",
+      "}"
+    ],
+    "description": "Create a typed binding only when a danger call succeeds"
+  },
   "Iterate list": {
     "prefix": "iterate",
     "body": [

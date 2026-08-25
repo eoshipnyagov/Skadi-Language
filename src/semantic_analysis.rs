@@ -595,14 +595,6 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             }
             if let Some(return_name) = returns.as_deref() {
                 let return_ty = parse_type_name_with_resources(return_name, &external_resources);
-                if *is_danger && matches!(return_ty, ValueType::ExternalResource(_)) {
-                    return Err(err_at_code(
-                        stmt,
-                        SEM_INVALID_CONTEXT,
-                        "danger functions cannot return an external resource until typed declaration recovery is available; use an infallible trusted adapter factory in this slice."
-                            .to_string(),
-                    ));
-                }
                 if matches!(return_ty, ValueType::Buffer(_)) {
                     return Err(err_at_code(
                         stmt,
@@ -1225,6 +1217,7 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                     declared_type: Some(dt),
                     value,
                     loc,
+                    on_error,
                     ..
                 } => {
                     if let Some(elem) = dt.strip_suffix(" List") {
@@ -1233,6 +1226,9 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                         warn_type_style(dt, loc.line, loc.column, user_types, out);
                     }
                     visit_expression_style(value, loc.line, loc.column, out);
+                    if let Some(on_error) = on_error {
+                        visit_statements(&on_error.statements, user_types, out);
+                    }
                 }
                 Statement::MemoryDecl {
                     name,
@@ -1245,8 +1241,16 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                         visit_statements(&on_error.statements, user_types, out);
                     }
                 }
-                Statement::VarDecl { value, loc, .. } => {
+                Statement::VarDecl {
+                    value,
+                    loc,
+                    on_error,
+                    ..
+                } => {
                     visit_expression_style(value, loc.line, loc.column, out);
+                    if let Some(on_error) = on_error {
+                        visit_statements(&on_error.statements, user_types, out);
+                    }
                 }
                 Statement::FunctionDef {
                     params,
@@ -1420,8 +1424,13 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 Statement::VarDecl {
                     name,
                     declared_type: Some(declared_type),
+                    on_error,
                     ..
                 } if declared_type == "Window" || declared_type.starts_with("Channel(") => {
+                    if let Some(on_error) = on_error {
+                        let mut handler_states = states.clone();
+                        visit_lifecycle_warnings(&on_error.statements, &mut handler_states, out);
+                    }
                     states.insert(name.clone(), ResourceLifecycle::Open);
                 }
                 Statement::ExpressionStatement { expr, .. } => {
@@ -1890,8 +1899,15 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
     fn visit_statements(statements: &[Statement], out: &mut HashSet<String>) {
         for stmt in statements {
             match stmt {
-                Statement::VarDecl { value, .. }
-                | Statement::Assignment { value, .. }
+                Statement::VarDecl {
+                    value, on_error, ..
+                } => {
+                    visit_expr(value, out);
+                    if let Some(on_error) = on_error {
+                        visit_block(on_error, out);
+                    }
+                }
+                Statement::Assignment { value, .. }
                 | Statement::FieldAssignment { value, .. }
                 | Statement::ListPush { value, .. } => visit_expr(value, out),
                 Statement::ReturnStatement { value, .. } => {
@@ -3003,6 +3019,7 @@ fn analyze_statement(
             value,
             is_constant,
             declared_type,
+            on_error,
             ..
         } => {
             if scope.contains_key(name) {
@@ -3025,14 +3042,124 @@ fn analyze_statement(
                     ),
                 ));
             }
-            let value_ty = infer_expression_type(
-                value,
-                scope,
-                memory_state,
-                functions,
-                structs,
-                fn_ctx.as_ref(),
-            )?;
+            let value_ty = if let Some(on_error) = on_error {
+                if *is_constant {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "fallible declaration must use 'new'; a constant cannot be initialized through an out parameter."
+                            .to_string(),
+                    ));
+                }
+                if declared_type.is_none() {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "fallible declaration '{}' requires an explicit type: use 'new <Type> {} = ... on error {{ ... }}'.",
+                            name, name
+                        ),
+                    ));
+                }
+                let Expression::Call {
+                    name: call_name,
+                    args,
+                } = value.as_ref()
+                else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "fallible declaration requires a direct danger fn call before 'on error'."
+                            .to_string(),
+                    ));
+                };
+                if builtin_from_name(call_name).is_some() {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "fallible declaration requires danger fn call: builtin '{}' is not danger.",
+                            call_name
+                        ),
+                    ));
+                }
+                let Some(resolved_name) = resolve_function_name(call_name, scope, functions) else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_UNKNOWN_FUNCTION,
+                        format!("unknown function '{}' in fallible declaration.", call_name),
+                    ));
+                };
+                let sig = functions
+                    .get(resolved_name)
+                    .expect("resolved function must exist");
+                if !sig.is_danger {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "fallible declaration requires danger fn call: '{}' is not declared as danger.",
+                            call_name
+                        ),
+                    ));
+                }
+                let Some(return_type) = sig.return_type.clone() else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "danger fn '{}' does not return a value for declaration '{}'.",
+                            call_name, name
+                        ),
+                    ));
+                };
+                validate_call_args(
+                    resolved_name,
+                    args,
+                    sig,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
+                for arg in args {
+                    record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+                }
+                let mut handler_scope = scope.clone();
+                let mut handler_memory_state = memory_state.clone();
+                analyze_block(
+                    on_error,
+                    &mut handler_scope,
+                    &mut handler_memory_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx.clone(),
+                    in_loop,
+                )?;
+                if !block_guarantees_termination(on_error) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "fallible declaration '{}' requires its 'on error' handler to terminate with return or return error; the binding does not exist on failure.",
+                            name
+                        ),
+                    ));
+                }
+                return_type
+            } else {
+                infer_expression_type(
+                    value,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?
+            };
             let final_ty = if let Some(tn) = declared_type {
                 let declared = if memory_state.labels.contains_key(tn) {
                     ValueType::Label(tn.clone())
@@ -3049,15 +3176,17 @@ fn analyze_statement(
                             .to_string(),
                     ));
                 }
-                validate_expression_for_target(
-                    &declared,
-                    value,
-                    scope,
-                    memory_state,
-                    functions,
-                    structs,
-                    fn_ctx.as_ref(),
-                )?;
+                if on_error.is_none() {
+                    validate_expression_for_target(
+                        &declared,
+                        value,
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
+                }
                 if let ValueType::Channel(elem_ty) = &declared
                     && !is_value_safe_channel_message(elem_ty, structs)
                 {
@@ -3095,15 +3224,17 @@ fn analyze_statement(
                 }
                 declared
             } else {
-                validate_expression_for_target(
-                    &value_ty,
-                    value,
-                    scope,
-                    memory_state,
-                    functions,
-                    structs,
-                    fn_ctx.as_ref(),
-                )?;
+                if on_error.is_none() {
+                    validate_expression_for_target(
+                        &value_ty,
+                        value,
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
+                }
                 value_ty
             };
             if declared_type.is_none()
@@ -3264,7 +3395,9 @@ fn analyze_statement(
             if final_ty == ValueType::Interrupt {
                 memory_state.interrupt_owners.insert(name.clone());
             }
-            record_task_effects_in_expr(stmt, value, scope, memory_state)?;
+            if on_error.is_none() {
+                record_task_effects_in_expr(stmt, value, scope, memory_state)?;
+            }
             assign_memory_provenance(memory_state, name, &final_ty, source_memory, structs);
             Ok(())
         }
@@ -5612,8 +5745,15 @@ fn expression_uses_task_handle(expr: &Expression, names: &HashSet<String>) -> bo
 fn statements_use_task_handle(statements: &[Statement], names: &HashSet<String>) -> bool {
     statements.iter().any(|stmt| match stmt {
         Statement::StopTask { task_name, .. } => names.contains(task_name),
-        Statement::VarDecl { value, .. }
-        | Statement::Assignment { value, .. }
+        Statement::VarDecl {
+            value, on_error, ..
+        } => {
+            expression_uses_task_handle(value, names)
+                || on_error
+                    .as_deref()
+                    .is_some_and(|block| statements_use_task_handle(&block.statements, names))
+        }
+        Statement::Assignment { value, .. }
         | Statement::FieldAssignment { value, .. }
         | Statement::ListPush { value, .. }
         | Statement::ExpressionStatement { expr: value, .. } => {
@@ -5722,10 +5862,18 @@ fn process_task_flow_statement(
 ) -> Result<Vec<TaskFlowState>, String> {
     match stmt {
         Statement::VarDecl {
-            name, value, loc, ..
+            name,
+            value,
+            on_error,
+            loc,
+            ..
         } => {
             let mut outputs = Vec::new();
             for mut state in states {
+                if let Some(on_error) = on_error {
+                    let _ =
+                        process_task_flow_statements(&on_error.statements, vec![state.clone()])?;
+                }
                 if let Expression::RunTask { args, .. } = value.as_ref() {
                     apply_task_flow_expressions(stmt, args, &mut state)?;
                     if state.contains_key(name) {

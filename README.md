@@ -43,7 +43,8 @@ The repository includes:
 - local package dependencies through `[dependencies]` and confined
   `import "package/path/file.skd"`,
 - a bounded C ABI through bodyless `external fn`, by-value fixed-field
-  `external struct`, typed buffers, opaque owning `external resource` handles,
+  `external struct`, typed buffers, fallible typed declarations, opaque owning
+  `external resource` handles,
   and project-level `[native]` C inputs,
 - experimental fixed/growing/child/root-static Memory runtime for `v1.2`,
 - explicit `view`/`edit` borrows and `move` ownership transfer for current

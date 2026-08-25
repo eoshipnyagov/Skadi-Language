@@ -76,6 +76,16 @@ xs = fs.list(".") on error {
 }
 
 #[test]
+fn parser_rejects_fallible_declaration_without_block() {
+    let err = parse_err("new i32 value = create() on error\n");
+    assert!(err.contains("SC-PARSE-234"), "{err}");
+    assert!(
+        err.contains("fallible declaration expected '{' after 'on error'"),
+        "{err}"
+    );
+}
+
+#[test]
 fn parser_structural_diagnostic_snapshot() {
     let src = r#"
 new Int x = 1

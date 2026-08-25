@@ -70,6 +70,11 @@ Opaque `external resource` is the exception: Skadi does not know the foreign
 destructor. Its owner must be passed explicitly to a consuming `move` parameter
 before scope exit, normally a danger close function with `on error`.
 
+A fallible factory needs neither a nullable nor a dummy handle:
+`new Resource value = create() on error { return ... }` creates the owner only
+on success. `value` does not exist in the error handler, so that handler must
+terminate the path with `return` or `return error`.
+
 A closed resource differs from a moved resource: closed/maybe-closed operations
 may be handled through `on error`, while use after move is a static error.
 

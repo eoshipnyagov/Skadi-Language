@@ -59,13 +59,17 @@ typedef struct {
     int32_t value;
 } Sensor;
 
-void *sensor_open(int32_t initial_value) {
+int sensor_open(int32_t initial_value, void **out) {
+    if (out == NULL) {
+        return 1;
+    }
     Sensor *sensor = (Sensor *)malloc(sizeof(Sensor));
     if (sensor == NULL) {
-        abort();
+        return 2;
     }
     sensor->value = initial_value;
-    return sensor;
+    *out = sensor;
+    return 0;
 }
 
 int32_t sensor_handle_read(const void *handle) {

@@ -169,7 +169,8 @@
   - `tests/c_abi_model.rs` проверяет `external fn`, scalar type whitelist, `void`,
     `external danger fn`, status/out ABI, `view`/`edit Buffer(T)`, by-value
     `external struct`, opaque owning `external resource`, field-order layout,
-    linear `view`/`edit`/`move`, leak/copy/ignored-result diagnostics, запрет
+    linear `view`/`edit`/`move`, typed danger declaration recovery, terminating
+    handler, leak/copy/ignored-result diagnostics, запрет
     хранения/возврата buffer и task-entry, formatter и C prototypes
   - CLI unit tests закрепляют GCC/Clang и MSVC linker argument shape
   - `tools/skadi-cli/tests/smoke.rs` собирает и запускает manifest project с

@@ -2,7 +2,7 @@
   "name": "skadi-syntax",
   "displayName": "Skadi Syntax",
   "description": "Syntax highlighting for the current Skadi language surface",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "publisher": "skadi-local",
   "license": "UNLICENSED",
   "repository": {
