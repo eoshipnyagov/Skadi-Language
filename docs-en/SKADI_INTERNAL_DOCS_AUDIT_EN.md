@@ -100,6 +100,10 @@ resolution, transitive dependency graphs, lock files, and re-exports do not.
 The current I/O model is deliberately small and
 synchronous; an old stream idea is not an accepted roadmap commitment.
 
+The bounded C ABI now also includes by-value `external struct` declarations
+with fixed scalar fields and ordinary C layout. Packed/custom layout, opaque
+handles, callbacks, and header verification remain future FFI work.
+
 ### Embedded and Canvas
 
 The host MVP implements typed periodic `Interrupt` and a strict interrupt-safe
@@ -120,7 +124,7 @@ remain future.
 6. Grow Canvas with events, text/images, and additional presenters.
 7. The bounded C ABI slice includes `external fn`, fixed scalar values,
    call-scoped `view`/`edit Buffer(T)`, and manifest native sources/libraries.
-   Continue package/module ergonomics, lockfiles, explicit struct layout, opaque
+   Continue remote package/module ergonomics, lockfiles, custom struct layout, opaque
    handles, and visible ownership of long-lived C resources. Resource declaration
    syntax must be tested against real C libraries before it is frozen.
 

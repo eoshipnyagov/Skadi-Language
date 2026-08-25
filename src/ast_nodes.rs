@@ -193,6 +193,7 @@ pub enum Statement {
         fields: Vec<StructField>,
         methods: Vec<StructMethod>,
         is_local: bool,
+        is_external: bool,
         loc: Location,
     },
     OnBlock {

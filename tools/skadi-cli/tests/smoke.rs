@@ -247,6 +247,7 @@ fn native_c_source_builds_and_runs_through_project_manifest() {
     let stdout = stdout_text(&run);
     assert!(stdout.contains("Calibrated reading: 400"), "{stdout}");
     assert!(stdout.contains("Reading valid: true"), "{stdout}");
+    assert!(stdout.contains("Reading confidence: 0.75"), "{stdout}");
     assert!(stdout.contains("Packet checksum: 60 -> 63"), "{stdout}");
 
     let _ = fs::remove_dir_all(project_dir);

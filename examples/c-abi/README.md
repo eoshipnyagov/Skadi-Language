@@ -3,7 +3,9 @@
 This project demonstrates the bounded Skadi C ABI with declarations isolated in
 the `src/sensor.skd` binding module, a native C source, fixed-width arguments,
 an `external danger fn` status/out adapter, scalar results, and call-scoped
-`view Buffer(u8)` / `edit Buffer(u8)` access to a typed Skadi list.
+`view Buffer(u8)` / `edit Buffer(u8)` access to a typed Skadi list. It also
+passes an `external struct SensorReading` by value using ordinary C field order
+and alignment.
 
 From this directory:
 
@@ -17,6 +19,7 @@ Expected program output:
 ```text
 Calibrated reading: 400
 Reading valid: true
+Reading confidence: 0.75
 Packet checksum: 60 -> 63
 ```
 

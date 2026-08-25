@@ -167,7 +167,8 @@
   - codegen shape проверяет double helpers и `sqrt/pow` вместо `sqrtf/powf`
 - bounded C ABI coverage
   - `tests/c_abi_model.rs` проверяет `external fn`, scalar type whitelist, `void`,
-    `external danger fn`, status/out ABI, `view`/`edit Buffer(T)`, запрет
+    `external danger fn`, status/out ABI, `view`/`edit Buffer(T)`, by-value
+    `external struct`, field-order layout, negative layout surface, запрет
     хранения/возврата buffer и task-entry, formatter и C prototypes
   - CLI unit tests закрепляют GCC/Clang и MSVC linker argument shape
   - `tools/skadi-cli/tests/smoke.rs` собирает и запускает manifest project с
@@ -214,7 +215,7 @@
 - C ABI
   - fixed scalar declarations, typed call-scoped buffers и `[native]`
     sources/libraries реализованы
-  - raw pointers, callbacks, explicit struct layout, opaque handles и
+  - raw pointers, callbacks, custom/packed struct layout, opaque handles и
     remote package/library resolver остаются следующими FFI slices
 
 ## 3. Политика для новых фич

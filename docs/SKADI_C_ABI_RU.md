@@ -1,7 +1,7 @@
 # C ABI и native C
 
 Skadi может вызывать небольшие C API через явно объявленные функции. Текущий
-MVP намеренно ограничен скалярами и типизированными буферами: он подходит для
+MVP намеренно ограничен скалярами, by-value структурами и типизированными буферами: он подходит для
 подключения проверенных C-функций, драйверных обёрток и постепенной проверки
 FFI-дизайна, но не открывает raw pointers и не скрывает владение ресурсами.
 
@@ -116,10 +116,50 @@ int sensor_read(int32_t channel, int32_t *out) {
 Для `external danger fn` C return type всегда `int`, а заявленный Skadi
 return type становится последним `out`-параметром.
 
-`Int`, `Float`, `Text`, `Path`, списки, struct, specialized types и owning
-resources не входят в текущий ABI. Для границы C всегда используйте
-fixed-width типы. Скалярные параметры передаются только по значению, а `move`
-не допускается на C-границе.
+`Int`, `Float`, `Text`, `Path`, списки, обычные struct, specialized types и
+owning resources не входят в текущий ABI. Для границы C всегда используйте
+fixed-width типы или явно объявленный `external struct`. ABI values передаются
+только по значению, а `move` не допускается на C-границе.
+
+## C-compatible структуры
+
+`external struct` описывает value-структуру с обычным layout выбранного C
+compiler:
+
+```skadi
+external struct SensorReading {
+    i32 value
+    f32 confidence
+    Bool valid
+}
+
+external fn sensor_describe(i32 value) returns SensorReading
+```
+
+Соответствующая сторона C должна объявить поля в том же порядке и с теми же
+типами:
+
+```c
+typedef struct {
+    int32_t value;
+    float confidence;
+    bool valid;
+} SensorReading;
+```
+
+Контракт первого среза:
+
+- минимум одно поле;
+- только fixed scalar ABI fields из таблицы выше;
+- порядок полей сохраняется;
+- используются обычные alignment/padding rules C compiler без `packed`;
+- методы, `hide`, вложенные структуры, arrays, pointers и owning fields запрещены;
+- аргументы и результаты `external fn` передаются по значению;
+- `view`/`edit external struct`, `Buffer(Struct)` и layout attributes отложены.
+
+Skadi не читает C header и не может доказать, что независимое C-объявление
+совпадает. Обе части должны собираться ABI-совместимыми toolchains и target
+настройками; лучше держать binding и C adapter рядом и проверять native smoke.
 
 ## Типизированные буферы
 
@@ -183,12 +223,12 @@ Config editor TUI сохраняет эти поля, но в текущем MVP
 - Для cross-target сборки native sources и libraries тоже должны поддерживать
   выбранную платформу.
 - Не передавайте C pointers как целые числа. Opaque handles, callbacks,
-  явный layout struct и правила освобождения остаются следующим FFI-этапом.
+  layout attributes и правила освобождения остаются следующим FFI-этапом.
 
 ## Текущие границы
 
 Не реализованы header import/generation, symbol aliases, calling-convention
-attributes, C struct/enum layout, raw pointers, nullable values, callbacks, variadic
+attributes, packed/custom struct и enum layout, raw pointers, nullable values, callbacks, variadic
 functions, C++ ABI и remote package/library resolver. Локальные Skadi package
 dependencies уже разрешаются через `[dependencies]`, но не заменяют поиск и
 версионирование native-библиотек. Это сознательная граница первого среза,

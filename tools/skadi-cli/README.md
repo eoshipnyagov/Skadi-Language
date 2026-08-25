@@ -71,7 +71,8 @@ Skadi call stack и базовые scalar-locals. Тот же машинный d
 
 Project manifest может подключать проверенные C sources и libraries через
 `[native]`; Skadi-граница объявляется bodyless `external fn` с fixed scalar
-типами. Pointer/resource ABI пока намеренно не поддерживается.
+типами, `external struct` для by-value C-layout и call-scoped `Buffer(T)`.
+Pointer/resource ABI пока намеренно не поддерживается.
 
 Секция `[dependencies]` связывает имя локального Skadi package с относительной
 директорией, содержащей свой `Skadi.toml`. Такой пакет импортируется как

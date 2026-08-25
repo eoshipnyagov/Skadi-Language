@@ -2,6 +2,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef struct {
+    int32_t value;
+    float confidence;
+    bool valid;
+} SensorReading;
+
 int sensor_calibrate(int16_t raw_value, int16_t offset, int32_t *out) {
     if (out == 0) {
         return 1;
@@ -16,6 +22,15 @@ int sensor_calibrate(int16_t raw_value, int16_t offset, int32_t *out) {
 
 bool sensor_is_valid(int32_t value) {
     return value >= 0 && value <= 1023;
+}
+
+SensorReading sensor_describe(int32_t value) {
+    SensorReading reading = {
+        .value = value,
+        .confidence = 0.75f,
+        .valid = sensor_is_valid(value),
+    };
+    return reading;
 }
 
 uint32_t sensor_checksum(const uint8_t *data, size_t length) {

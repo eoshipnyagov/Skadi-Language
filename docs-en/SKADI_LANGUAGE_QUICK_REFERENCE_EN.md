@@ -61,6 +61,7 @@ is rejected by semantic analysis.
 | Danger function | `danger fn load(Path path) returns Text { ... }` | Stable |
 | External C function | `external fn c_add(i32 a, i32 b) returns i32` | Experimental; bodyless scalar/buffer ABI |
 | External danger C function | `external danger fn c_read(i32 port) returns i32` | Experimental; C `int` status plus `out`, requires `on error` |
+| C-compatible value struct | `external struct Reading { i32 value }` | Experimental; fixed scalar fields, ordinary C layout, by value |
 | Read-only C buffer | `external fn sum(view Buffer(u8) data) returns u32` | Experimental; `const T *` plus `size_t` |
 | Mutable C buffer | `external danger fn fill(edit Buffer(u8) data)` | Experimental; `T *` plus `size_t` |
 | Local symbol | `local fn/struct` | Stable |

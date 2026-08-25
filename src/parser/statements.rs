@@ -249,6 +249,32 @@ pub fn parse_external_function_declaration(
         .map(|(statement, consumed)| (statement, consumed + 1))
 }
 
+pub fn parse_external_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
+    if tokens.get(start_index).map(Token::kind) != Some(TokenKind::KeywordExternal) {
+        return Err(parse_err(
+            "SC-PARSE-227",
+            "expected 'external' before external declaration.",
+        ));
+    }
+    match tokens.get(start_index + 1).map(Token::kind) {
+        Some(TokenKind::KeywordStruct) => {
+            parse_struct_declaration_inner(tokens, start_index + 1, false, true)
+                .map(|(statement, consumed)| (statement, consumed + 1))
+        }
+        Some(TokenKind::KeywordFn) | Some(TokenKind::Identifier)
+            if tokens.get(start_index + 1).is_some_and(|token| {
+                token.kind() == TokenKind::KeywordFn || token.lexeme == "danger"
+            }) =>
+        {
+            parse_external_function_declaration(tokens, start_index)
+        }
+        _ => Err(parse_err(
+            "SC-PARSE-230",
+            "external must prefix 'fn', 'danger fn', or 'struct'.",
+        )),
+    }
+}
+
 fn parse_function_declaration_inner(
     tokens: &[Token],
     start_index: usize,
@@ -466,8 +492,10 @@ pub fn parse_local_prefixed_declaration(
             parse_function_declaration_inner(tokens, start_index + 1, true, false)
                 .map(|(stmt, consumed)| (stmt, consumed + 1))
         }
-        TokenKind::KeywordStruct => parse_struct_declaration_inner(tokens, start_index + 1, true)
-            .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        TokenKind::KeywordStruct => {
+            parse_struct_declaration_inner(tokens, start_index + 1, true, false)
+                .map(|(stmt, consumed)| (stmt, consumed + 1))
+        }
         TokenKind::KeywordLabel => parse_label_declaration_inner(tokens, start_index + 1, true)
             .map(|(stmt, consumed)| (stmt, consumed + 1)),
         TokenKind::KeywordTag => parse_tag_declaration_inner(tokens, start_index + 1, true)
@@ -1973,13 +2001,14 @@ fn parse_tag_declaration_inner(
 }
 
 pub fn parse_struct_declaration(tokens: &[Token], start_index: usize) -> ParseResult<Statement> {
-    parse_struct_declaration_inner(tokens, start_index, false)
+    parse_struct_declaration_inner(tokens, start_index, false, false)
 }
 
 fn parse_struct_declaration_inner(
     tokens: &[Token],
     start_index: usize,
     is_local: bool,
+    is_external: bool,
 ) -> ParseResult<Statement> {
     let loc = Location {
         line: tokens[start_index].line,
@@ -2031,6 +2060,12 @@ fn parse_struct_declaration_inner(
             None
         };
         if let Some(ms) = method_start {
+            if is_external {
+                return Err(parse_err(
+                    "SC-PARSE-231",
+                    "external struct cannot declare methods; wrap behavior in Skadi functions.",
+                ));
+            }
             let (method, consumed) = parse_struct_method(tokens, ms, close)?;
             methods.push(method);
             cursor = ms + consumed;
@@ -2068,6 +2103,7 @@ fn parse_struct_declaration_inner(
             fields,
             methods,
             is_local,
+            is_external,
             loc,
         },
         close + 1 - start_index,

@@ -1,7 +1,7 @@
 # C ABI and Native C
 
 Skadi can call small C APIs through explicit external declarations. The current
-MVP deliberately supports scalars and typed buffers. It is useful for trusted C
+MVP deliberately supports scalars, by-value structs, and typed buffers. It is useful for trusted C
 helpers, driver adapters, and testing the FFI design without exposing raw
 pointers or hiding resource ownership.
 
@@ -105,10 +105,35 @@ call used as an ordinary expression.
 For `external danger fn`, the C return type is always `int`, and the declared
 Skadi result becomes the final out parameter.
 
-`Int`, `Float`, `Text`, `Path`, lists, structs, specialized types, and owning
-resources are not ABI types in this slice. Use fixed-width types at every C
-boundary. Scalar parameters are passed by value, and `move` is not accepted at
-the C boundary.
+`Int`, `Float`, `Text`, `Path`, lists, ordinary structs, specialized types, and
+owning resources are not ABI types in this slice. Use fixed-width types or an
+explicit `external struct` at the C boundary. ABI values are passed by value,
+and `move` is not accepted at the boundary.
+
+## C-compatible structs
+
+`external struct` declares a value struct using the selected C compiler's
+ordinary field layout:
+
+```skadi
+external struct SensorReading {
+    i32 value
+    f32 confidence
+    Bool valid
+}
+
+external fn sensor_describe(i32 value) returns SensorReading
+```
+
+The C side must declare the same field order and matching types. The first slice
+requires at least one fixed-scalar field and forbids methods, `hide`, nested
+structs, arrays, pointers, owning fields, and packed/custom layout. External
+struct parameters and results are by value; borrowed structs, `Buffer(Struct)`,
+and layout attributes remain future work.
+
+Skadi does not parse the C header and cannot prove that the independent C
+declaration matches. Compile both sides for compatible targets/toolchains and
+keep a native smoke test beside the binding.
 
 ## Typed buffers
 
@@ -161,8 +186,8 @@ directly in `Skadi.toml`.
   detect an ABI mismatch.
 - Native sources and libraries must support the selected cross target.
 - Do not encode C pointers as integers.
-- Header import/generation, symbol aliases, calling conventions, C struct/enum
-  layout, raw pointers, nullable values, callbacks, variadics, C++, and remote
+- Header import/generation, symbol aliases, calling conventions, packed/custom
+  struct and enum layout, raw pointers, nullable values, callbacks, variadics, C++, and remote
   package/library resolution are not implemented yet. Local Skadi package
   dependencies already resolve through `[dependencies]`, but do not replace
   native library discovery or versioning.

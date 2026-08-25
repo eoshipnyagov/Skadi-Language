@@ -19,6 +19,7 @@ Date: 2026-08-25
 - ByteSize, Angle, Vec2/Vec3/Vec4 and vector math.
 - `edit` mutable and `view` read-only call-scoped borrows;
 - bodyless `external fn` scalar ABI plus call-scoped `view`/`edit Buffer(T)`;
+- by-value `external struct` with fixed scalar fields and ordinary C layout;
 - explicit `move` ownership transfer and resource-returning factories;
 - periodic `Interrupt` sources and `on interrupt`;
 - Channel `try_send`, `close`/drain, cancellation-aware blocking operations,

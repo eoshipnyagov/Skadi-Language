@@ -345,20 +345,22 @@ impl Formatter {
                 name,
                 fields,
                 methods,
+                is_external,
                 ..
             } => {
                 self.write_indent(indent);
+                if *is_external {
+                    self.out.push_str("external ");
+                }
                 self.out.push_str("struct ");
                 self.out.push_str(name);
                 self.out.push_str(" {\n");
-                for (index, field) in fields.iter().enumerate() {
+                for field in fields {
                     self.write_indent(indent + 1);
                     self.out.push_str(&field.field_type);
                     self.out.push(' ');
                     self.out.push_str(&field.name);
-                    if index + 1 < fields.len() || !methods.is_empty() {
-                        self.out.push('\n');
-                    }
+                    self.out.push('\n');
                 }
                 if !fields.is_empty() && !methods.is_empty() {
                     self.out.push('\n');

@@ -383,6 +383,17 @@ fn is_external_abi_type_name(name: &str) -> bool {
     )
 }
 
+fn is_external_abi_value_type(
+    name: &str,
+    external_structs: &std::collections::HashSet<String>,
+) -> bool {
+    if is_external_abi_type_name(name) {
+        return true;
+    }
+    let unqualified = name.rsplit('.').next().unwrap_or(name);
+    external_structs.contains(unqualified)
+}
+
 fn external_buffer_element(name: &str) -> Option<&str> {
     name.strip_prefix("Buffer(")
         .and_then(|inner| inner.strip_suffix(')'))
@@ -409,6 +420,18 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
     let mut labels: HashMap<String, Vec<LabelVariant>> = HashMap::new();
     let mut tags: HashMap<String, Vec<String>> = HashMap::new();
     let mut structs: HashMap<String, StructInfo> = HashMap::new();
+    let external_structs: std::collections::HashSet<String> = program
+        .statements
+        .iter()
+        .filter_map(|statement| match statement {
+            Statement::StructDecl {
+                name,
+                is_external: true,
+                ..
+            } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
     let task_context_functions = collect_task_context_functions(&program.statements);
 
     for stmt in &program.statements {
@@ -463,12 +486,12 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                                 ),
                             ));
                         }
-                    } else if !is_external_abi_type_name(parameter_type) {
+                    } else if !is_external_abi_value_type(parameter_type, &external_structs) {
                         return Err(err_at_code(
                             stmt,
                             SEM_INVALID_CONTEXT,
                             format!(
-                                "external parameter '{}' uses unsupported ABI type '{}'; use fixed-width integers, f32/f64, Bool, or Char.",
+                                "external parameter '{}' uses unsupported ABI type '{}'; use a fixed scalar or an 'external struct'.",
                                 parameter.name, parameter_type
                             ),
                         ));
@@ -477,20 +500,20 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                             stmt,
                             SEM_INVALID_CONTEXT,
                             format!(
-                                "external scalar parameter '{}' must be passed by value; only Buffer(T) supports 'view' or 'edit'.",
+                                "external value parameter '{}' must be passed by value; only Buffer(T) supports 'view' or 'edit'.",
                                 parameter.name
                             ),
                         ));
                     }
                 }
                 if let Some(return_type) = returns.as_deref()
-                    && !is_external_abi_type_name(return_type)
+                    && !is_external_abi_value_type(return_type, &external_structs)
                 {
                     return Err(err_at_code(
                         stmt,
                         SEM_INVALID_CONTEXT,
                         format!(
-                            "external function '{}' uses unsupported return ABI type '{}'; omit 'returns' for void or use a fixed scalar type.",
+                            "external function '{}' uses unsupported return ABI type '{}'; omit 'returns' for void or use a fixed scalar or 'external struct'.",
                             name, return_type
                         ),
                     ));
@@ -649,6 +672,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             fields,
             methods,
             is_local,
+            is_external,
             ..
         } = stmt
         {
@@ -666,6 +690,65 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                         name
                     ),
                 ));
+            }
+            if *is_external {
+                if *is_local {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!("external struct '{}' cannot be local.", name),
+                    ));
+                }
+                if fields.is_empty() {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!("external struct '{}' requires at least one field.", name),
+                    ));
+                }
+                if !methods.is_empty() {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "external struct '{}' cannot declare methods; wrap behavior in Skadi functions.",
+                            name
+                        ),
+                    ));
+                }
+                let mut field_names = std::collections::HashSet::new();
+                for field in fields {
+                    if field.is_hidden {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "external struct '{}' field '{}' cannot be hidden.",
+                                name, field.name
+                            ),
+                        ));
+                    }
+                    if !is_external_abi_type_name(&field.field_type) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "external struct '{}' field '{}' uses unsupported ABI type '{}'; use fixed-width integers, f32/f64, Bool, or Char.",
+                                name, field.name, field.field_type
+                            ),
+                        ));
+                    }
+                    if !field_names.insert(field.name.as_str()) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_REDECLARATION,
+                            format!(
+                                "external struct '{}' declares field '{}' more than once.",
+                                name, field.name
+                            ),
+                        ));
+                    }
+                }
             }
             let mut fmap = HashMap::new();
             let mut hidden = std::collections::HashSet::new();

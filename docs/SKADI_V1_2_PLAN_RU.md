@@ -520,8 +520,8 @@ vector slice до матриц или transform framework.
   CLI smoke;
 - VS Code/Pygments и RU/EN user docs.
 
-Следующие FFI slices намеренно не входят в MVP: raw pointers, explicit
-struct layout, opaque handles, callbacks, symbol aliases, header generation,
+Следующие FFI slices намеренно не входят в этот MVP: raw pointers, value struct
+layout, opaque handles, callbacks, symbol aliases, header generation,
 remote package/library resolver и формализованное владение C resources.
 
 ### Milestone 17: local package resolver - выполнен
@@ -544,6 +544,25 @@ remote package/library resolver и формализованное владени
 Сознательно отложены Git/registry sources, version constraints, transitive
 dependency graph, lock-файл, package commands и re-export. Lock-файл появится
 вместе с реальным remote/version resolver, а не как пустой артефакт.
+
+### Milestone 18: C ABI value structs - выполнен
+
+Реализовано:
+
+- `external struct Name { ... }` как явный C-compatible value contract;
+- минимум одно поле и fixed scalar whitelist `i8..i64`, `u8..u64`, `f32/f64`,
+  `Bool`, `Char`;
+- сохранение порядка полей и обычные target C alignment/padding rules;
+- by-value параметры и результаты обычных и danger `external fn`;
+- запрет методов, `hide`, duplicate fields, nesting, owning types и обычных
+  Skadi structs на ABI-границе;
+- parser/semantic/formatter/C-shape tests и реальный native compile-run через
+  расширенный `examples/c-abi`.
+
+Отложены packed/custom alignment, explicit offsets, nested ABI structs,
+`Buffer(Struct)`, borrowed structs, header verification/generation и opaque
+handles. `external struct` не делает вид, что компилятор сверил независимый C
+header: совпадение layout остаётся явным контрактом binding-адаптера.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 

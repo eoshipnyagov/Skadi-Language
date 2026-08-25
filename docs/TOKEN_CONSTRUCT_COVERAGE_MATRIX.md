@@ -14,8 +14,9 @@ Legend:
 |---|---|---|---|---|---|---|
 | `fn` | Y | Y | Y | Y | Y | core function path covered in smoke+e2e |
 | `danger fn` | Y | Y | Y | Y | Y | includes `return error` flow |
-| `external fn` | Y | Y | Y | Y | Y | bodyless fixed-scalar and typed-buffer C ABI; manifest native-source smoke |
+| `external fn` | Y | Y | Y | Y | Y | bodyless fixed-scalar/value-struct and typed-buffer C ABI; manifest native-source smoke |
 | `external danger fn` | Y | Y | Y | Y | Y | existing status/out danger ABI; mandatory `on error` |
+| `external struct` | Y | Y | Y | Y | Y | fixed scalar C layout, by-value native compile-run smoke |
 | `struct` | Y | Y | P | P | P | lowering works for current subset; advanced cases pending |
 | `label` | Y | Y | Y | Y | Y | explicit numeric discriminants; `ErrorCode` starts with `Ok = 0` |
 | `tag` | Y | Y | Y | Y | Y | symbolic nominal variants without user numeric contract |

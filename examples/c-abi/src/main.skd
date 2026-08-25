@@ -7,6 +7,7 @@ calibrated = sensor.sensor_calibrate(raw_value, offset) on error {
     output("Calibration failed")
 }
 new Bool valid = sensor.sensor_is_valid(calibrated)
+new sensor.SensorReading reading = sensor.sensor_describe(calibrated)
 new u8 List packet = [10, 20, 30]
 new u32 checksum_before = sensor.sensor_checksum(view packet)
 sensor.sensor_adjust(edit packet, 1) on error {
@@ -16,4 +17,5 @@ new u32 checksum_after = sensor.sensor_checksum(view packet)
 
 output("Calibrated reading: ", calibrated)
 output("Reading valid: ", valid)
+output("Reading confidence: ", reading.confidence)
 output("Packet checksum: ", checksum_before, " -> ", checksum_after)

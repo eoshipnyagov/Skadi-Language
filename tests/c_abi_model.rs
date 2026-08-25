@@ -1,4 +1,4 @@
-use v01::ast_nodes::Program;
+use v01::ast_nodes::{Program, Statement};
 use v01::codegen::transpile_program_to_c;
 use v01::formatter::format_source;
 use v01::lexer::lex;
@@ -42,6 +42,52 @@ c_ping()
 }
 
 #[test]
+fn external_struct_values_are_typed_and_lowered_with_c_field_order() {
+    let program = semantic_ok(
+        r#"
+external struct SensorReading {
+    i32 value
+    f32 confidence
+    Bool valid
+}
+
+external fn sensor_describe(i32 value) returns SensorReading
+external danger fn sensor_read(i32 channel) returns SensorReading
+
+new SensorReading reading = sensor_describe(7)
+reading = sensor_read(1) on error {
+    output("read failed")
+}
+"#,
+    );
+    let Statement::StructDecl {
+        is_external: true,
+        fields,
+        ..
+    } = &program.statements[0]
+    else {
+        panic!("expected external struct");
+    };
+    assert_eq!(fields.len(), 3);
+
+    let c = transpile_program_to_c(&program);
+    assert!(
+        c.contains(
+            "typedef struct {\n    int32_t value;\n    float confidence;\n    bool valid;\n} SensorReading;"
+        ),
+        "{c}"
+    );
+    assert!(
+        c.contains("SensorReading sensor_describe(int32_t value);"),
+        "{c}"
+    );
+    assert!(
+        c.contains("int sensor_read(int32_t channel, SensorReading *out);"),
+        "{c}"
+    );
+}
+
+#[test]
 fn formatter_preserves_bodyless_external_declarations() {
     let formatted =
         format_source(
@@ -51,6 +97,17 @@ fn formatter_preserves_bodyless_external_declarations() {
     assert_eq!(
         formatted,
         "external fn c_add(i32 left, i32 right) returns i32\n\nexternal fn c_sum(view Buffer(u8) data) returns u32\n\nexternal danger fn c_zero(edit Buffer(u8) data)\n\nexternal fn c_ping()\n"
+    );
+}
+
+#[test]
+fn formatter_preserves_external_struct_layout() {
+    let formatted =
+        format_source("external struct Reading {\ni32 value\nf32 confidence\nBool valid\n}\n")
+            .expect("format external struct");
+    assert_eq!(
+        formatted,
+        "external struct Reading {\n    i32 value\n    f32 confidence\n    Bool valid\n}\n"
     );
 }
 
@@ -170,6 +227,31 @@ fn external_contract_accepts_only_fixed_scalar_abi_types() {
         assert!(error.contains("SC-SEM-040"), "{error}");
         assert!(error.contains("unsupported"), "{error}");
     }
+}
+
+#[test]
+fn external_struct_rejects_ambiguous_or_non_c_layout_surface() {
+    for source in [
+        "external struct Empty {\n}\n",
+        "external struct TextField {\n    Text value\n}\n",
+        "external struct HiddenField {\n    hide i32 value\n}\n",
+        "external struct Duplicate {\n    i32 value\n    i32 value\n}\n",
+        "struct Regular {\n    i32 value\n}\nexternal fn relay(Regular value) returns i32\n",
+    ] {
+        let error = semantic_err(source);
+        assert!(error.contains("SC-SEM-"), "{error}");
+    }
+
+    let method_tokens = lex(
+        "external struct WithMethod {\n    i32 value\n    fn get() {\n        pass\n    }\n}\n",
+    )
+    .expect("lex external method");
+    let method_error = parse_program(&method_tokens).expect_err("external method must fail");
+    assert!(method_error.contains("SC-PARSE-231"), "{method_error}");
+    assert!(
+        method_error.contains("cannot declare methods"),
+        "{method_error}"
+    );
 }
 
 #[test]

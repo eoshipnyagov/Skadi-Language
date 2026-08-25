@@ -59,6 +59,10 @@
   - native sources/libraries задаются через `[native]` в `Skadi.toml`.
 - `external danger fn name(...) returns Type` - `Experimental`
   - использует существующий status/out danger ABI и обязательный `on error`.
+- `external struct Name { fixed_width field }` - `Experimental`
+  - C-compatible value layout с сохранением порядка полей;
+  - минимум одно fixed scalar поле, без методов, `hide`, nesting и packing;
+  - разрешён по значению в аргументах/результатах `external fn`.
 - типизированные параметры - `Stable`
 - канонический типизированный возврат `fn name(...) returns Type` - `Stable`
 - legacy-возврат `fn name(...) Type` - `Partial`

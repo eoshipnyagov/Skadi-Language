@@ -262,8 +262,9 @@ backend и embedded display adapter.
    call-scoped `view`/`edit Buffer(T)` и `[native]` sources/libraries. Первый
    local-path package resolver через `[dependencies]` также готов и сохраняет
    direct-import-only/diamond-dedup контракты. Следующая очередь: Git/registry
-   resolver, transitive graph и lockfile, explicit struct layout, opaque handles
-   и видимое владение долгоживущими C resources; эти формы проверяются на
+   resolver, transitive graph и lockfile, custom/packed struct layout, opaque
+   handles и видимое владение долгоживущими C resources; by-value
+   `external struct` с fixed scalar fields уже реализован. Следующие формы проверяются на
    реальных C-библиотеках до заморозки.
 
 ### Параллельный tooling-трек
