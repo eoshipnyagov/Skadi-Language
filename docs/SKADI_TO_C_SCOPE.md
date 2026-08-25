@@ -167,7 +167,7 @@ CLI добавляет platform link flags, включая `-pthread` на POSIX
   allocation-free rasterizer с source-over alpha blending и clipping;
 - `checksum` даёт deterministic headless regression seam;
 - `Window` является отдельным linear resource;
-- `windows.open` и `present(direct canvas)` используют Win32/GDI backend;
+- `windows.open` и `present(edit canvas)` используют Win32/GDI backend;
 - headless Canvas не включает Window runtime, а Windows toolchain добавляет
   `gdi32` только для соответствующего target path;
 - `Color`/`Rect` value-safe, `Canvas`/`Window` запрещены в Task/Channel и

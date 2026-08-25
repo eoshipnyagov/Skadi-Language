@@ -1,6 +1,6 @@
 # Token/Construct Coverage Matrix (current `develop`)
 
-Date: 2026-08-17
+Date: 2026-08-25
 Purpose: traceability across stable `v1.1` and experimental `v1.2` systems surface.
 
 Legend:
@@ -14,6 +14,8 @@ Legend:
 |---|---|---|---|---|---|---|
 | `fn` | Y | Y | Y | Y | Y | core function path covered in smoke+e2e |
 | `danger fn` | Y | Y | Y | Y | Y | includes `return error` flow |
+| `external fn` | Y | Y | Y | Y | Y | bodyless fixed-scalar and typed-buffer C ABI; manifest native-source smoke |
+| `external danger fn` | Y | Y | Y | Y | Y | existing status/out danger ABI; mandatory `on error` |
 | `struct` | Y | Y | P | P | P | lowering works for current subset; advanced cases pending |
 | `label` | Y | Y | Y | Y | Y | explicit numeric discriminants; `ErrorCode` starts with `Ok = 0` |
 | `tag` | Y | Y | Y | Y | Y | symbolic nominal variants without user numeric contract |
@@ -35,7 +37,8 @@ Legend:
 | `fixed` / `const` | identifier | Y | Y | Y | Y | ordinary identifier names; immutable binding keyword is `constant` |
 | `hide` | Y | Y | Y | P | P | hidden-field access checks implemented; broader struct-lowering depth is ongoing |
 | `local` | Y | Y | Y | P | P | local visibility enforced in import pipeline via symbol isolation |
-| `direct` / `view` | Y | Y | Y | Y | Y | explicit mutable/read-only function borrow contract |
+| `edit` / `view` | Y | Y | Y | Y | Y | explicit mutable/read-only function borrow contract |
+| `Buffer(T)` external parameter | P | Y | Y | Y | Y | fixed-scalar typed List lowers to pointer + `size_t` for one call |
 | `move` | Y | Y | Y | Y | Y | explicit resource transfer, factory return, branch/loop checks |
 | `allow grow` / `allow drop` | P (policy words) | Y | Y | Y | Y | contextual only inside Memory initializer; drop is declarative |
 | `import "./... .skd"` | N (resolved in CLI pipeline pre-lex) | N (pre-merged) | N (pre-merged) | N (pre-merged) | Y | covered in `tools/skadi-cli` tests |
@@ -110,6 +113,7 @@ Legend:
 - Canvas frontend/runtime/showcase: `tests/canvas_model.rs`, `tests/showcase_programs.rs`, `tests/showcase_builds.rs`, `benchmarks/bench_17_canvas_palette.skd`
 - Transition surfaces and Char literals: `tests/transition_surfaces.rs`, `tests/codegen_e2e.rs`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
+- C ABI parser/semantic/codegen/formatter: `tests/c_abi_model.rs`; manifest/native compile-run: `tools/skadi-cli/tests/smoke.rs`
 
 ## 4. Synchronization rules
 

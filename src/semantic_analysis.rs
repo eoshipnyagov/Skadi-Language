@@ -40,6 +40,7 @@ enum ValueType {
     Interrupt,
     Task(Option<Box<ValueType>>),
     Channel(Box<ValueType>),
+    Buffer(Box<ValueType>),
     List(Box<ValueType>),
     Struct(String),
     Label(String),
@@ -50,6 +51,7 @@ enum ValueType {
 #[derive(Clone, Debug)]
 struct FunctionSig {
     is_danger: bool,
+    is_external: bool,
     return_type: Option<ValueType>,
     has_explicit_return: bool,
     param_types: Vec<ValueType>,
@@ -364,6 +366,29 @@ fn sem_err(code: &'static str, msg: String) -> String {
     format_diagnostic(DiagnosticKind::Semantic, Some(code), msg, None, None, None)
 }
 
+fn is_external_abi_type_name(name: &str) -> bool {
+    matches!(
+        name,
+        "i8" | "i16"
+            | "i32"
+            | "i64"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "f32"
+            | "f64"
+            | "Bool"
+            | "Char"
+    )
+}
+
+fn external_buffer_element(name: &str) -> Option<&str> {
+    name.strip_prefix("Buffer(")
+        .and_then(|inner| inner.strip_suffix(')'))
+        .map(str::trim)
+}
+
 fn err_at_code(stmt: &Statement, code: &'static str, msg: String) -> String {
     if let Some((line, col)) = statement_loc(stmt) {
         format_diagnostic(
@@ -394,11 +419,93 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             params,
             uses_returns_keyword: _,
             is_local,
+            is_external,
             ..
         } = stmt
         {
+            if *is_external {
+                if name == "main" || builtin_from_name(name).is_some() {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!("external function name '{}' is reserved by Skadi.", name),
+                    ));
+                }
+                for parameter in params {
+                    let Some(parameter_type) = parameter.param_type.as_deref() else {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "external parameter '{}' requires an explicit fixed ABI type.",
+                                parameter.name
+                            ),
+                        ));
+                    };
+                    if let Some(element) = external_buffer_element(parameter_type) {
+                        if !is_external_abi_type_name(element) {
+                            return Err(err_at_code(
+                                stmt,
+                                SEM_INVALID_CONTEXT,
+                                format!(
+                                    "external buffer parameter '{}' uses unsupported element type '{}'; use a fixed scalar ABI type.",
+                                    parameter.name, element
+                                ),
+                            ));
+                        }
+                        if !matches!(parameter.borrow, BorrowMode::View | BorrowMode::EditMutable) {
+                            return Err(err_at_code(
+                                stmt,
+                                SEM_INVALID_CONTEXT,
+                                format!(
+                                    "external buffer parameter '{}' requires 'view Buffer({})' or 'edit Buffer({})'.",
+                                    parameter.name, element, element
+                                ),
+                            ));
+                        }
+                    } else if !is_external_abi_type_name(parameter_type) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "external parameter '{}' uses unsupported ABI type '{}'; use fixed-width integers, f32/f64, Bool, or Char.",
+                                parameter.name, parameter_type
+                            ),
+                        ));
+                    } else if parameter.borrow != BorrowMode::Value {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "external scalar parameter '{}' must be passed by value; only Buffer(T) supports 'view' or 'edit'.",
+                                parameter.name
+                            ),
+                        ));
+                    }
+                }
+                if let Some(return_type) = returns.as_deref()
+                    && !is_external_abi_type_name(return_type)
+                {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "external function '{}' uses unsupported return ABI type '{}'; omit 'returns' for void or use a fixed scalar type.",
+                            name, return_type
+                        ),
+                    ));
+                }
+            }
             if let Some(return_name) = returns.as_deref() {
                 let return_ty = parse_type_name(return_name);
+                if matches!(return_ty, ValueType::Buffer(_)) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "Buffer(T) is a call-scoped external parameter and cannot be returned."
+                            .to_string(),
+                    ));
+                }
                 ensure_memory_type_allowed(stmt, &return_ty, "function return type", false)?;
                 ensure_task_type_allowed(stmt, &return_ty, "function return type", false)?;
                 ensure_channel_type_allowed(
@@ -411,6 +518,14 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             for param in params {
                 if let Some(param_name) = param.param_type.as_deref() {
                     let param_ty = parse_type_name(param_name);
+                    if matches!(param_ty, ValueType::Buffer(_)) && !*is_external {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            "Buffer(T) is available only as a 'view' or 'edit' external function parameter."
+                                .to_string(),
+                        ));
+                    }
                     if requires_explicit_resource_mode(&param_ty)
                         && param.borrow == BorrowMode::Value
                     {
@@ -418,7 +533,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                             stmt,
                             SEM_INVALID_CONTEXT,
                             format!(
-                                "resource parameter '{}' must use 'direct', 'view', or 'move'.",
+                                "resource parameter '{}' must use 'edit', 'view', or 'move'.",
                                 param.name
                             ),
                         ));
@@ -466,10 +581,15 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 name.clone(),
                 FunctionSig {
                     is_danger: *is_danger,
-                    return_type: returns
-                        .as_deref()
-                        .map(parse_type_name)
-                        .or(Some(ValueType::Int)),
+                    is_external: *is_external,
+                    return_type: if *is_external {
+                        returns.as_deref().map(parse_type_name)
+                    } else {
+                        returns
+                            .as_deref()
+                            .map(parse_type_name)
+                            .or(Some(ValueType::Int))
+                    },
                     has_explicit_return: returns.is_some(),
                     param_types: params.iter().map(param_type_or_default).collect(),
                     param_borrows: params.iter().map(|param| param.borrow).collect(),
@@ -587,7 +707,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                                 stmt,
                                 SEM_INVALID_CONTEXT,
                                 format!(
-                                    "resource parameter '{}' must use 'direct', 'view', or 'move'.",
+                                    "resource parameter '{}' must use 'edit', 'view', or 'move'.",
                                     param.name
                                 ),
                             ));
@@ -626,6 +746,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                     m.name.clone(),
                     FunctionSig {
                         is_danger: m.is_danger,
+                        is_external: false,
                         return_type: m
                             .returns
                             .as_deref()
@@ -1327,6 +1448,12 @@ fn parse_type_name(name: &str) -> ValueType {
     {
         return ValueType::Channel(Box::new(parse_type_name(inner.trim())));
     }
+    if let Some(inner) = name
+        .strip_prefix("Buffer(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return ValueType::Buffer(Box::new(parse_type_name(inner.trim())));
+    }
     if let Some(elem) = name.strip_suffix(" List") {
         return ValueType::List(Box::new(parse_type_name(elem.trim())));
     }
@@ -1404,7 +1531,7 @@ fn interrupt_safe_expression(expr: &Expression) -> bool {
         Expression::LiteralString(_)
         | Expression::ListLiteral(_)
         | Expression::Index { .. }
-        | Expression::DirectBorrow(_)
+        | Expression::EditBorrow(_)
         | Expression::ViewBorrow(_)
         | Expression::Move(_)
         | Expression::RunTask { .. }
@@ -1513,7 +1640,7 @@ fn collect_task_context_functions(statements: &[Statement]) -> HashSet<String> {
                 }
             }
             Expression::VariableReference(_)
-            | Expression::DirectBorrow(_)
+            | Expression::EditBorrow(_)
             | Expression::ViewBorrow(_)
             | Expression::Move(_)
             | Expression::MemberAccess { .. }
@@ -2042,24 +2169,24 @@ fn validate_call_args(
         match (borrow, arg) {
             (
                 BorrowMode::Value,
-                Expression::DirectBorrow(_) | Expression::ViewBorrow(_) | Expression::Move(_),
+                Expression::EditBorrow(_) | Expression::ViewBorrow(_) | Expression::Move(_),
             ) => {
                 return Err(sem_err(
                     SEM_ARG_TYPE,
                     format!(
-                        "value parameter of '{}' must not use 'view', 'direct', or 'move' at call site.",
+                        "value parameter of '{}' must not use 'view', 'edit', or 'move' at call site.",
                         name
                     ),
                 ));
             }
-            (BorrowMode::DirectMutable, Expression::DirectBorrow(_)) => {}
+            (BorrowMode::EditMutable, Expression::EditBorrow(_)) => {}
             (BorrowMode::View, Expression::ViewBorrow(_)) => {}
             (BorrowMode::Move, Expression::Move(_)) => {}
-            (BorrowMode::DirectMutable, _) => {
+            (BorrowMode::EditMutable, _) => {
                 return Err(sem_err(
                     SEM_ARG_TYPE,
                     format!(
-                        "mutable borrowed parameter of '{}' requires explicit 'direct <identifier>' argument.",
+                        "mutable borrowed parameter of '{}' requires explicit 'edit <identifier>' argument.",
                         name
                     ),
                 ));
@@ -2086,6 +2213,29 @@ fn validate_call_args(
         }
         let actual_ty =
             infer_expression_type(arg, scope, memory_state, functions, structs, fn_ctx)?;
+        if let ValueType::Buffer(expected_element) = &expected_ty {
+            let ValueType::List(actual_element) = actual_ty else {
+                return Err(sem_err(
+                    SEM_ARG_TYPE,
+                    format!(
+                        "external Buffer parameter of '{}' requires a typed List, got {:?}.",
+                        name, actual_ty
+                    ),
+                ));
+            };
+            if !can_assign(expected_element, &actual_element)
+                || !can_assign(&actual_element, expected_element)
+            {
+                return Err(sem_err(
+                    SEM_ARG_TYPE,
+                    format!(
+                        "external Buffer element mismatch for '{}': expected {:?} List, got {:?} List.",
+                        name, expected_element, actual_element
+                    ),
+                ));
+            }
+            continue;
+        }
         if !can_assign_expression(&expected_ty, &actual_ty, arg) {
             return Err(sem_err(
                 SEM_ARG_TYPE,
@@ -2155,6 +2305,16 @@ fn parse_declared_type_name(
             nominal_types,
         )));
     }
+    if let Some(inner) = name
+        .strip_prefix("Buffer(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return ValueType::Buffer(Box::new(parse_declared_type_name(
+            inner.trim(),
+            structs,
+            nominal_types,
+        )));
+    }
     if let Some(elem) = name.strip_suffix(" List") {
         let elem = elem.trim();
         let parsed_elem = parse_type_name(elem);
@@ -2184,7 +2344,7 @@ fn parse_declared_type_name(
 fn type_contains_memory(ty: &ValueType) -> bool {
     match ty {
         ValueType::Memory => true,
-        ValueType::List(inner) => type_contains_memory(inner),
+        ValueType::List(inner) | ValueType::Buffer(inner) => type_contains_memory(inner),
         ValueType::Task(Some(inner)) | ValueType::Channel(inner) => type_contains_memory(inner),
         _ => false,
     }
@@ -2193,7 +2353,9 @@ fn type_contains_memory(ty: &ValueType) -> bool {
 fn type_contains_task(ty: &ValueType) -> bool {
     match ty {
         ValueType::Task(_) => true,
-        ValueType::List(inner) | ValueType::Channel(inner) => type_contains_task(inner),
+        ValueType::List(inner) | ValueType::Channel(inner) | ValueType::Buffer(inner) => {
+            type_contains_task(inner)
+        }
         _ => false,
     }
 }
@@ -2201,7 +2363,7 @@ fn type_contains_task(ty: &ValueType) -> bool {
 fn type_contains_channel(ty: &ValueType) -> bool {
     match ty {
         ValueType::Channel(_) => true,
-        ValueType::List(inner) => type_contains_channel(inner),
+        ValueType::List(inner) | ValueType::Buffer(inner) => type_contains_channel(inner),
         ValueType::Task(Some(inner)) => type_contains_channel(inner),
         _ => false,
     }
@@ -2220,7 +2382,11 @@ fn is_value_safe_channel_message(ty: &ValueType, structs: &HashMap<String, Struc
                     .all(|field_ty| is_value_safe_channel_message(field_ty, structs))
             })
             .unwrap_or(false),
-        ValueType::List(_) | ValueType::Canvas | ValueType::Window | ValueType::Interrupt => false,
+        ValueType::List(_)
+        | ValueType::Buffer(_)
+        | ValueType::Canvas
+        | ValueType::Window
+        | ValueType::Interrupt => false,
         _ => true,
     }
 }
@@ -2268,6 +2434,7 @@ fn is_task_safe_boundary_type(
         // Lists have mutable backing storage in the current runtime. Passing their
         // representation by value would create a cross-task mutable alias.
         ValueType::List(_)
+        | ValueType::Buffer(_)
         | ValueType::Memory
         | ValueType::Interrupt
         | ValueType::Canvas
@@ -2624,6 +2791,14 @@ fn analyze_statement(
                 } else {
                     parse_declared_type_name(tn, structs, &HashMap::new())
                 };
+                if matches!(declared, ValueType::Buffer(_)) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "Buffer(T) cannot be stored; use a typed List and pass it to an external function with 'view' or 'edit'."
+                            .to_string(),
+                    ));
+                }
                 validate_expression_for_target(
                     &declared,
                     value,
@@ -2712,7 +2887,7 @@ fn analyze_statement(
                 && matches!(
                     value.as_ref(),
                     Expression::VariableReference(_)
-                        | Expression::DirectBorrow(_)
+                        | Expression::EditBorrow(_)
                         | Expression::ViewBorrow(_)
                 )
             {
@@ -2887,7 +3062,7 @@ fn analyze_statement(
                     stmt,
                     SEM_INVALID_CONTEXT,
                     format!(
-                        "resource capability '{}' cannot be reassigned or copied; pass it with 'direct' instead.",
+                        "resource capability '{}' cannot be reassigned or copied; pass it with 'edit' instead.",
                         target
                     ),
                 ));
@@ -3122,7 +3297,11 @@ fn analyze_statement(
             Ok(())
         }
         Statement::FunctionDef {
-            name, params, body, ..
+            name,
+            params,
+            body,
+            is_external,
+            ..
         } => {
             let Some(sig) = functions.get(name) else {
                 return Err(sem_err(
@@ -3130,6 +3309,9 @@ fn analyze_statement(
                     format!("internal error: missing function signature for '{}'.", name),
                 ));
             };
+            if *is_external {
+                return Ok(());
+            }
             let mut fn_scope = scope.clone();
             let mut fn_memory_state = MemoryState {
                 labels: memory_state.labels.clone(),
@@ -4107,6 +4289,29 @@ fn analyze_statement(
                     ),
                 ));
             }
+            let target_type = scope
+                .get(target)
+                .expect("validated danger assignment target must exist");
+            let Some(return_type) = sig.return_type.as_ref() else {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "danger fn '{}' does not return a value for assignment to '{}'.",
+                        call_name, target
+                    ),
+                ));
+            };
+            if !can_assign(target_type, return_type) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_TYPE_MISMATCH,
+                    format!(
+                        "danger call result type mismatch for '{}': target is {:?}, result is {:?}.",
+                        target, target_type, return_type
+                    ),
+                ));
+            }
             validate_call_args(
                 resolved_name,
                 args,
@@ -4202,12 +4407,11 @@ fn analyze_statement(
                         .resource_lifecycles
                         .insert(window.to_string(), ResourceLifecycle::Closed);
                 } else {
-                    if !matches!(args.as_slice(), [Expression::DirectBorrow(_)]) {
+                    if !matches!(args.as_slice(), [Expression::EditBorrow(_)]) {
                         return Err(err_at_code(
                             stmt,
                             SEM_ARG_TYPE,
-                            "Window.present requires explicit 'direct <Canvas>' borrow."
-                                .to_string(),
+                            "Window.present requires explicit 'edit <Canvas>' borrow.".to_string(),
                         ));
                     }
                     let actual_ty = infer_expression_type(
@@ -4968,7 +5172,7 @@ fn record_task_effects_in_expr(
             Ok(())
         }
         Expression::VariableReference(_)
-        | Expression::DirectBorrow(_)
+        | Expression::EditBorrow(_)
         | Expression::ViewBorrow(_)
         | Expression::MemberAccess { .. }
         | Expression::Stopping
@@ -5078,7 +5282,7 @@ fn apply_task_flow_expression(
         | Expression::LiteralByteSize { .. }
         | Expression::LiteralAngle { .. }
         | Expression::VariableReference(_)
-        | Expression::DirectBorrow(_)
+        | Expression::EditBorrow(_)
         | Expression::ViewBorrow(_)
         | Expression::Move(_)
         | Expression::MemberAccess { .. }
@@ -5632,13 +5836,22 @@ fn infer_expression_type(
                 })
             }
         }
-        Expression::DirectBorrow(name) => {
+        Expression::EditBorrow(name) => {
             require_owned_resource(memory_state, name)?;
+            if let Some(kind) = read_only_binding_kind(memory_state, name) {
+                return Err(sem_err(
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "{} '{}' cannot be borrowed with 'edit'; use 'view' or an editable binding.",
+                        kind, name
+                    ),
+                ));
+            }
             scope.get(name).cloned().ok_or_else(|| {
                 sem_err(
                     SEM_USE_BEFORE_DEF,
                     format!(
-                        "use-before-definition: '{}' is not defined for direct borrow.",
+                        "use-before-definition: '{}' is not defined for edit borrow.",
                         name
                     ),
                 )
@@ -5988,10 +6201,10 @@ fn infer_expression_type(
                         )),
                         (ValueType::Canvas, "checksum") => Some((vec![], ValueType::Int)),
                         (ValueType::Window, "present") => {
-                            if !matches!(args.as_slice(), [Expression::DirectBorrow(_)]) {
+                            if !matches!(args.as_slice(), [Expression::EditBorrow(_)]) {
                                 return Err(sem_err(
                                     SEM_ARG_TYPE,
-                                    "Window.present requires explicit 'direct <Canvas>' borrow."
+                                    "Window.present requires explicit 'edit <Canvas>' borrow."
                                         .to_string(),
                                 ));
                             }
@@ -7292,6 +7505,15 @@ fn infer_expression_type(
             let sig = functions
                 .get(resolved_name)
                 .expect("resolved function must exist");
+            if sig.is_danger {
+                return Err(sem_err(
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "danger fn call '{}' requires 'on error'; it cannot be used as an ordinary expression.",
+                        name
+                    ),
+                ));
+            }
             validate_call_args(
                 resolved_name,
                 args,
@@ -7320,9 +7542,18 @@ fn infer_expression_type(
                     ),
                 ));
             }
+            if sig.is_external {
+                return Err(sem_err(
+                    SEM_TASK_RULE,
+                    format!(
+                        "external fn '{}' cannot be used as a task entry; wrap it in a Skadi function first.",
+                        call_name
+                    ),
+                ));
+            }
             if args
                 .iter()
-                .any(|arg| matches!(arg, Expression::DirectBorrow(_) | Expression::ViewBorrow(_)))
+                .any(|arg| matches!(arg, Expression::EditBorrow(_) | Expression::ViewBorrow(_)))
             {
                 return Err(sem_err(
                     SEM_TASK_RULE,
@@ -7751,7 +7982,7 @@ fn infer_expression_memory_provenance(
 
     match expr {
         Expression::VariableReference(name)
-        | Expression::DirectBorrow(name)
+        | Expression::EditBorrow(name)
         | Expression::ViewBorrow(name)
         | Expression::Move(name) => Ok(memory_state.variable_memory.get(name).cloned()),
         Expression::MemberAccess { base, .. } => {

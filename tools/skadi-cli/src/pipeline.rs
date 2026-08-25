@@ -62,6 +62,13 @@ pub struct ToolchainOutput {
     pub stderr: String,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NativeLinkOptions {
+    pub sources: Vec<PathBuf>,
+    pub libraries: Vec<String>,
+    pub library_paths: Vec<PathBuf>,
+}
+
 #[cfg(test)]
 pub fn compile_frontend(entry_path: &Path) -> Result<FrontendOutput, String> {
     compile_frontend_with_options(entry_path, CodegenOptions::default())
@@ -339,8 +346,9 @@ fn index_public_top_level_declarations(
         .and_then(|s| s.to_str())
         .ok_or_else(|| format!("invalid module filename '{}'.", path.display()))?
         .to_string();
-    let decl_re = Regex::new(r"(?m)^\s*(fn|struct|label|tag)\s+([A-Za-z_][A-Za-z0-9_]*)")
-        .map_err(|e| format!("internal declaration index regex error: {e}"))?;
+    let decl_re =
+        Regex::new(r"(?m)^\s*(?:external\s+)?(fn|struct|label|tag)\s+([A-Za-z_][A-Za-z0-9_]*)")
+            .map_err(|e| format!("internal declaration index regex error: {e}"))?;
     for caps in decl_re.captures_iter(source) {
         let Some(name_m) = caps.get(2) else {
             continue;
@@ -519,19 +527,39 @@ fn parse_import_line(line: &str) -> Result<Option<ImportSpec>, String> {
     Ok(Some(ImportSpec { path, alias }))
 }
 
+#[cfg(test)]
 pub fn compile_c_to_exe_detailed(
     c_path: &Path,
     exe_path: &Path,
     target: &str,
     preferred_compiler: Option<&str>,
 ) -> Result<ToolchainOutput, String> {
+    compile_c_to_exe_detailed_with_native(
+        c_path,
+        exe_path,
+        target,
+        preferred_compiler,
+        &NativeLinkOptions::default(),
+    )
+}
+
+pub fn compile_c_to_exe_detailed_with_native(
+    c_path: &Path,
+    exe_path: &Path,
+    target: &str,
+    preferred_compiler: Option<&str>,
+    native: &NativeLinkOptions,
+) -> Result<ToolchainOutput, String> {
     let _profile = resolve_profile(target)?;
 
-    let candidates = if let Some(cc) = preferred_compiler {
+    let mut candidates = if let Some(cc) = preferred_compiler {
         vec![single_compiler_invocation(target, cc, c_path, exe_path)?]
     } else {
         candidate_invocations(target, c_path, exe_path)?
     };
+    for invocation in &mut candidates {
+        apply_native_link_options(invocation, c_path, native);
+    }
 
     let mut errs: Vec<String> = Vec::new();
     for inv in candidates {
@@ -585,6 +613,67 @@ pub fn compile_c_to_exe_detailed(
     }
 }
 
+fn apply_native_link_options(
+    invocation: &mut CompilerInvocation,
+    generated_c: &Path,
+    native: &NativeLinkOptions,
+) {
+    let generated_arg = generated_c.display().to_string();
+    let source_args = native
+        .sources
+        .iter()
+        .map(|source| source.display().to_string())
+        .collect::<Vec<_>>();
+    let insertion = invocation
+        .args
+        .iter()
+        .position(|arg| arg == &generated_arg)
+        .map_or(0, |index| index + 1);
+    invocation.args.splice(insertion..insertion, source_args);
+
+    let is_msvc = Path::new(&invocation.program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("cl") || name.eq_ignore_ascii_case("cl.exe"));
+    if is_msvc {
+        invocation.args.extend(
+            native
+                .library_paths
+                .iter()
+                .map(|path| format!("/LIBPATH:{}", path.display())),
+        );
+        invocation
+            .args
+            .extend(native.libraries.iter().map(|library| {
+                if library.to_ascii_lowercase().ends_with(".lib") {
+                    library.clone()
+                } else {
+                    format!("{library}.lib")
+                }
+            }));
+    } else {
+        let system_library_index = invocation
+            .args
+            .iter()
+            .position(|argument| argument.starts_with("-l"))
+            .unwrap_or(invocation.args.len());
+        let user_link_args = native
+            .library_paths
+            .iter()
+            .map(|path| format!("-L{}", path.display()))
+            .chain(
+                native
+                    .libraries
+                    .iter()
+                    .map(|library| format!("-l{library}")),
+            )
+            .collect::<Vec<_>>();
+        invocation
+            .args
+            .splice(system_library_index..system_library_index, user_link_args);
+    }
+}
+
 fn format_invocation(invocation: &CompilerInvocation) -> String {
     if invocation.args.is_empty() {
         invocation.program.clone()
@@ -607,9 +696,11 @@ pub fn compile_c_to_exe(c_path: &Path, exe_path: &Path, target: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::{
-        compile_c_to_exe, compile_frontend, compile_frontend_with_options, compile_to_c,
-        escape_c_string, load_source_with_imports, parse_import_line, rewrite_local_symbols,
+        NativeLinkOptions, apply_native_link_options, compile_c_to_exe, compile_frontend,
+        compile_frontend_with_options, compile_to_c, escape_c_string, load_source_with_imports,
+        parse_import_line, rewrite_local_symbols,
     };
+    use crate::targets::CompilerInvocation;
     use crate::targets::detect_compiler;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -631,6 +722,42 @@ mod tests {
         ["gcc", "clang", "cc", "cl"]
             .iter()
             .any(|c| detect_compiler(c))
+    }
+
+    #[test]
+    fn native_link_options_are_shaped_for_gnu_and_msvc() {
+        let generated = Path::new("build/main.c");
+        let native = NativeLinkOptions {
+            sources: vec![PathBuf::from("native/helper.c")],
+            libraries: vec!["sensor".to_string()],
+            library_paths: vec![PathBuf::from("native/lib")],
+        };
+        let mut gnu = CompilerInvocation {
+            program: "gcc".to_string(),
+            args: vec![
+                "build/main.c".to_string(),
+                "-o".to_string(),
+                "build/main".to_string(),
+                "-lm".to_string(),
+            ],
+        };
+        apply_native_link_options(&mut gnu, generated, &native);
+        assert_eq!(gnu.args[1], "native/helper.c");
+        assert!(gnu.args.contains(&"-Lnative/lib".to_string()));
+        assert!(gnu.args.contains(&"-lsensor".to_string()));
+        assert!(
+            gnu.args.iter().position(|arg| arg == "-lsensor")
+                < gnu.args.iter().position(|arg| arg == "-lm")
+        );
+
+        let mut msvc = CompilerInvocation {
+            program: "cl.exe".to_string(),
+            args: vec!["/nologo".to_string(), "build/main.c".to_string()],
+        };
+        apply_native_link_options(&mut msvc, generated, &native);
+        assert_eq!(msvc.args[2], "native/helper.c");
+        assert!(msvc.args.contains(&"/LIBPATH:native/lib".to_string()));
+        assert!(msvc.args.contains(&"sensor.lib".to_string()));
     }
 
     #[test]
@@ -1238,6 +1365,28 @@ local label State {
         assert!(err.contains("import symbol collision detected"));
         assert!(err.contains("'shared'"));
         assert!(err.contains("modules [a, b]"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn external_binding_symbol_collision_is_deterministic() {
+        let root = temp_case_dir("imports_external_collision");
+        let a = root.join("a.skd");
+        let b = root.join("b.skd");
+        let entry = root.join("main.skd");
+        fs::write(&a, "external fn shared_native(i32 value) returns i32\n").expect("write a");
+        fs::write(&b, "external fn shared_native(i32 value) returns i32\n").expect("write b");
+        fs::write(
+            &entry,
+            "import \"./a.skd\"\nimport \"./b.skd\"\nnew Int value = 0\n",
+        )
+        .expect("write entry");
+
+        let err = compile_to_c(&entry).expect_err("external collision must fail");
+        assert!(err.contains("[SC-MOD-002]"), "{err}");
+        assert!(err.contains("'shared_native'"), "{err}");
+        assert!(err.contains("modules [a, b]"), "{err}");
 
         let _ = fs::remove_dir_all(root);
     }

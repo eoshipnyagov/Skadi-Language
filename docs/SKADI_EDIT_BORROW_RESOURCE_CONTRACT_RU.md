@@ -1,4 +1,4 @@
-# Контракт borrow-доступа и ресурсов
+# Контракт `view` / `edit` доступа и ресурсов
 
 Статус: **Accepted design, bounded MVP**.
 
@@ -10,7 +10,7 @@
 У значения есть один owner. Owner может временно дать оригинал функции:
 
 - посмотреть через `view`;
-- изменить через `direct`;
+- изменить через `edit`;
 - окончательно передать через `move`.
 
 Функция не может сохранить borrowed value, вернуть его или передать задаче,
@@ -23,21 +23,22 @@ fn show(view Player player) {
     output(player.name)
 }
 
-fn damage(direct Player player, Int amount) {
+fn damage(edit Player player, Int amount) {
     player.health = player.health - amount
 }
 
 show(view player)
-damage(direct player, 10)
+damage(edit player, 10)
 ```
 
-`view` и `direct` видны в declaration и call site. Это намеренно делает передачу
+`view` и `edit` видны в declaration и call site. Это намеренно делает передачу
 оригинала заметной с обеих сторон API.
 
 ## 3. Bounded MVP rules
 
 - borrow живёт ровно один синхронный вызов;
-- `direct T` является exclusive mutable borrow;
+- `edit T` является exclusive mutable borrow;
+- `constant` binding и `view` parameter нельзя передать через `edit`;
 - `view T` является shared read-only borrow;
 - одновременно разрешён один mutable borrow либо несколько read-only borrows;
 - borrowed reference не является first-class value;
@@ -45,6 +46,10 @@ damage(direct player, 10)
 - borrow нельзя вернуть;
 - borrow нельзя передать через `run`;
 - lifetime-аннотации в source не нужны.
+
+На C-границе тот же контракт используется формой `view Buffer(T)` /
+`edit Buffer(T)`: typed `T List` раскрывается в pointer + length только на время
+синхронного `external fn` вызова. Сам `Buffer(T)` не является storable type.
 
 ## 4. Resource handles
 
@@ -75,10 +80,10 @@ capabilities:
 
 - canonical immutable marker называется `constant`, не `const`;
 - `view` относится к read-only borrow model и не делает сам resource глобально immutable;
-- `direct` относится к borrow model;
-- `view`, `direct` и `move` остаются полностью зарезервированными
+- `edit` относится к borrow model;
+- `view`, `edit` и `move` остаются полностью зарезервированными
   словами, а не contextual keywords;
-- старый `fixed` удаляется из language surface;
+- `fixed` и `const` являются обычными identifiers, а не declaration modifiers;
 - если embedded потребует static storage, будет введён отдельный `static`
   contract, а не переиспользован `fixed`;
 - `allow grow/drop` является contextual policy только внутри `memory(...)`.

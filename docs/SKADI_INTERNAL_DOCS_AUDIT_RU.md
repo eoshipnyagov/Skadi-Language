@@ -41,7 +41,7 @@ Draft описывает направление мысли, но не являе
   Backends;
 - Canvas остаётся Domain Core и учебной/прототипной поверхностью, но не должен
   превращаться в полный GUI/media framework;
-- язык должен обучать управлению ресурсами: scope, copy, `view`, `direct`,
+- язык должен обучать управлению ресурсами: scope, copy, `view`, `edit`,
   `move`, cleanup, Memory и Task/Channel должны быть видимы в diagnostics;
 - `when / is` является строгой формой `switch / case`: single evaluation, no
   fallthrough, duplicate-case diagnostics и будущая exhaustiveness-проверка;
@@ -212,7 +212,7 @@ Canvas-first immediate-mode модель перешла в experimental Canvas v
 - linear resources `Canvas`/`Window`;
 - software RGBA framebuffer и deterministic rasterizer;
 - line/rect/circle primitives, alpha blending и headless checksum;
-- Win32 presenter через `window.present(direct canvas)`.
+- Win32 presenter через `window.present(edit canvas)`.
 
 Пока отсутствуют events, text/images, transforms, `Matrix2D`, non-Windows window
 backend и embedded display adapter.
@@ -222,7 +222,7 @@ backend и embedded display adapter.
 | Форма | Реальный статус | Решение |
 |---|---|---|
 | `fixed` / `const` | Обычные identifiers | Не резервировать без контракта; неизменяемая форма — только `constant` |
-| `direct` / `view` | Реализованный borrow contract | Использовать для явной mutable/read-only передачи без владения |
+| `edit` / `view` | Реализованный borrow contract | Использовать для явной mutable/read-only передачи без владения |
 | `move` | Реализованный bounded ownership transfer | Использовать явно в signature, call site, binding и resource return |
 | `allow grow` / `allow drop` | Реализованы только как contextual Memory policies | Не превращать `allow` в общий modifier |
 | `on interrupt` | Host MVP для typed periodic Interrupt | Hardware IRQ backend остаётся future |
@@ -257,10 +257,11 @@ backend и embedded display adapter.
 5. Embedded target contract и первый ESP32/FreeRTOS spike.
 6. `Ring`/bounded `Pool` для явной `drop oldest` семантики.
 7. Canvas events, text/images и следующие presentation backends.
-8. Module/package ergonomics и первый ограниченный C ABI slice. Направление
-   принято: manifest + lockfile, explicit imports, fixed-width ABI, explicit
-   struct layout, opaque handles и видимое владение buffers/resources; точный
-   declaration syntax проверяется на реальных C-библиотеках до заморозки.
+8. Ограниченный C ABI slice включает `external fn`, fixed scalar types,
+   call-scoped `view`/`edit Buffer(T)` и `[native]` sources/libraries. Следующая
+   очередь: module/package resolver, lockfile, explicit struct layout, opaque
+   handles и видимое владение долгоживущими C resources; эти формы проверяются
+   на реальных C-библиотеках до заморозки.
 
 ### Параллельный tooling-трек
 

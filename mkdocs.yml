@@ -60,6 +60,7 @@ plugins:
             Функции и ошибки: Functions and Errors
             Struct, Text и List: Struct, Text, and List
             Модули и видимость: Modules and Visibility
+            C ABI и native C: C ABI and Native C
             Ввод, вывод и файлы: I/O and Files
             Математика: Math
             Управление памятью: Memory
@@ -150,6 +151,7 @@ nav:
               - Функции и ошибки: user/functions-errors.md
               - Struct, Text и List: user/data-model.md
               - Модули и видимость: user/modules.md
+              - C ABI и native C: user/c-abi.md
               - Ввод, вывод и файлы: user/io-files.md
               - Математика: user/math.md
           - Systems surface:
@@ -215,7 +217,7 @@ nav:
           - Accepted Systems Contracts:
               - Tag and Label: internal/tag-label-contract.md
               - Channel Lifecycle: internal/channel-lifecycle-contract.md
-              - Borrow Access and Resources: internal/direct-borrow-resource-contract.md
+              - Borrow Access and Resources: internal/edit-borrow-resource-contract.md
               - Ownership UX Lab: internal/ownership-ux-lab.md
               - Interrupt Model: internal/interrupt-model-contract.md
           - Visual Core:

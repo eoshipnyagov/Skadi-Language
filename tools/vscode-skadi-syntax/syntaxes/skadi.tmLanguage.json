@@ -276,7 +276,7 @@
       "patterns": [
         {
           "name": "storage.modifier.skd",
-          "match": "\\b(danger|new|constant|hide|local|allow|grow|drop|direct|view|move)\\b"
+          "match": "\\b(external|danger|new|constant|hide|local|allow|grow|drop|edit|view|move)\\b"
         }
       ]
     },
@@ -320,7 +320,7 @@
       "patterns": [
         {
           "name": "storage.type.skd",
-          "match": "\\b(Int|Float|Bool|Char|bool|char|Text|Path|Time|Duration|ByteSize|Angle|Memory|Task|Channel|Interrupt|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Color|Rect|List|Canvas|Window)\\b"
+          "match": "\\b(Int|Float|Bool|Char|bool|char|Text|Path|Time|Duration|ByteSize|Angle|Memory|Task|Channel|Buffer|Interrupt|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|Vec2|Vec3|Vec4|Color|Rect|List|Canvas|Window)\\b"
         }
       ]
     },

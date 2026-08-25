@@ -78,7 +78,7 @@ Memory device_memory = memory.static(4kb)
 ## Владение ресурсами
 
 `Canvas`, `Window`, `Interrupt` и owning `Channel` имеют одного владельца.
-Оригинал можно временно передать через `view`/`direct` либо окончательно отдать:
+Оригинал можно временно передать через `view`/`edit` либо окончательно отдать:
 
 ```skadi
 fn consume(move Canvas frame) {

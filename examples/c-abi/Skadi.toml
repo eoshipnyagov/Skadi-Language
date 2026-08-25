@@ -1,0 +1,15 @@
+[package]
+name = "c_abi_sensor"
+version = "0.1.0"
+edition = "v1"
+
+[build]
+entry = "src/main.skd"
+
+[numeric]
+int = "target"
+
+[native]
+sources = ["native/sensor.c"]
+libraries = []
+library_paths = []

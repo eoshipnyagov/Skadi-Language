@@ -40,8 +40,10 @@ The repository includes:
 - formatter,
 - math/core support for `v1.1`,
 - relative path imports, `local`/`hide`, and qualified `module.symbol` access,
+- a bounded scalar and typed-buffer C ABI through bodyless `external fn`
+  declarations and project-level `[native]` C sources/libraries,
 - experimental fixed/growing/child/root-static Memory runtime for `v1.2`,
-- explicit `view`/`direct` borrows and `move` ownership transfer for current
+- explicit `view`/`edit` borrows and `move` ownership transfer for current
   linear resources,
 - experimental native Task/Channel runtime and periodic host Interrupts for
   `v1.2`, including cancellation-aware Channel operations and Duration-bounded
@@ -64,6 +66,11 @@ The repository includes:
 - HTML docs site structure.
 
 The current focus is to make Skadi real enough to test syntax, diagnostics, examples, workflows, and the general feel of the language.
+
+The current C interoperability slice is intentionally small: fixed-width scalar
+arguments/results, call-scoped `view`/`edit Buffer(T)`, and manifest-managed
+native C inputs. Raw pointers, callbacks, C layouts, and ownership-bearing
+handles remain explicit future contracts rather than unsafe implicit conversions.
 
 ## Why Skadi Exists
 
@@ -274,7 +281,7 @@ loop {
         continue
     }
 
-    window.present(direct canvas)
+    window.present(edit canvas)
 }
 ```
 
@@ -357,7 +364,7 @@ frame.fill_rect(panel, Color.terminal_blue)
 frame.circle(center, 48.0, Color.terminal_bright_yellow)
 
 while window.is_open() {
-    window.present(direct frame)
+    window.present(edit frame)
     sleep(16ms)
 }
 ```

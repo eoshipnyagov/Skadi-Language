@@ -28,14 +28,14 @@ frame.circle(center, 48.0, Color.terminal_bright_yellow)
 frame.fill_circle(center, 12.0, color(213, 78, 83, 192))
 
 while window.is_open() {
-    window.present(direct frame)
+    window.present(edit frame)
     sleep(16ms)
 }
 ```
 
 `Canvas` и `Window` являются ресурсами: их нельзя копировать, возвращать из
 функции или передавать по значению. Для изменения Canvas из функции используйте
-`direct Canvas`, для чтения — `view Canvas`.
+`edit Canvas`, для чтения — `view Canvas`.
 
 ## Типы и конструкторы
 
@@ -93,7 +93,7 @@ while window.is_open() {
 
 ```skadi
 while window.is_open() {
-    window.present(direct frame)
+    window.present(edit frame)
     sleep(16ms)
 }
 ```
@@ -109,7 +109,7 @@ host-целях. Размеры Window и Canvas при `present` должны �
 После условного `window.close()` вызов `present()` требует обработчик:
 
 ```skadi
-window.present(direct frame) on error {
+window.present(edit frame) on error {
     pass
 }
 ```

@@ -432,7 +432,7 @@ vector slice до матриц или transform framework.
 
 - Canvas v0: portable headless rasterizer, Color/Rect, drawing primitives,
   checksum и Win32 presenter;
-- call-scoped `view`/`direct` и explicit `move` для `Canvas`, `Window`,
+- call-scoped `view`/`edit` и explicit `move` для `Canvas`, `Window`,
   `Interrupt` и owning `Channel`;
 - resource factory return, use-after-move, branch merge и loop diagnostics;
 - fixed baseline, segmented `allow grow`, child и root-static Memory regions;
@@ -498,8 +498,31 @@ vector slice до матриц или transform framework.
 - `as_f32` является checked narrowing с `on error`, `as_f64` — safe widening;
 - native regression coverage, showcase, highlighters и RU/EN docs обновлены.
 
-Отложено: checked arithmetic overflow/division policy, float/integer
-conversions и реальные embedded target defaults.
+Отложены реальные embedded target defaults.
+
+### Milestone 16: bounded C ABI - scalar + typed buffer MVP выполнен
+
+Реализовано:
+
+- bodyless `external fn` с обычным typed-call поведением;
+- `external danger fn` поверх существующего status/out ABI и обязательного
+  `on error`;
+- fixed scalar ABI для `i8..i64`, `u8..u64`, `f32/f64`, `Bool`, `Char` и
+  `void`; platform `Int` и owning resources запрещены;
+- `view Buffer(T)` / `edit Buffer(T)` понижают typed `T List` в call-scoped
+  `const T *` / `T *` и `size_t` length без raw pointers в Skadi;
+- C prototype lowering до пользовательских вызовов независимо от порядка
+  объявлений;
+- `[native]` manifest с project-relative `sources`, `libraries` и
+  `library_paths`, без произвольных shell/compiler flags;
+- GCC/Clang и MSVC linker argument mapping;
+- parser/semantic/formatter/codegen tests, binding-модуль и native compile-run
+  CLI smoke;
+- VS Code/Pygments и RU/EN user docs.
+
+Следующие FFI slices намеренно не входят в MVP: raw pointers, explicit
+struct layout, opaque handles, callbacks, symbol aliases, header generation,
+package resolver и формализованное владение C resources.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 

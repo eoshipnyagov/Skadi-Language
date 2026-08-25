@@ -33,14 +33,15 @@
 - `return error Code` - `Stable`
 - `pass` - `Stable`
 - выражение как statement, включая builtin-вызовы вроде `output("hello")` - `Stable`
-- `direct Type name` / `direct value` - `Implemented / bounded mutable borrow`
+- `edit Type name` / `edit value` - `Implemented / bounded mutable borrow`
 - `view Type name` / `view value` - `Implemented / bounded read-only borrow`
 - `move Type name` / `move value` / `return move value` -
   `Implemented / bounded ownership transfer`
   - применяется к `Canvas`, `Window`, `Interrupt` и owning `Channel`;
   - старое имя после передачи недоступно;
   - partial move после ветвления и move из повторяющегося loop диагностируются.
-- `constant direct` - `Removed`; parser указывает использовать `view`
+- `direct` больше не является borrow-маркером и доступен как обычный identifier;
+  mutable borrow записывается только через `edit`
 - `fixed` / `const` не являются ключевыми словами и доступны как обычные identifiers;
   неизменяемый binding объявляется только через `constant`.
 
@@ -49,6 +50,15 @@
 - `fn name(...) { ... }` - `Stable`
 - `danger fn name(...) { ... }` - `Stable`
 - `local fn name(...) { ... }` - `Stable`
+- `external fn name(fixed_width value) returns fixed_width` - `Experimental`
+  - объявление не имеет тела;
+  - отсутствие `returns` означает C `void`;
+  - scalar-параметры используют fixed ABI и передаются по значению;
+  - `view Buffer(T)` / `edit Buffer(T)` принимают fixed-scalar `T List` как
+    call-scoped C pointer + `size_t` length;
+  - native sources/libraries задаются через `[native]` в `Skadi.toml`.
+- `external danger fn name(...) returns Type` - `Experimental`
+  - использует существующий status/out danger ABI и обязательный `on error`.
 - типизированные параметры - `Stable`
 - канонический типизированный возврат `fn name(...) returns Type` - `Stable`
 - legacy-возврат `fn name(...) Type` - `Partial`
@@ -267,7 +277,7 @@
   - `color`, `color_hex`, мягкие цветовые алиасы и 16 `Color.terminal_*` констант реализованы;
   - `Canvas` является linear resource с software RGBA framebuffer;
   - `clear`, `pixel`, `line`, `rect`, `fill_rect`, `circle`, `fill_circle` и `checksum` проходят semantic/C runtime;
-  - `Window` является отдельным linear resource, а `present` требует `direct Canvas`;
+  - `Window` является отдельным linear resource, а `present` требует `edit Canvas`;
   - первый Window backend реализован для Win32; headless Canvas остаётся переносимым;
   - events, text/images, transforms, `Matrix2D` и остальные оконные backend отложены;
   - полный контракт: [Canvas и Visual Core](canvas.md).

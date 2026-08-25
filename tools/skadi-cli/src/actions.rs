@@ -14,7 +14,8 @@ use v01::formatter::format_source;
 
 use crate::debug_session::{DebugCommand, DebugEvent, DebugIoMode, DebugStop, start_debug_session};
 use crate::pipeline::{
-    DebugSourceMapEntry, compile_c_to_exe_detailed, compile_frontend_with_options,
+    DebugSourceMapEntry, NativeLinkOptions, compile_c_to_exe_detailed_with_native,
+    compile_frontend_with_options,
 };
 use crate::project::{
     ManifestConfig, create_project, ensure_build_dir, ensure_entry_file_at, init_project,
@@ -263,6 +264,9 @@ pub struct ManifestConfigResult {
     pub edition: String,
     pub entry: String,
     pub int_width: String,
+    pub native_sources: Vec<String>,
+    pub native_libraries: Vec<String>,
+    pub native_library_paths: Vec<String>,
 }
 
 pub fn project_summary() -> ProjectSummary {
@@ -660,7 +664,8 @@ fn run_build_at_mode(
     };
     let exe_path = build_dir.join(exe_name);
 
-    let toolchain = compile_native(&c_path, &exe_path, options)?;
+    let native = resolve_native_link_options(&project)?;
+    let toolchain = compile_native(&c_path, &exe_path, options, &native)?;
 
     Ok(BuildResult {
         project: summary,
@@ -1080,7 +1085,12 @@ pub fn prepare_quick_run(options: &QuickRunOptions) -> Result<QuickRunPrepared, 
         OutputKind::LinuxElf => artifact_name,
     };
     let exe_path = build_dir.path.join(exe_name);
-    let toolchain = compile_native(&c_path, &exe_path, &options.build)?;
+    let toolchain = compile_native(
+        &c_path,
+        &exe_path,
+        &options.build,
+        &NativeLinkOptions::default(),
+    )?;
 
     Ok(QuickRunPrepared {
         source,
@@ -1249,6 +1259,9 @@ pub fn load_manifest_config(root: &Path) -> Result<ManifestConfigResult, ActionE
         edition: manifest.edition,
         entry: manifest.entry,
         int_width: manifest.int_width,
+        native_sources: manifest.native_sources,
+        native_libraries: manifest.native_libraries,
+        native_library_paths: manifest.native_library_paths,
     })
 }
 
@@ -1262,6 +1275,9 @@ pub fn save_manifest_config(
         edition: manifest.edition.trim().to_string(),
         entry: manifest.entry.trim().to_string(),
         int_width: manifest.int_width.trim().to_string(),
+        native_sources: manifest.native_sources.clone(),
+        native_libraries: manifest.native_libraries.clone(),
+        native_library_paths: manifest.native_library_paths.clone(),
     };
     save_manifest_config_at(root, &updated).map_err(|e| ActionError::new(FailureSource::Io, e))?;
     load_manifest_config(root)
@@ -1277,14 +1293,16 @@ fn compile_native(
     c_path: &Path,
     exe_path: &Path,
     options: &BuildOptions,
+    native: &NativeLinkOptions,
 ) -> Result<crate::pipeline::ToolchainOutput, ActionError> {
     let profile =
         resolve_profile(&options.target).map_err(|e| ActionError::new(FailureSource::Usage, e))?;
-    compile_c_to_exe_detailed(
+    compile_c_to_exe_detailed_with_native(
         c_path,
         exe_path,
         &options.target,
         options.cc.as_deref(),
+        native,
     )
     .map_err(|e| {
         let compiler_info = options
@@ -1305,6 +1323,50 @@ fn compile_native(
                 shell_probe_hint(),
             ),
         )
+    })
+}
+
+fn resolve_native_link_options(
+    project: &crate::project::ProjectConfig,
+) -> Result<NativeLinkOptions, ActionError> {
+    let sources = project
+        .native_sources
+        .iter()
+        .map(|source| project.root.join(source))
+        .collect::<Vec<_>>();
+    for source in &sources {
+        if !source.is_file() {
+            return Err(ActionError::new(
+                FailureSource::Project,
+                format!(
+                    "native source '{}' does not exist or is not a file",
+                    source.display()
+                ),
+            ));
+        }
+    }
+
+    let library_paths = project
+        .native_library_paths
+        .iter()
+        .map(|path| project.root.join(path))
+        .collect::<Vec<_>>();
+    for path in &library_paths {
+        if !path.is_dir() {
+            return Err(ActionError::new(
+                FailureSource::Project,
+                format!(
+                    "native library path '{}' does not exist or is not a directory",
+                    path.display()
+                ),
+            ));
+        }
+    }
+
+    Ok(NativeLinkOptions {
+        sources,
+        libraries: project.native_libraries.clone(),
+        library_paths,
     })
 }
 

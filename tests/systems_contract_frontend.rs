@@ -178,10 +178,10 @@ output("sum=", fixed + const)
 }
 
 #[test]
-fn value_direct_and_view_parameters_enforce_the_call_contract() {
+fn value_edit_and_view_parameters_enforce_the_call_contract() {
     let program = semantic_ok(
         r#"
-fn increment(direct Int value) {
+fn increment(edit Int value) {
     value += 1
 }
 
@@ -191,7 +191,7 @@ fn observe(view Int value) Int {
 
 constant Int answer = 42
 new Int count = 1
-increment(direct count)
+increment(edit count)
 new Int observed = observe(view answer)
 "#,
     );
@@ -201,9 +201,9 @@ new Int observed = observe(view answer)
     assert!(c.contains("increment(&count)"), "{c}");
     assert!(c.contains("const SkInt answer = 42"), "{c}");
 
-    let missing_direct = semantic_err(
+    let missing_edit = semantic_err(
         r#"
-fn increment(direct Int value) {
+fn increment(edit Int value) {
     value += 1
 }
 
@@ -211,7 +211,22 @@ new Int count = 1
 increment(count)
 "#,
     );
-    assert!(missing_direct.contains("requires explicit 'direct <identifier>'"));
+    assert!(missing_edit.contains("requires explicit 'edit <identifier>'"));
+
+    let edits_constant = semantic_err(
+        r#"
+fn increment(edit Int value) {
+    value += 1
+}
+
+constant Int answer = 42
+increment(edit answer)
+"#,
+    );
+    assert!(
+        edits_constant.contains("constant binding 'answer' cannot be borrowed with 'edit'"),
+        "{edits_constant}"
+    );
 
     let mutates_read_only = semantic_err(
         r#"
@@ -232,7 +247,7 @@ fn observe(view Int value) returns Int {
 }
 
 new Int value = 1
-new Int observed = observe(direct value)
+new Int observed = observe(edit value)
 "#,
     );
     assert!(
@@ -245,12 +260,12 @@ new Int observed = observe(direct value)
 fn call_scoped_borrow_cannot_cross_a_task_boundary() {
     let err = semantic_err(
         r#"
-fn increment(direct Int value) {
+fn increment(edit Int value) {
     value += 1
 }
 
 new Int count = 1
-Task worker = run increment(direct count)
+Task worker = run increment(edit count)
 wait worker
 "#,
     );
@@ -272,16 +287,9 @@ wait worker
 }
 
 #[test]
-fn constant_direct_points_to_the_view_replacement() {
-    let err = parse_err(
-        r#"
-fn observe(constant direct Int value) {
-    output(value)
-}
-"#,
-    );
-    assert!(err.contains("SC-PARSE-106"), "{err}");
-    assert!(err.contains("replaced by 'view <Type> <name>'"), "{err}");
+fn obsolete_direct_spelling_is_not_a_borrow_marker() {
+    let tokens = lex("direct").expect("lex obsolete borrow spelling");
+    assert_eq!(tokens[0].kind(), v01::common_types::TokenKind::Identifier);
 }
 
 #[test]

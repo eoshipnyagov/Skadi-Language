@@ -8,7 +8,7 @@ bounded ownership engine. Он не является обещанием полн
 
 Связанные контракты:
 
-- [Borrow-доступ и ресурсы](direct-borrow-resource-contract.md)
+- [Borrow-доступ и ресурсы](edit-borrow-resource-contract.md)
 - [Memory MVP](memory-model-mvp.md)
 - [Task MVP](task-model-mvp.md)
 - [Channel lifecycle](channel-lifecycle-contract.md)
@@ -20,7 +20,7 @@ bounded ownership engine. Он не является обещанием полн
 1. **Владею.** Если я создал ресурс, он мой. Пока он мой, я отвечаю за него.
 2. **Одалживаю посмотреть.** Если resource нельзя копировать, `view`
    разрешает функции посмотреть на оригинал, но не менять его и не забирать себе.
-3. **Одалживаю изменить.** `direct` разрешает функции временно изменить оригинал,
+3. **Одалживаю изменить.** `edit` разрешает функции временно изменить оригинал,
    но после вызова он снова у владельца.
 4. **Отдаю.** `move` передаёт владение другому. После этого старый владелец
    больше не может пользоваться ресурсом.
@@ -46,14 +46,14 @@ resource можно одолжить или отдать
 | Создать владельца | `Canvas frame = canvas(...)` | Implemented |
 | Прочитать copyable value | `fn show(Int value)` | Implemented / preferred |
 | Посмотреть на resource | `view Canvas frame` | Implemented |
-| Временно изменить | `direct Canvas frame` | Implemented |
+| Временно изменить | `edit Canvas frame` | Implemented |
 | Передать read-only borrow в вызов | `inspect(view frame)` | Implemented |
-| Передать mutable borrow в вызов | `draw(direct frame)` | Implemented |
+| Передать mutable borrow в вызов | `draw(edit frame)` | Implemented |
 | Передать владение | `consume(move frame)` | Implemented |
 | Вернуть владение | `return move frame` | Implemented |
 | Автоматически освободить | выход из scope | Implemented for current owning resources |
 
-Исходный владелец всегда виден как обычное имя. `view`, `direct` и `move`
+Исходный владелец всегда виден как обычное имя. `view`, `edit` и `move`
 обязаны быть видны в call site: опасная граница не должна прятаться в сигнатуре.
 
 ## 3. Полигон из десяти сценариев
@@ -100,12 +100,12 @@ show(answer)
 Статус: **Implemented**.
 
 ```skadi
-fn increment(direct Int value) {
+fn increment(edit Int value) {
     value = value + 1
 }
 
 new Int count = 1
-increment(direct count)
+increment(edit count)
 output(count)
 ```
 
@@ -139,7 +139,7 @@ Ownership state проверяется общей state machine; конкрет�
 Статус: **Implemented для Canvas**.
 
 ```skadi
-fn paint(direct Canvas frame) {
+fn paint(edit Canvas frame) {
     frame.clear(Color.terminal_blue)
 }
 
@@ -148,7 +148,7 @@ fn fingerprint(view Canvas frame) returns Int {
 }
 
 Canvas frame = canvas(64, 48)
-paint(direct frame)
+paint(edit frame)
 new Int checksum = fingerprint(view frame)
 ```
 
@@ -168,7 +168,7 @@ if should_close {
     window.close()
 }
 
-window.present(direct frame) on error {
+window.present(edit frame) on error {
     pass
 }
 ```
@@ -278,7 +278,7 @@ Diagnostic сообщает, что после `if` ресурс доступе�
 
 Если переменная владеет resource, его можно передать через `view`, чтобы функция
 только посмотрела на него. Одновременно смотреть могут несколько функций.
-Через `direct` функция получает право временно пользоваться оригиналом и менять
+Через `edit` функция получает право временно пользоваться оригиналом и менять
 его; изменяемый доступ в этот момент может быть только один. После синхронного
 вызова доступ возвращается владельцу.
 
@@ -302,7 +302,7 @@ resource отличается от moved: переменная ещё сущес
 Итог проверки:
 
 - передача copyable values по значению проходит тест объяснимости;
-- `direct` для изменения caller value и `view` для чтения resource
+- `edit` для изменения caller value и `view` для чтения resource
   проходят тест объяснимости;
 - scope cleanup проходит тест объяснимости;
 - явный `move` является естественным глаголом передачи ownership;
@@ -319,7 +319,7 @@ resource отличается от moved: переменная ещё сущес
    ownership отдельно имеет состояния `owned` и `moved`.
 3. Borrow живёт только один синхронный вызов.
 4. `view` запрещает логически изменяющие операции.
-5. `view` и `direct` нельзя передать через `run`, сохранить или вернуть.
+5. `view` и `edit` нельзя передать через `run`, сохранить или вернуть.
 6. Операция над `maybe closed` или `closed` требует `on error`; для заведомо
    закрытой операции выдаётся warning.
 7. `move` завершает доступ через исходное имя и не может быть обработан через
@@ -333,8 +333,8 @@ resource отличается от moved: переменная ещё сущес
 Каноническое UX-правило:
 
 ```text
-copyable value: читать по значению, изменять caller через direct
-resource: читать через view, изменять через direct, отдавать через move
+copyable value: читать по значению, изменять caller через edit
+resource: читать через view, изменять через edit, отдавать через move
 ```
 
 ## 6. Что показал полигон

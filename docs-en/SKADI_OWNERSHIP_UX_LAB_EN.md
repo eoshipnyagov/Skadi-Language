@@ -8,7 +8,7 @@ does not promise a full lifetime calculus.
 
 Related contracts:
 
-- [Borrow access and resources](direct-borrow-resource-contract.en.md)
+- [Borrow access and resources](edit-borrow-resource-contract.en.md)
 - [Memory MVP](memory-model-mvp.en.md)
 - [Task MVP](task-model-mvp.en.md)
 - [Channel lifecycle](channel-lifecycle-contract.en.md)
@@ -20,7 +20,7 @@ A program has things and their owners.
 1. **Own.** If I create a resource, it is mine and I am responsible for it.
 2. **Lend for observation.** If a resource cannot be copied, `view`
    lets a function inspect the original without changing or keeping it.
-3. **Lend for mutation.** `direct` lets a function temporarily modify the
+3. **Lend for mutation.** `edit` lets a function temporarily modify the
    original. It belongs to the owner again after the call.
 4. **Give.** `move` transfers ownership. The old owner can no longer use
    the resource.
@@ -46,14 +46,14 @@ complicated.
 | Create an owner | `Canvas frame = canvas(...)` | Implemented |
 | Read a copyable value | `fn show(Int value)` | Implemented / preferred |
 | Inspect a resource | `view Canvas frame` | Implemented |
-| Mutate temporarily | `direct Canvas frame` | Implemented |
+| Mutate temporarily | `edit Canvas frame` | Implemented |
 | Pass a read-only borrow | `inspect(view frame)` | Implemented |
-| Pass a mutable borrow | `draw(direct frame)` | Implemented |
+| Pass a mutable borrow | `draw(edit frame)` | Implemented |
 | Transfer ownership | `consume(move frame)` | Implemented |
 | Return ownership | `return move frame` | Implemented |
 | Release automatically | scope exit | Implemented per resource, not unified |
 
-The owner remains an ordinary name. `view`, `direct`, and `move` must remain
+The owner remains an ordinary name. `view`, `edit`, and `move` must remain
 visible at the call site so an ownership boundary is never hidden in a signature.
 
 ## 3. Ten-scenario lab
@@ -99,12 +99,12 @@ source semantics.
 Status: **Implemented**.
 
 ```skadi
-fn increment(direct Int value) {
+fn increment(edit Int value) {
     value = value + 1
 }
 
 new Int count = 1
-increment(direct count)
+increment(edit count)
 output(count)
 ```
 
@@ -135,7 +135,7 @@ types rather than by one state machine.
 Status: **Implemented for Canvas**.
 
 ```skadi
-fn paint(direct Canvas frame) {
+fn paint(edit Canvas frame) {
     frame.clear(Color.terminal_blue)
 }
 
@@ -144,7 +144,7 @@ fn fingerprint(view Canvas frame) returns Int {
 }
 
 Canvas frame = canvas(64, 48)
-paint(direct frame)
+paint(edit frame)
 new Int checksum = fingerprint(view frame)
 ```
 
@@ -164,7 +164,7 @@ if should_close {
     window.close()
 }
 
-window.present(direct frame) on error {
+window.present(edit frame) on error {
     pass
 }
 ```
@@ -267,7 +267,7 @@ If a variable contains an ordinary copyable value, a function can receive a
 copy. Changing that copy does not change the original variable.
 
 If a variable owns a resource, `view` lets a function inspect it. Multiple
-read-only views may exist at the same time. `direct` lets one function
+read-only views may exist at the same time. `edit` lets one function
 temporarily use and modify the original. The owner regains access after the
 synchronous call.
 
@@ -285,7 +285,7 @@ platform handles.
 Result:
 
 - passing copyable values by value passes the explainability test;
-- `direct` for caller mutation and `view` for resource observation
+- `edit` for caller mutation and `view` for resource observation
   pass the explainability test;
 - scope cleanup passes;
 - explicit `move` is the natural ownership-transfer verb;
@@ -302,7 +302,7 @@ These are the current bounded contract:
    separately tracks `owned` and `moved`.
 3. A borrow lasts for one synchronous call.
 4. `view` rejects logically mutating operations.
-5. `view` and `direct` cannot cross `run`, be stored, or be returned.
+5. `view` and `edit` cannot cross `run`, be stored, or be returned.
 6. Operations on `maybe closed` or `closed` require `on error`; a definitely
    closed operation also produces a warning.
 7. `move` ends access through the source name and cannot be recovered with
@@ -315,8 +315,8 @@ These are the current bounded contract:
 Canonical UX rule:
 
 ```text
-copyable value: read by value, mutate the caller through direct
-resource: read through view, mutate through direct, give through move
+copyable value: read by value, mutate the caller through edit
+resource: read through view, mutate through edit, give through move
 ```
 
 ## 6. What the lab revealed

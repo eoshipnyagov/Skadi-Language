@@ -115,7 +115,7 @@ local fn implementation_detail() returns Int {
 ```skadi
 import "./math_utils.skd"
 
-new Int direct = add(2, 3)
+new Int imported = add(2, 3)
 new Int explicit = math_utils.add(4, 5)
 ```
 
@@ -174,7 +174,7 @@ output(frame.checksum())
 
 Этот пример работает без окна и подходит для тестов. На Windows кадр можно
 показать через `Window window = windows.open(...)` и
-`window.present(direct frame)`. API, палитра и resource rules описаны на
+`window.present(edit frame)`. API, палитра и resource rules описаны на
 странице [Canvas и Visual Core](canvas.md).
 
 ## Векторы (`v1.2`, experimental)

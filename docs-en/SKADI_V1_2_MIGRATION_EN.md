@@ -20,7 +20,7 @@ the project and does not need to match the toolchain version.
 ## New capabilities
 
 - fixed/growing/child/root-static `Memory`, `place in`, and an explicit overflow boundary;
-- call-scoped `view`/`direct` and explicit `move` for current linear resources;
+- call-scoped `view`/`edit` and explicit `move` for current linear resources;
 - native `Task`, `Task(T)`, `run`, `wait`, `stop`, and `stopping`;
 - bounded `Channel(T)` with blocking `send/receive`, `try_send`, close/drain,
   cancellation, and Duration-bounded `send_for/receive_for`;

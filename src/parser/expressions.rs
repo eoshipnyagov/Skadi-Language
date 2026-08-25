@@ -401,16 +401,16 @@ impl<'a> ExprParser<'a> {
                 Ok(Expression::LiteralFloat(parsed))
             }
             TokenKind::TypeBool => Ok(Expression::LiteralBool(tok.lexeme == "true")),
-            TokenKind::KeywordDirect => {
+            TokenKind::KeywordEdit => {
                 if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {
                     return Err(parse_err(
                         "SC-PARSE-222",
-                        "'direct' call argument requires an identifier.",
+                        "'edit' call argument requires an identifier.",
                     ));
                 }
                 let name = self.tokens[self.idx].lexeme.clone();
                 self.idx += 1;
-                Ok(Expression::DirectBorrow(name))
+                Ok(Expression::EditBorrow(name))
             }
             TokenKind::KeywordView => {
                 if self.idx >= self.end || self.tokens[self.idx].kind != TokenKind::Identifier {

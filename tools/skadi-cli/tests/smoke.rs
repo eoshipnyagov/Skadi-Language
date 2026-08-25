@@ -204,6 +204,55 @@ fn new_check_and_optional_build_run_smoke() {
 }
 
 #[test]
+fn native_c_source_builds_and_runs_through_project_manifest() {
+    if !host_compiler_ready() {
+        return;
+    }
+    let project_dir = unique_temp_dir("native_c_flow");
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("examples/c-abi");
+    fs::create_dir_all(project_dir.join("src")).expect("create source directory");
+    fs::create_dir_all(project_dir.join("native")).expect("create native directory");
+    fs::copy(fixture.join("Skadi.toml"), project_dir.join("Skadi.toml"))
+        .expect("copy manifest fixture");
+    fs::copy(
+        fixture.join("src/main.skd"),
+        project_dir.join("src/main.skd"),
+    )
+    .expect("copy Skadi fixture");
+    fs::copy(
+        fixture.join("src/sensor.skd"),
+        project_dir.join("src/sensor.skd"),
+    )
+    .expect("copy Skadi binding fixture");
+    fs::copy(
+        fixture.join("native/sensor.c"),
+        project_dir.join("native/sensor.c"),
+    )
+    .expect("copy native fixture");
+
+    let check = run_cli(&project_dir, &["check"]);
+    assert!(
+        check.status.success(),
+        "native check failed: {}",
+        stderr_text(&check)
+    );
+    let run = run_cli(&project_dir, &["run"]);
+    assert!(
+        run.status.success(),
+        "native run failed: {}",
+        stderr_text(&run)
+    );
+    let stdout = stdout_text(&run);
+    assert!(stdout.contains("Calibrated reading: 400"), "{stdout}");
+    assert!(stdout.contains("Reading valid: true"), "{stdout}");
+    assert!(stdout.contains("Packet checksum: 60 -> 63"), "{stdout}");
+
+    let _ = fs::remove_dir_all(project_dir);
+}
+
+#[test]
 fn debug_breakpoint_and_step_smoke() {
     if !host_compiler_ready() {
         return;

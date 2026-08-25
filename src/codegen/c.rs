@@ -1177,6 +1177,10 @@ fn emit_time_runtime(out: &mut String) {
 }
 
 fn map_function_name(name: &str) -> &str {
+    let name = name
+        .rsplit_once('.')
+        .map(|(_, unqualified)| unqualified)
+        .unwrap_or(name);
     if name == "main" {
         "skadi_user_main"
     } else {
@@ -1285,7 +1289,7 @@ fn expression_uses_task_surface(expr: &Expression) -> bool {
             .values()
             .any(|value| expression_uses_task_surface(value)),
         Expression::VariableReference(_)
-        | Expression::DirectBorrow(_)
+        | Expression::EditBorrow(_)
         | Expression::ViewBorrow(_)
         | Expression::Move(_)
         | Expression::MemberAccess { .. }
@@ -2649,6 +2653,20 @@ pub fn transpile_program_to_c_with_options(
     let needs_math_runtime = program_uses_math_runtime(program);
     let needs_bit_runtime = program_uses_bit_runtime(program);
     let needs_numeric_runtime = program_uses_numeric_runtime(program);
+    let needs_external_buffer = program.statements.iter().any(|statement| {
+        matches!(
+            statement,
+            Statement::FunctionDef {
+                is_external: true,
+                params,
+                ..
+            } if params.iter().any(|parameter| parameter
+                .param_type
+                .as_deref()
+                .and_then(buffer_element_from_decl)
+                .is_some())
+        )
+    });
     let needs_wrapping_runtime = program_uses_wrapping_runtime(program);
     let needs_visual_runtime = program_uses_visual_runtime(program);
     let needs_window_runtime = program_uses_window_runtime(program);
@@ -2679,6 +2697,7 @@ pub fn transpile_program_to_c_with_options(
         || needs_visual_runtime
         || needs_bit_runtime
         || needs_numeric_runtime
+        || needs_external_buffer
         || options.debug_probes
     {
         out.push_str("#include <stddef.h>\n");
@@ -2819,7 +2838,29 @@ pub fn transpile_program_to_c_with_options(
     }
 
     for stmt in &program.statements {
-        if let Statement::FunctionDef { .. } = stmt {
+        if let Statement::FunctionDef {
+            is_external: true, ..
+        } = stmt
+        {
+            emit_function(stmt, &mut out, &mut codegen_state);
+        }
+    }
+    if program.statements.iter().any(|statement| {
+        matches!(
+            statement,
+            Statement::FunctionDef {
+                is_external: true,
+                ..
+            }
+        )
+    }) {
+        out.push('\n');
+    }
+    for stmt in &program.statements {
+        if let Statement::FunctionDef {
+            is_external: false, ..
+        } = stmt
+        {
             emit_function(stmt, &mut out, &mut codegen_state);
             out.push('\n');
         }
@@ -4480,25 +4521,43 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
         body,
         returns,
         is_danger,
+        is_external,
         ..
     } = stmt
     {
         if *is_danger {
             out.push_str("int");
+        } else if *is_external && returns.is_none() {
+            out.push_str("void");
         } else {
             out.push_str(&map_skadi_type_to_c(returns.as_deref()));
         }
         out.push(' ');
         out.push_str(map_function_name(name));
         out.push('(');
+        if params.is_empty() && *is_external && !(*is_danger && returns.is_some()) {
+            out.push_str("void");
+        }
         for (i, p) in params.iter().enumerate() {
             if i > 0 {
                 out.push_str(", ");
             }
+            if let Some(element) = p.param_type.as_deref().and_then(buffer_element_from_decl) {
+                if p.borrow == BorrowMode::View {
+                    out.push_str("const ");
+                }
+                out.push_str(&map_skadi_type_to_c(Some(element)));
+                out.push_str(" *");
+                out.push_str(&p.name);
+                out.push_str(", size_t ");
+                out.push_str(&p.name);
+                out.push_str("_length");
+                continue;
+            }
             let c_type = map_skadi_type_to_c(p.param_type.as_deref());
             match p.borrow {
                 BorrowMode::Value => out.push_str(&c_type),
-                BorrowMode::DirectMutable => {
+                BorrowMode::EditMutable => {
                     out.push_str(&c_type);
                     out.push_str(" *");
                 }
@@ -4519,6 +4578,10 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
             out.push_str(&map_skadi_type_to_c(Some(ret_ty)));
             out.push_str(" *out");
         }
+        if *is_external {
+            out.push_str(");\n");
+            return;
+        }
         out.push_str(") {\n");
         let mut declared: HashMap<String, String> = params
             .iter()
@@ -4528,8 +4591,8 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
                     match p.borrow {
                         BorrowMode::Value => base,
                         BorrowMode::Move => format!("{base}@owned"),
-                        BorrowMode::DirectMutable | BorrowMode::View => {
-                            format!("{base}@direct")
+                        BorrowMode::EditMutable | BorrowMode::View => {
+                            format!("{base}@borrow")
                         }
                     }
                 })
@@ -4744,11 +4807,34 @@ fn collect_call_types(program: &Program) -> HashMap<String, String> {
     let mut call_types = HashMap::new();
     for statement in &program.statements {
         match statement {
-            Statement::FunctionDef { name, returns, .. } => {
+            Statement::FunctionDef {
+                name,
+                params,
+                returns,
+                is_external,
+                ..
+            } => {
                 call_types.insert(
                     format!("fn:{name}"),
                     returns.clone().unwrap_or_else(|| "Int".to_string()),
                 );
+                if *is_external {
+                    for (index, parameter) in params.iter().enumerate() {
+                        if parameter
+                            .param_type
+                            .as_deref()
+                            .and_then(buffer_element_from_decl)
+                            .is_some()
+                        {
+                            let mode = match parameter.borrow {
+                                BorrowMode::View => "view",
+                                BorrowMode::EditMutable => "edit",
+                                _ => continue,
+                            };
+                            call_types.insert(format!("buffer:{name}:{index}"), mode.to_string());
+                        }
+                    }
+                }
             }
             Statement::StructDecl {
                 name,
@@ -4792,6 +4878,42 @@ fn call_return_type<'a>(name: &str, declared: &'a HashMap<String, String>) -> Op
     declared
         .get(&format!("\0skadi:fn:{name}"))
         .map(String::as_str)
+}
+
+fn buffer_element_from_decl(raw: &str) -> Option<&str> {
+    raw.strip_prefix("Buffer(")
+        .and_then(|inner| inner.strip_suffix(')'))
+        .map(str::trim)
+}
+
+fn external_buffer_mode<'a>(
+    function_name: &str,
+    index: usize,
+    declared: &'a HashMap<String, String>,
+) -> Option<&'a str> {
+    let short_name = function_name.rsplit('.').next().unwrap_or(function_name);
+    declared
+        .get(&format!("\0skadi:buffer:{short_name}:{index}"))
+        .map(String::as_str)
+}
+
+fn emit_call_arguments(
+    function_name: &str,
+    args: &[Expression],
+    declared: &HashMap<String, String>,
+) -> Vec<String> {
+    let mut rendered = Vec::new();
+    for (index, argument) in args.iter().enumerate() {
+        if external_buffer_mode(function_name, index, declared).is_some()
+            && let Expression::ViewBorrow(name) | Expression::EditBorrow(name) = argument
+        {
+            rendered.push(format!("{name}.data"));
+            rendered.push(format!("{name}.len"));
+        } else {
+            rendered.push(emit_expr(argument, declared));
+        }
+    }
+    rendered
 }
 
 fn infer_scalar_declaration_type(
@@ -4908,7 +5030,7 @@ fn emit_debug_named_local(
 
 fn emit_debug_named_local_with_type(out: &mut String, indent: usize, name: &str, raw_type: &str) {
     let normalized = normalize_type_token(raw_type);
-    let value = if raw_type.ends_with("@direct") {
+    let value = if raw_type.ends_with("@borrow") {
         format!("(*{name})")
     } else {
         name.to_string()
@@ -5104,7 +5226,7 @@ fn emit_statement_body(
             out.push_str(&pad);
             if declared
                 .get(target)
-                .map(|ty| ty.ends_with("@direct"))
+                .map(|ty| ty.ends_with("@borrow"))
                 .unwrap_or(false)
             {
                 out.push_str("(*");
@@ -5125,7 +5247,7 @@ fn emit_statement_body(
             out.push_str(&pad);
             let is_direct = declared
                 .get(target)
-                .map(|ty| ty.ends_with("@direct"))
+                .map(|ty| ty.ends_with("@borrow"))
                 .unwrap_or(false);
             let rendered_target = if is_direct {
                 format!("(*{target})")
@@ -5156,7 +5278,7 @@ fn emit_statement_body(
                 out.push_str("my->");
             } else if declared
                 .get(object)
-                .map(|ty| ty.ends_with("@direct"))
+                .map(|ty| ty.ends_with("@borrow"))
                 .unwrap_or(false)
             {
                 out.push_str(object);
@@ -5593,18 +5715,14 @@ fn emit_statement_body(
                 return;
             }
             out.push_str(&pad);
-            out.push_str("/* TODO(v1): danger call lowering */\n");
+            out.push_str("/* Skadi danger call */\n");
             out.push_str(&pad);
             out.push_str("if (");
             out.push_str(map_function_name(call_name));
             out.push('(');
-            for (i, a) in args.iter().enumerate() {
-                if i > 0 {
-                    out.push_str(", ");
-                }
-                out.push_str(&emit_expr(a, declared));
-            }
-            if !args.is_empty() {
+            let rendered_args = emit_call_arguments(call_name, args, declared);
+            out.push_str(&rendered_args.join(", "));
+            if !rendered_args.is_empty() {
                 out.push_str(", ");
             }
             out.push('&');
@@ -5715,10 +5833,10 @@ fn emit_statement_body(
             }
             if let Some((window, method @ ("present" | "close"))) = call_name.split_once('.')
                 && let Some(window_type) = declared.get(window)
-                && normalize_type_token(window_type.strip_suffix("@direct").unwrap_or(window_type))
+                && normalize_type_token(window_type.strip_suffix("@borrow").unwrap_or(window_type))
                     == "Window"
             {
-                let receiver = if window_type.ends_with("@direct") {
+                let receiver = if window_type.ends_with("@borrow") {
                     window.to_string()
                 } else {
                     format!("&{window}")
@@ -5805,17 +5923,12 @@ fn emit_statement_body(
                 return;
             }
             out.push_str(&pad);
-            out.push_str("/* TODO(v1): danger call lowering */\n");
+            out.push_str("/* Skadi danger call */\n");
             out.push_str(&pad);
             out.push_str("if (");
             out.push_str(map_function_name(call_name));
             out.push('(');
-            for (i, a) in args.iter().enumerate() {
-                if i > 0 {
-                    out.push_str(", ");
-                }
-                out.push_str(&emit_expr(a, declared));
-            }
+            out.push_str(&emit_call_arguments(call_name, args, declared).join(", "));
             out.push_str(") != 0) {\n");
             let mut inner = declared.clone();
             emit_block(
@@ -6511,7 +6624,7 @@ fn emit_return_expr(
 fn normalize_type_token(raw: &str) -> String {
     let raw = raw
         .strip_suffix("@owned")
-        .or_else(|| raw.strip_suffix("@direct"))
+        .or_else(|| raw.strip_suffix("@borrow"))
         .unwrap_or(raw);
     if let Some(inner) = raw.strip_prefix("Task(").and_then(|s| s.strip_suffix(')')) {
         return format!("Task({})", normalize_type_token(inner.trim()));
@@ -6521,6 +6634,12 @@ fn normalize_type_token(raw: &str) -> String {
         .and_then(|s| s.strip_suffix(')'))
     {
         return format!("Channel({})", normalize_type_token(inner.trim()));
+    }
+    if let Some(inner) = raw
+        .strip_prefix("Buffer(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return format!("Buffer({})", normalize_type_token(inner.trim()));
     }
     if let Some(elem) = raw.strip_suffix(" List") {
         return format!("{} List", normalize_type_token(elem.trim()));
@@ -7004,7 +7123,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::VariableReference(name)
             if declared
                 .get(name)
-                .map(|ty| ty.ends_with("@direct"))
+                .map(|ty| ty.ends_with("@borrow"))
                 .unwrap_or(false) =>
         {
             format!("(*{name})")
@@ -7016,10 +7135,10 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             "EPSILON" => "FLT_EPSILON".to_string(),
             _ => name.clone(),
         },
-        Expression::DirectBorrow(name) => {
+        Expression::EditBorrow(name) => {
             if declared
                 .get(name)
-                .map(|ty| ty.ends_with("@direct"))
+                .map(|ty| ty.ends_with("@borrow"))
                 .unwrap_or(false)
             {
                 name.clone()
@@ -7030,7 +7149,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::ViewBorrow(name) => {
             if declared
                 .get(name)
-                .map(|ty| ty.ends_with("@direct"))
+                .map(|ty| ty.ends_with("@borrow"))
                 .unwrap_or(false)
             {
                 name.clone()
@@ -7058,7 +7177,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 format!("my->{}", field)
             } else if declared
                 .get(base)
-                .map(|ty| ty.ends_with("@direct"))
+                .map(|ty| ty.ends_with("@borrow"))
                 .unwrap_or(false)
             {
                 format!("{}->{}", base, field)
@@ -7144,14 +7263,14 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                 && matches!(
                     normalize_type_token(
                         receiver_type
-                            .strip_suffix("@direct")
+                            .strip_suffix("@borrow")
                             .unwrap_or(receiver_type)
                     )
                     .as_str(),
                     "Canvas" | "Window"
                 )
             {
-                let receiver = if receiver_type.ends_with("@direct") {
+                let receiver = if receiver_type.ends_with("@borrow") {
                     receiver_name.to_string()
                 } else {
                     format!("&{receiver_name}")
@@ -7684,10 +7803,10 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             if let Some((base, method)) = name.split_once(".")
                 && !declared.contains_key(base)
             {
-                let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
+                let rendered = emit_call_arguments(name, args, declared);
                 return format!("{}({})", method, rendered.join(", "));
             }
-            let rendered: Vec<String> = args.iter().map(|a| emit_expr(a, declared)).collect();
+            let rendered = emit_call_arguments(name, args, declared);
             format!("{}({})", map_function_name(name), rendered.join(", "))
         }
         Expression::Stopping => "sk_task_is_stopping()".to_string(),

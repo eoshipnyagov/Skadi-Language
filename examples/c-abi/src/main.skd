@@ -1,0 +1,19 @@
+import "./sensor.skd"
+
+new i16 raw_value = 412
+new i16 offset = -12
+new i32 calibrated = 0
+calibrated = sensor.sensor_calibrate(raw_value, offset) on error {
+    output("Calibration failed")
+}
+new Bool valid = sensor.sensor_is_valid(calibrated)
+new u8 List packet = [10, 20, 30]
+new u32 checksum_before = sensor.sensor_checksum(view packet)
+sensor.sensor_adjust(edit packet, 1) on error {
+    output("Packet adjustment failed")
+}
+new u32 checksum_after = sensor.sensor_checksum(view packet)
+
+output("Calibrated reading: ", calibrated)
+output("Reading valid: ", valid)
+output("Packet checksum: ", checksum_before, " -> ", checksum_after)

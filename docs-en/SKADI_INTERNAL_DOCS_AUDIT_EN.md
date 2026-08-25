@@ -25,7 +25,7 @@ feature by itself.
   Platform Backends.
 - Canvas remains a Domain Core teaching and prototyping surface, but it must not
   grow into a complete GUI, media framework, or game engine.
-- The language should teach resource management. Scope, copy, `view`, `direct`,
+- The language should teach resource management. Scope, copy, `view`, `edit`,
   `move`, cleanup, Memory, and Task/Channel behavior must be visible through
   diagnostics and tooling.
 - `when / is` is the strict Skadi `switch / case`: evaluate once, never fall
@@ -116,12 +116,11 @@ remain future.
 4. Design the first ESP32/FreeRTOS platform slice and hardware interrupt binding.
 5. Add explicit `Ring`/bounded `Pool` semantics for `drop oldest`.
 6. Grow Canvas with events, text/images, and additional presenters.
-7. Continue package/module ergonomics and the first bounded C ABI slice. The
-   accepted direction is manifest plus lockfile, explicit imports, fixed-width
-   ABI values, explicit struct layout, opaque handles, and visible ownership of
-   buffers/resources. Exact declaration syntax must be tested against real C
-   libraries before it is frozen. The obsolete `fixed`/`const` lexer-only
-   reservation has been removed.
+7. The bounded C ABI slice includes `external fn`, fixed scalar values,
+   call-scoped `view`/`edit Buffer(T)`, and manifest native sources/libraries.
+   Continue package/module ergonomics, lockfiles, explicit struct layout, opaque
+   handles, and visible ownership of long-lived C resources. Resource declaration
+   syntax must be tested against real C libraries before it is frozen.
 
 In parallel, the tooling track now has its first structured analysis facts and a
 source-order ownership/resource/Task/Memory lifecycle chain in the TUI. Next are

@@ -107,7 +107,7 @@ GitHub Pages.
 
 - Memory runtime проходит parser/semantic/codegen/runtime путь для fixed,
   segmented-growing, child и root-static regions.
-- `view`/`direct` borrows и `move` ownership transfer работают для текущих
+- `view`/`edit` borrows и `move` ownership transfer работают для текущих
   linear resources.
 - Task/Channel MVP проходит parser/semantic/codegen/runtime путь: native `run/wait`,
   cooperative `stop/stopping`, bounded blocking Channel, `try_send` и

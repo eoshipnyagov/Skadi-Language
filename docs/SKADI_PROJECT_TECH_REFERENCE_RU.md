@@ -144,7 +144,7 @@ Tooling stages добавляют собственные `SC-MOD`, `SC-CG`, `SC-
 
 - recursive relative path imports;
 - cycle/missing-file diagnostics;
-- direct-import-only visibility;
+- edit-import-only visibility;
 - public symbol collision detection;
 - `local` isolation и `module.symbol` qualification;
 - line-origin table для раскрытого multi-file source;
@@ -202,7 +202,7 @@ native layer; собственный machine debugger не является це
 ### Experimental line `v1.2`
 
 - bounded Memory runtime с fixed/grow/child/static regions;
-- call-scoped `view`/`direct` и explicit resource `move`;
+- call-scoped `view`/`edit` и explicit resource `move`;
 - native Task/Channel MVP на Win32/pthread;
 - nominal Time/Duration и monotonic runtime;
 - реализованные bounded milestones: Time/Duration, ByteSize, Angle и Vec2/Vec3/Vec4;

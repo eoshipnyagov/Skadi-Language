@@ -5,6 +5,7 @@
 - [Установка](../../docs/SKADI_INSTALLATION_RU.md)
 - [Быстрый старт CLI](../../docs/SKADI_CLI_QUICK_START_RU.md)
 - [Справочник CLI/TUI](../../docs/SKADI_CLI_REFERENCE_RU.md)
+- [C ABI и native C](../../docs/SKADI_C_ABI_RU.md)
 - [Руководство для новичка](../../docs/SKADI_GETTING_STARTED_RU.md)
 
 ## Основной workflow
@@ -67,6 +68,10 @@ Skadi call stack и базовые scalar-locals. Тот же машинный d
 
 `build` и `run` принимают `--target` и `--cc`. C-компилятор является внешней
 зависимостью и не устанавливается вместе со Skadi.
+
+Project manifest может подключать проверенные C sources и libraries через
+`[native]`; Skadi-граница объявляется bodyless `external fn` с fixed scalar
+типами. Pointer/resource ABI пока намеренно не поддерживается.
 
 ## TUI
 

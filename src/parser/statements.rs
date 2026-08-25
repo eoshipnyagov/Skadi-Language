@@ -112,6 +112,7 @@ fn parse_parenthesized_type_name(tokens: &[Token], start: usize) -> Option<(Stri
     let base = tokens[start].lexeme.as_str();
     if base != "Task"
         && base != "Channel"
+        && base != "Buffer"
         && base != "Interrupt"
         && base != "Canvas"
         && base != "Window"
@@ -231,13 +232,28 @@ pub fn parse_function_declaration(
     start_index: usize,
     _scope: &ScopeManager,
 ) -> ParseResult<Statement> {
-    parse_function_declaration_inner(tokens, start_index, false)
+    parse_function_declaration_inner(tokens, start_index, false, false)
+}
+
+pub fn parse_external_function_declaration(
+    tokens: &[Token],
+    start_index: usize,
+) -> ParseResult<Statement> {
+    if tokens.get(start_index).map(Token::kind) != Some(TokenKind::KeywordExternal) {
+        return Err(parse_err(
+            "SC-PARSE-227",
+            "expected 'external' before external function declaration.",
+        ));
+    }
+    parse_function_declaration_inner(tokens, start_index + 1, false, true)
+        .map(|(statement, consumed)| (statement, consumed + 1))
 }
 
 fn parse_function_declaration_inner(
     tokens: &[Token],
     start_index: usize,
     is_local: bool,
+    is_external: bool,
 ) -> ParseResult<Statement> {
     let mut current_index = start_index;
     let loc = Location {
@@ -298,13 +314,8 @@ fn parse_function_declaration_inner(
 
             let mut borrow = BorrowMode::Value;
             let mut type_index = current_index;
-            if tokens[type_index].kind() == TokenKind::KeywordConstant {
-                return Err(parse_err(
-                    "SC-PARSE-106",
-                    "'constant direct' parameters were replaced by 'view <Type> <name>'.",
-                ));
-            } else if tokens[type_index].kind() == TokenKind::KeywordDirect {
-                borrow = BorrowMode::DirectMutable;
+            if tokens[type_index].kind() == TokenKind::KeywordEdit {
+                borrow = BorrowMode::EditMutable;
                 type_index += 1;
             } else if tokens[type_index].kind() == TokenKind::KeywordView {
                 borrow = BorrowMode::View;
@@ -364,12 +375,46 @@ fn parse_function_declaration_inner(
                 "expected return type after 'returns'.",
             ));
         }
-    } else if let Some((return_type, next_index)) = parse_type_name_at(tokens, current_index)
+    } else if !is_external
+        && let Some((return_type, next_index)) = parse_type_name_at(tokens, current_index)
         && next_index < tokens.len()
         && tokens[next_index].lexeme == "{"
     {
         returns = Some(return_type);
         current_index = next_index;
+    }
+
+    if is_external {
+        if params
+            .iter()
+            .any(|parameter| parameter.param_type.is_none())
+        {
+            return Err(parse_err(
+                "SC-PARSE-228",
+                "external function parameters require explicit types.",
+            ));
+        }
+        if current_index < tokens.len()
+            && tokens[current_index].kind() != TokenKind::NewLine
+            && tokens[current_index].lexeme != "}"
+        {
+            return Err(parse_err(
+                "SC-PARSE-229",
+                "external function declaration must end after its return type.",
+            ));
+        }
+        let statement = Statement::FunctionDef {
+            name: function_name,
+            params,
+            body: Vec::new().into(),
+            returns,
+            uses_returns_keyword,
+            is_danger,
+            is_local: false,
+            is_external: true,
+            loc,
+        };
+        return Ok((statement, current_index - start_index));
     }
 
     if current_index >= tokens.len()
@@ -398,6 +443,7 @@ fn parse_function_declaration_inner(
         uses_returns_keyword,
         is_danger,
         is_local,
+        is_external: false,
         loc,
     };
 
@@ -416,8 +462,10 @@ pub fn parse_local_prefixed_declaration(
         ));
     }
     match tokens[start_index + 1].kind() {
-        TokenKind::KeywordFn => parse_function_declaration_inner(tokens, start_index + 1, true)
-            .map(|(stmt, consumed)| (stmt, consumed + 1)),
+        TokenKind::KeywordFn => {
+            parse_function_declaration_inner(tokens, start_index + 1, true, false)
+                .map(|(stmt, consumed)| (stmt, consumed + 1))
+        }
         TokenKind::KeywordStruct => parse_struct_declaration_inner(tokens, start_index + 1, true)
             .map(|(stmt, consumed)| (stmt, consumed + 1)),
         TokenKind::KeywordLabel => parse_label_declaration_inner(tokens, start_index + 1, true)
@@ -2062,13 +2110,8 @@ fn parse_struct_method(
         }
         let mut borrow = BorrowMode::Value;
         let mut type_index = current_index;
-        if tokens[type_index].kind() == TokenKind::KeywordConstant {
-            return Err(parse_err(
-                "SC-PARSE-156",
-                "'constant direct' parameters were replaced by 'view <Type> <name>'.",
-            ));
-        } else if tokens[type_index].kind() == TokenKind::KeywordDirect {
-            borrow = BorrowMode::DirectMutable;
+        if tokens[type_index].kind() == TokenKind::KeywordEdit {
+            borrow = BorrowMode::EditMutable;
             type_index += 1;
         } else if tokens[type_index].kind() == TokenKind::KeywordView {
             borrow = BorrowMode::View;

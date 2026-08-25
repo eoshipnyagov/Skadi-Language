@@ -62,10 +62,23 @@ edition = "v1"
 
 [build]
 entry = "src/main.skd"
+
+[numeric]
+int = "target"
+
+[native]
+sources = []
+libraries = []
+library_paths = []
 ```
 
-Supported fields are `name`, `version`, `edition`, and `entry`. The TUI Config
-view edits the same fields.
+Supported fields include `name`, `version`, `edition`, `entry`, `[numeric] int`,
+and the `[native]` arrays. The TUI Config view edits the project/numeric fields
+and preserves native settings.
+
+`[native]` configures the bounded [C ABI](c-abi.en.md): `sources` lists relative
+`.c` files, `libraries` contains library names, and `library_paths` contains
+relative search directories. Arbitrary compiler flags are not accepted.
 
 ## Build and run
 
@@ -76,6 +89,8 @@ skadi-cli run --target host --cc gcc
 
 Failures identify their source: Skadi frontend, project configuration, C
 toolchain, runtime execution, or I/O. Build artifacts are written to `build/`.
+Native source/path validation is reported as project configuration; C compiler
+and linker failures are reported as toolchain errors.
 
 ## Quick run
 

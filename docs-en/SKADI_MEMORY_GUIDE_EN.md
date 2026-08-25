@@ -46,7 +46,7 @@ Memory device_memory = memory.static(4kb)
 ## Ownership transfer
 
 `Canvas`, `Window`, `Interrupt`, and owning `Channel` handles have one owner.
-They can be borrowed through `view`/`direct` or transferred explicitly:
+They can be borrowed through `view`/`edit` or transferred explicitly:
 
 ```skadi
 fn consume(move Canvas frame) {

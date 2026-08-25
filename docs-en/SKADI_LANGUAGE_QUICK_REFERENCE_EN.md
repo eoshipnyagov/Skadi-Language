@@ -59,6 +59,10 @@ is rejected by semantic analysis.
 |---|---|---:|
 | Function | `fn add(Int a, Int b) returns Int { ... }` | Stable |
 | Danger function | `danger fn load(Path path) returns Text { ... }` | Stable |
+| External C function | `external fn c_add(i32 a, i32 b) returns i32` | Experimental; bodyless scalar/buffer ABI |
+| External danger C function | `external danger fn c_read(i32 port) returns i32` | Experimental; C `int` status plus `out`, requires `on error` |
+| Read-only C buffer | `external fn sum(view Buffer(u8) data) returns u32` | Experimental; `const T *` plus `size_t` |
+| Mutable C buffer | `external danger fn fill(edit Buffer(u8) data)` | Experimental; `T *` plus `size_t` |
 | Local symbol | `local fn/struct` | Stable |
 | Local numeric label | `local label Code { Ok = 0 }` | Stable |
 | Local symbolic tag | `local tag Status { Ready Busy }` | Stable |
@@ -67,7 +71,7 @@ is rejected by semantic analysis.
 | Error label | `label ErrorCode { Ok = 0 Missing = 1 }` | Stable |
 | Recovery | `value = danger_call() on error { ... }` | Stable |
 | Read-only borrow | `fn inspect(view Canvas frame)`, `inspect(view frame)` | Experimental |
-| Mutable borrow | `fn paint(direct Canvas frame)`, `paint(direct frame)` | Experimental |
+| Mutable borrow | `fn paint(edit Canvas frame)`, `paint(edit frame)` | Experimental |
 | Ownership transfer | `fn consume(move Canvas frame)`, `consume(move frame)` | Experimental |
 | Ownership return | `return move frame` | Experimental |
 | Struct | `struct Point { Float x Float y }` | Stable |
@@ -83,7 +87,7 @@ is rejected by semantic analysis.
 The first `ErrorCode` variant must be `Ok`.
 
 `view` passes a reference without permission to mutate through that parameter.
-`direct` grants exclusive mutable access. Both borrows end with the synchronous
+`edit` grants exclusive mutable access. Both borrows end with the synchronous
 call and cannot cross a `run` boundary.
 
 ## Text, List, filesystem, and I/O

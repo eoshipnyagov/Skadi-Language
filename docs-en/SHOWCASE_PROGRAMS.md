@@ -1,6 +1,7 @@
 # Skadi Showcase Programs
 
-This page collects 17 small showcase programs for the current Skadi toolchain.
+This page collects 18 small showcase programs and several focused project
+examples for the current Skadi toolchain.
 
 They serve three roles:
 
@@ -70,6 +71,8 @@ Focused native examples also cover:
   `send_for`/`receive_for` and `timed_out` handling;
 - `examples/concurrency/05_timed_task_wait.skd` for conditional Task-handle
   consumption across success and timeout paths.
+- `examples/c-abi/` for a manifest project using `external fn`, a native C
+  source, fixed-width values, and `view`/`edit Buffer(u8)` at the ABI boundary.
 
 ## Stable showcase fixtures
 

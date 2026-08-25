@@ -10,6 +10,7 @@ inventory. The detailed reference is split by topic:
 - [Functions and errors](functions-errors.en.md)
 - [Struct, Text, and List](data-model.en.md)
 - [Files, imports, and visibility](modules.en.md)
+- [C ABI and native C](c-abi.en.md)
 - [I/O and filesystem](io-files.en.md)
 - [Math](math.en.md)
 

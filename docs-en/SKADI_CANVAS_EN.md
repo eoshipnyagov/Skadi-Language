@@ -28,13 +28,13 @@ frame.circle(center, 48.0, Color.terminal_bright_yellow)
 frame.fill_circle(center, 12.0, color(213, 78, 83, 192))
 
 while window.is_open() {
-    window.present(direct frame)
+    window.present(edit frame)
     sleep(16ms)
 }
 ```
 
 `Canvas` and `Window` are resources. They cannot be copied, returned from a
-function, or passed by value. Use `direct Canvas` for mutable function access
+function, or passed by value. Use `edit Canvas` for mutable function access
 and `view Canvas` for read-only access.
 
 ## Types and constructors
@@ -91,7 +91,7 @@ The full 16-color palette is exposed as:
 
 ```skadi
 while window.is_open() {
-    window.present(direct frame)
+    window.present(edit frame)
     sleep(16ms)
 }
 ```
@@ -107,7 +107,7 @@ mark the window as unresponsive.
 After a conditional `window.close()`, `present()` requires a handler:
 
 ```skadi
-window.present(direct frame) on error {
+window.present(edit frame) on error {
     pass
 }
 ```

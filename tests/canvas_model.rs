@@ -84,7 +84,7 @@ Canvas frame = canvas(64, 48)
 Window window = windows.open("Skadi Canvas", 64, 48)
 frame.clear(Color.terminal_black)
 frame.line({x = 4.0, y = 4.0}, {x = 59.0, y = 43.0}, Color.terminal_bright_cyan)
-window.present(direct frame)
+window.present(edit frame)
 window.close()
 "#;
 
@@ -131,7 +131,7 @@ fn draw(Canvas frame) {
 "#,
     );
     assert!(
-        value_parameter.contains("must use 'direct'"),
+        value_parameter.contains("must use 'edit'"),
         "{value_parameter}"
     );
 
@@ -155,7 +155,7 @@ window.present(frame)
 "#,
     );
     assert!(
-        present_without_borrow.contains("requires explicit 'direct <Canvas>'"),
+        present_without_borrow.contains("requires explicit 'edit <Canvas>'"),
         "{present_without_borrow}"
     );
 
@@ -176,7 +176,7 @@ fn erase(view Canvas frame) {
 fn canvas_borrowed_functions_separate_mutation_from_observation() {
     let program = semantic_ok(
         r#"
-fn paint(direct Canvas frame) {
+fn paint(edit Canvas frame) {
     frame.clear(Color.terminal_black)
 }
 
@@ -185,7 +185,7 @@ fn fingerprint(view Canvas frame) returns Int {
 }
 
 Canvas frame = canvas(8, 8)
-paint(direct frame)
+paint(edit frame)
 new Int checksum = fingerprint(view frame)
 output(checksum)
 "#,
@@ -361,7 +361,7 @@ if should_close {
     window.close()
 }
 
-window.present(direct frame)
+window.present(edit frame)
 "#,
     );
     assert!(
@@ -380,7 +380,7 @@ if should_close {
     window.close()
 }
 
-window.present(direct frame) on error {
+window.present(edit frame) on error {
     pass
 }
 "#,
@@ -399,7 +399,7 @@ Canvas frame = canvas(8, 8)
 Window window = windows.open("Canvas", 8, 8)
 window.close()
 
-window.present(direct frame) on error {
+window.present(edit frame) on error {
     pass
 }
 "#;
@@ -427,7 +427,7 @@ fn render(Bool should_close) returns Int {
         return 0
     }
 
-    window.present(direct frame)
+    window.present(edit frame)
     return 0
 }
 "#,

@@ -75,6 +75,10 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 | Функция с возвратом | `fn add(Int a, Int b) returns Int { ... }` | Stable |
 | Danger-функция | `danger fn load(Path path) returns Text { ... }` | Stable |
 | Локальная функция | `local fn helper() { ... }` | Stable |
+| Внешняя C-функция | `external fn c_add(i32 a, i32 b) returns i32` | Experimental; scalar/buffer ABI, без тела |
+| Внешняя danger C-функция | `external danger fn c_read(i32 port) returns i32` | Experimental; C `int` status + `out`, обязательный `on error` |
+| Read-only C buffer | `external fn sum(view Buffer(u8) data) returns u32` | Experimental; `const T *` + `size_t` |
+| Mutable C buffer | `external danger fn fill(edit Buffer(u8) data)` | Experimental; `T *` + `size_t` |
 | Legacy return type | `fn add(...) Int { ... }` | Compatibility |
 | Возврат | `return value`, `return` | Stable |
 | Код ошибки | `return error MissingFile` | Stable, только в `danger fn` |
@@ -83,13 +87,13 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 | Danger recovery | `value = load(path) on error { ... }` | Stable |
 | Danger call без результата | `save() on error { ... }` | Stable |
 | Read-only borrow | `fn inspect(view Canvas frame)`, `inspect(view frame)` | Experimental |
-| Mutable borrow | `fn paint(direct Canvas frame)`, `paint(direct frame)` | Experimental |
+| Mutable borrow | `fn paint(edit Canvas frame)`, `paint(edit frame)` | Experimental |
 | Передача ownership | `fn consume(move Canvas frame)`, `consume(move frame)` | Experimental |
 | Возврат ownership | `return move frame` | Experimental |
 
 `ErrorCode` обязан существовать, а его первым вариантом должен быть `Ok`.
 
-`view` передаёт ссылку без права изменять объект через этот параметр. `direct`
+`view` передаёт ссылку без права изменять объект через этот параметр. `edit`
 даёт исключительный изменяемый доступ. Оба borrow завершаются вместе с
 синхронным вызовом и не могут пересекать границу `run`.
 
@@ -276,11 +280,11 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `canvas.fill_circle(center, radius, color)` | Заполненный круг |
 | `canvas.checksum()` | Детерминированная проверка кадра |
 | `windows.open(title, width, height)` | Создать Win32 `Window` |
-| `window.present(direct canvas)` | Показать Canvas с явным borrow |
+| `window.present(edit canvas)` | Показать Canvas с явным borrow |
 | `window.is_open()` / `window.close()` | Lifecycle окна |
 
 `Color` и `Rect` — value types. `Canvas` и `Window` — линейные ресурсы: они не
-копируются, временно передаются через `view`/`direct`, а ownership передаётся
+копируются, временно передаются через `view`/`edit`, а ownership передаётся
 через `move`. Полный текущий контракт:
 [Canvas и Visual Core](canvas.md).
 

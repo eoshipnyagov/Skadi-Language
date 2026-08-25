@@ -85,6 +85,9 @@ Runtime code считается публичным только после по�
 - `SC-PARSE-001..003` — parser entry/wrapper diagnostics (`parser/mod.rs`)
 - `SC-PARSE-101..148` — statement-level parser diagnostics (`parser/statements.rs`)
 - `SC-PARSE-201..226` — expression parser diagnostics (`parser/expressions.rs`)
+- `SC-PARSE-227` — ожидался `external` перед внешним объявлением
+- `SC-PARSE-228` — параметры `external fn` не являются явно типизированными value-параметрами
+- `SC-PARSE-229` — после сигнатуры `external fn` обнаружено тело или иной лишний токен
 
 ### Диапазоны parse codes
 

@@ -10,6 +10,7 @@ functions и builtins используйте [быструю справку](lan
 - [Функции, видимость и обработка ошибок](functions-errors.md)
 - [Struct, Text и List](data-model.md)
 - [Файлы, импорты и видимость](modules.md)
+- [C ABI и native C](c-abi.md)
 - [Ввод, вывод и файловая система](io-files.md)
 - [Математика](math.md)
 

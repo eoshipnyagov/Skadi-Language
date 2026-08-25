@@ -246,7 +246,7 @@ fn collect_task_entries_from_expr(expression: &Expression, entries: &mut HashSet
         | Expression::Stopping
         | Expression::TimedOut
         | Expression::VariableReference(_)
-        | Expression::DirectBorrow(_)
+        | Expression::EditBorrow(_)
         | Expression::ViewBorrow(_)
         | Expression::Move(_)
         | Expression::MemberAccess { .. }
@@ -575,7 +575,7 @@ fn collect_expression_facts(
             "wait is the ownership boundary that releases the native task lifecycle",
             "keep this wait reachable from every path after task creation",
         ),
-        Expression::DirectBorrow(name) => push_lifecycle_fact(
+        Expression::EditBorrow(name) => push_lifecycle_fact(
             facts,
             AnalysisFactKind::ResourceBorrowed,
             "SC-AN-302",
@@ -583,7 +583,7 @@ fn collect_expression_facts(
             function,
             task_entries,
             name,
-            format!("'{name}' is borrowed for direct mutation"),
+            format!("'{name}' is borrowed for editing"),
             "ownership stays with the caller while one callee may mutate the value",
             "ensure no competing borrow or owner use overlaps this call",
         ),

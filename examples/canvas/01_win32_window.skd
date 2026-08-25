@@ -11,6 +11,6 @@ frame.circle(center, 48.0, Color.terminal_bright_yellow)
 frame.fill_circle(center, 12.0, Color.terminal_bright_red)
 
 while window.is_open() {
-    window.present(direct frame)
+    window.present(edit frame)
     sleep(16ms)
 }

@@ -132,7 +132,7 @@ Skadi нацелен на системное программирование с
 values and scopes
 -> explicit errors
 -> resource lifecycle and close
--> view / direct / move
+-> view / edit / move
 -> Memory
 -> Task / Channel
 -> Interrupt and embedded

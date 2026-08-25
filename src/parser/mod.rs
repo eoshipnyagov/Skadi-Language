@@ -20,6 +20,9 @@ fn parse_statement_at(
         TokenKind::KeywordFn => {
             statements::parse_function_declaration(tokens, current_token_index, parser_scope)
         }
+        TokenKind::KeywordExternal => {
+            statements::parse_external_function_declaration(tokens, current_token_index)
+        }
         TokenKind::KeywordFor => {
             statements::parse_for_loop(tokens, current_token_index, parser_scope)
         }

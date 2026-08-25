@@ -15,7 +15,7 @@ fn fingerprint(view Canvas frame) returns Int {
     return frame.checksum()
 }
 
-fn paint(direct Canvas frame) {
+fn paint(edit Canvas frame) {
     frame.clear(Color.terminal_blue)
 }
 
@@ -25,12 +25,12 @@ fn consume(move Canvas frame) {
 
 Canvas frame = canvas(32, 24)
 new Int before = fingerprint(view frame)
-paint(direct frame)
+paint(edit frame)
 consume(move frame)
 ```
 
 - `view` is a read-only borrow for one synchronous call.
-- `direct` is an exclusive mutable borrow for one call.
+- `edit` is an exclusive mutable borrow for one call.
 - `move` transfers ownership permanently and makes the old name unavailable.
 
 The marker is visible in both the signature and call site because it changes

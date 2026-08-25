@@ -20,6 +20,7 @@ class SkadiLexer(RegexLexer):
                 words(
                     (
                         "fn",
+                        "external",
                         "danger",
                         "struct",
                         "label",
@@ -31,7 +32,7 @@ class SkadiLexer(RegexLexer):
                         "allow",
                         "grow",
                         "drop",
-                        "direct",
+                        "edit",
                         "view",
                         "move",
                         "if",
@@ -80,6 +81,7 @@ class SkadiLexer(RegexLexer):
                         "Memory",
                         "Task",
                         "Channel",
+                        "Buffer",
                         "Interrupt",
                         "List",
                         "Link",

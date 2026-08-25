@@ -8,6 +8,7 @@
 pub enum TokenKind {
     // Keywords
     KeywordFn,           // fn
+    KeywordExternal,     // external
     KeywordStruct,       // struct
     KeywordLabel,        // label
     KeywordTag,          // tag
@@ -28,7 +29,7 @@ pub enum TokenKind {
     KeywordHide,         // hide
     KeywordLocal,        // local
     KeywordMy,           // my
-    KeywordDirect,       // direct
+    KeywordEdit,         // edit
     KeywordView,         // view
     KeywordMove,         // move
     KeywordOnError,      // on error

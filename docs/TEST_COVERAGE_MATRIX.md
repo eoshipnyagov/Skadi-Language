@@ -165,6 +165,13 @@
   - parser сохраняет literal precision до semantic target selection
   - semantic tests отделяют диапазоны `Float/f32` и `f64`
   - codegen shape проверяет double helpers и `sqrt/pow` вместо `sqrtf/powf`
+- bounded C ABI coverage
+  - `tests/c_abi_model.rs` проверяет `external fn`, scalar type whitelist, `void`,
+    `external danger fn`, status/out ABI, `view`/`edit Buffer(T)`, запрет
+    хранения/возврата buffer и task-entry, formatter и C prototypes
+  - CLI unit tests закрепляют GCC/Clang и MSVC linker argument shape
+  - `tools/skadi-cli/tests/smoke.rs` собирает и запускает manifest project с
+    отдельным binding-модулем и реальным native C source
 
 ## 2. Что покрыто частично / что ещё требует углубления
 
@@ -201,6 +208,11 @@
 - module ergonomics
   - относительный path-import и правила видимости покрыты полноценно
   - path import aliases реализованы; module-name imports и re-export остаются TODO
+- C ABI
+  - fixed scalar declarations, typed call-scoped buffers и `[native]`
+    sources/libraries реализованы
+  - raw pointers, callbacks, explicit struct layout, opaque handles и
+    package/library resolver остаются следующими FFI slices
 
 ## 3. Политика для новых фич
 

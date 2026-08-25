@@ -16,7 +16,7 @@ fn fingerprint(view Canvas frame) returns Int {
     return frame.checksum()
 }
 
-fn paint(direct Canvas frame) {
+fn paint(edit Canvas frame) {
     frame.clear(Color.terminal_blue)
 }
 
@@ -26,12 +26,12 @@ fn consume(move Canvas frame) {
 
 Canvas frame = canvas(32, 24)
 new Int before = fingerprint(view frame)
-paint(direct frame)
+paint(edit frame)
 consume(move frame)
 ```
 
 - `view` даёт read-only borrow на время синхронного вызова.
-- `direct` даёт exclusive mutable borrow на время вызова.
+- `edit` даёт exclusive mutable borrow на время вызова.
 - `move` окончательно передаёт ownership. Старое имя после вызова недоступно.
 
 Маркер виден и в сигнатуре, и в call site. Это не оптимизационная подсказка, а

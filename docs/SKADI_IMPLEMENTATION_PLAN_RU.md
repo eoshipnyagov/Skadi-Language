@@ -236,7 +236,7 @@ Reference:
 
 - Memory MVP: region runtime, `place in`, `clear`, базовые escape- и lifecycle-проверки;
 - segmented growth, child/root-static regions и bounded ownership transfer
-  через `view`/`direct`/`move`;
+  через `view`/`edit`/`move`;
 - Task/Channel runtime MVP: `run`, `wait`, `stop`, `stopping`, bounded FIFO и передача результатов;
 - Win32 и pthread backend, многопоточные stress/e2e и обязательный TSan gate в Linux CI;
 - относительные path-imports, `local`/`hide`, direct-import-only visibility и `module.symbol`;

@@ -42,7 +42,7 @@ pub struct FunctionParam {
 pub enum BorrowMode {
     #[default]
     Value,
-    DirectMutable,
+    EditMutable,
     View,
     Move,
 }
@@ -134,6 +134,7 @@ pub enum Statement {
         uses_returns_keyword: bool,
         is_danger: bool,
         is_local: bool,
+        is_external: bool,
         loc: Location,
     },
     IfStatement {
@@ -339,7 +340,7 @@ pub enum Expression {
         index: Box<Expression>,
     },
     VariableReference(String), // Usage of a defined variable name
-    DirectBorrow(String),
+    EditBorrow(String),
     ViewBorrow(String),
     Move(String),
     MemberAccess {

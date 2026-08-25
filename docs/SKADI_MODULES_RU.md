@@ -58,8 +58,9 @@ imports — `SC-MOD-001`.
 
 ## Принятое направление: packages и C-библиотеки
 
-Подключение пакетов и C-библиотек является обязательной частью пути к полной
-версии языка, но пока не является рабочим синтаксисом.
+Package resolver пока не реализован. Ограниченный scalar C ABI уже доступен
+через bodyless `external fn` и `[native]` в `Skadi.toml`; полный контракт и пример
+описаны на странице [C ABI и native C](c-abi.md).
 
 Package layer должен добавить зависимости в `Skadi.toml`, локальные и Git
 sources, воспроизводимый lock-файл, единое разрешение diamond graph и imports по
@@ -67,15 +68,18 @@ sources, воспроизводимый lock-файл, единое разреш
 видимой: файл по-прежнему явно импортирует то, чем пользуется.
 
 C interoperability вводится отдельным ограниченным ABI-контрактом, а не
-разрешением вставлять произвольный C в Skadi. Первый срез должен покрыть:
+разрешением вставлять произвольный C в Skadi. Первый реализованный срез
+покрывает функции с fixed-width integers, `f32/f64`, `Bool`, `Char`, `void`,
+native C sources, library paths и linker names.
 
-- функции с fixed-width integers и `f32/f64`;
+Следующие срезы должны покрыть:
+
 - C-compatible structs с явным layout;
 - opaque owning/borrowed handles;
 - buffers с явной длиной;
-- include paths, library paths и linker names из `Skadi.toml`;
+- include/header contract;
 - явные правила владения для `char*`, buffers, callbacks и resource handles.
 
-Точный declaration syntax будет принят только вместе с проверкой нескольких
+Точный resource/layout syntax будет принят только вместе с проверкой нескольких
 реальных библиотек. Автоматическая генерация bindings из простых headers должна
 строиться поверх того же ABI-контракта, а не создавать вторую модель FFI.

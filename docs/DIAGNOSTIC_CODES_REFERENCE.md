@@ -43,6 +43,9 @@ Wrapper/stage codes used by CLI pipeline:
   - `SC-PARSE-225` invalid radix or decimal integer literal
 - `SC-PARSE-226` invalid or non-finite floating-point literal (source parsing
   preserves finite `f64`; a `Float/f32` range mismatch is `SC-SEM-020`)
+- `SC-PARSE-227` missing `external` prefix at the external-declaration parser entry
+- `SC-PARSE-228` external parameter has no explicit type
+- `SC-PARSE-229` external declaration has a body or trailing syntax after its signature
 
 ## 3. Semantic Codes (`SC-SEM-*`)
 

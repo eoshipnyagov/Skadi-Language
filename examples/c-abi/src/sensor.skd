@@ -1,0 +1,4 @@
+external danger fn sensor_calibrate(i16 raw_value, i16 offset) returns i32
+external fn sensor_is_valid(i32 value) returns Bool
+external fn sensor_checksum(view Buffer(u8) data) returns u32
+external danger fn sensor_adjust(edit Buffer(u8) data, u8 delta)

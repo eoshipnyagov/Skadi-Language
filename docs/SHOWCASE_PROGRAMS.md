@@ -1,6 +1,7 @@
 # Showcase-программы Skadi
 
-В этом разделе собраны 17 небольших showcase-программ.
+В этом разделе собраны 18 небольших showcase-программ и несколько фокусных
+project examples.
 
 Их цель:
 
@@ -29,6 +30,7 @@
   <li><code>bench_15_angle_navigation.skd</code><ul><li>Расчёт направления через nominal <code>Angle</code>.</li><li>Покрытие: literals <code>deg/rad</code>, arithmetic, basic trigonometry, <code>normalize_angle</code>, <code>as_radians</code> и <code>Angle List</code>.</li></ul></li>
   <li><code>bench_16_vector_navigation.skd</code><ul><li>Навигационный расчёт с встроенными векторами.</li><li>Покрытие: <code>Vec2/Vec3/Vec4</code>, components, vector/scalar arithmetic, <code>normalize</code>, <code>distance</code>, <code>length</code> и <code>cross</code>.</li></ul></li>
   <li><code>bench_17_canvas_palette.skd</code><ul><li>Детерминированная headless-сцена Canvas v0.</li><li>Покрытие: <code>Color</code>, <code>color_hex</code>, 16-цветная терминальная палитра, <code>Rect</code>, <code>Canvas</code>, clipping, alpha blending, прямоугольники, окружности и framebuffer checksum.</li></ul></li>
+  <li><code>bench_18_bit_registers.skd</code><ul><li>Модель fixed-width управляющего регистра.</li><li>Покрытие: radix literals, checked bit operations, explicit wrapping, checked float/integer conversions и <code>f64</code>.</li></ul></li>
 </ol>
 
 ## Фокусные примеры memory и ownership
@@ -43,6 +45,8 @@
   заблокированной на пустом Channel;
 - `examples/concurrency/04_timed_channel.skd` — Duration-bounded Channel waits;
 - `examples/concurrency/05_timed_task_wait.skd` — path-sensitive timed Task wait.
+- `examples/c-abi/` — полноценный manifest project с `external fn`, native C
+  source, fixed-width параметрами и `view`/`edit Buffer(u8)` на ABI-границе.
 
 ## Репозиторные входные данные
 

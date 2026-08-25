@@ -17,7 +17,8 @@ Date: 2026-08-17
 - native Task/Channel on Win32/pthread;
 - Time/Duration and monotonic runtime;
 - ByteSize, Angle, Vec2/Vec3/Vec4 and vector math.
-- `direct` mutable and `view` read-only call-scoped borrows;
+- `edit` mutable and `view` read-only call-scoped borrows;
+- bodyless `external fn` scalar ABI plus call-scoped `view`/`edit Buffer(T)`;
 - explicit `move` ownership transfer and resource-returning factories;
 - periodic `Interrupt` sources and `on interrupt`;
 - Channel `try_send`, `close`/drain, cancellation-aware blocking operations,

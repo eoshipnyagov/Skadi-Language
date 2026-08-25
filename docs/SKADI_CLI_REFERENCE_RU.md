@@ -75,10 +75,23 @@ edition = "v1"
 
 [build]
 entry = "src/main.skd"
+
+[numeric]
+int = "target"
+
+[native]
+sources = []
+libraries = []
+library_paths = []
 ```
 
-Поддерживаются `name`, `version`, `edition`, `entry`. Config editor внутри TUI
-редактирует те же поля.
+Поддерживаются `name`, `version`, `edition`, `entry`, `[numeric] int` и массивы
+`[native]`. Config editor внутри TUI редактирует основные project/numeric поля
+и сохраняет native-настройки без изменений.
+
+`[native]` подключает ограниченный [C ABI](c-abi.md): `sources` содержит
+относительные `.c`-файлы, `libraries` — имена библиотек, `library_paths` —
+относительные каталоги поиска. Произвольные compiler flags не принимаются.
 
 ## `new` и `init`
 
@@ -147,6 +160,10 @@ skadi-cli run --target host --cc gcc
 Для imports сохраняется реальный файл происхождения, а не только entry. Эту же
 карту использует команда `debug`. `run` передаёт stdout/stderr программы и
 сохраняет её exit status.
+
+При наличии `[native]` команда одновременно компилирует указанные C sources и
+линкует библиотеки. Ошибки отсутствующих путей относятся к project/configuration,
+а ошибки C compiler или linker — к toolchain.
 
 ## `debug`
 

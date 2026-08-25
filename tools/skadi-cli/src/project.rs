@@ -6,6 +6,9 @@ pub struct ProjectConfig {
     pub name: String,
     pub entry: PathBuf,
     pub int_width: String,
+    pub native_sources: Vec<String>,
+    pub native_libraries: Vec<String>,
+    pub native_library_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -15,6 +18,9 @@ pub struct ManifestConfig {
     pub edition: String,
     pub entry: String,
     pub int_width: String,
+    pub native_sources: Vec<String>,
+    pub native_libraries: Vec<String>,
+    pub native_library_paths: Vec<String>,
 }
 
 const TEMPLATE_MAIN: &str = "new Text greeting = \"Hello from Skadi\"\n\noutput(greeting)\n\nnew Angle quarter_turn = 90deg\n\noutput(\"Quarter turn: \", rad_to_deg(quarter_turn), \" degrees\")\n";
@@ -28,6 +34,9 @@ pub fn load_project_at(root: &Path) -> Result<ProjectConfig, String> {
         name: manifest.name,
         entry,
         int_width: manifest.int_width,
+        native_sources: manifest.native_sources,
+        native_libraries: manifest.native_libraries,
+        native_library_paths: manifest.native_library_paths,
     })
 }
 
@@ -36,7 +45,7 @@ pub fn load_manifest_config_at(root: &Path) -> Result<ManifestConfig, String> {
     let content = fs::read_to_string(&manifest)
         .map_err(|e| format!("failed to read {}: {e}", manifest.display()))?;
 
-    Ok(ManifestConfig {
+    let config = ManifestConfig {
         name: extract_string_value(&content, "name").unwrap_or_else(|| {
             root.file_name()
                 .and_then(|s| s.to_str())
@@ -49,7 +58,12 @@ pub fn load_manifest_config_at(root: &Path) -> Result<ManifestConfig, String> {
             .unwrap_or_else(|| "src/main.skd".to_string()),
         int_width: extract_section_string_value(&content, "numeric", "int")
             .unwrap_or_else(|| "target".to_string()),
-    })
+        native_sources: extract_section_string_array(&content, "native", "sources")?,
+        native_libraries: extract_section_string_array(&content, "native", "libraries")?,
+        native_library_paths: extract_section_string_array(&content, "native", "library_paths")?,
+    };
+    validate_manifest_config(&config)?;
+    Ok(config)
 }
 
 pub fn save_manifest_config_at(root: &Path, manifest: &ManifestConfig) -> Result<(), String> {
@@ -108,6 +122,52 @@ fn extract_section_string_value(content: &str, section: &str, key: &str) -> Opti
     None
 }
 
+fn extract_section_string_array(
+    content: &str,
+    section: &str,
+    key: &str,
+) -> Result<Vec<String>, String> {
+    let mut current_section = "";
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            current_section = &trimmed[1..trimmed.len() - 1];
+            continue;
+        }
+        if current_section != section {
+            continue;
+        }
+        let Some((left, right)) = trimmed.split_once('=') else {
+            continue;
+        };
+        if left.trim() != key {
+            continue;
+        }
+        let value = right.trim();
+        if !value.starts_with('[') || !value.ends_with(']') {
+            return Err(format!(
+                "manifest field '{section}.{key}' must be a one-line string array"
+            ));
+        }
+        let inner = value[1..value.len() - 1].trim();
+        if inner.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut values = Vec::new();
+        for item in inner.split(',') {
+            let item = item.trim();
+            if item.len() < 2 || !item.starts_with('"') || !item.ends_with('"') {
+                return Err(format!(
+                    "manifest field '{section}.{key}' accepts only quoted string values"
+                ));
+            }
+            values.push(item[1..item.len() - 1].to_string());
+        }
+        return Ok(values);
+    }
+    Ok(Vec::new())
+}
+
 pub fn ensure_build_dir(root: &Path) -> Result<PathBuf, String> {
     let dir = root.join("build");
     fs::create_dir_all(&dir).map_err(|e| format!("create {} failed: {e}", dir.display()))?;
@@ -128,6 +188,9 @@ pub fn create_project(root: &Path, name: &str) -> Result<(), String> {
         edition: "v1".to_string(),
         entry: "src/main.skd".to_string(),
         int_width: "target".to_string(),
+        native_sources: Vec::new(),
+        native_libraries: Vec::new(),
+        native_library_paths: Vec::new(),
     };
     fs::write(&toml_path, render_manifest_config(&manifest))
         .map_err(|e| format!("write {} failed: {e}", toml_path.display()))?;
@@ -163,6 +226,9 @@ pub fn init_project(root: &Path) -> Result<(), String> {
             edition: "v1".to_string(),
             entry: "src/main.skd".to_string(),
             int_width: "target".to_string(),
+            native_sources: Vec::new(),
+            native_libraries: Vec::new(),
+            native_library_paths: Vec::new(),
         };
         fs::write(&toml_path, render_manifest_config(&manifest))
             .map_err(|e| format!("write {} failed: {e}", toml_path.display()))?;
@@ -179,8 +245,26 @@ pub fn init_project(root: &Path) -> Result<(), String> {
 
 fn render_manifest_config(manifest: &ManifestConfig) -> String {
     format!(
-        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"{}\"\n\n[build]\nentry = \"{}\"\n\n[numeric]\nint = \"{}\"\n",
-        manifest.name, manifest.version, manifest.edition, manifest.entry, manifest.int_width
+        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"{}\"\n\n[build]\nentry = \"{}\"\n\n[numeric]\nint = \"{}\"\n\n[native]\nsources = {}\nlibraries = {}\nlibrary_paths = {}\n",
+        manifest.name,
+        manifest.version,
+        manifest.edition,
+        manifest.entry,
+        manifest.int_width,
+        render_string_array(&manifest.native_sources),
+        render_string_array(&manifest.native_libraries),
+        render_string_array(&manifest.native_library_paths),
+    )
+}
+
+fn render_string_array(values: &[String]) -> String {
+    format!(
+        "[{}]",
+        values
+            .iter()
+            .map(|value| format!("\"{value}\""))
+            .collect::<Vec<_>>()
+            .join(", ")
     )
 }
 
@@ -205,6 +289,47 @@ fn validate_manifest_config(manifest: &ManifestConfig) -> Result<(), String> {
             "manifest field 'numeric.int' must be target, i8, i16, i32, or i64".to_string(),
         );
     }
+    for source in &manifest.native_sources {
+        validate_native_relative_path(source, "native.sources")?;
+        if !source.ends_with(".c") {
+            return Err(format!(
+                "manifest field 'native.sources' accepts only .c files, got '{source}'"
+            ));
+        }
+    }
+    for path in &manifest.native_library_paths {
+        validate_native_relative_path(path, "native.library_paths")?;
+    }
+    for library in &manifest.native_libraries {
+        if library.is_empty()
+            || !library.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.')
+            })
+        {
+            return Err(format!(
+                "manifest field 'native.libraries' contains invalid library name '{library}'"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_native_relative_path(value: &str, field: &str) -> Result<(), String> {
+    let path = Path::new(value);
+    let bytes = value.as_bytes();
+    let has_windows_drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+    let has_portable_root = value.starts_with('/') || value.starts_with('\\');
+    let has_parent = value.split(['/', '\\']).any(|component| component == "..");
+    if value.trim().is_empty()
+        || path.is_absolute()
+        || has_windows_drive
+        || has_portable_root
+        || has_parent
+    {
+        return Err(format!(
+            "manifest field '{field}' requires a project-relative path and must not contain '..', got '{value}'"
+        ));
+    }
     Ok(())
 }
 
@@ -214,7 +339,7 @@ mod tests {
 
     use super::{
         ManifestConfig, ensure_entry_file_at, init_project, load_manifest_config_at,
-        save_manifest_config_at,
+        save_manifest_config_at, validate_manifest_config,
     };
 
     fn unique_temp_dir(stem: &str) -> std::path::PathBuf {
@@ -238,6 +363,9 @@ mod tests {
             edition: "v1".to_string(),
             entry: "src/app.skd".to_string(),
             int_width: "i16".to_string(),
+            native_sources: vec!["native/helper.c".to_string()],
+            native_libraries: vec!["helper".to_string()],
+            native_library_paths: vec!["native/lib".to_string()],
         };
         save_manifest_config_at(&temp, &updated).expect("save");
         let loaded = load_manifest_config_at(&temp).expect("load");
@@ -255,5 +383,43 @@ mod tests {
         assert!(source.contains("Hello"));
 
         let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[test]
+    fn native_manifest_rejects_unsafe_paths_and_flag_like_library_names() {
+        let base = ManifestConfig {
+            name: "demo".to_string(),
+            version: "0.1.0".to_string(),
+            edition: "v1".to_string(),
+            entry: "src/main.skd".to_string(),
+            int_width: "target".to_string(),
+            native_sources: Vec::new(),
+            native_libraries: Vec::new(),
+            native_library_paths: Vec::new(),
+        };
+
+        let mut absolute = base.clone();
+        absolute.native_sources = vec!["/outside/helper.c".to_string()];
+        assert!(
+            validate_manifest_config(&absolute)
+                .expect_err("absolute path must fail")
+                .contains("project-relative")
+        );
+
+        let mut parent = base.clone();
+        parent.native_sources = vec!["native/../helper.c".to_string()];
+        assert!(
+            validate_manifest_config(&parent)
+                .expect_err("parent traversal must fail")
+                .contains("must not contain '..'")
+        );
+
+        let mut flags = base;
+        flags.native_libraries = vec!["-Wl=unsafe".to_string()];
+        assert!(
+            validate_manifest_config(&flags)
+                .expect_err("linker flag must fail")
+                .contains("invalid library name")
+        );
     }
 }

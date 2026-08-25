@@ -103,7 +103,7 @@
   "Borrowed Canvas function": {
     "prefix": "directcanvas",
     "body": [
-      "fn ${1:draw}(direct Canvas ${2:frame}) {",
+      "fn ${1:draw}(edit Canvas ${2:frame}) {",
       "    ${2:frame}.clear(${3:Color.black})",
       "    ${0}",
       "}"
@@ -119,7 +119,7 @@
       "${1:frame}.clear(${6:Color.terminal_black})",
       "",
       "while ${4:window}.is_open() {",
-      "    ${4:window}.present(direct ${1:frame})",
+      "    ${4:window}.present(edit ${1:frame})",
       "    sleep(${7:16ms})",
       "    ${0}",
       "}"

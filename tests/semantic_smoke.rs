@@ -129,13 +129,46 @@ danger fn parse_value(bool x) Int {
 }
 
 new bool x = true
-x = parse_value(x) on error {
-    x = false
+new Int value = 0
+value = parse_value(x) on error {
+    value = -1
 }
 "#;
     let tokens = lex(src).expect("lex should succeed");
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic analysis should pass");
+}
+
+#[test]
+fn semantic_rejects_unhandled_danger_expression_and_wrong_result_target() {
+    let unhandled = r#"
+danger fn parse_value(Bool ready) returns Int {
+    return 1
+}
+
+new Int value = parse_value(true)
+"#;
+    let tokens = lex(unhandled).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("unhandled danger call must fail");
+    assert!(err.contains("SC-SEM-040"), "{err}");
+    assert!(err.contains("requires 'on error'"), "{err}");
+
+    let wrong_target = r#"
+danger fn parse_value(Bool ready) returns Int {
+    return 1
+}
+
+new Bool value = false
+value = parse_value(true) on error {
+    value = false
+}
+"#;
+    let tokens = lex(wrong_target).expect("lex should succeed");
+    let program = parse_program(&tokens).expect("parse should succeed");
+    let err = semantic_analyze(&program).expect_err("danger result mismatch must fail");
+    assert!(err.contains("SC-SEM-020"), "{err}");
+    assert!(err.contains("danger call result type mismatch"), "{err}");
 }
 
 #[test]

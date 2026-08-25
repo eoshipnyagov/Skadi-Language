@@ -166,6 +166,7 @@ impl<'a> Lexer<'a> {
     fn resolve_keyword(lexeme: &str) -> TokenKind {
         match lexeme {
             "fn" => TokenKind::KeywordFn,
+            "external" => TokenKind::KeywordExternal,
             "struct" => TokenKind::KeywordStruct,
             "label" => TokenKind::KeywordLabel,
             "tag" => TokenKind::KeywordTag,
@@ -186,7 +187,7 @@ impl<'a> Lexer<'a> {
             "hide" => TokenKind::KeywordHide,
             "local" => TokenKind::KeywordLocal,
             "my" => TokenKind::KeywordMy,
-            "direct" => TokenKind::KeywordDirect,
+            "edit" => TokenKind::KeywordEdit,
             "view" => TokenKind::KeywordView,
             "move" => TokenKind::KeywordMove,
             "on" => TokenKind::KeywordOnError,

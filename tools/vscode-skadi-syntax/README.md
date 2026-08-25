@@ -37,7 +37,7 @@ Skadi surface.
 - numbers
 - declarations (`fn`, `struct`, `label`, `tag`) and function signatures
 - control-flow and modifiers (`danger`, `new`, `on error`, `allow grow/drop`,
-  `direct`, `view`, `move`, etc.)
+  `edit`, `view`, `move`, etc.)
 - core type names, constants, and canonical aliases (`Bool`, `Char`, `PI`, `TAU`, `EPSILON`)
 - builtins (`output`, `read`, `contains`, `len`, `slice`, `find`, `concat`, `args`, `fs.*`, math core)
 - member calls/access (`.push()`, `.pop()`, `.field`, and custom methods like `.inc()`)

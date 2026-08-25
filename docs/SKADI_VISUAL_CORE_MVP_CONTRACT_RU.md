@@ -35,9 +35,9 @@ portable software Canvas + separate platform presenter
 - параметр по значению;
 - передача через Task/Channel.
 
-Ресурсный параметр обязан быть `direct` или `view`. Изменяющие методы
+Ресурсный параметр обязан быть `edit` или `view`. Изменяющие методы
 Canvas требуют mutable receiver. `Window.present` принимает
-`direct Canvas`, делая borrow явным в месте вызова.
+`edit Canvas`, делая borrow явным в месте вызова.
 
 ## 3. Конструкторы
 
@@ -119,7 +119,7 @@ checksum
 Canvas не знает об окне. `Window` показывает уже готовый framebuffer:
 
 ```skadi
-window.present(direct frame)
+window.present(edit frame)
 ```
 
 Первый backend:

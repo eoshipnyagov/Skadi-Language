@@ -145,9 +145,13 @@ impl Formatter {
                 body,
                 returns,
                 is_danger,
+                is_external,
                 ..
             } => {
                 self.write_indent(indent);
+                if *is_external {
+                    self.out.push_str("external ");
+                }
                 if *is_danger {
                     self.out.push_str("danger ");
                 }
@@ -159,6 +163,9 @@ impl Formatter {
                 if let Some(returns) = returns {
                     self.out.push_str(" returns ");
                     self.out.push_str(returns);
+                }
+                if *is_external {
+                    return Ok(());
                 }
                 self.out.push(' ');
                 self.render_block(body, indent)?;
@@ -553,7 +560,7 @@ impl Formatter {
             .map(|param| {
                 let prefix = match param.borrow {
                     BorrowMode::Value => "",
-                    BorrowMode::DirectMutable => "direct ",
+                    BorrowMode::EditMutable => "edit ",
                     BorrowMode::View => "view ",
                     BorrowMode::Move => "move ",
                 };
@@ -611,7 +618,7 @@ impl Formatter {
                 format!("{}[{}]", base_text, self.render_expression(index, 0))
             }
             Expression::VariableReference(name) => name.clone(),
-            Expression::DirectBorrow(name) => format!("direct {name}"),
+            Expression::EditBorrow(name) => format!("edit {name}"),
             Expression::ViewBorrow(name) => format!("view {name}"),
             Expression::Move(name) => format!("move {name}"),
             Expression::MemberAccess { base, field } => format!("{base}.{field}"),
