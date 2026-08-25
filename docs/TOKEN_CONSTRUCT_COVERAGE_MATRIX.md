@@ -17,6 +17,7 @@ Legend:
 | `external fn` | Y | Y | Y | Y | Y | bodyless fixed-scalar/value-struct and typed-buffer C ABI; manifest native-source smoke |
 | `external danger fn` | Y | Y | Y | Y | Y | existing status/out danger ABI; mandatory `on error` |
 | `external struct` | Y | Y | Y | Y | Y | fixed scalar C layout, by-value native compile-run smoke |
+| `external resource` | P | Y | Y | Y | Y | contextual `resource`; opaque owning C handle with explicit `view`/`edit`/`move` lifecycle |
 | `struct` | Y | Y | P | P | P | lowering works for current subset; advanced cases pending |
 | `label` | Y | Y | Y | Y | Y | explicit numeric discriminants; `ErrorCode` starts with `Ok = 0` |
 | `tag` | Y | Y | Y | Y | Y | symbolic nominal variants without user numeric contract |

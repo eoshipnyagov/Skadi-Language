@@ -21,7 +21,7 @@ Skadi surface.
 1. Build package:
    - `npx @vscode/vsce package --allow-missing-repository`
 2. Install in VS Code:
-   - `code --install-extension skadi-syntax-0.3.7.vsix`
+   - `code --install-extension skadi-syntax-0.3.8.vsix`
 
 ## File extensions and naming
 
@@ -37,7 +37,7 @@ Skadi surface.
 - numbers
 - declarations (`fn`, `struct`, `label`, `tag`) and function signatures
 - control-flow and modifiers (`danger`, `new`, `on error`, `allow grow/drop`,
-  `edit`, `view`, `move`, etc.)
+  `edit`, `view`, `move`, contextual `external resource`, etc.)
 - core type names, constants, and canonical aliases (`Bool`, `Char`, `PI`, `TAU`, `EPSILON`)
 - builtins (`output`, `read`, `contains`, `len`, `slice`, `find`, `concat`, `args`, `fs.*`, math core)
 - member calls/access (`.push()`, `.pop()`, `.field`, and custom methods like `.inc()`)

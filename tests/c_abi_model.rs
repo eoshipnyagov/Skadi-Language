@@ -112,6 +112,129 @@ fn formatter_preserves_external_struct_layout() {
 }
 
 #[test]
+fn external_resources_are_opaque_owned_handles() {
+    let program = semantic_ok(
+        r#"
+external resource Sensor
+external fn sensor_open(i32 channel) returns Sensor
+external fn sensor_read(view Sensor sensor) returns i32
+external danger fn sensor_adjust(edit Sensor sensor, i32 delta)
+external danger fn sensor_close(move Sensor sensor)
+
+new Sensor sensor = sensor_open(2)
+new i32 value = sensor_read(view sensor)
+sensor_adjust(edit sensor, 3) on error {
+    output("adjust failed")
+}
+sensor_close(move sensor) on error {
+    output("close failed")
+}
+"#,
+    );
+
+    let Statement::StructDecl {
+        name,
+        is_external: true,
+        is_resource: true,
+        ..
+    } = &program.statements[0]
+    else {
+        panic!("expected external resource");
+    };
+    assert_eq!(name, "Sensor");
+
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("typedef void *Sensor;"), "{c}");
+    assert!(c.contains("Sensor sensor_open(int32_t channel);"), "{c}");
+    assert!(
+        c.contains("int32_t sensor_read(const void * sensor);"),
+        "{c}"
+    );
+    assert!(
+        c.contains("int sensor_adjust(void * sensor, int32_t delta);"),
+        "{c}"
+    );
+    assert!(c.contains("int sensor_close(void * sensor);"), "{c}");
+    assert!(c.contains("sensor_read(sensor)"), "{c}");
+    assert!(c.contains("sensor_adjust(sensor, 3)"), "{c}");
+    assert!(c.contains("sensor_close(sensor)"), "{c}");
+}
+
+#[test]
+fn formatter_preserves_external_resource_declarations() {
+    let formatted =
+        format_source("external resource Sensor\n").expect("format external resource declaration");
+    assert_eq!(formatted, "external resource Sensor\n");
+}
+
+#[test]
+fn external_resource_declaration_reports_structural_errors() {
+    let missing = lex("external resource\n").expect("lex missing resource name");
+    let missing_error = parse_program(&missing).expect_err("resource name must be required");
+    assert!(missing_error.contains("SC-PARSE-232"), "{missing_error}");
+
+    let trailing = lex("external resource Sensor extra\n").expect("lex trailing syntax");
+    let trailing_error = parse_program(&trailing).expect_err("trailing syntax must fail");
+    assert!(trailing_error.contains("SC-PARSE-233"), "{trailing_error}");
+}
+
+#[test]
+fn external_resources_require_explicit_linear_ownership() {
+    let value_parameter =
+        semantic_err("external resource Sensor\nexternal fn inspect(Sensor sensor) returns i32\n");
+    assert!(value_parameter.contains("must use 'view', 'edit', or 'move'"));
+
+    let ignored = semantic_err(
+        "external resource Sensor\nexternal fn sensor_open() returns Sensor\nsensor_open()\n",
+    );
+    assert!(ignored.contains("cannot be ignored"), "{ignored}");
+
+    let leaked = semantic_err(
+        "external resource Sensor\nexternal fn sensor_open() returns Sensor\nnew Sensor sensor = sensor_open()\n",
+    );
+    assert!(
+        leaked.contains("before leaving its owning scope"),
+        "{leaked}"
+    );
+
+    let copied = semantic_err(
+        "external resource Sensor\nexternal fn sensor_open() returns Sensor\nexternal fn sensor_close(move Sensor sensor)\nnew Sensor first = sensor_open()\nnew Sensor second = first\nsensor_close(move first)\n",
+    );
+    assert!(copied.contains("would copy ownership"), "{copied}");
+
+    let fallible_factory =
+        semantic_err("external resource Sensor\nexternal danger fn sensor_open() returns Sensor\n");
+    assert!(
+        fallible_factory.contains("typed declaration recovery"),
+        "{fallible_factory}"
+    );
+
+    let stored_in_struct =
+        semantic_err("external resource Sensor\nstruct Holder {\n    Sensor sensor\n}\n");
+    assert!(
+        stored_in_struct.contains("cannot own an external resource"),
+        "{stored_in_struct}"
+    );
+
+    let reused_after_close_failure = semantic_err(
+        r#"
+external resource Sensor
+external fn sensor_open() returns Sensor
+external fn sensor_read(view Sensor sensor) returns i32
+external danger fn sensor_close(move Sensor sensor)
+new Sensor sensor = sensor_open()
+sensor_close(move sensor) on error {
+    new i32 value = sensor_read(view sensor)
+}
+"#,
+    );
+    assert!(
+        reused_after_close_failure.contains("was moved"),
+        "{reused_after_close_failure}"
+    );
+}
+
+#[test]
 fn external_danger_uses_the_existing_status_and_out_abi() {
     let program = semantic_ok(
         r#"

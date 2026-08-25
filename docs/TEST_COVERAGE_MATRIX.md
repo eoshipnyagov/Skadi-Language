@@ -168,7 +168,8 @@
 - bounded C ABI coverage
   - `tests/c_abi_model.rs` проверяет `external fn`, scalar type whitelist, `void`,
     `external danger fn`, status/out ABI, `view`/`edit Buffer(T)`, by-value
-    `external struct`, field-order layout, negative layout surface, запрет
+    `external struct`, opaque owning `external resource`, field-order layout,
+    linear `view`/`edit`/`move`, leak/copy/ignored-result diagnostics, запрет
     хранения/возврата buffer и task-entry, formatter и C prototypes
   - CLI unit tests закрепляют GCC/Clang и MSVC linker argument shape
   - `tools/skadi-cli/tests/smoke.rs` собирает и запускает manifest project с
@@ -213,10 +214,10 @@
     preservation и CLI `check/run` smoke
   - Git/registry resolver, transitive dependencies, lock-файл и re-export остаются TODO
 - C ABI
-  - fixed scalar declarations, typed call-scoped buffers и `[native]`
-    sources/libraries реализованы
-  - raw pointers, callbacks, custom/packed struct layout, opaque handles и
-    remote package/library resolver остаются следующими FFI slices
+  - fixed scalar declarations, typed call-scoped buffers, by-value structs,
+    opaque owning handles и `[native]` sources/libraries реализованы
+  - raw pointers, callbacks, custom/packed struct layout, borrowed handles с
+    внешним lifetime и remote package/library resolver остаются следующими FFI slices
 
 ## 3. Политика для новых фич
 

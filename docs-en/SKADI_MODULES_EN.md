@@ -60,9 +60,9 @@ available through bodyless `external fn` declarations and `[native]` in
 version constraints, transitive resolution, and a reproducible lock file remain
 future work; the local resolver deliberately does not create a placeholder lock.
 
-The implemented slice covers fixed-width scalar functions and manifest linker
-configuration. Explicit struct layouts, opaque owned/borrowed handles,
-long-lived buffers, headers, callbacks, and visible resource ownership are
-future slices. Call-scoped typed `Buffer(T)` is already implemented. Binding
-generation from simple headers must reuse this ABI
-contract rather than define a second FFI model.
+The implemented slice covers fixed-width scalar functions, by-value external
+structs, call-scoped typed buffers, opaque owning `external resource` handles,
+and manifest linker configuration. Custom layouts, borrowed external
+lifetimes, long-lived buffers, headers, and callbacks remain future slices.
+Binding generation from simple headers must reuse this ABI contract rather
+than define a second FFI model.

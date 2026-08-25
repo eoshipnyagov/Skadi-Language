@@ -346,11 +346,17 @@ impl Formatter {
                 fields,
                 methods,
                 is_external,
+                is_resource,
                 ..
             } => {
                 self.write_indent(indent);
                 if *is_external {
                     self.out.push_str("external ");
+                }
+                if *is_resource {
+                    self.out.push_str("resource ");
+                    self.out.push_str(name);
+                    return Ok(());
                 }
                 self.out.push_str("struct ");
                 self.out.push_str(name);

@@ -17,6 +17,9 @@ Readability and ownership-transfer scenarios are evaluated in the
 - at the C boundary, `view Buffer(T)` / `edit Buffer(T)` expose a typed List as
   pointer + length for one synchronous `external fn` call; `Buffer(T)` itself
   is not a storable type;
+- an opaque C handle declared with `external resource Name` uses the same
+  `view`/`edit`/`move` rules but has no inferred cleanup; every owning path must
+  end in a consuming external call;
 - operations on `maybe closed` or `closed` resources require `on error`;
 - a handled operation on a definitely closed resource is accepted with a
   warning;

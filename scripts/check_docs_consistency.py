@@ -161,6 +161,7 @@ def main() -> int:
         "iterate",
         "when",
         "struct",
+        "external resource",
         "hide",
         "my.field",
         'import "./math.skd"',

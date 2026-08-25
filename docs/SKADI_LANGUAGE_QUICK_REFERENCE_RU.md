@@ -78,6 +78,7 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 | Внешняя C-функция | `external fn c_add(i32 a, i32 b) returns i32` | Experimental; scalar/buffer ABI, без тела |
 | Внешняя danger C-функция | `external danger fn c_read(i32 port) returns i32` | Experimental; C `int` status + `out`, обязательный `on error` |
 | C-compatible value struct | `external struct Reading { i32 value }` | Experimental; fixed scalar fields, обычный C layout, by-value |
+| Opaque C resource | `external resource Sensor` | Experimental; один owner, `view`/`edit`, освобождение через `move` |
 | Read-only C buffer | `external fn sum(view Buffer(u8) data) returns u32` | Experimental; `const T *` + `size_t` |
 | Mutable C buffer | `external danger fn fill(edit Buffer(u8) data)` | Experimental; `T *` + `size_t` |
 | Legacy return type | `fn add(...) Int { ... }` | Compatibility |

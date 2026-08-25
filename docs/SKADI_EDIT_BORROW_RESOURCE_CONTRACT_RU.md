@@ -70,6 +70,11 @@ capabilities:
 Текущие однооперационные `read`/`write` не требуют немедленного появления
 долгоживущего `File` handle.
 
+Opaque C handle объявляется через `external resource Name`. Он использует те же
+`view`/`edit`/`move` правила, но не имеет автоматического cleanup: frontend не
+знает destructor внешней библиотеки, поэтому owner должен быть явно передан
+consuming external-функции на каждом пути до выхода из scope.
+
 `.close()` не является универсальным resource API. Сейчас он предметно
 реализован у `Window` и `Channel`; будущие `File`, `Port` и `Socket` смогут
 использовать тот же lifecycle engine. `Task`, `Interrupt`, `Memory` и `Canvas`

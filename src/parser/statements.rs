@@ -257,6 +257,48 @@ pub fn parse_external_declaration(tokens: &[Token], start_index: usize) -> Parse
         ));
     }
     match tokens.get(start_index + 1).map(Token::kind) {
+        Some(TokenKind::Identifier)
+            if tokens
+                .get(start_index + 1)
+                .is_some_and(|token| token.lexeme == "resource") =>
+        {
+            let Some(name) = tokens.get(start_index + 2) else {
+                return Err(parse_err(
+                    "SC-PARSE-232",
+                    "external resource declaration requires a type name.",
+                ));
+            };
+            if name.kind() != TokenKind::Identifier {
+                return Err(parse_err(
+                    "SC-PARSE-232",
+                    "external resource declaration requires an identifier type name.",
+                ));
+            }
+            if tokens
+                .get(start_index + 3)
+                .is_some_and(|token| token.kind() != TokenKind::NewLine && token.lexeme != "}")
+            {
+                return Err(parse_err(
+                    "SC-PARSE-233",
+                    "external resource declaration must end after its type name.",
+                ));
+            }
+            Ok((
+                Statement::StructDecl {
+                    name: name.lexeme.clone(),
+                    fields: Vec::new(),
+                    methods: Vec::new(),
+                    is_local: false,
+                    is_external: true,
+                    is_resource: true,
+                    loc: Location {
+                        line: tokens[start_index].line,
+                        column: tokens[start_index].col,
+                    },
+                },
+                3,
+            ))
+        }
         Some(TokenKind::KeywordStruct) => {
             parse_struct_declaration_inner(tokens, start_index + 1, false, true)
                 .map(|(statement, consumed)| (statement, consumed + 1))
@@ -270,7 +312,7 @@ pub fn parse_external_declaration(tokens: &[Token], start_index: usize) -> Parse
         }
         _ => Err(parse_err(
             "SC-PARSE-230",
-            "external must prefix 'fn', 'danger fn', or 'struct'.",
+            "external must prefix 'fn', 'danger fn', 'struct', or 'resource'.",
         )),
     }
 }
@@ -2104,6 +2146,7 @@ fn parse_struct_declaration_inner(
             methods,
             is_local,
             is_external,
+            is_resource: false,
             loc,
         },
         close + 1 - start_index,

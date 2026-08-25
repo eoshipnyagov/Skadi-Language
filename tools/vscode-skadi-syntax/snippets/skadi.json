@@ -100,6 +100,17 @@
     ],
     "description": "Bind a strict handler to a periodic host Interrupt"
   },
+  "External resource binding": {
+    "prefix": "externalresource",
+    "body": [
+      "external resource ${1:Handle}",
+      "external fn ${2:open_handle}() returns ${1:Handle}",
+      "external fn ${3:inspect_handle}(view ${1:Handle} ${4:handle}) returns ${5:i32}",
+      "external danger fn ${6:close_handle}(move ${1:Handle} ${4:handle})",
+      "${0}"
+    ],
+    "description": "Declare an opaque owning C handle with explicit lifecycle"
+  },
   "Borrowed Canvas function": {
     "prefix": "directcanvas",
     "body": [

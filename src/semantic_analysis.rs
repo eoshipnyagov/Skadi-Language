@@ -43,6 +43,7 @@ enum ValueType {
     Buffer(Box<ValueType>),
     List(Box<ValueType>),
     Struct(String),
+    ExternalResource(String),
     Label(String),
     Tag(String),
     Unknown,
@@ -141,14 +142,21 @@ struct MemoryState {
 fn is_movable_resource(ty: &ValueType) -> bool {
     matches!(
         ty,
-        ValueType::Canvas | ValueType::Window | ValueType::Interrupt | ValueType::Channel(_)
+        ValueType::Canvas
+            | ValueType::Window
+            | ValueType::Interrupt
+            | ValueType::Channel(_)
+            | ValueType::ExternalResource(_)
     )
 }
 
 fn requires_explicit_resource_mode(ty: &ValueType) -> bool {
     matches!(
         ty,
-        ValueType::Canvas | ValueType::Window | ValueType::Interrupt
+        ValueType::Canvas
+            | ValueType::Window
+            | ValueType::Interrupt
+            | ValueType::ExternalResource(_)
     )
 }
 
@@ -291,6 +299,43 @@ fn require_open_resource(state: &MemoryState, name: &str, operation: &str) -> Re
     }
 }
 
+fn ensure_external_resources_consumed(
+    scope: &HashMap<String, ValueType>,
+    state: &MemoryState,
+    only_new_since: Option<&HashSet<String>>,
+) -> Result<(), String> {
+    for (name, binding) in &state.ownership {
+        if only_new_since.is_some_and(|existing| existing.contains(name)) {
+            continue;
+        }
+        if !matches!(scope.get(name), Some(ValueType::ExternalResource(_))) {
+            continue;
+        }
+        match binding.state {
+            OwnershipState::Moved => {}
+            OwnershipState::Owned => {
+                return Err(sem_err(
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "external resource '{}' must be passed to a 'move' parameter before leaving its owning scope.",
+                        name
+                    ),
+                ));
+            }
+            OwnershipState::MaybeMoved => {
+                return Err(sem_err(
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "external resource '{}' is consumed only on some control-flow paths; pass it to a 'move' parameter on every path.",
+                        name
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn read_only_binding_kind(state: &MemoryState, name: &str) -> Option<&'static str> {
     if state.views.contains(name) {
         Some("view parameter")
@@ -306,6 +351,7 @@ struct StructInfo {
     fields: HashMap<String, ValueType>,
     hidden_fields: std::collections::HashSet<String>,
     methods: HashMap<String, FunctionSig>,
+    is_external_resource: bool,
 }
 
 const SEM_REDECLARATION: &str = "SC-SEM-010";
@@ -427,6 +473,20 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             Statement::StructDecl {
                 name,
                 is_external: true,
+                is_resource: false,
+                ..
+            } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    let external_resources: std::collections::HashSet<String> = program
+        .statements
+        .iter()
+        .filter_map(|statement| match statement {
+            Statement::StructDecl {
+                name,
+                is_external: true,
+                is_resource: true,
                 ..
             } => Some(name.clone()),
             _ => None,
@@ -465,7 +525,19 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                             ),
                         ));
                     };
-                    if let Some(element) = external_buffer_element(parameter_type) {
+                    let short_type = parameter_type.rsplit('.').next().unwrap_or(parameter_type);
+                    if external_resources.contains(short_type) {
+                        if parameter.borrow == BorrowMode::Value {
+                            return Err(err_at_code(
+                                stmt,
+                                SEM_INVALID_CONTEXT,
+                                format!(
+                                    "external resource parameter '{}' must use 'view', 'edit', or 'move'.",
+                                    parameter.name
+                                ),
+                            ));
+                        }
+                    } else if let Some(element) = external_buffer_element(parameter_type) {
                         if !is_external_abi_type_name(element) {
                             return Err(err_at_code(
                                 stmt,
@@ -508,6 +580,8 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 }
                 if let Some(return_type) = returns.as_deref()
                     && !is_external_abi_value_type(return_type, &external_structs)
+                    && !external_resources
+                        .contains(return_type.rsplit('.').next().unwrap_or(return_type))
                 {
                     return Err(err_at_code(
                         stmt,
@@ -520,7 +594,15 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 }
             }
             if let Some(return_name) = returns.as_deref() {
-                let return_ty = parse_type_name(return_name);
+                let return_ty = parse_type_name_with_resources(return_name, &external_resources);
+                if *is_danger && matches!(return_ty, ValueType::ExternalResource(_)) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        "danger functions cannot return an external resource until typed declaration recovery is available; use an infallible trusted adapter factory in this slice."
+                            .to_string(),
+                    ));
+                }
                 if matches!(return_ty, ValueType::Buffer(_)) {
                     return Err(err_at_code(
                         stmt,
@@ -540,7 +622,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             }
             for param in params {
                 if let Some(param_name) = param.param_type.as_deref() {
-                    let param_ty = parse_type_name(param_name);
+                    let param_ty = parse_type_name_with_resources(param_name, &external_resources);
                     if matches!(param_ty, ValueType::Buffer(_)) && !*is_external {
                         return Err(err_at_code(
                             stmt,
@@ -614,7 +696,18 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                             .or(Some(ValueType::Int))
                     },
                     has_explicit_return: returns.is_some(),
-                    param_types: params.iter().map(param_type_or_default).collect(),
+                    param_types: params
+                        .iter()
+                        .map(|param| {
+                            param
+                                .param_type
+                                .as_deref()
+                                .map(|name| {
+                                    parse_type_name_with_resources(name, &external_resources)
+                                })
+                                .unwrap_or(ValueType::Int)
+                        })
+                        .collect(),
                     param_borrows: params.iter().map(|param| param.borrow).collect(),
                 },
             );
@@ -673,6 +766,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             methods,
             is_local,
             is_external,
+            is_resource,
             ..
         } = stmt
         {
@@ -699,14 +793,24 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                         format!("external struct '{}' cannot be local.", name),
                     ));
                 }
-                if fields.is_empty() {
+                if *is_resource && (!fields.is_empty() || !methods.is_empty()) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "external resource '{}' is opaque and cannot declare fields or methods.",
+                            name
+                        ),
+                    ));
+                }
+                if !*is_resource && fields.is_empty() {
                     return Err(err_at_code(
                         stmt,
                         SEM_INVALID_CONTEXT,
                         format!("external struct '{}' requires at least one field.", name),
                     ));
                 }
-                if !methods.is_empty() {
+                if !*is_resource && !methods.is_empty() {
                     return Err(err_at_code(
                         stmt,
                         SEM_INVALID_CONTEXT,
@@ -753,7 +857,17 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             let mut fmap = HashMap::new();
             let mut hidden = std::collections::HashSet::new();
             for f in fields {
-                let field_ty = parse_type_name(&f.field_type);
+                let field_ty = parse_type_name_with_resources(&f.field_type, &external_resources);
+                if matches!(field_ty, ValueType::ExternalResource(_)) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!(
+                            "struct field '{}' cannot own an external resource; keep the handle in a separate binding.",
+                            f.name
+                        ),
+                    ));
+                }
                 ensure_memory_type_allowed(stmt, &field_ty, "struct field type", false)?;
                 ensure_task_type_allowed(stmt, &field_ty, "struct field type", false)?;
                 ensure_channel_type_allowed(stmt, &field_ty, "struct field type", false)?;
@@ -765,7 +879,8 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
             let mut mmap = HashMap::new();
             for m in methods {
                 if let Some(return_name) = m.returns.as_deref() {
-                    let return_ty = parse_type_name(return_name);
+                    let return_ty =
+                        parse_type_name_with_resources(return_name, &external_resources);
                     ensure_memory_type_allowed(
                         stmt,
                         &return_ty,
@@ -782,7 +897,8 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                 }
                 for param in &m.params {
                     if let Some(param_name) = param.param_type.as_deref() {
-                        let param_ty = parse_type_name(param_name);
+                        let param_ty =
+                            parse_type_name_with_resources(param_name, &external_resources);
                         if requires_explicit_resource_mode(&param_ty)
                             && param.borrow == BorrowMode::Value
                         {
@@ -833,10 +949,22 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                         return_type: m
                             .returns
                             .as_deref()
-                            .map(parse_type_name)
+                            .map(|name| parse_type_name_with_resources(name, &external_resources))
                             .or(Some(ValueType::Int)),
                         has_explicit_return: m.returns.is_some(),
-                        param_types: m.params.iter().map(param_type_or_default).collect(),
+                        param_types: m
+                            .params
+                            .iter()
+                            .map(|param| {
+                                param
+                                    .param_type
+                                    .as_deref()
+                                    .map(|name| {
+                                        parse_type_name_with_resources(name, &external_resources)
+                                    })
+                                    .unwrap_or(ValueType::Int)
+                            })
+                            .collect(),
                         param_borrows: m.params.iter().map(|param| param.borrow).collect(),
                     },
                 );
@@ -847,6 +975,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
                     fields: fmap,
                     hidden_fields: hidden,
                     methods: mmap,
+                    is_external_resource: *is_resource,
                 },
             );
         }
@@ -934,6 +1063,7 @@ pub fn semantic_analyze(program: &Program) -> Result<(), String> {
         None,
         false,
     )?;
+    ensure_external_resources_consumed(&scope, &memory_state, None)?;
     validate_task_lifecycle(program)
 }
 
@@ -1541,6 +1671,18 @@ fn parse_type_name(name: &str) -> ValueType {
         return ValueType::List(Box::new(parse_type_name(elem.trim())));
     }
     parse_primitive_type_name(name)
+}
+
+fn parse_type_name_with_resources(
+    name: &str,
+    external_resources: &std::collections::HashSet<String>,
+) -> ValueType {
+    let short = name.rsplit('.').next().unwrap_or(name);
+    if external_resources.contains(short) {
+        ValueType::ExternalResource(short.to_string())
+    } else {
+        parse_type_name(name)
+    }
 }
 
 fn interrupt_safe_expression(expr: &Expression) -> bool {
@@ -2400,12 +2542,7 @@ fn parse_declared_type_name(
     }
     if let Some(elem) = name.strip_suffix(" List") {
         let elem = elem.trim();
-        let parsed_elem = parse_type_name(elem);
-        if parsed_elem == ValueType::Unknown
-            && let Some(resolved_struct) = resolve_struct_name(elem)
-        {
-            return ValueType::List(Box::new(ValueType::Struct(resolved_struct)));
-        }
+        let parsed_elem = parse_declared_type_name(elem, structs, nominal_types);
         return ValueType::List(Box::new(parsed_elem));
     }
     let parsed = parse_type_name(name);
@@ -2418,7 +2555,14 @@ fn parse_declared_type_name(
     if parsed == ValueType::Unknown
         && let Some(resolved_struct) = resolve_struct_name(name)
     {
-        ValueType::Struct(resolved_struct)
+        if structs
+            .get(&resolved_struct)
+            .is_some_and(|info| info.is_external_resource)
+        {
+            ValueType::ExternalResource(resolved_struct)
+        } else {
+            ValueType::Struct(resolved_struct)
+        }
     } else {
         parsed
     }
@@ -2469,7 +2613,8 @@ fn is_value_safe_channel_message(ty: &ValueType, structs: &HashMap<String, Struc
         | ValueType::Buffer(_)
         | ValueType::Canvas
         | ValueType::Window
-        | ValueType::Interrupt => false,
+        | ValueType::Interrupt
+        | ValueType::ExternalResource(_) => false,
         _ => true,
     }
 }
@@ -2522,6 +2667,7 @@ fn is_task_safe_boundary_type(
         | ValueType::Interrupt
         | ValueType::Canvas
         | ValueType::Window
+        | ValueType::ExternalResource(_)
         | ValueType::Task(_)
         | ValueType::Unknown => false,
     }
@@ -2533,6 +2679,27 @@ fn ensure_memory_type_allowed(
     context: &str,
     allow_direct_memory: bool,
 ) -> Result<(), String> {
+    fn contains_external_resource(ty: &ValueType) -> bool {
+        match ty {
+            ValueType::ExternalResource(_) => true,
+            ValueType::List(inner)
+            | ValueType::Buffer(inner)
+            | ValueType::Channel(inner)
+            | ValueType::Task(Some(inner)) => contains_external_resource(inner),
+            _ => false,
+        }
+    }
+
+    if !matches!(ty, ValueType::ExternalResource(_)) && contains_external_resource(ty) {
+        return Err(err_at_code(
+            stmt,
+            SEM_INVALID_CONTEXT,
+            format!(
+                "{} cannot contain an owning external resource; keep each handle in its own binding and transfer it explicitly with 'move'.",
+                context
+            ),
+        ));
+    }
     if *ty == ValueType::Memory && allow_direct_memory {
         return Ok(());
     }
@@ -2954,6 +3121,7 @@ fn analyze_statement(
                         | ValueType::Memory
                         | ValueType::Task(_)
                         | ValueType::Channel(_)
+                        | ValueType::ExternalResource(_)
                         | ValueType::Unknown
                 )
             {
@@ -3006,6 +3174,7 @@ fn analyze_statement(
                         | ValueType::Window
                         | ValueType::Task(_)
                         | ValueType::Channel(_)
+                        | ValueType::ExternalResource(_)
                 )
             {
                 return Err(err_at_code(
@@ -3465,6 +3634,7 @@ fn analyze_statement(
                 Some(local_ctx),
                 false,
             )?;
+            ensure_external_resources_consumed(&fn_scope, &fn_memory_state, None)?;
             if sig.is_danger && !block_guarantees_termination(body) {
                 return Err(err_at_code(
                     stmt,
@@ -4405,6 +4575,9 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
+            for arg in args {
+                record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+            }
             let mut on_error_scope = scope.clone();
             let mut on_error_memory_state = memory_state.clone();
             analyze_block(
@@ -4669,6 +4842,9 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
+            for arg in args {
+                record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+            }
             let mut on_error_scope = scope.clone();
             let mut on_error_memory_state = memory_state.clone();
             analyze_block(
@@ -4961,7 +5137,7 @@ fn analyze_statement(
                         .to_string(),
                 ));
             }
-            let _ = infer_expression_type(
+            let expression_type = infer_expression_type(
                 expr,
                 scope,
                 memory_state,
@@ -4969,6 +5145,14 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
+            if matches!(expression_type, ValueType::ExternalResource(_)) {
+                return Err(err_at_code(
+                    stmt,
+                    SEM_INVALID_CONTEXT,
+                    "owning external resource result cannot be ignored; bind it to a typed variable and eventually pass it with 'move'."
+                        .to_string(),
+                ));
+            }
             if let Expression::Call { name, .. } = expr.as_ref()
                 && let Some((resource, "close")) = name.split_once('.')
                 && memory_state.resource_lifecycles.contains_key(resource)
@@ -4982,6 +5166,7 @@ fn analyze_statement(
         }
         Statement::StructDecl { name, methods, .. } => {
             for m in methods {
+                let method_sig = structs.get(name).and_then(|info| info.methods.get(&m.name));
                 let mut method_scope = scope.clone();
                 let mut method_memory_state = MemoryState {
                     labels: memory_state.labels.clone(),
@@ -4989,8 +5174,11 @@ fn analyze_statement(
                     ..MemoryState::default()
                 };
                 method_scope.insert("my".to_string(), ValueType::Struct(name.clone()));
-                for p in &m.params {
-                    let pty = param_type_or_default(p);
+                for (index, p) in m.params.iter().enumerate() {
+                    let pty = method_sig
+                        .and_then(|sig| sig.param_types.get(index))
+                        .cloned()
+                        .unwrap_or_else(|| param_type_or_default(p));
                     method_scope.insert(p.name.clone(), pty.clone());
                     if p.borrow == BorrowMode::View {
                         method_memory_state.views.insert(p.name.clone());
@@ -5027,10 +5215,8 @@ fn analyze_statement(
                 }
                 let method_ctx = FnContext {
                     is_danger: m.is_danger,
-                    return_type: m
-                        .returns
-                        .as_deref()
-                        .map(parse_type_name)
+                    return_type: method_sig
+                        .and_then(|sig| sig.return_type.clone())
                         .or(Some(ValueType::Int)),
                     self_struct: Some(name.clone()),
                     is_task_context: false,
@@ -5047,6 +5233,7 @@ fn analyze_statement(
                     Some(method_ctx),
                     false,
                 )?;
+                ensure_external_resources_consumed(&method_scope, &method_memory_state, None)?;
             }
             Ok(())
         }
@@ -5066,6 +5253,11 @@ fn analyze_block(
     fn_ctx: Option<FnContext>,
     in_loop: bool,
 ) -> Result<(), String> {
+    let existing_owners = memory_state
+        .ownership
+        .keys()
+        .cloned()
+        .collect::<HashSet<_>>();
     analyze_statements(
         &block.statements,
         scope,
@@ -5076,7 +5268,8 @@ fn analyze_block(
         task_context_functions,
         fn_ctx,
         in_loop,
-    )
+    )?;
+    ensure_external_resources_consumed(scope, memory_state, Some(&existing_owners))
 }
 
 fn timed_error_context(fn_ctx: Option<FnContext>, enabled: bool) -> Option<FnContext> {

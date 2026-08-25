@@ -21,6 +21,7 @@ struct CodegenState {
     function_returns: HashMap<String, String>,
     call_types: HashMap<String, String>,
     nominal_types: HashSet<String>,
+    external_resources: HashSet<String>,
     interrupt_handler_index: usize,
     statement_collisions: HashMap<(u32, u32), usize>,
     source_map: Vec<CodegenSourceMapEntry>,
@@ -160,7 +161,11 @@ fn collect_struct_names(program: &Program) -> Vec<String> {
         .statements
         .iter()
         .filter_map(|s| match s {
-            Statement::StructDecl { name, .. } => Some(name.clone()),
+            Statement::StructDecl {
+                name,
+                is_resource: false,
+                ..
+            } => Some(name.clone()),
             _ => None,
         })
         .collect()
@@ -2641,6 +2646,19 @@ pub fn transpile_program_to_c_with_options(
                 _ => None,
             })
             .collect(),
+        external_resources: program
+            .statements
+            .iter()
+            .filter_map(|stmt| match stmt {
+                Statement::StructDecl {
+                    name,
+                    is_external: true,
+                    is_resource: true,
+                    ..
+                } => Some(name.clone()),
+                _ => None,
+            })
+            .collect(),
         debug_probes: options.debug_probes,
         ..CodegenState::default()
     };
@@ -3059,7 +3077,19 @@ fn emit_default_return_tail(
 
 fn emit_struct_declarations(program: &Program, out: &mut String) {
     for stmt in &program.statements {
-        if let Statement::StructDecl { name, fields, .. } = stmt {
+        if let Statement::StructDecl {
+            name,
+            fields,
+            is_resource,
+            ..
+        } = stmt
+        {
+            if *is_resource {
+                out.push_str("typedef void *");
+                out.push_str(name);
+                out.push_str(";\n\n");
+                continue;
+            }
             out.push_str("typedef struct {\n");
             for field in fields {
                 let c_ty = map_skadi_type_to_c(Some(field.field_type.as_str()));
@@ -4555,8 +4585,17 @@ fn emit_function(stmt: &Statement, out: &mut String, state: &mut CodegenState) {
                 continue;
             }
             let c_type = map_skadi_type_to_c(p.param_type.as_deref());
+            let is_external_resource = p.param_type.as_deref().is_some_and(|ty| {
+                state
+                    .external_resources
+                    .contains(ty.rsplit('.').next().unwrap_or(ty))
+            });
             match p.borrow {
                 BorrowMode::Value => out.push_str(&c_type),
+                BorrowMode::View if is_external_resource => out.push_str("const void *"),
+                BorrowMode::EditMutable | BorrowMode::Move if is_external_resource => {
+                    out.push_str("void *")
+                }
                 BorrowMode::EditMutable => {
                     out.push_str(&c_type);
                     out.push_str(" *");
@@ -4840,8 +4879,13 @@ fn collect_call_types(program: &Program) -> HashMap<String, String> {
                 name,
                 fields,
                 methods,
+                is_resource,
                 ..
             } => {
+                if *is_resource {
+                    call_types.insert(format!("opaque:{name}"), name.clone());
+                    continue;
+                }
                 for field in fields {
                     call_types.insert(
                         format!("field:{name}.{}", field.name),
@@ -4878,6 +4922,11 @@ fn call_return_type<'a>(name: &str, declared: &'a HashMap<String, String>) -> Op
     declared
         .get(&format!("\0skadi:fn:{name}"))
         .map(String::as_str)
+}
+
+fn is_external_resource_type(raw: &str, declared: &HashMap<String, String>) -> bool {
+    let normalized = normalize_type_token(raw);
+    declared.contains_key(&format!("\0skadi:opaque:{normalized}"))
 }
 
 fn buffer_element_from_decl(raw: &str) -> Option<&str> {
@@ -6558,6 +6607,9 @@ fn emit_statement_body(
                 normalize_type_token(&tracked_type).as_str(),
                 "Canvas" | "Window" | "Interrupt"
             ) || channel_elem_from_decl(&tracked_type).is_some()
+                || state
+                    .external_resources
+                    .contains(tracked_type.rsplit('.').next().unwrap_or(&tracked_type))
             {
                 tracked_type.push_str("@owned");
             }
@@ -7138,7 +7190,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::EditBorrow(name) => {
             if declared
                 .get(name)
-                .map(|ty| ty.ends_with("@borrow"))
+                .map(|ty| ty.ends_with("@borrow") || is_external_resource_type(ty, declared))
                 .unwrap_or(false)
             {
                 name.clone()
@@ -7149,7 +7201,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         Expression::ViewBorrow(name) => {
             if declared
                 .get(name)
-                .map(|ty| ty.ends_with("@borrow"))
+                .map(|ty| ty.ends_with("@borrow") || is_external_resource_type(ty, declared))
                 .unwrap_or(false)
             {
                 name.clone()

@@ -72,8 +72,8 @@ Focused native examples also cover:
 - `examples/concurrency/05_timed_task_wait.skd` for conditional Task-handle
   consumption across success and timeout paths.
 - `examples/c-abi/` for a manifest project using `external fn`, a native C
-  source, fixed-width values, a by-value `external struct`, and
-  `view`/`edit Buffer(u8)` at the ABI boundary.
+  source, fixed-width values, a by-value `external struct`, an opaque owning
+  `external resource`, and `view`/`edit Buffer(u8)` at the ABI boundary.
 - `examples/packages/` contains two minimal manifest projects: the application
   declares a sibling dependency and imports `math_kit/src/answer.skd` through
   the local package resolver.

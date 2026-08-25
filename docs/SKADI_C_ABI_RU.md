@@ -116,10 +116,11 @@ int sensor_read(int32_t channel, int32_t *out) {
 Для `external danger fn` C return type всегда `int`, а заявленный Skadi
 return type становится последним `out`-параметром.
 
-`Int`, `Float`, `Text`, `Path`, списки, обычные struct, specialized types и
-owning resources не входят в текущий ABI. Для границы C всегда используйте
-fixed-width типы или явно объявленный `external struct`. ABI values передаются
-только по значению, а `move` не допускается на C-границе.
+`Int`, `Float`, `Text`, `Path`, списки, обычные struct и specialized types не
+входят в текущий ABI. Для границы C используйте fixed-width типы, явно
+объявленный `external struct`, call-scoped `Buffer(T)` или opaque
+`external resource`. ABI values передаются по значению; owning handle всегда
+требует видимый `view`, `edit` или `move`.
 
 ## C-compatible структуры
 
@@ -156,6 +157,52 @@ typedef struct {
 - методы, `hide`, вложенные структуры, arrays, pointers и owning fields запрещены;
 - аргументы и результаты `external fn` передаются по значению;
 - `view`/`edit external struct`, `Buffer(Struct)` и layout attributes отложены.
+
+## Opaque owning resources
+
+`external resource` объявляет тип C handle, внутреннее устройство которого
+Skadi не видит:
+
+```skadi
+external resource Sensor
+
+external fn sensor_open(i32 channel) returns Sensor
+external fn sensor_read(view Sensor sensor) returns i32
+external danger fn sensor_adjust(edit Sensor sensor, i32 delta)
+external danger fn sensor_close(move Sensor sensor)
+
+new Sensor sensor = sensor_open(2)
+new i32 value = sensor_read(view sensor)
+sensor_adjust(edit sensor, 1) on error {
+    output("adjust failed")
+}
+sensor_close(move sensor) on error {
+    output("close failed")
+}
+```
+
+На C-границе `Sensor` понижается в opaque `void *`. C adapter должен принимать
+и возвращать совместимый pointer-sized handle; приводить его к внутреннему типу
+можно только внутри native C source.
+
+Контракт владения:
+
+- factory, возвращающая `Sensor`, создаёт нового единственного owner;
+- `view Sensor` разрешает синхронное чтение без передачи ownership;
+- `edit Sensor` разрешает синхронное изменение без передачи ownership;
+- `move Sensor` потребляет owner независимо от success/error status C-вызова;
+- результат factory нельзя игнорировать или копировать;
+- перед выходом из owning scope handle должен быть передан функции с
+  `move Sensor` на каждом control-flow path;
+- `external resource` нельзя хранить в `List`, struct, `Task` или `Channel` и
+  нельзя преобразовывать в integer/raw pointer.
+- в текущем срезе factory должна быть trusted non-danger `external fn`:
+  `external danger fn ... returns Resource` отложена до typed declaration с
+  `on error`, чтобы не вводить nullable/uninitialized handle.
+
+Skadi намеренно не угадывает destructor по имени и не выполняет скрытый
+`sensor_close`. Освобождающая функция является обычным явно объявленным
+`external fn`; если она `danger`, call site обязан написать `on error`.
 
 Skadi не читает C header и не может доказать, что независимое C-объявление
 совпадает. Обе части должны собираться ABI-совместимыми toolchains и target
@@ -222,8 +269,9 @@ Config editor TUI сохраняет эти поля, но в текущем MVP
 - Подключайте заголовки в C-файлах и проверяйте их обычным C compiler.
 - Для cross-target сборки native sources и libraries тоже должны поддерживать
   выбранную платформу.
-- Не передавайте C pointers как целые числа. Opaque handles, callbacks,
-  layout attributes и правила освобождения остаются следующим FFI-этапом.
+- Не передавайте C pointers как целые числа. Для owning handle используйте
+  `external resource`; callbacks, borrowed external lifetimes и layout
+  attributes остаются следующими FFI-этапами.
 
 ## Текущие границы
 

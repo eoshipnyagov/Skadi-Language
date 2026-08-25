@@ -46,8 +46,8 @@ project examples.
 - `examples/concurrency/04_timed_channel.skd` — Duration-bounded Channel waits;
 - `examples/concurrency/05_timed_task_wait.skd` — path-sensitive timed Task wait.
 - `examples/c-abi/` — полноценный manifest project с `external fn`, native C
-  source, fixed-width параметрами, by-value `external struct` и
-  `view`/`edit Buffer(u8)` на ABI-границе.
+  source, fixed-width параметрами, by-value `external struct`, opaque owning
+  `external resource` и `view`/`edit Buffer(u8)` на ABI-границе.
 - `examples/packages/` — два минимальных manifest projects: приложение объявляет
   sibling dependency и импортирует модуль через
   `import "math_kit/src/answer.skd"`.

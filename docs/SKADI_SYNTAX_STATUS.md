@@ -1,6 +1,6 @@
 # Статус синтаксиса Skadi
 
-Дата: 2026-08-17
+Дата: 2026-08-25
 Назначение: единый точный срез того, какой синтаксис действительно работает в этом репозитории сейчас.
 
 ## Уровни статуса
@@ -63,6 +63,15 @@
   - C-compatible value layout с сохранением порядка полей;
   - минимум одно fixed scalar поле, без методов, `hide`, nesting и packing;
   - разрешён по значению в аргументах/результатах `external fn`.
+- `external resource Name` - `Experimental`
+  - объявляет opaque owning C handle без доступного Skadi layout;
+  - factory возвращает новый owner как `Name`;
+  - параметры обязаны использовать `view`, `edit` или `move` и повторять этот
+    маркер в call site;
+  - результат нельзя игнорировать, копировать или оставлять живым при выходе из
+    scope: освобождающая C-функция должна принять `move Name`;
+  - передача через `Task`, `Channel`, `List`, struct fields и raw integer/pointer
+    conversions запрещена.
 - типизированные параметры - `Stable`
 - канонический типизированный возврат `fn name(...) returns Type` - `Stable`
 - legacy-возврат `fn name(...) Type` - `Partial`

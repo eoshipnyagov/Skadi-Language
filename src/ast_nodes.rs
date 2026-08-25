@@ -194,6 +194,7 @@ pub enum Statement {
         methods: Vec<StructMethod>,
         is_local: bool,
         is_external: bool,
+        is_resource: bool,
         loc: Location,
     },
     OnBlock {

@@ -249,6 +249,10 @@ fn native_c_source_builds_and_runs_through_project_manifest() {
     assert!(stdout.contains("Reading valid: true"), "{stdout}");
     assert!(stdout.contains("Reading confidence: 0.75"), "{stdout}");
     assert!(stdout.contains("Packet checksum: 60 -> 63"), "{stdout}");
+    assert!(
+        stdout.contains("Opaque handle value: 400 -> 405"),
+        "{stdout}"
+    );
 
     let _ = fs::remove_dir_all(project_dir);
 }

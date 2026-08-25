@@ -14,8 +14,18 @@ sensor.sensor_adjust(edit packet, 1) on error {
     output("Packet adjustment failed")
 }
 new u32 checksum_after = sensor.sensor_checksum(view packet)
+new sensor.Sensor handle = sensor.sensor_open(calibrated)
+new i32 handle_before = sensor.sensor_handle_read(view handle)
+sensor.sensor_handle_adjust(edit handle, 5) on error {
+    output("Handle adjustment failed")
+}
+new i32 handle_after = sensor.sensor_handle_read(view handle)
+sensor.sensor_close(move handle) on error {
+    output("Handle close failed")
+}
 
 output("Calibrated reading: ", calibrated)
 output("Reading valid: ", valid)
 output("Reading confidence: ", reading.confidence)
 output("Packet checksum: ", checksum_before, " -> ", checksum_after)
+output("Opaque handle value: ", handle_before, " -> ", handle_after)

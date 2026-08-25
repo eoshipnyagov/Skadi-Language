@@ -189,6 +189,15 @@
     "type-declaration": {
       "patterns": [
         {
+          "name": "meta.type.declaration.external-resource.skd",
+          "match": "\\b(external)\\s+(resource)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.modifier.skd" },
+            "2": { "name": "storage.type.resource.skd" },
+            "3": { "name": "entity.name.type.skd" }
+          }
+        },
+        {
           "name": "meta.type.declaration.struct.skd",
           "match": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {

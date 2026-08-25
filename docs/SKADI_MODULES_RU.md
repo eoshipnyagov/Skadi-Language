@@ -101,16 +101,17 @@ constraints, transitive resolution и воспроизводимый lock-фай
 C interoperability вводится отдельным ограниченным ABI-контрактом, а не
 разрешением вставлять произвольный C в Skadi. Первый реализованный срез
 покрывает функции с fixed-width integers, `f32/f64`, `Bool`, `Char`, `void`,
-native C sources, library paths и linker names.
+by-value `external struct`, opaque owning `external resource`, native C
+sources, library paths и linker names.
 
 Следующие срезы должны покрыть:
 
-- C-compatible structs с явным layout;
-- opaque owning/borrowed handles;
+- custom/packed layout и проверку C headers;
+- borrowed handles с lifetime, принадлежащим внешней библиотеке;
 - долгоживущие buffers и ownership beyond call-scoped `Buffer(T)`;
 - include/header contract;
 - явные правила владения для `char*`, buffers, callbacks и resource handles.
 
-Точный resource/layout syntax будет принят только вместе с проверкой нескольких
-реальных библиотек. Автоматическая генерация bindings из простых headers должна
+Текущий owning resource syntax проверен native smoke, но остаётся experimental
+до испытания на нескольких реальных библиотеках. Автоматическая генерация bindings из простых headers должна
 строиться поверх того же ABI-контракта, а не создавать вторую модель FFI.

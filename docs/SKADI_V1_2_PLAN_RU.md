@@ -520,9 +520,10 @@ vector slice до матриц или transform framework.
   CLI smoke;
 - VS Code/Pygments и RU/EN user docs.
 
-Следующие FFI slices намеренно не входят в этот MVP: raw pointers, value struct
-layout, opaque handles, callbacks, symbol aliases, header generation,
-remote package/library resolver и формализованное владение C resources.
+Следующие FFI slices намеренно не входили в Milestone 16: raw pointers, value
+struct layout, opaque handles, callbacks, symbol aliases, header generation,
+remote package/library resolver и формализованное владение C resources. Value
+structs и opaque owning handles позднее закрыты Milestone 18/19 ниже.
 
 ### Milestone 17: local package resolver - выполнен
 
@@ -560,9 +561,28 @@ dependency graph, lock-файл, package commands и re-export. Lock-файл п
   расширенный `examples/c-abi`.
 
 Отложены packed/custom alignment, explicit offsets, nested ABI structs,
-`Buffer(Struct)`, borrowed structs, header verification/generation и opaque
-handles. `external struct` не делает вид, что компилятор сверил независимый C
+`Buffer(Struct)`, borrowed structs и header verification/generation.
+`external struct` не делает вид, что компилятор сверил независимый C
 header: совпадение layout остаётся явным контрактом binding-адаптера.
+
+### Milestone 19: C ABI opaque owning resources - выполнен
+
+Реализовано:
+
+- `external resource Name` как контекстная декларация opaque C handle;
+- factory-return создаёт единственного owner, а параметры требуют явный
+  `view`, `edit` или `move` в сигнатуре и call site;
+- owning result нельзя игнорировать, копировать или оставить живым при выходе
+  из scope; consuming C-функция должна принять `move Name` на каждом пути;
+- `move` в danger-вызове потребляет handle до входа в `on error`, поэтому
+  failed close не создаёт ложного повторного владельца;
+- C lowering использует pointer-sized opaque `void *` typedef без integer casts;
+- parser/semantic/formatter/C-shape negative coverage и native compile-run
+  добавлены в `examples/c-abi`.
+
+Отложены typed declaration recovery для fallible resource factory, borrowed
+handles с lifetime внешней библиотеки, nullable handles, callbacks, destructor
+metadata/автоматический cleanup и header generation.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 

@@ -43,7 +43,8 @@ The repository includes:
 - local package dependencies through `[dependencies]` and confined
   `import "package/path/file.skd"`,
 - a bounded C ABI through bodyless `external fn`, by-value fixed-field
-  `external struct`, typed buffers, and project-level `[native]` C inputs,
+  `external struct`, typed buffers, opaque owning `external resource` handles,
+  and project-level `[native]` C inputs,
 - experimental fixed/growing/child/root-static Memory runtime for `v1.2`,
 - explicit `view`/`edit` borrows and `move` ownership transfer for current
   linear resources,
@@ -69,11 +70,11 @@ The repository includes:
 
 The current focus is to make Skadi real enough to test syntax, diagnostics, examples, workflows, and the general feel of the language.
 
-The current C interoperability slice is intentionally small: fixed-width scalar
-arguments/results, by-value fixed-field `external struct`, call-scoped
-`view`/`edit Buffer(T)`, and manifest-managed native C inputs. Raw pointers,
-callbacks, custom layouts, and ownership-bearing handles remain explicit future
-contracts rather than unsafe implicit conversions.
+The current C interoperability slice is intentionally bounded: fixed-width
+scalar arguments/results, by-value fixed-field `external struct`, call-scoped
+`view`/`edit Buffer(T)`, opaque owning `external resource` handles, and
+manifest-managed native C inputs. Raw pointers, callbacks, custom layouts, and
+implicit ownership conversions remain outside the language surface.
 
 The first package slice is intentionally local and deterministic. A project may
 map a dependency name to a relative directory containing `Skadi.toml`; Git and

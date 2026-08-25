@@ -90,6 +90,8 @@ Runtime code считается публичным только после по�
 - `SC-PARSE-229` — после сигнатуры `external fn` обнаружено тело или иной лишний токен
 - `SC-PARSE-230` — `external` поставлен перед неподдерживаемым видом объявления
 - `SC-PARSE-231` — `external struct` содержит метод вместо чистого field layout
+- `SC-PARSE-232` — у `external resource` отсутствует корректное имя типа
+- `SC-PARSE-233` — после имени `external resource` обнаружен лишний синтаксис
 
 ### Диапазоны parse codes
 

@@ -1,7 +1,8 @@
 # C ABI and Native C
 
 Skadi can call small C APIs through explicit external declarations. The current
-MVP deliberately supports scalars, by-value structs, and typed buffers. It is useful for trusted C
+MVP deliberately supports scalars, by-value structs, typed buffers, and opaque
+owned handles. It is useful for trusted C
 helpers, driver adapters, and testing the FFI design without exposing raw
 pointers or hiding resource ownership.
 
@@ -105,10 +106,10 @@ call used as an ordinary expression.
 For `external danger fn`, the C return type is always `int`, and the declared
 Skadi result becomes the final out parameter.
 
-`Int`, `Float`, `Text`, `Path`, lists, ordinary structs, specialized types, and
-owning resources are not ABI types in this slice. Use fixed-width types or an
-explicit `external struct` at the C boundary. ABI values are passed by value,
-and `move` is not accepted at the boundary.
+`Int`, `Float`, `Text`, `Path`, lists, ordinary structs, and specialized types
+are not ABI types in this slice. Use fixed-width types, an explicit
+`external struct`, call-scoped `Buffer(T)`, or an opaque `external resource` at
+the C boundary. Owned handles require visible `view`, `edit`, or `move` access.
 
 ## C-compatible structs
 
@@ -134,6 +135,48 @@ and layout attributes remain future work.
 Skadi does not parse the C header and cannot prove that the independent C
 declaration matches. Compile both sides for compatible targets/toolchains and
 keep a native smoke test beside the binding.
+
+## Opaque owning resources
+
+`external resource` declares a C handle whose representation is hidden from
+Skadi:
+
+```skadi
+external resource Sensor
+
+external fn sensor_open(i32 channel) returns Sensor
+external fn sensor_read(view Sensor sensor) returns i32
+external danger fn sensor_adjust(edit Sensor sensor, i32 delta)
+external danger fn sensor_close(move Sensor sensor)
+
+new Sensor sensor = sensor_open(2)
+new i32 value = sensor_read(view sensor)
+sensor_adjust(edit sensor, 1) on error {
+    output("adjust failed")
+}
+sensor_close(move sensor) on error {
+    output("close failed")
+}
+```
+
+The generated C represents `Sensor` as an opaque `void *`. The native adapter
+may cast it to its private type, but Skadi code cannot inspect or convert it.
+
+- A factory result creates one owner.
+- `view` borrows it for synchronous read-only access.
+- `edit` borrows it for synchronous exclusive access.
+- `move` consumes it, including when a danger call returns an error status.
+- A result cannot be ignored or copied.
+- Every control-flow path must transfer the owner to a consuming `move`
+  parameter before its scope ends.
+- Handles cannot be stored in lists/structs or cross Task/Channel boundaries.
+- The current factory must be a trusted non-danger `external fn`. A danger
+  factory returning a resource is deferred until typed declarations can carry
+  `on error`, avoiding nullable or uninitialized handles.
+
+Skadi does not infer a destructor from a function name. The binding declares an
+ordinary consuming external function; if it is `danger`, the call requires
+`on error`.
 
 ## Typed buffers
 
@@ -185,9 +228,10 @@ directly in `Skadi.toml`.
 - Keep the C signature and `external fn` declaration identical; Skadi cannot
   detect an ABI mismatch.
 - Native sources and libraries must support the selected cross target.
-- Do not encode C pointers as integers.
+- Do not encode C pointers as integers; use `external resource` for owned handles.
 - Header import/generation, symbol aliases, calling conventions, packed/custom
-  struct and enum layout, raw pointers, nullable values, callbacks, variadics, C++, and remote
+  struct and enum layout, raw pointers, borrowed external lifetimes, nullable
+  values, callbacks, variadics, C++, and remote
   package/library resolution are not implemented yet. Local Skadi package
   dependencies already resolve through `[dependencies]`, but do not replace
   native library discovery or versioning.

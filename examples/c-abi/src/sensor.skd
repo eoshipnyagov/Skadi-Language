@@ -4,8 +4,14 @@ external struct SensorReading {
     Bool valid
 }
 
+external resource Sensor
+
 external danger fn sensor_calibrate(i16 raw_value, i16 offset) returns i32
 external fn sensor_is_valid(i32 value) returns Bool
 external fn sensor_describe(i32 value) returns SensorReading
 external fn sensor_checksum(view Buffer(u8) data) returns u32
 external danger fn sensor_adjust(edit Buffer(u8) data, u8 delta)
+external fn sensor_open(i32 initial_value) returns Sensor
+external fn sensor_handle_read(view Sensor sensor) returns i32
+external danger fn sensor_handle_adjust(edit Sensor sensor, i32 delta)
+external danger fn sensor_close(move Sensor sensor)

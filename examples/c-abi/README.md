@@ -5,7 +5,8 @@ the `src/sensor.skd` binding module, a native C source, fixed-width arguments,
 an `external danger fn` status/out adapter, scalar results, and call-scoped
 `view Buffer(u8)` / `edit Buffer(u8)` access to a typed Skadi list. It also
 passes an `external struct SensorReading` by value using ordinary C field order
-and alignment.
+and alignment. The same project exercises an opaque `external resource Sensor`
+through explicit `view`, `edit`, and consuming `move` calls.
 
 From this directory:
 
@@ -21,6 +22,7 @@ Calibrated reading: 400
 Reading valid: true
 Reading confidence: 0.75
 Packet checksum: 60 -> 63
+Opaque handle value: 400 -> 405
 ```
 
 The public contract is documented in `docs/SKADI_C_ABI_RU.md` and

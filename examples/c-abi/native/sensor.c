@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 typedef struct {
     int32_t value;
@@ -51,5 +52,40 @@ int sensor_adjust(uint8_t *data, size_t length, uint8_t delta) {
         }
         data[index] = (uint8_t)(data[index] + delta);
     }
+    return 0;
+}
+
+typedef struct {
+    int32_t value;
+} Sensor;
+
+void *sensor_open(int32_t initial_value) {
+    Sensor *sensor = (Sensor *)malloc(sizeof(Sensor));
+    if (sensor == NULL) {
+        abort();
+    }
+    sensor->value = initial_value;
+    return sensor;
+}
+
+int32_t sensor_handle_read(const void *handle) {
+    const Sensor *sensor = (const Sensor *)handle;
+    return sensor->value;
+}
+
+int sensor_handle_adjust(void *handle, int32_t delta) {
+    Sensor *sensor = (Sensor *)handle;
+    if (sensor == NULL) {
+        return 1;
+    }
+    sensor->value += delta;
+    return 0;
+}
+
+int sensor_close(void *handle) {
+    if (handle == NULL) {
+        return 1;
+    }
+    free(handle);
     return 0;
 }

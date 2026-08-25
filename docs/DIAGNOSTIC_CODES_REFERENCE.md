@@ -48,6 +48,8 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-PARSE-229` external declaration has a body or trailing syntax after its signature
 - `SC-PARSE-230` `external` prefixes an unsupported declaration kind
 - `SC-PARSE-231` `external struct` contains a method instead of a pure field layout
+- `SC-PARSE-232` `external resource` is missing a valid type name
+- `SC-PARSE-233` `external resource` has trailing syntax after its type name
 
 ## 3. Semantic Codes (`SC-SEM-*`)
 
