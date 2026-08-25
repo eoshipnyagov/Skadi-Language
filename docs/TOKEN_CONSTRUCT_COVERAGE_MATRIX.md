@@ -43,6 +43,7 @@ Legend:
 | `allow grow` / `allow drop` | P (policy words) | Y | Y | Y | Y | contextual only inside Memory initializer; drop is declarative |
 | `import "./... .skd"` | N (resolved in CLI pipeline pre-lex) | N (pre-merged) | N (pre-merged) | N (pre-merged) | Y | covered in `tools/skadi-cli` tests |
 | `import "./x.skd" as alias` | N (CLI pre-lex) | N | N | N | Y | local qualified alias rewrites to canonical module name |
+| `import "package/path/x.skd"` | N (CLI pre-lex) | N | N | N | Y | local `[dependencies]`, root confinement, CLI check/run smoke |
 | `import module_name` | N | N | N | N | Y (negative) | deterministic diagnostic `[SC-MOD-001]` |
 | import public symbol collision | N | N | N | N | Y (negative) | deterministic diagnostics `[SC-MOD-002]` |
 | direct-import-only visibility | N | N | N | N | Y (negative) | deterministic diagnostics `[SC-MOD-003]` |

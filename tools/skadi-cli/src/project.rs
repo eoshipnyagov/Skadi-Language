@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -18,6 +19,7 @@ pub struct ManifestConfig {
     pub edition: String,
     pub entry: String,
     pub int_width: String,
+    pub dependencies: BTreeMap<String, String>,
     pub native_sources: Vec<String>,
     pub native_libraries: Vec<String>,
     pub native_library_paths: Vec<String>,
@@ -27,6 +29,7 @@ const TEMPLATE_MAIN: &str = "new Text greeting = \"Hello from Skadi\"\n\noutput(
 
 pub fn load_project_at(root: &Path) -> Result<ProjectConfig, String> {
     let manifest = load_manifest_config_at(root)?;
+    resolve_local_dependencies(root, &manifest.dependencies)?;
     let entry = root.join(&manifest.entry);
 
     Ok(ProjectConfig {
@@ -46,18 +49,21 @@ pub fn load_manifest_config_at(root: &Path) -> Result<ManifestConfig, String> {
         .map_err(|e| format!("failed to read {}: {e}", manifest.display()))?;
 
     let config = ManifestConfig {
-        name: extract_string_value(&content, "name").unwrap_or_else(|| {
+        name: extract_section_string_value(&content, "package", "name").unwrap_or_else(|| {
             root.file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("skadi_project")
                 .to_string()
         }),
-        version: extract_string_value(&content, "version").unwrap_or_else(|| "0.1.0".to_string()),
-        edition: extract_string_value(&content, "edition").unwrap_or_else(|| "v1".to_string()),
-        entry: extract_string_value(&content, "entry")
+        version: extract_section_string_value(&content, "package", "version")
+            .unwrap_or_else(|| "0.1.0".to_string()),
+        edition: extract_section_string_value(&content, "package", "edition")
+            .unwrap_or_else(|| "v1".to_string()),
+        entry: extract_section_string_value(&content, "build", "entry")
             .unwrap_or_else(|| "src/main.skd".to_string()),
         int_width: extract_section_string_value(&content, "numeric", "int")
             .unwrap_or_else(|| "target".to_string()),
+        dependencies: extract_section_string_map(&content, "dependencies")?,
         native_sources: extract_section_string_array(&content, "native", "sources")?,
         native_libraries: extract_section_string_array(&content, "native", "libraries")?,
         native_library_paths: extract_section_string_array(&content, "native", "library_paths")?,
@@ -86,22 +92,6 @@ pub fn ensure_entry_file_at(root: &Path, entry: &str) -> Result<PathBuf, String>
     Ok(entry_path)
 }
 
-fn extract_string_value(content: &str, key: &str) -> Option<String> {
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if !trimmed.starts_with(key) {
-            continue;
-        }
-        let mut parts = trimmed.splitn(2, '=');
-        let _left = parts.next()?;
-        let right = parts.next()?.trim();
-        if right.starts_with('\"') && right.ends_with('\"') && right.len() >= 2 {
-            return Some(right[1..right.len() - 1].to_string());
-        }
-    }
-    None
-}
-
 fn extract_section_string_value(content: &str, section: &str, key: &str) -> Option<String> {
     let mut current_section = "";
     for line in content.lines() {
@@ -110,10 +100,13 @@ fn extract_section_string_value(content: &str, section: &str, key: &str) -> Opti
             current_section = &trimmed[1..trimmed.len() - 1];
             continue;
         }
-        if current_section != section || !trimmed.starts_with(key) {
+        if current_section != section {
             continue;
         }
-        let (_, right) = trimmed.split_once('=')?;
+        let (left, right) = trimmed.split_once('=')?;
+        if left.trim() != key {
+            continue;
+        }
         let right = right.trim();
         if right.starts_with('"') && right.ends_with('"') && right.len() >= 2 {
             return Some(right[1..right.len() - 1].to_string());
@@ -168,6 +161,89 @@ fn extract_section_string_array(
     Ok(Vec::new())
 }
 
+fn extract_section_string_map(
+    content: &str,
+    section: &str,
+) -> Result<BTreeMap<String, String>, String> {
+    let mut current_section = "";
+    let mut values = BTreeMap::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            current_section = &trimmed[1..trimmed.len() - 1];
+            continue;
+        }
+        if current_section != section || trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let Some((left, right)) = trimmed.split_once('=') else {
+            return Err(format!(
+                "manifest section '[{section}]' expects entries like name = \"../path\""
+            ));
+        };
+        let name = left.trim();
+        let value = right.trim();
+        if name.is_empty() || value.len() < 2 || !value.starts_with('"') || !value.ends_with('"') {
+            return Err(format!(
+                "manifest dependency '{name}' must use a quoted local path"
+            ));
+        }
+        if values
+            .insert(name.to_string(), value[1..value.len() - 1].to_string())
+            .is_some()
+        {
+            return Err(format!(
+                "manifest dependency '{name}' is declared more than once"
+            ));
+        }
+    }
+    Ok(values)
+}
+
+pub fn resolve_local_dependencies(
+    root: &Path,
+    dependencies: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, PathBuf>, String> {
+    let project_root = fs::canonicalize(root)
+        .map_err(|e| format!("failed to resolve project root '{}': {e}", root.display()))?;
+    let mut resolved = BTreeMap::new();
+    let mut roots = BTreeMap::<PathBuf, String>::new();
+
+    for (name, relative) in dependencies {
+        let dependency_root = fs::canonicalize(project_root.join(relative)).map_err(|e| {
+            format!("manifest dependency '{name}' path '{relative}' cannot be resolved: {e}")
+        })?;
+        if !dependency_root.is_dir() {
+            return Err(format!(
+                "manifest dependency '{name}' path '{}' is not a directory",
+                dependency_root.display()
+            ));
+        }
+        let dependency_manifest = dependency_root.join("Skadi.toml");
+        if !dependency_manifest.is_file() {
+            return Err(format!(
+                "manifest dependency '{name}' must point to a Skadi package containing Skadi.toml, got '{}'",
+                dependency_root.display()
+            ));
+        }
+        load_manifest_config_at(&dependency_root).map_err(|error| {
+            format!(
+                "manifest dependency '{name}' has an invalid Skadi.toml at '{}': {error}",
+                dependency_manifest.display()
+            )
+        })?;
+        if let Some(previous) = roots.insert(dependency_root.clone(), name.clone()) {
+            return Err(format!(
+                "manifest dependencies '{previous}' and '{name}' resolve to the same package root '{}'",
+                dependency_root.display()
+            ));
+        }
+        resolved.insert(name.clone(), dependency_root);
+    }
+
+    Ok(resolved)
+}
+
 pub fn ensure_build_dir(root: &Path) -> Result<PathBuf, String> {
     let dir = root.join("build");
     fs::create_dir_all(&dir).map_err(|e| format!("create {} failed: {e}", dir.display()))?;
@@ -188,6 +264,7 @@ pub fn create_project(root: &Path, name: &str) -> Result<(), String> {
         edition: "v1".to_string(),
         entry: "src/main.skd".to_string(),
         int_width: "target".to_string(),
+        dependencies: BTreeMap::new(),
         native_sources: Vec::new(),
         native_libraries: Vec::new(),
         native_library_paths: Vec::new(),
@@ -226,6 +303,7 @@ pub fn init_project(root: &Path) -> Result<(), String> {
             edition: "v1".to_string(),
             entry: "src/main.skd".to_string(),
             int_width: "target".to_string(),
+            dependencies: BTreeMap::new(),
             native_sources: Vec::new(),
             native_libraries: Vec::new(),
             native_library_paths: Vec::new(),
@@ -244,13 +322,20 @@ pub fn init_project(root: &Path) -> Result<(), String> {
 }
 
 fn render_manifest_config(manifest: &ManifestConfig) -> String {
+    let dependencies = manifest
+        .dependencies
+        .iter()
+        .map(|(name, path)| format!("{name} = \"{path}\""))
+        .collect::<Vec<_>>()
+        .join("\n");
     format!(
-        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"{}\"\n\n[build]\nentry = \"{}\"\n\n[numeric]\nint = \"{}\"\n\n[native]\nsources = {}\nlibraries = {}\nlibrary_paths = {}\n",
+        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"{}\"\n\n[build]\nentry = \"{}\"\n\n[numeric]\nint = \"{}\"\n\n[dependencies]\n{}\n\n[native]\nsources = {}\nlibraries = {}\nlibrary_paths = {}\n",
         manifest.name,
         manifest.version,
         manifest.edition,
         manifest.entry,
         manifest.int_width,
+        dependencies,
         render_string_array(&manifest.native_sources),
         render_string_array(&manifest.native_libraries),
         render_string_array(&manifest.native_library_paths),
@@ -289,6 +374,21 @@ fn validate_manifest_config(manifest: &ManifestConfig) -> Result<(), String> {
             "manifest field 'numeric.int' must be target, i8, i16, i32, or i64".to_string(),
         );
     }
+    for (name, path) in &manifest.dependencies {
+        let mut characters = name.chars();
+        let valid_start = characters
+            .next()
+            .is_some_and(|character| character == '_' || character.is_ascii_alphabetic());
+        let valid_rest = characters.all(|character| {
+            character == '_' || character == '-' || character.is_ascii_alphanumeric()
+        });
+        if !valid_start || !valid_rest {
+            return Err(format!(
+                "manifest dependency name '{name}' must start with a letter or '_' and contain only letters, digits, '_', or '-'"
+            ));
+        }
+        validate_dependency_relative_path(path, name)?;
+    }
     for source in &manifest.native_sources {
         validate_native_relative_path(source, "native.sources")?;
         if !source.ends_with(".c") {
@@ -314,6 +414,25 @@ fn validate_manifest_config(manifest: &ManifestConfig) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_dependency_relative_path(value: &str, name: &str) -> Result<(), String> {
+    let path = Path::new(value);
+    let bytes = value.as_bytes();
+    let has_windows_drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+    let has_portable_root = value.starts_with('/') || value.starts_with('\\');
+    let has_unsupported_toml_character = value.contains(['"', '\n', '\r']);
+    if value.trim().is_empty()
+        || path.is_absolute()
+        || has_windows_drive
+        || has_portable_root
+        || has_unsupported_toml_character
+    {
+        return Err(format!(
+            "manifest dependency '{name}' requires a relative local path, got '{value}'"
+        ));
+    }
+    Ok(())
+}
+
 fn validate_native_relative_path(value: &str, field: &str) -> Result<(), String> {
     let path = Path::new(value);
     let bytes = value.as_bytes();
@@ -335,11 +454,12 @@ fn validate_native_relative_path(value: &str, field: &str) -> Result<(), String>
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
         ManifestConfig, ensure_entry_file_at, init_project, load_manifest_config_at,
-        save_manifest_config_at, validate_manifest_config,
+        resolve_local_dependencies, save_manifest_config_at, validate_manifest_config,
     };
 
     fn unique_temp_dir(stem: &str) -> std::path::PathBuf {
@@ -363,6 +483,10 @@ mod tests {
             edition: "v1".to_string(),
             entry: "src/app.skd".to_string(),
             int_width: "i16".to_string(),
+            dependencies: BTreeMap::from([
+                ("physics".to_string(), "../physics".to_string()),
+                ("ui".to_string(), "vendor/ui".to_string()),
+            ]),
             native_sources: vec!["native/helper.c".to_string()],
             native_libraries: vec!["helper".to_string()],
             native_library_paths: vec!["native/lib".to_string()],
@@ -370,6 +494,26 @@ mod tests {
         save_manifest_config_at(&temp, &updated).expect("save");
         let loaded = load_manifest_config_at(&temp).expect("load");
         assert_eq!(loaded, updated);
+
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[test]
+    fn manifest_fields_are_scoped_to_their_sections() {
+        let temp = unique_temp_dir("manifest_sections");
+        std::fs::write(
+            temp.join("Skadi.toml"),
+            "[package]\nname = \"application\"\nversion = \"1.0.0\"\n\n[build]\nentry = \"src/main.skd\"\n\n[dependencies]\nname = \"../name-package\"\nentry = \"../entry-package\"\n",
+        )
+        .expect("manifest");
+
+        let loaded = load_manifest_config_at(&temp).expect("load manifest");
+        assert_eq!(loaded.name, "application");
+        assert_eq!(loaded.entry, "src/main.skd");
+        assert_eq!(
+            loaded.dependencies.get("name"),
+            Some(&"../name-package".to_string())
+        );
 
         let _ = std::fs::remove_dir_all(temp);
     }
@@ -393,6 +537,7 @@ mod tests {
             edition: "v1".to_string(),
             entry: "src/main.skd".to_string(),
             int_width: "target".to_string(),
+            dependencies: BTreeMap::new(),
             native_sources: Vec::new(),
             native_libraries: Vec::new(),
             native_library_paths: Vec::new(),
@@ -421,5 +566,59 @@ mod tests {
                 .expect_err("linker flag must fail")
                 .contains("invalid library name")
         );
+    }
+
+    #[test]
+    fn dependency_manifest_rejects_absolute_paths_and_invalid_names() {
+        let mut manifest = ManifestConfig {
+            name: "demo".to_string(),
+            version: "0.1.0".to_string(),
+            edition: "v1".to_string(),
+            entry: "src/main.skd".to_string(),
+            int_width: "target".to_string(),
+            dependencies: BTreeMap::from([("bad name".to_string(), "../shared".to_string())]),
+            native_sources: Vec::new(),
+            native_libraries: Vec::new(),
+            native_library_paths: Vec::new(),
+        };
+        assert!(
+            validate_manifest_config(&manifest)
+                .expect_err("invalid dependency name must fail")
+                .contains("dependency name")
+        );
+
+        manifest.dependencies = BTreeMap::from([("shared".to_string(), "C:/shared".to_string())]);
+        assert!(
+            validate_manifest_config(&manifest)
+                .expect_err("absolute dependency path must fail")
+                .contains("relative local path")
+        );
+    }
+
+    #[test]
+    fn local_dependency_resolution_requires_a_skadi_package() {
+        let workspace = unique_temp_dir("dependency_resolution");
+        let app = workspace.join("app");
+        let package = workspace.join("shared");
+        std::fs::create_dir_all(&app).expect("app dir");
+        std::fs::create_dir_all(&package).expect("package dir");
+        std::fs::write(package.join("Skadi.toml"), "[package]\nname = \"shared\"\n")
+            .expect("package manifest");
+
+        let dependencies = BTreeMap::from([("shared".to_string(), "../shared".to_string())]);
+        let resolved = resolve_local_dependencies(&app, &dependencies).expect("resolve package");
+        assert_eq!(
+            resolved.get("shared"),
+            Some(&std::fs::canonicalize(&package).expect("canonical package"))
+        );
+
+        std::fs::remove_file(package.join("Skadi.toml")).expect("remove manifest");
+        assert!(
+            resolve_local_dependencies(&app, &dependencies)
+                .expect_err("missing package manifest must fail")
+                .contains("containing Skadi.toml")
+        );
+
+        let _ = std::fs::remove_dir_all(workspace);
     }
 }

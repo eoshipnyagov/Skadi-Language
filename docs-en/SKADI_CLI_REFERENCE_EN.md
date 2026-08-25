@@ -66,6 +66,9 @@ entry = "src/main.skd"
 [numeric]
 int = "target"
 
+[dependencies]
+physics = "../physics"
+
 [native]
 sources = []
 libraries = []
@@ -73,8 +76,14 @@ library_paths = []
 ```
 
 Supported fields include `name`, `version`, `edition`, `entry`, `[numeric] int`,
-and the `[native]` arrays. The TUI Config view edits the project/numeric fields
-and preserves native settings.
+local `[dependencies]` paths, and the `[native]` arrays. The TUI Config view
+edits project/numeric fields and preserves dependency/native settings; a visual
+dependency editor is not implemented yet.
+
+A dependency path is relative to the current manifest and must point to a
+directory with its own `Skadi.toml`. It enables imports such as
+`import "physics/src/vector.skd"`. Git/registry dependencies and a lock file are
+not implemented yet.
 
 `[native]` configures the bounded [C ABI](c-abi.en.md): `sources` lists relative
 `.c` files, `libraries` contains library names, and `library_paths` contains

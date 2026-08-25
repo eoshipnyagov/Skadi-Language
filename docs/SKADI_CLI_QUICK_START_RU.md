@@ -82,6 +82,18 @@ cd hello_skadi
 - `src/main.skd`
 - `.gitignore`
 
+Если проект использует соседний локальный Skadi package, добавьте его в
+`Skadi.toml`:
+
+```toml
+[dependencies]
+physics = "../physics"
+```
+
+После этого файл пакета доступен как
+`import "physics/src/vector.skd"`. Директория `../physics` должна содержать
+собственный `Skadi.toml`.
+
 ## 6. Основной цикл работы
 
 ```powershell

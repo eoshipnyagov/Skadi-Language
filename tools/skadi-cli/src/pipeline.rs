@@ -5,6 +5,7 @@ use std::process::Command;
 
 use regex::Regex;
 
+use crate::project::{load_manifest_config_at, resolve_local_dependencies};
 use crate::targets::{
     CompilerInvocation, candidate_invocations, resolve_profile, single_compiler_invocation,
 };
@@ -16,12 +17,17 @@ use v01::lexer::lex;
 use v01::parser::parse_program;
 use v01::semantic_analysis::{semantic_analyze, semantic_style_warnings};
 
-const IMPORT_CONTRACT_HINT: &str = "module contract: use `import \"./relative_path.skd\"` with an optional local `as alias`; module-name imports are not supported.";
+const IMPORT_CONTRACT_HINT: &str = "module contract: use `import \"./relative_path.skd\"` for project-relative modules or `import \"package/path.skd\"` for a local dependency declared in Skadi.toml; both forms accept local `as alias`.";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ImportSpec {
     path: String,
     alias: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ImportResolver {
+    packages: BTreeMap<String, PathBuf>,
 }
 
 pub struct FrontendOutput {
@@ -215,12 +221,19 @@ fn load_source_bundle(entry_path: &Path) -> Result<LoadedSource, String> {
             IMPORT_CONTRACT_HINT
         )
     })?;
-    let direct_imports = collect_direct_imports(&entry_abs)?;
+    let resolver = ImportResolver::for_entry(&entry_abs)?;
+    let direct_imports = collect_direct_imports(&entry_abs, &resolver)?;
 
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut stack: Vec<PathBuf> = Vec::new();
     let mut decl_index: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    let merged = load_source_recursive(&entry_abs, &mut seen, &mut stack, &mut decl_index)?;
+    let merged = load_source_recursive(
+        &entry_abs,
+        &resolver,
+        &mut seen,
+        &mut stack,
+        &mut decl_index,
+    )?;
     validate_entry_direct_visibility(&entry_abs, &direct_imports, &decl_index)?;
     ensure_no_public_symbol_collisions(&decl_index)?;
     Ok(merged)
@@ -228,6 +241,7 @@ fn load_source_bundle(entry_path: &Path) -> Result<LoadedSource, String> {
 
 fn load_source_recursive(
     path: &Path,
+    resolver: &ImportResolver,
     seen: &mut HashSet<PathBuf>,
     stack: &mut Vec<PathBuf>,
     decl_index: &mut BTreeMap<String, BTreeSet<String>>,
@@ -273,7 +287,7 @@ fn load_source_recursive(
     let mut aliases: Vec<(String, String)> = Vec::new();
     for (line_index, line) in source.lines().enumerate() {
         if let Some(import) = parse_import_line(line)? {
-            let import_abs = base_dir.join(&import.path);
+            let import_abs = resolver.resolve(base_dir, &import.path)?;
             if let Some(alias) = import.alias {
                 let canonical = import_abs
                     .file_stem()
@@ -283,7 +297,7 @@ fn load_source_recursive(
                     })?;
                 aliases.push((alias, canonical.to_string()));
             }
-            let imported = load_source_recursive(&import_abs, seen, stack, decl_index)?;
+            let imported = load_source_recursive(&import_abs, resolver, seen, stack, decl_index)?;
             if !imported.text.is_empty() {
                 merged.text.push_str(&imported.text);
                 merged.origins.extend(imported.origins);
@@ -311,7 +325,10 @@ fn load_source_recursive(
     Ok(merged)
 }
 
-fn collect_direct_imports(entry_abs: &Path) -> Result<HashSet<PathBuf>, String> {
+fn collect_direct_imports(
+    entry_abs: &Path,
+    resolver: &ImportResolver,
+) -> Result<HashSet<PathBuf>, String> {
     let source = fs::read_to_string(entry_abs).map_err(|e| {
         format!(
             "failed to read import file '{}': {e}. {}",
@@ -323,17 +340,91 @@ fn collect_direct_imports(entry_abs: &Path) -> Result<HashSet<PathBuf>, String> 
     let mut out: HashSet<PathBuf> = HashSet::new();
     for line in source.lines() {
         if let Some(import) = parse_import_line(line)? {
-            let import_abs = fs::canonicalize(base_dir.join(import.path)).map_err(|e| {
-                format!(
-                    "import path resolution failed for '{}': {e}. {}",
-                    base_dir.display(),
-                    IMPORT_CONTRACT_HINT
-                )
-            })?;
+            let import_abs = resolver.resolve(base_dir, &import.path)?;
             out.insert(import_abs);
         }
     }
     Ok(out)
+}
+
+impl ImportResolver {
+    fn for_entry(entry_abs: &Path) -> Result<Self, String> {
+        let Some(project_root) = entry_abs.parent().and_then(|parent| {
+            parent
+                .ancestors()
+                .find(|root| root.join("Skadi.toml").is_file())
+        }) else {
+            return Ok(Self::default());
+        };
+        let manifest = load_manifest_config_at(project_root)?;
+        let packages = resolve_local_dependencies(project_root, &manifest.dependencies)?;
+        Ok(Self { packages })
+    }
+
+    fn resolve(&self, base_dir: &Path, import_path: &str) -> Result<PathBuf, String> {
+        if is_explicit_relative_import(import_path) {
+            return fs::canonicalize(base_dir.join(import_path)).map_err(|e| {
+                format!(
+                    "import path resolution failed for '{}': {e}. {}",
+                    import_path, IMPORT_CONTRACT_HINT
+                )
+            });
+        }
+
+        let components = import_path
+            .split(['/', '\\'])
+            .filter(|component| !component.is_empty())
+            .collect::<Vec<_>>();
+        let Some(package_name) = components.first() else {
+            return Err(format!(
+                "[SC-MOD-004] empty package import. {IMPORT_CONTRACT_HINT}"
+            ));
+        };
+        let Some(package_root) = self.packages.get(*package_name) else {
+            return Err(format!(
+                "[SC-MOD-004] unknown package dependency '{}': add it to [dependencies] in Skadi.toml. {}",
+                package_name, IMPORT_CONTRACT_HINT
+            ));
+        };
+        let package_path = &components[1..];
+        if package_path.is_empty()
+            || package_path
+                .iter()
+                .any(|component| matches!(*component, "." | ".."))
+        {
+            return Err(format!(
+                "[SC-MOD-004] package import '{}' must name a file inside dependency '{}', without '.' or '..'. {}",
+                import_path, package_name, IMPORT_CONTRACT_HINT
+            ));
+        }
+        let candidate = package_path
+            .iter()
+            .fold(package_root.clone(), |path, component| path.join(component));
+        let resolved = fs::canonicalize(&candidate).map_err(|e| {
+            format!(
+                "[SC-MOD-004] package import '{}' cannot be resolved at '{}': {e}. {}",
+                import_path,
+                candidate.display(),
+                IMPORT_CONTRACT_HINT
+            )
+        })?;
+        if !resolved.starts_with(package_root) {
+            return Err(format!(
+                "[SC-MOD-004] package import '{}' escapes dependency root '{}'. {}",
+                import_path,
+                package_root.display(),
+                IMPORT_CONTRACT_HINT
+            ));
+        }
+        Ok(resolved)
+    }
+}
+
+fn is_explicit_relative_import(path: &str) -> bool {
+    path.starts_with("./")
+        || path.starts_with("../")
+        || path.starts_with(".\\")
+        || path.starts_with("..\\")
 }
 
 fn index_public_top_level_declarations(
@@ -488,14 +579,14 @@ fn parse_import_line(line: &str) -> Result<Option<ImportSpec>, String> {
     let rest = trimmed["import ".len()..].trim();
     if !rest.starts_with('"') {
         return Err(format!(
-            "module-name import is not supported in v1: '{}'. {}",
+            "unquoted import is not supported: '{}'. {}",
             line.trim(),
             IMPORT_CONTRACT_HINT
         ));
     }
     let Some(close_quote) = rest[1..].find('"').map(|index| index + 1) else {
         return Err(format!(
-            "unsupported import syntax '{}'; expected: import \"./path/file.skd\". {}",
+            "unsupported import syntax '{}'; expected: import \"./path/file.skd\" or import \"package/path/file.skd\". {}",
             line.trim(),
             IMPORT_CONTRACT_HINT
         ));
@@ -777,7 +868,7 @@ mod tests {
     #[test]
     fn parse_import_line_rejects_unquoted_path() {
         let err = parse_import_line("import lib").expect_err("must reject");
-        assert!(err.contains("module-name import is not supported"));
+        assert!(err.contains("unquoted import is not supported"));
     }
 
     #[test]
@@ -909,6 +1000,75 @@ local label State {
         let merged = load_source_with_imports(&entry).expect("merge alias");
         assert!(merged.contains("new Int value = utility.answer()"));
         assert!(!merged.contains("short.answer()"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn package_import_resolves_declared_local_dependency() {
+        let workspace = temp_case_dir("package_import");
+        let app = workspace.join("app");
+        let package = workspace.join("physics");
+        fs::create_dir_all(app.join("src")).expect("app source dir");
+        fs::create_dir_all(package.join("src")).expect("package source dir");
+        fs::write(
+            app.join("Skadi.toml"),
+            "[package]\nname = \"app\"\n\n[build]\nentry = \"src/main.skd\"\n\n[dependencies]\nphysics = \"../physics\"\n",
+        )
+        .expect("app manifest");
+        fs::write(
+            package.join("Skadi.toml"),
+            "[package]\nname = \"physics\"\n",
+        )
+        .expect("package manifest");
+        fs::write(
+            package.join("src/math.skd"),
+            "fn answer() Int {\n    return 42\n}\n",
+        )
+        .expect("package module");
+        let entry = app.join("src/main.skd");
+        fs::write(
+            &entry,
+            "import \"physics/src/math.skd\" as calc\nnew Int value = calc.answer()\n",
+        )
+        .expect("entry");
+
+        let merged = load_source_with_imports(&entry).expect("merge package import");
+        assert!(merged.contains("fn answer() Int"));
+        assert!(merged.contains("new Int value = math.answer()"));
+        assert!(!merged.contains("calc.answer()"));
+
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn package_import_rejects_unknown_dependency_and_parent_traversal() {
+        let root = temp_case_dir("package_import_errors");
+        fs::create_dir_all(root.join("src")).expect("source dir");
+        fs::write(
+            root.join("Skadi.toml"),
+            "[package]\nname = \"app\"\n\n[build]\nentry = \"src/main.skd\"\n",
+        )
+        .expect("manifest");
+        let entry = root.join("src/main.skd");
+        fs::write(&entry, "import \"missing/src/lib.skd\"\n").expect("unknown package entry");
+        let unknown = load_source_with_imports(&entry).expect_err("unknown package must fail");
+        assert!(unknown.contains("[SC-MOD-004]"));
+        assert!(unknown.contains("unknown package dependency 'missing'"));
+
+        let package = root.join("package");
+        fs::create_dir_all(&package).expect("package dir");
+        fs::write(package.join("Skadi.toml"), "[package]\nname = \"pkg\"\n")
+            .expect("package manifest");
+        fs::write(
+            root.join("Skadi.toml"),
+            "[package]\nname = \"app\"\n\n[dependencies]\npkg = \"package\"\n",
+        )
+        .expect("manifest with package");
+        fs::write(&entry, "import \"pkg/../outside.skd\"\n").expect("traversal entry");
+        let traversal = load_source_with_imports(&entry).expect_err("traversal must fail");
+        assert!(traversal.contains("[SC-MOD-004]"));
+        assert!(traversal.contains("without '.' or '..'"));
 
         let _ = fs::remove_dir_all(root);
     }
@@ -1241,7 +1401,7 @@ local label State {
     }
 
     #[test]
-    fn negative_module_name_import_fails_with_contract_diagnostic() {
+    fn negative_unquoted_import_fails_with_contract_diagnostic() {
         let root = temp_case_dir("imports_neg_module_name");
         let entry = root.join("main.skd");
         fs::write(&entry, "import lib\nnew Int x = 1\n").expect("write entry");
@@ -1250,7 +1410,7 @@ local label State {
         assert!(err.contains("[SC-MOD-001]"));
         assert!(err.contains("stage=module-import"));
         assert!(err.contains("hint:"));
-        assert!(err.contains("module-name import is not supported"));
+        assert!(err.contains("unquoted import is not supported"));
 
         let _ = fs::remove_dir_all(root);
     }

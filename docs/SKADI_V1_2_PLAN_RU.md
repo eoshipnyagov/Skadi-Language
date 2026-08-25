@@ -107,8 +107,8 @@ API, а не из-за отсутствующего backend.
 - automatic `allow drop` reclamation и user drop hooks;
 - child/static allocators как замороженный stable API;
 - Canvas events, text/images, transforms и дополнительные presenters;
-- module-name imports, packages и re-exports поверх реализованных path-imports
-  и aliases.
+- Git/registry dependencies, transitive package resolver, lock-файл и re-exports
+  поверх реализованных path-imports, aliases и local `[dependencies]` slice.
 
 Эти направления можно держать как drafts и future contracts, но не смешивать со стабильным обещанием `v1.2`.
 
@@ -522,7 +522,28 @@ vector slice до матриц или transform framework.
 
 Следующие FFI slices намеренно не входят в MVP: raw pointers, explicit
 struct layout, opaque handles, callbacks, symbol aliases, header generation,
-package resolver и формализованное владение C resources.
+remote package/library resolver и формализованное владение C resources.
+
+### Milestone 17: local package resolver - выполнен
+
+Реализовано:
+
+- детерминированная секция `[dependencies]` в `Skadi.toml` с относительными
+  путями к соседним или vendored Skadi packages;
+- обязательный `Skadi.toml` в корне зависимости и ранняя project-диагностика
+  несуществующих/невалидных roots;
+- package import `import "dependency/path/file.skd"` с тем же локальным `as`,
+  direct-import-only visibility и canonical diamond deduplication, что у
+  относительных imports;
+- запрет `.`/`..` и выхода canonical path за package root, код `SC-MOD-004`;
+- сохранение dependencies при редактировании основных полей manifest в TUI и
+  отображение секции в preview;
+- unit, resolver-negative и официальный CLI `check/run` smoke;
+- синхронные RU/EN user docs, status/coverage/diagnostics matrices.
+
+Сознательно отложены Git/registry sources, version constraints, transitive
+dependency graph, lock-файл, package commands и re-export. Lock-файл появится
+вместе с реальным remote/version resolver, а не как пустой артефакт.
 
 ### Завершённый спринт: v1.2 Distribution & Release Candidate
 

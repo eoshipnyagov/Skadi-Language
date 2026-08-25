@@ -257,12 +257,12 @@ CI проверяет:
 Пока не являются текущей реализованной поверхностью:
 
 - hardware `on interrupt` backends;
-- module name imports/re-exports;
+- Git/registry dependencies, transitive resolution, lock-файл и re-exports;
 - Channel `select`, task groups и async/await;
 - shared mutable state model;
 - ESP32/FreeRTOS и другие embedded runtime backends;
 - Canvas events/text/images, Matrix2D, generic units и operator overloading;
-- package manager и dependency resolution;
+- remote package manager и dependency version resolution;
 - готовый embedded/ESP32 runtime и flash workflow;
 - non-Windows и embedded Canvas presentation backends.
 

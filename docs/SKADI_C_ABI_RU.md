@@ -189,5 +189,7 @@ Config editor TUI сохраняет эти поля, но в текущем MVP
 
 Не реализованы header import/generation, symbol aliases, calling-convention
 attributes, C struct/enum layout, raw pointers, nullable values, callbacks, variadic
-functions, C++ ABI и package resolver. Это сознательная граница первого среза,
+functions, C++ ABI и remote package/library resolver. Локальные Skadi package
+dependencies уже разрешаются через `[dependencies]`, но не заменяют поиск и
+версионирование native-библиотек. Это сознательная граница первого среза,
 а не обещание автоматически поддерживать любую C-библиотеку.

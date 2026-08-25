@@ -73,6 +73,9 @@ Focused native examples also cover:
   consumption across success and timeout paths.
 - `examples/c-abi/` for a manifest project using `external fn`, a native C
   source, fixed-width values, and `view`/`edit Buffer(u8)` at the ABI boundary.
+- `examples/packages/` contains two minimal manifest projects: the application
+  declares a sibling dependency and imports `math_kit/src/answer.skd` through
+  the local package resolver.
 
 ## Stable showcase fixtures
 

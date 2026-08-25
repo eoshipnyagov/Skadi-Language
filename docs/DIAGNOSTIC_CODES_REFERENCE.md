@@ -95,7 +95,7 @@ Wrapper/stage codes used by CLI pipeline:
 - `SC-MOD-001`
   - stage: `skadi-cli` import/merge pipeline
   - meaning: path-import contract violation or import graph failure
-  - includes: unsupported module-name import, alias import, missing import file, cyclic import
+  - includes: unsupported unquoted import, invalid alias, missing import file, cyclic import
 - `SC-MOD-002`
   - stage: `skadi-cli` import/merge pipeline
   - meaning: deterministic public symbol collision across imported modules
@@ -104,6 +104,11 @@ Wrapper/stage codes used by CLI pipeline:
   - stage: `skadi-cli` import/merge pipeline
   - meaning: direct-import-only visibility violation at entry file
   - includes: entry file calling symbol available only through transitive import chain
+- `SC-MOD-004`
+  - stage: `skadi-cli` local package resolver
+  - meaning: unknown package dependency, invalid package path, or package-root escape
+  - contract: package imports use `import "dependency/path/file.skd"`, where the
+    dependency is declared as a local path in `[dependencies]`
 
 - `SC-CGEN-001`
   - stage: native C compiler invocation after transpilation

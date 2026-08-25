@@ -1,6 +1,6 @@
 # Skadi Syntax Status
 
-Date: 2026-08-17
+Date: 2026-08-25
 
 ## Stable `v1.1`
 
@@ -25,6 +25,8 @@ Date: 2026-08-17
   `send_for`/`receive_for`, and contextual `timed_out`;
 - path-sensitive `wait task for Duration on error { ... }`;
 - Canvas v0 with a Win32 presenter and portable headless rasterizer.
+- local path dependencies in `Skadi.toml` and
+  `import "package/path/file.skd"`, with package-root confinement.
 
 ## Compatibility
 
@@ -49,7 +51,7 @@ checks, and explicit angle/unit representation access. Duration literals cover
 ## Reserved or future
 
 - automatic `allow drop` reclamation;
-- package-name imports and re-exports;
+- Git/registry dependencies, transitive resolution, lock files, and re-exports;
 - Channel `select`/`try_receive`, and async/task groups;
 - ESP32/RTOS backend;
 - Matrix2D, Canvas events/text/images, non-Windows presenters, and generic units/vectors.

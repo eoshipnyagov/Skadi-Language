@@ -1981,6 +1981,15 @@ fn render_config(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 lines.push(Line::from(line));
             }
             lines.push(Line::from(""));
+            lines.push(Line::from("[dependencies]"));
+            if manifest.dependencies.is_empty() {
+                lines.push(Line::from("# no local dependencies"));
+            } else {
+                for (name, path) in &manifest.dependencies {
+                    lines.push(Line::from(format!("{name} = \"{path}\"")));
+                }
+            }
+            lines.push(Line::from(""));
             lines.push(Line::from("Session Build Preferences"));
             lines.push(Line::from(format!("target = {}", app.build_prefs.target)));
             lines.push(Line::from(format!(
@@ -3342,14 +3351,29 @@ mod tests {
     fn config_save_updates_manifest_on_disk() {
         let temp = unique_temp_dir("config_save");
         init_project(&temp).expect("project should init");
+        let dependency = temp.join("shared");
+        fs::create_dir_all(&dependency).expect("dependency dir");
+        fs::write(
+            dependency.join("Skadi.toml"),
+            "[package]\nname = \"shared\"\n",
+        )
+        .expect("dependency manifest");
 
         let mut app = App::new();
         app.open_project_path(temp.clone());
-        app.config.manifest.as_mut().expect("manifest").version = "1.1.0".to_string();
+        let manifest = app.config.manifest.as_mut().expect("manifest");
+        manifest.version = "1.1.0".to_string();
+        manifest
+            .dependencies
+            .insert("shared".to_string(), "shared".to_string());
         app.save_config();
 
         let loaded = crate::project::load_manifest_config_at(&temp).expect("manifest reload");
         assert_eq!(loaded.version, "1.1.0");
+        assert_eq!(
+            loaded.dependencies.get("shared"),
+            Some(&"shared".to_string())
+        );
         assert_eq!(
             app.last_action.as_ref().map(|action| action.name.as_str()),
             Some("config save")

@@ -30,6 +30,38 @@ Alias виден только внутри файла, где записан imp
 Транзитивный import не становится неявным re-export. Это удерживает зависимости
 видимыми и диагностируется через `SC-MOD-003`.
 
+## Локальные package-зависимости
+
+Проект может дать имя соседнему или vendored Skadi-пакету через
+`[dependencies]`:
+
+```toml
+[dependencies]
+physics = "../physics"
+ui = "vendor/ui"
+```
+
+Путь задаётся относительно директории текущего `Skadi.toml`. Корень
+зависимости обязан быть директорией с собственным `Skadi.toml`. После этого
+модуль импортируется через имя зависимости и путь внутри неё:
+
+```skadi
+import "physics/src/vector.skd" as vectors
+
+new vectors.Body body = vectors.make_body()
+```
+
+Первый компонент строки import — имя из `[dependencies]`; qualifier по
+умолчанию всё равно берётся из имени файла (`vector` в примере), а `as` даёт
+локальный alias. Импорт с `.` или `..` внутри package path запрещён, и
+канонический путь не может выйти из корня зависимости. Неизвестная зависимость,
+неверный package root и попытка выхода получают `SC-MOD-004` внутри общей
+module-stage диагностики.
+
+Прямые импорты, diamond-deduplication, `local` и правила коллизий одинаковы для
+локальных файлов и package imports. Зависимость пакета не становится
+автоматически видимой приложению.
+
 ## Public и local
 
 Top-level `fn`, `struct`, `label` и `tag` экспортируются по умолчанию. Prefix `local`
@@ -48,24 +80,23 @@ imports — `SC-MOD-001`.
 
 Пока отсутствуют:
 
-- imports по module/package name;
 - re-export;
-- dependency registry;
+- Git/registry dependencies и version constraints;
+- transitive dependency resolution и lock-файл;
 - отдельная module declaration.
 
 Для переносимости всегда используйте относительные пути проекта, а не абсолютные
 пути машины.
 
-## Принятое направление: packages и C-библиотеки
+## Packages и C-библиотеки
 
-Package resolver пока не реализован. Ограниченный scalar C ABI уже доступен
+Первый local-path package resolver реализован. Ограниченный C ABI уже доступен
 через bodyless `external fn` и `[native]` в `Skadi.toml`; полный контракт и пример
 описаны на странице [C ABI и native C](c-abi.md).
 
-Package layer должен добавить зависимости в `Skadi.toml`, локальные и Git
-sources, воспроизводимый lock-файл, единое разрешение diamond graph и imports по
-имени пакета. Транзитивная зависимость не должна автоматически становиться
-видимой: файл по-прежнему явно импортирует то, чем пользуется.
+Следующий package layer должен добавить Git/registry sources, version
+constraints, transitive resolution и воспроизводимый lock-файл. Эти контракты
+не имитируются раньше времени: локальный resolver не создаёт пустой lock-файл.
 
 C interoperability вводится отдельным ограниченным ABI-контрактом, а не
 разрешением вставлять произвольный C в Skadi. Первый реализованный срез
@@ -76,7 +107,7 @@ native C sources, library paths и linker names.
 
 - C-compatible structs с явным layout;
 - opaque owning/borrowed handles;
-- buffers с явной длиной;
+- долгоживущие buffers и ownership beyond call-scoped `Buffer(T)`;
 - include/header contract;
 - явные правила владения для `char*`, buffers, callbacks и resource handles.
 

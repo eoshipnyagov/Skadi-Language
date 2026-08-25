@@ -82,7 +82,7 @@ is rejected by semantic analysis.
 | Relative import | `import "./math.skd"` | Stable |
 | Qualification | `math.add()`, `math.Point`, `math.Error` | Stable |
 | Aliased path import | `import "./x.skd" as x` | Stable; alias is file-local |
-| Package-name import | `import module` | Future |
+| Local package import | `import "package/path/x.skd"` | Experimental; package is declared in `[dependencies]` |
 
 The first `ErrorCode` variant must be `Ok`.
 

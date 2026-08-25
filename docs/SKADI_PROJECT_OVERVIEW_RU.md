@@ -126,7 +126,8 @@ GitHub Pages.
 
 ## 9. Что пока не стоит считать завершённым продуктовым слоем
 
-- module-name imports и re-exports поверх path-imports с рабочими aliases;
+- Git/registry dependencies, transitive package resolver, lock-файл и re-exports
+  поверх path-imports и готового local `[dependencies]` slice;
 - автоматическая reclamation по `allow drop` и полный lifetime calculus;
 - `select` и task groups поверх стабилизированных Channel/Task cancellation и
   timeout boundaries;

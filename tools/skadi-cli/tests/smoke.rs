@@ -556,6 +556,55 @@ fn init_and_check_smoke() {
 }
 
 #[test]
+fn local_package_dependency_checks_and_runs_through_manifest() {
+    let workspace = unique_temp_dir("local_dependency");
+    let app = workspace.join("app");
+    let package = workspace.join("math-kit");
+    fs::create_dir_all(app.join("src")).expect("app source dir");
+    fs::create_dir_all(package.join("src")).expect("package source dir");
+    fs::write(
+        app.join("Skadi.toml"),
+        "[package]\nname = \"package_demo\"\nversion = \"0.1.0\"\nedition = \"v1\"\n\n[build]\nentry = \"src/main.skd\"\n\n[numeric]\nint = \"target\"\n\n[dependencies]\nmath_kit = \"../math-kit\"\n",
+    )
+    .expect("app manifest");
+    fs::write(
+        package.join("Skadi.toml"),
+        "[package]\nname = \"math-kit\"\nversion = \"0.1.0\"\nedition = \"v1\"\n",
+    )
+    .expect("package manifest");
+    fs::write(
+        package.join("src/answer.skd"),
+        "fn answer() Int {\n    return 42\n}\n",
+    )
+    .expect("package source");
+    fs::write(
+        app.join("src/main.skd"),
+        "import \"math_kit/src/answer.skd\" as meaning\noutput(meaning.answer())\n",
+    )
+    .expect("app source");
+
+    let check = run_cli(&app, &["check"]);
+    assert!(
+        check.status.success(),
+        "package check failed: {}",
+        stderr_text(&check)
+    );
+    assert!(stdout_text(&check).contains("check ok:"));
+
+    if host_compiler_ready() {
+        let run = run_cli(&app, &["run"]);
+        assert!(
+            run.status.success(),
+            "package run failed: {}",
+            stderr_text(&run)
+        );
+        assert!(stdout_text(&run).contains("42"));
+    }
+
+    let _ = fs::remove_dir_all(workspace);
+}
+
+#[test]
 fn check_applies_project_int_width() {
     let temp = unique_temp_dir("int_width");
     let init = run_cli(&temp, &["init"]);

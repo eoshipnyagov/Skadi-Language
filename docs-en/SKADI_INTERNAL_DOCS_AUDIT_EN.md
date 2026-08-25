@@ -94,8 +94,10 @@ lowering; `ErrorCode` remains the special label that starts with `Ok = 0`.
 ### Modules and I/O
 
 Relative path imports, direct-import-only visibility, and
-`import "./x.skd" as alias` work. Named package imports, re-exports, and
-dependency resolution do not. The current I/O model is deliberately small and
+`import "./x.skd" as alias` work. Local path dependencies in `[dependencies]`
+also support `import "package/path/file.skd"` with root confinement. Git/registry
+resolution, transitive dependency graphs, lock files, and re-exports do not.
+The current I/O model is deliberately small and
 synchronous; an old stream idea is not an accepted roadmap commitment.
 
 ### Embedded and Canvas

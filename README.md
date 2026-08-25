@@ -40,6 +40,8 @@ The repository includes:
 - formatter,
 - math/core support for `v1.1`,
 - relative path imports, `local`/`hide`, and qualified `module.symbol` access,
+- local package dependencies through `[dependencies]` and confined
+  `import "package/path/file.skd"`,
 - a bounded scalar and typed-buffer C ABI through bodyless `external fn`
   declarations and project-level `[native]` C sources/libraries,
 - experimental fixed/growing/child/root-static Memory runtime for `v1.2`,
@@ -71,6 +73,11 @@ The current C interoperability slice is intentionally small: fixed-width scalar
 arguments/results, call-scoped `view`/`edit Buffer(T)`, and manifest-managed
 native C inputs. Raw pointers, callbacks, C layouts, and ownership-bearing
 handles remain explicit future contracts rather than unsafe implicit conversions.
+
+The first package slice is intentionally local and deterministic. A project may
+map a dependency name to a relative directory containing `Skadi.toml`; Git and
+registry sources, version solving, transitive resolution, and lock files remain
+future work.
 
 ## Why Skadi Exists
 

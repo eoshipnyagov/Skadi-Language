@@ -46,7 +46,7 @@ Skadi в этом репозитории сейчас:
 - не придумывайте новые ключевые слова;
 - не придумывайте новые builtins;
 - не придумывайте generics, match-expression, exceptions, traits, classes,
-  module-name imports, import aliases, lambdas, async/await и macro-system;
+  unquoted imports, package declarations, lambdas, async/await и macro-system;
 - не предполагайте существование GC, borrow-checker или exception runtime;
 - не используйте синтаксис, если вы не видели его в документации или тестах.
 
@@ -111,8 +111,10 @@ Experimental `Memory`, `Task/Channel`, `Time/Duration`, `ByteSize`, `Angle` и `
 - писать `enum` вместо `label`;
 - использовать `Result<T, E>`, `Option<T>`, `Some/None`, `Ok/Err`;
 - возвращать ошибки через несуществующий exception-style flow;
-- использовать module-name import, alias, `package` или `namespace` вместо
-  поддержанного `import "./relative/path.skd"`;
+- использовать unquoted `import module`, `package` или `namespace`; поддержаны
+  `import "./relative/path.skd"` и локальный
+  `import "dependency/path/file.skd"`, если dependency объявлена в
+  `[dependencies]` текущего `Skadi.toml`; обе формы допускают `as alias`;
 - писать `[]Type`, `Vec<T>`, `Array<T>` вместо `Type List`;
 - придумывать методы и builtins вроде `text.trim()`, `path.exists()`,
   `list.map()`, `list.filter()`, `print()`, `panic()`;
@@ -317,7 +319,7 @@ syntax-canonical-matrix и showcase-программы.
 Ты пишешь код на Skadi для текущего репозитория.
 Работай только в рамках реально поддержанного подмножества языка.
 Не используй синтаксис из Rust, Python, Go, TypeScript, Kotlin или C#.
-Не придумывай generics, module-name imports, classes, enums, exceptions, lambdas или async.
+Не придумывай generics, unquoted imports, package declarations, classes, enums, exceptions, lambdas или async.
 Для объявления переменных используй new.
 Для канонического стиля предпочитай Bool/Char и iterate ... as ....
 Для ошибок используй только существующий danger/on error/ErrorCode flow.

@@ -149,17 +149,18 @@ checked helpers и завершает выполнение с `SC-RT-350`; на�
 
 ### Modules
 
-Реализация использует preprocessing относительных path-imports и правило
-direct-import-only. Это практический модульный слой, но ещё не package system.
+Реализация использует preprocessing относительных path-imports, local package
+imports через `[dependencies]` и правило direct-import-only. Это практический
+локальный package layer, но ещё не сетевой package manager.
 
 Не реализованы:
 
-- `import module_name`;
 - re-export;
-- package/dependency resolution;
+- Git/registry sources, version/transitive resolution и lock-файл;
 - отдельная module declaration.
 
-`import "./x.skd" as alias` и квалифицированные `alias.symbol` реализованы.
+`import "./x.skd" as alias`, `import "package/path/x.skd"` и
+квалифицированные `alias.symbol` реализованы.
 
 ### Error flow
 
@@ -258,10 +259,12 @@ backend и embedded display adapter.
 6. `Ring`/bounded `Pool` для явной `drop oldest` семантики.
 7. Canvas events, text/images и следующие presentation backends.
 8. Ограниченный C ABI slice включает `external fn`, fixed scalar types,
-   call-scoped `view`/`edit Buffer(T)` и `[native]` sources/libraries. Следующая
-   очередь: module/package resolver, lockfile, explicit struct layout, opaque
-   handles и видимое владение долгоживущими C resources; эти формы проверяются
-   на реальных C-библиотеках до заморозки.
+   call-scoped `view`/`edit Buffer(T)` и `[native]` sources/libraries. Первый
+   local-path package resolver через `[dependencies]` также готов и сохраняет
+   direct-import-only/diamond-dedup контракты. Следующая очередь: Git/registry
+   resolver, transitive graph и lockfile, explicit struct layout, opaque handles
+   и видимое владение долгоживущими C resources; эти формы проверяются на
+   реальных C-библиотеках до заморозки.
 
 ### Параллельный tooling-трек
 

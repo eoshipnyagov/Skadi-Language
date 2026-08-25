@@ -135,8 +135,8 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 | `math.add(1, 2)` | Stable | Квалификация по имени файла |
 | `math.Point` | Stable | Квалифицированный тип |
 | `math.SomeError` | Stable | Квалифицированный `ErrorCode` variant |
-| `import module_name` | Future | Нет package/module resolver |
 | `import "./x.skd" as x` | Stable | Alias локален импортирующему файлу |
+| `import "package/path/x.skd"` | Experimental | `package` объявлен локальным путём в `[dependencies]` |
 | Re-export | Future | Отсутствует |
 
 ## Text, List и I/O builtins

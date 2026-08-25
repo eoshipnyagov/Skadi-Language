@@ -162,5 +162,7 @@ directly in `Skadi.toml`.
 - Native sources and libraries must support the selected cross target.
 - Do not encode C pointers as integers.
 - Header import/generation, symbol aliases, calling conventions, C struct/enum
-  layout, raw pointers, nullable values, callbacks, variadics, C++, and package
-  resolution are not implemented yet.
+  layout, raw pointers, nullable values, callbacks, variadics, C++, and remote
+  package/library resolution are not implemented yet. Local Skadi package
+  dependencies already resolve through `[dependencies]`, but do not replace
+  native library discovery or versioning.

@@ -20,18 +20,49 @@ once.
 Top-level functions, structs, labels, and tags are public by default. Prefix
 them with `local` to keep them in the file.
 
-Named package imports, re-exports, and dependency resolution are not implemented.
+Re-exports, remote dependency resolution, and standalone module declarations are
+not implemented.
 
-## Accepted direction: packages and C libraries
+## Local package dependencies
 
-The package resolver is not implemented yet. A bounded scalar C ABI is already
+Projects can name sibling or vendored Skadi packages in `Skadi.toml`:
+
+```toml
+[dependencies]
+physics = "../physics"
+ui = "vendor/ui"
+```
+
+Each path is relative to the current manifest. The dependency root must contain
+its own `Skadi.toml`. Import a file through the dependency name:
+
+```skadi
+import "physics/src/vector.skd" as vectors
+
+new vectors.Body body = vectors.make_body()
+```
+
+The first path component selects `[dependencies]`; the default qualifier still
+comes from the imported file name, while `as` is local to the importing file.
+`.` and `..` are forbidden inside a package path, and canonical resolution may
+not escape the dependency root. Unknown packages and invalid roots report
+`SC-MOD-004` within the module stage.
+
+Direct visibility, canonical diamond deduplication, `local`, and collision rules
+are identical for project and package modules. A package's dependency is not
+implicitly visible to the application.
+
+## Packages and C libraries
+
+The first local-path package resolver is implemented. A bounded C ABI is already
 available through bodyless `external fn` declarations and `[native]` in
-`Skadi.toml`; see [C ABI and Native C](c-abi.en.md). Packages will use the
-manifest for local/Git dependencies plus a reproducible lock file, preserve
-explicit direct imports, and resolve diamond graphs once.
+`Skadi.toml`; see [C ABI and Native C](c-abi.en.md). Git/registry sources,
+version constraints, transitive resolution, and a reproducible lock file remain
+future work; the local resolver deliberately does not create a placeholder lock.
 
 The implemented slice covers fixed-width scalar functions and manifest linker
 configuration. Explicit struct layouts, opaque owned/borrowed handles,
-length-carrying buffers, headers, callbacks, and visible resource ownership are
-future slices. Binding generation from simple headers must reuse this ABI
+long-lived buffers, headers, callbacks, and visible resource ownership are
+future slices. Call-scoped typed `Buffer(T)` is already implemented. Binding
+generation from simple headers must reuse this ABI
 contract rather than define a second FFI model.

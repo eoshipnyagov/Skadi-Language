@@ -207,12 +207,15 @@
   - CLI smoke запускает breakpoint по `.skd`, затем `step` и `continue`
 - module ergonomics
   - относительный path-import и правила видимости покрыты полноценно
-  - path import aliases реализованы; module-name imports и re-export остаются TODO
+  - path import aliases и локальные package imports через `[dependencies]`
+    реализованы; проверяются package-root confinement, неизвестное имя, TUI
+    preservation и CLI `check/run` smoke
+  - Git/registry resolver, transitive dependencies, lock-файл и re-export остаются TODO
 - C ABI
   - fixed scalar declarations, typed call-scoped buffers и `[native]`
     sources/libraries реализованы
   - raw pointers, callbacks, explicit struct layout, opaque handles и
-    package/library resolver остаются следующими FFI slices
+    remote package/library resolver остаются следующими FFI slices
 
 ## 3. Политика для новых фич
 

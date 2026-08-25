@@ -73,6 +73,11 @@ Project manifest может подключать проверенные C source
 `[native]`; Skadi-граница объявляется bodyless `external fn` с fixed scalar
 типами. Pointer/resource ABI пока намеренно не поддерживается.
 
+Секция `[dependencies]` связывает имя локального Skadi package с относительной
+директорией, содержащей свой `Skadi.toml`. Такой пакет импортируется как
+`import "name/path/file.skd"`; Git/registry resolution и lock-файл пока
+отложены.
+
 ## TUI
 
 TUI поддерживает:
@@ -85,7 +90,8 @@ TUI поддерживает:
 - Debug workspace с исходной позицией, thread ID, call stack, scalar-locals и
   выводом программы;
 - `check`, `format`, `build`, `run`, `doctor`;
-- редактор каноничных полей `Skadi.toml`;
+- редактор каноничных полей `Skadi.toml`, сохраняющий `[dependencies]` и
+  `[native]` без потерь;
 - выбор target и компилятора для текущего сеанса;
 - переключение проектов и просмотр build artifacts.
 

@@ -79,15 +79,24 @@ entry = "src/main.skd"
 [numeric]
 int = "target"
 
+[dependencies]
+physics = "../physics"
+
 [native]
 sources = []
 libraries = []
 library_paths = []
 ```
 
-Поддерживаются `name`, `version`, `edition`, `entry`, `[numeric] int` и массивы
-`[native]`. Config editor внутри TUI редактирует основные project/numeric поля
-и сохраняет native-настройки без изменений.
+Поддерживаются `name`, `version`, `edition`, `entry`, `[numeric] int`, локальные
+пути `[dependencies]` и массивы `[native]`. Config editor внутри TUI редактирует
+основные project/numeric поля и сохраняет dependencies/native-настройки без
+изменений; отдельный визуальный редактор зависимостей пока не реализован.
+
+Dependency path задаётся относительно текущего manifest и должен вести в
+директорию с собственным `Skadi.toml`. После объявления доступен import вида
+`import "physics/src/vector.skd"`; Git/registry dependencies и lock-файл пока
+отсутствуют.
 
 `[native]` подключает ограниченный [C ABI](c-abi.md): `sources` содержит
 относительные `.c`-файлы, `libraries` — имена библиотек, `library_paths` —

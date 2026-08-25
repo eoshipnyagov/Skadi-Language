@@ -1,0 +1,17 @@
+[package]
+name = "math-kit"
+version = "0.1.0"
+edition = "v1"
+
+[build]
+entry = "src/answer.skd"
+
+[numeric]
+int = "target"
+
+[dependencies]
+
+[native]
+sources = []
+libraries = []
+library_paths = []

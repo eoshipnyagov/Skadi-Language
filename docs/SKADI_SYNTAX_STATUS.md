@@ -124,7 +124,8 @@
 - нарушение direct-import-only видимости диагностируется как `SC-MOD-003` - `Stable`
 - квалификация `module.symbol`, где `module` - имя файла без `.skd`, работает для функций, типов структур и вариантов `ErrorCode` - `Stable`
 - `import "./x.skd" as alias` - `Stable`; alias локален текущему файлу
-- `import module_name` - `Planned`
+- `[dependencies] name = "../local-package"` и `import "name/path/file.skd"` - `Experimental`
+- package path confinement и неизвестные dependencies диагностируются как `SC-MOD-004` - `Experimental`
 
 ## Builtins: Text / List / Filesystem / I/O
 
@@ -287,7 +288,7 @@
 
 ## Сознательно отложенное
 
-- module-name imports и aliases поверх стабильного path-import контракта
+- Git/registry dependencies, transitive resolver, lock-файл и re-export
 - расширение Canvas: events, text/images, transforms и дополнительные backends
 - systems additions track
 - более строгая модель ошибок индексации

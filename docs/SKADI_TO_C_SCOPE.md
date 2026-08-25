@@ -196,7 +196,8 @@ roadmap, а не скрытым обещанием desktop C backend.
 - automatic `allow drop` reclamation и user drop hooks;
 - перенос ownership для самого `Memory` и `Task`;
 - generic units algebra, `Timer`, matrices, SIMD lowering, swizzles и расширенная vector algebra;
-- re-exports и module-name imports.
+- Git/registry package resolution, lock-файл и re-exports; local-path
+  `[dependencies]` imports уже обрабатываются CLI pipeline.
 
 ## Инварианты generated C
 

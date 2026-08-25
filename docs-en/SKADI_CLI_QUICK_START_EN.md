@@ -24,5 +24,15 @@ skadi-cli run
 Use `skadi-cli init` for an existing directory and `skadi-cli tui` for the
 interactive workflow. Use `format --check` in CI.
 
+For a sibling local Skadi package, add a relative path to the project manifest:
+
+```toml
+[dependencies]
+physics = "../physics"
+```
+
+The package root must contain its own `Skadi.toml`; import a module with
+`import "physics/src/vector.skd"`.
+
 See the [complete CLI/TUI reference](cli-reference.en.md) for targets, compiler
 selection, diagnostics, TUI keys, and planned commands.
