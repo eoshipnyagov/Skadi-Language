@@ -23,6 +23,8 @@ Date: 2026-08-25
 - explicit `move` ownership transfer and resource-returning factories;
 - typed danger declarations whose terminating `on error` handler leaves the
   binding absent on failure;
+- owning `File`, nominal `FileMode`, fallible `fs.open/read_all/write/close`,
+  early close, move/borrow rules, and automatic scope cleanup;
 - periodic `Interrupt` sources and `on interrupt`;
 - Channel `try_send`, `close`/drain, cancellation-aware blocking operations,
   `send_for`/`receive_for`, and contextual `timed_out`;

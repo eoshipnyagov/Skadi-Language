@@ -100,6 +100,16 @@ const SHOWCASE_CASES: &[ShowcaseCase] = &[
         source: "benchmarks/bench_17_canvas_palette.skd",
         extra_flags: &[],
     },
+    ShowcaseCase {
+        name: "bench_18_bit_registers",
+        source: "benchmarks/bench_18_bit_registers.skd",
+        extra_flags: &[],
+    },
+    ShowcaseCase {
+        name: "bench_19_file_resource",
+        source: "benchmarks/bench_19_file_resource.skd",
+        extra_flags: &[],
+    },
 ];
 
 fn find_c_compiler() -> Option<&'static str> {

@@ -284,7 +284,14 @@ fn collect_statement_facts(
                 loc,
                 ..
             } => {
-                collect_expression_facts(value, loc, false, function, task_entries, facts);
+                collect_expression_facts(
+                    value,
+                    loc,
+                    on_error.is_some(),
+                    function,
+                    task_entries,
+                    facts,
+                );
                 if let Some(on_error) = on_error {
                     collect_statement_facts(&on_error.statements, function, task_entries, facts);
                 }
@@ -663,6 +670,21 @@ fn collect_call_fact(
         );
         return;
     }
+    if matches!(operation, "read_all" | "write") {
+        push_lifecycle_fact(
+            facts,
+            AnalysisFactKind::ResourceBorrowed,
+            "SC-AN-302",
+            loc,
+            function,
+            task_entries,
+            channel,
+            format!("resource '{channel}' is borrowed for File.{operation}"),
+            "the operation mutates file cursor state while ownership stays with this binding",
+            "keep the operation inside the owner's live scope and handle its error path",
+        );
+        return;
+    }
     let (kind, code) = match operation {
         "send" => (AnalysisFactKind::BlockingChannelSend, "SC-AN-101"),
         "receive" => (AnalysisFactKind::BlockingChannelReceive, "SC-AN-102"),
@@ -713,7 +735,7 @@ fn collect_call_fact(
 fn is_lifecycle_resource_type(type_name: &str) -> bool {
     matches!(
         type_name,
-        "Canvas" | "Window" | "Interrupt" | "Task" | "Memory"
+        "Canvas" | "Window" | "File" | "Interrupt" | "Task" | "Memory"
     ) || type_name.starts_with("Channel(")
         || type_name.starts_with("Task(")
 }

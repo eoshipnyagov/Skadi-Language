@@ -32,6 +32,7 @@ fn demonstrate_handle(i32 initial_value) returns i32 {
 }
 
 demonstrate_handle(calibrated)
+demonstrate_handle(-1)
 
 output("Calibrated reading: ", calibrated)
 output("Reading valid: ", valid)

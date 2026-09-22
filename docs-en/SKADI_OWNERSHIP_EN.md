@@ -3,7 +3,7 @@
 Skadi separates ordinary values from owning resources.
 
 - Scalar and small value types are copied by value.
-- `Canvas`, `Window`, `Interrupt`, owning `Channel`, and `external resource`
+- `Canvas`, `Window`, `File`, `Interrupt`, owning `Channel`, and `external resource`
   handles have exactly one owner.
 - `Memory` is a region capability and is not transferred through `move`.
 - `Task` has a dedicated lifecycle and must be consumed through `wait`.
@@ -65,6 +65,12 @@ silently regain ownership.
 
 Resources still owned when a scope ends are released automatically in reverse
 acquisition order. After a move, only the new owner performs cleanup.
+
+Built-in `File` follows this rule and has a known runtime destructor: an open
+owner closes automatically at scope exit. `file.close() on error { ... }`
+releases it earlier. `read_all` and `write` require the owner or an `edit File`
+borrow; `view File` cannot mutate cursor state, and borrowed handles cannot be
+closed.
 
 Opaque `external resource` is the exception: Skadi does not know the foreign
 destructor. Its owner must be passed explicitly to a consuming `move` parameter

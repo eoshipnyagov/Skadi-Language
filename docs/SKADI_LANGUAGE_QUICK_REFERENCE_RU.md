@@ -48,6 +48,7 @@
 | Задача | `Task`, `Task(Int)` | Experimental | Линейный owning handle |
 | Канал | `Channel(Int)` | Experimental | Value-safe message type |
 | Регион | `Memory` | Experimental | Capability, не обычное значение |
+| Файл | `File`, `FileMode.Read/Write/Append/ReadWrite` | Experimental | Линейный owning handle; автоочистка scope |
 
 Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 
@@ -156,9 +157,13 @@ Escapes `Char`: `\n`, `\r`, `\t`, `\0`, `\'`, `\\`.
 | `input` | `input(Text)` | `Text` | Stable |
 | `read` | `read(Text\|Path)` | `Text` | Stable |
 | `write` | `write(Text\|Path, Text)` | `Int` | Stable |
+| `fs.open` | `fs.open(Text\|Path, FileMode)` | `File` | Experimental; только typed declaration + `on error` |
 | `fs.list` | `fs.list(Text\|Path)` | `Text List` | Stable |
 | `fs.join` | `fs.join(Text\|Path, Text)` | `Text` | Stable |
 | `fs.is_dir` | `fs.is_dir(Text\|Path)` | `Bool` | Stable |
+| `file.read_all` | `file.read_all()` | `Text` | Experimental; `on error`, owner/edit |
+| `file.write` | `file.write(Text)` | без результата | Experimental; `on error`, owner/edit |
+| `file.close` | `file.close()` | без результата | Experimental; `on error`, только owner |
 
 List operations:
 

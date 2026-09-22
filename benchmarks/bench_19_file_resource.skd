@@ -1,0 +1,32 @@
+fn inspect_and_record(Path source_path, Path report_path) returns Int {
+    new File source = fs.open(source_path, FileMode.Read) on error {
+        output("could not open source file")
+        return -1
+    }
+    new Text contents = source.read_all() on error {
+        output("could not read source file")
+        return -2
+    }
+    source.close() on error {
+        output("could not close source file")
+        return -3
+    }
+    output("source bytes: ", len(contents))
+    new File report = fs.open(report_path, FileMode.Write) on error {
+        output("could not open report file")
+        return -4
+    }
+    report.write("Skadi File lifecycle: ok\n") on error {
+        output("could not write report file")
+        return -5
+    }
+    report.close() on error {
+        output("could not close report file")
+        return -6
+    }
+    return 0
+}
+
+new Int status = inspect_and_record("benchmarks/showcase-data/sample_weather.txt", "benchmarks/showcase-data/file_resource_output.txt")
+
+output("status: ", status)

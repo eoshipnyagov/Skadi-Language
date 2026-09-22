@@ -8,6 +8,7 @@ pub enum Builtin {
     FsList,
     FsIsDir,
     FsJoin,
+    FsOpen,
     Args,
     Output,
     Input,
@@ -160,6 +161,13 @@ const BUILTIN_SPECS: &[BuiltinSpec] = &[
     BuiltinSpec {
         builtin: Builtin::FsJoin,
         name: "fs.join",
+        arity: 2,
+        category: BuiltinCategory::CoreFilesystem,
+        enabled: true,
+    },
+    BuiltinSpec {
+        builtin: Builtin::FsOpen,
+        name: "fs.open",
         arity: 2,
         category: BuiltinCategory::CoreFilesystem,
         enabled: true,

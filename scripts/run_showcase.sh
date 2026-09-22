@@ -25,6 +25,7 @@ BENCHES=(
   "bench_16_vector_navigation|benchmarks/bench_16_vector_navigation.skd|.|"
   "bench_17_canvas_palette|benchmarks/bench_17_canvas_palette.skd|.|"
   "bench_18_bit_registers|benchmarks/bench_18_bit_registers.skd|.|"
+  "bench_19_file_resource|benchmarks/bench_19_file_resource.skd|.|"
 )
 
 build_bench() {
@@ -70,5 +71,6 @@ for bench in "${BENCHES[@]}"; do
   fi
 done
 
+rm -f "$ROOT/benchmarks/showcase-data/file_resource_output.txt"
 echo
 echo "Showcase run completed successfully."

@@ -34,6 +34,7 @@ This is the compact inventory of the current public language surface.
 | Angle | `Angle`, `90deg`, `0.25rad` | Experimental |
 | Vector | `Vec2`, `Vec3`, `Vec4` | Experimental |
 | Runtime capabilities | `Memory`, `Task(T)`, `Channel(T)` | Experimental |
+| File resource | `File`, `FileMode.Read/Write/Append/ReadWrite` | Experimental; linear owner with scope cleanup |
 
 `bool` and `char` are compatibility aliases. `Char` is ASCII-only.
 
@@ -107,9 +108,13 @@ call and cannot cross a `run` boundary.
 | `input` | `Text` | `Text` |
 | `read` | `Text\|Path` | `Text` |
 | `write` | `Text\|Path, Text` | `Int` |
+| `fs.open` | `Text\|Path, FileMode` | `File`; typed declaration plus `on error` |
 | `fs.list` | `Text\|Path` | `Text List` |
 | `fs.join` | `Text\|Path, Text` | `Text` |
 | `fs.is_dir` | `Text\|Path` | `Bool` |
+| `file.read_all` | none | `Text`; `on error`, owner/edit |
+| `file.write` | `Text` | no value; `on error`, owner/edit |
+| `file.close` | none | no value; `on error`, owner only |
 
 List operations are `items.push(value)` and
 `value = items.pop() on error { ... }`.

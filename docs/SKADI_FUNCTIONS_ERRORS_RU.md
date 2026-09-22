@@ -63,8 +63,10 @@ save_state() on error {
 }
 ```
 
-Нельзя добавлять `on error` к обычному вызову или builtin I/O. Индексация также
-пока остаётся fail-soft, а не danger operation.
+Нельзя добавлять `on error` к обычному вызову или удобным whole-file builtins
+`read`/`write`. Исключение в I/O surface - fallible resource API:
+`fs.open`, `File.read_all`, `File.write` и `File.close` требуют `on error`.
+Индексация пока остаётся fail-soft, а не danger operation.
 
 ## Практический принцип
 

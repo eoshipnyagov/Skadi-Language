@@ -221,3 +221,14 @@ fn showcase_bit_registers_compiles() {
     assert!(c.contains("sk_bit_shift_right_i8(signed_pattern, 1)"));
     assert!(c.contains("SC-RT-340"));
 }
+
+#[test]
+fn showcase_file_resource_compiles() {
+    let src = include_str!("../benchmarks/bench_19_file_resource.skd");
+    let c = compile_pipeline(src);
+    assert!(c.contains("sk_file_open(source_path, FileMode_Read, &source)"));
+    assert!(c.contains("sk_file_read_all(&source, &contents)"));
+    assert!(c.contains("sk_file_close(&source)"));
+    assert!(c.contains("sk_file_write(&report"));
+    assert!(c.contains("sk_file_destroy(&report)"));
+}

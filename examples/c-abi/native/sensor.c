@@ -63,6 +63,10 @@ int sensor_open(int32_t initial_value, void **out) {
     if (out == NULL) {
         return 1;
     }
+    if (initial_value < 0) {
+        *out = NULL;
+        return 3;
+    }
     Sensor *sensor = (Sensor *)malloc(sizeof(Sensor));
     if (sensor == NULL) {
         return 2;

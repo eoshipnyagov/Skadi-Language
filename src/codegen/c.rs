@@ -811,6 +811,45 @@ fn emit_fs_runtime(out: &mut String, need_list: bool, need_is_dir: bool, need_jo
 }
 
 fn emit_io_runtime(out: &mut String, needs_args_runtime: bool) {
+    out.push_str("typedef enum { FileMode_Read, FileMode_Write, FileMode_Append, FileMode_ReadWrite } SkFileMode;\n");
+    out.push_str("typedef struct { FILE *handle; SkFileMode mode; } SkFile;\n\n");
+    out.push_str(
+        "static int sk_file_open(const char *path, SkFileMode mode, SkFile *out_file) {\n",
+    );
+    out.push_str("    if (!path || !out_file) return 1;\n");
+    out.push_str("    out_file->handle = NULL;\n");
+    out.push_str("    out_file->mode = mode;\n");
+    out.push_str("    const char *native_mode = mode == FileMode_Read ? \"rb\" : mode == FileMode_Write ? \"wb\" : mode == FileMode_Append ? \"ab\" : \"r+b\";\n");
+    out.push_str("    out_file->handle = fopen(path, native_mode);\n");
+    out.push_str("    return out_file->handle ? 0 : 1;\n");
+    out.push_str("}\n\n");
+    out.push_str("static int sk_file_read_all(SkFile *file, const char **out_text) {\n");
+    out.push_str("    if (!file || !file->handle || !out_text || (file->mode != FileMode_Read && file->mode != FileMode_ReadWrite)) return 1;\n");
+    out.push_str("    if (fseek(file->handle, 0, SEEK_END) != 0) return 1;\n");
+    out.push_str("    long length = ftell(file->handle);\n");
+    out.push_str("    if (length < 0 || fseek(file->handle, 0, SEEK_SET) != 0) return 1;\n");
+    out.push_str("    char *buffer = sk_text_alloc((size_t)length);\n");
+    out.push_str("    if (!buffer) return 1;\n");
+    out.push_str("    size_t read_count = fread(buffer, 1, (size_t)length, file->handle);\n");
+    out.push_str("    if (read_count != (size_t)length && ferror(file->handle)) { sk_free_text(buffer); return 1; }\n");
+    out.push_str("    buffer[read_count] = '\\0';\n");
+    out.push_str("    *out_text = buffer;\n");
+    out.push_str("    return 0;\n");
+    out.push_str("}\n\n");
+    out.push_str("static int sk_file_write(SkFile *file, const char *text) {\n");
+    out.push_str("    if (!file || !file->handle || (file->mode != FileMode_Write && file->mode != FileMode_Append && file->mode != FileMode_ReadWrite)) return 1;\n");
+    out.push_str("    const char *data = text ? text : \"\";\n");
+    out.push_str("    size_t length = strlen(data);\n");
+    out.push_str("    return fwrite(data, 1, length, file->handle) == length && fflush(file->handle) == 0 ? 0 : 1;\n");
+    out.push_str("}\n\n");
+    out.push_str("static int sk_file_close(SkFile *file) {\n");
+    out.push_str("    if (!file || !file->handle) return 1;\n");
+    out.push_str("    FILE *handle = file->handle;\n");
+    out.push_str("    file->handle = NULL;\n");
+    out.push_str("    return fclose(handle) == 0 ? 0 : 1;\n");
+    out.push_str("}\n\n");
+    out.push_str("static void sk_file_destroy(SkFile *file) { if (file && file->handle) { fclose(file->handle); file->handle = NULL; } }\n");
+    out.push_str("static SkFile sk_file_move(SkFile *source) { SkFile moved = *source; source->handle = NULL; return moved; }\n\n");
     out.push_str(
         "static int sk_output_text(const char *s) { printf(\"%s\\n\", s ? s : \"\"); return 0; }\n",
     );
@@ -2964,7 +3003,7 @@ fn emit_top_level_cleanup(program: &Program, out: &mut String) {
             out.push_str(");\n");
         }
     }
-    for resource_type in ["Window", "Canvas"] {
+    for resource_type in ["Window", "Canvas", "File"] {
         for stmt in program.statements.iter().rev() {
             if let Statement::VarDecl {
                 name,
@@ -2974,10 +3013,11 @@ fn emit_top_level_cleanup(program: &Program, out: &mut String) {
                 && normalize_type_token(declared_type) == resource_type
             {
                 out.push_str("    ");
-                out.push_str(if resource_type == "Window" {
-                    "sk_window_destroy(&"
-                } else {
-                    "sk_canvas_destroy(&"
+                out.push_str(match resource_type {
+                    "Window" => "sk_window_destroy(&",
+                    "Canvas" => "sk_canvas_destroy(&",
+                    "File" => "sk_file_destroy(&",
+                    _ => unreachable!(),
                 });
                 out.push_str(name);
                 out.push_str(");\n");
@@ -3041,6 +3081,7 @@ fn expression_returns_owned_text(expr: &Expression) -> bool {
         expr,
         Expression::Call { name, .. }
             if matches!(name.as_str(), "input" | "read" | "slice" | "concat" | "fs.join")
+                || name.ends_with(".read_all")
     )
 }
 
@@ -3538,9 +3579,13 @@ fn expression_uses_io_call(expr: &Expression) -> bool {
         Expression::Call { name, args } => {
             let is_io = matches!(
                 name.as_str(),
-                "output" | "input" | "read" | "write" | "args"
+                "output" | "input" | "read" | "write" | "args" | "fs.open"
             );
-            is_io || args.iter().any(expression_uses_io_call)
+            is_io
+                || name.ends_with(".read_all")
+                || name.ends_with(".write")
+                || name.ends_with(".close")
+                || args.iter().any(expression_uses_io_call)
         }
         Expression::BinaryOp { left, right, .. } => {
             expression_uses_io_call(left)
@@ -4748,6 +4793,25 @@ fn emit_block(
     for stmt in block.statements.iter().rev() {
         if let Statement::VarDecl {
             name,
+            value,
+            declared_type: Some(declared_type),
+            ..
+        } = stmt
+            && matches!(
+                normalize_type_token(declared_type).as_str(),
+                "Text" | "Path"
+            )
+            && expression_returns_owned_text(value)
+        {
+            out.push_str(&"    ".repeat(indent));
+            out.push_str("sk_free_text((void*)");
+            out.push_str(name);
+            out.push_str(");\n");
+        }
+    }
+    for stmt in block.statements.iter().rev() {
+        if let Statement::VarDecl {
+            name,
             declared_type: Some(declared_type),
             ..
         } = stmt
@@ -4759,7 +4823,7 @@ fn emit_block(
             out.push_str(");\n");
         }
     }
-    for resource_type in ["Window", "Canvas"] {
+    for resource_type in ["Window", "Canvas", "File"] {
         for stmt in block.statements.iter().rev() {
             if let Statement::VarDecl {
                 name,
@@ -4769,10 +4833,11 @@ fn emit_block(
                 && normalize_type_token(declared_type) == resource_type
             {
                 out.push_str(&"    ".repeat(indent));
-                out.push_str(if resource_type == "Window" {
-                    "sk_window_destroy(&"
-                } else {
-                    "sk_canvas_destroy(&"
+                out.push_str(match resource_type {
+                    "Window" => "sk_window_destroy(&",
+                    "Canvas" => "sk_canvas_destroy(&",
+                    "File" => "sk_file_destroy(&",
+                    _ => unreachable!(),
                 });
                 out.push_str(name);
                 out.push_str(");\n");
@@ -4828,6 +4893,11 @@ fn emit_move_parameter_cleanup(
                 out.push_str(&param.name);
                 out.push_str(");\n");
             }
+            "File" => {
+                out.push_str("sk_file_destroy(&");
+                out.push_str(&param.name);
+                out.push_str(");\n");
+            }
             "Interrupt" => {
                 out.push_str("sk_interrupt_destroy(");
                 out.push_str(&param.name);
@@ -4844,6 +4914,20 @@ fn emit_move_parameter_cleanup(
 }
 
 fn emit_owned_channel_cleanup(out: &mut String, pad: &str, declared: &HashMap<String, String>) {
+    let mut text_names = declared
+        .iter()
+        .filter_map(|(name, declared_type)| {
+            (declared_type == "Text@owned" || declared_type == "Path@owned")
+                .then_some(name.as_str())
+        })
+        .collect::<Vec<_>>();
+    text_names.sort_unstable();
+    for text_name in text_names.into_iter().rev() {
+        out.push_str(pad);
+        out.push_str("sk_free_text((void*)");
+        out.push_str(text_name);
+        out.push_str(");\n");
+    }
     let mut memory_names = declared
         .iter()
         .filter_map(|(name, declared_type)| {
@@ -4857,7 +4941,7 @@ fn emit_owned_channel_cleanup(out: &mut String, pad: &str, declared: &HashMap<St
         out.push_str(memory_name);
         out.push_str(");\n");
     }
-    for resource_type in ["Window", "Canvas"] {
+    for resource_type in ["Window", "Canvas", "File"] {
         let mut resources = declared
             .iter()
             .filter_map(|(name, declared_type)| {
@@ -4869,10 +4953,11 @@ fn emit_owned_channel_cleanup(out: &mut String, pad: &str, declared: &HashMap<St
         resources.sort_unstable();
         for resource in resources.into_iter().rev() {
             out.push_str(pad);
-            out.push_str(if resource_type == "Window" {
-                "sk_window_destroy(&"
-            } else {
-                "sk_canvas_destroy(&"
+            out.push_str(match resource_type {
+                "Window" => "sk_window_destroy(&",
+                "Canvas" => "sk_canvas_destroy(&",
+                "File" => "sk_file_destroy(&",
+                _ => unreachable!(),
             });
             out.push_str(resource);
             out.push_str(");\n");
@@ -5608,6 +5693,31 @@ fn emit_statement_body(
             on_error,
             ..
         } => {
+            if let Some((file_name, "read_all")) = call_name.split_once('.')
+                && declared
+                    .get(file_name)
+                    .is_some_and(|ty| normalize_type_token(ty) == "File")
+            {
+                out.push_str(&pad);
+                out.push_str("if (sk_file_read_all(");
+                out.push_str(&emit_file_receiver(file_name, declared));
+                out.push_str(", &");
+                out.push_str(target);
+                out.push_str(") != 0) {\n");
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str("}\n");
+                return;
+            }
             if call_name == "as_f32"
                 && let [value] = args.as_slice()
             {
@@ -5863,6 +5973,39 @@ fn emit_statement_body(
             on_error,
             ..
         } => {
+            if let Some((file_name, method @ ("write" | "close"))) = call_name.split_once('.')
+                && declared
+                    .get(file_name)
+                    .is_some_and(|ty| normalize_type_token(ty) == "File")
+            {
+                out.push_str(&pad);
+                out.push_str("if (");
+                out.push_str(if method == "write" {
+                    "sk_file_write"
+                } else {
+                    "sk_file_close"
+                });
+                out.push('(');
+                out.push_str(&emit_file_receiver(file_name, declared));
+                for arg in args {
+                    out.push_str(", ");
+                    out.push_str(&emit_expr(arg, declared));
+                }
+                out.push_str(") != 0) {\n");
+                let mut inner = declared.clone();
+                emit_block(
+                    on_error,
+                    out,
+                    indent + 1,
+                    &mut inner,
+                    fn_ctx,
+                    place_ctx,
+                    state,
+                );
+                out.push_str(&pad);
+                out.push_str("}\n");
+                return;
+            }
             if call_name == "__task_wait_for"
                 && let [Expression::VariableReference(task_name), timeout] = args.as_slice()
                 && declared
@@ -6505,15 +6648,33 @@ fn emit_statement_body(
                 out.push_str("/* Skadi fallible declaration */\n");
                 out.push_str(&pad);
                 out.push_str("if (");
-                out.push_str(map_function_name(call_name));
-                out.push('(');
-                let rendered_args = emit_call_arguments(call_name, args, declared);
-                out.push_str(&rendered_args.join(", "));
-                if !rendered_args.is_empty() {
+                if call_name == "fs.open" {
+                    out.push_str("sk_file_open(");
+                    out.push_str(&emit_expr(&args[0], declared));
                     out.push_str(", ");
+                    out.push_str(&emit_expr(&args[1], declared));
+                    out.push_str(", &");
+                    out.push_str(name);
+                } else if let Some((file_name, "read_all")) = call_name.split_once('.')
+                    && declared
+                        .get(file_name)
+                        .is_some_and(|ty| normalize_type_token(ty) == "File")
+                {
+                    out.push_str("sk_file_read_all(");
+                    out.push_str(&emit_file_receiver(file_name, declared));
+                    out.push_str(", &");
+                    out.push_str(name);
+                } else {
+                    out.push_str(map_function_name(call_name));
+                    out.push('(');
+                    let rendered_args = emit_call_arguments(call_name, args, declared);
+                    out.push_str(&rendered_args.join(", "));
+                    if !rendered_args.is_empty() {
+                        out.push_str(", ");
+                    }
+                    out.push('&');
+                    out.push_str(name);
                 }
-                out.push('&');
-                out.push_str(name);
                 out.push_str(") != 0) {\n");
                 let mut handler_declared = declared.clone();
                 emit_block(
@@ -6531,11 +6692,15 @@ fn emit_statement_body(
                 let mut tracked_type = declared_type.to_string();
                 if matches!(
                     normalize_type_token(&tracked_type).as_str(),
-                    "Canvas" | "Window" | "Interrupt"
+                    "Canvas" | "Window" | "File" | "Interrupt"
                 ) || channel_elem_from_decl(&tracked_type).is_some()
                     || state
                         .external_resources
                         .contains(tracked_type.rsplit('.').next().unwrap_or(&tracked_type))
+                    || (matches!(
+                        normalize_type_token(&tracked_type).as_str(),
+                        "Text" | "Path"
+                    ) && expression_returns_owned_text(value))
                 {
                     tracked_type.push_str("@owned");
                 }
@@ -6730,11 +6895,15 @@ fn emit_statement_body(
             let mut tracked_type = effective_type.unwrap_or_else(|| "Int".to_string());
             if matches!(
                 normalize_type_token(&tracked_type).as_str(),
-                "Canvas" | "Window" | "Interrupt"
+                "Canvas" | "Window" | "File" | "Interrupt"
             ) || channel_elem_from_decl(&tracked_type).is_some()
                 || state
                     .external_resources
                     .contains(tracked_type.rsplit('.').next().unwrap_or(&tracked_type))
+                || (matches!(
+                    normalize_type_token(&tracked_type).as_str(),
+                    "Text" | "Path"
+                ) && expression_returns_owned_text(value))
             {
                 tracked_type.push_str("@owned");
             }
@@ -6747,6 +6916,14 @@ fn emit_statement_body(
                 emit_statement(s, out, indent, &mut inner, fn_ctx, place_ctx, state);
             }
         }
+    }
+}
+
+fn emit_file_receiver(name: &str, declared: &HashMap<String, String>) -> String {
+    if declared.get(name).is_some_and(|ty| ty.ends_with("@borrow")) {
+        name.to_string()
+    } else {
+        format!("&{name}")
     }
 }
 
@@ -6778,6 +6955,8 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "Rect" => "SkRect".to_string(),
         "Canvas" => "SkCanvas".to_string(),
         "Window" => "SkWindow".to_string(),
+        "File" => "SkFile".to_string(),
+        "FileMode" => "SkFileMode".to_string(),
         "bool" | "Bool" => "bool".to_string(),
         "char" | "Char" => "char".to_string(),
         "Memory" => "SkMemoryRegion*".to_string(),
@@ -6859,17 +7038,18 @@ fn is_text_expr(expr: &Expression, declared: &HashMap<String, String>) -> bool {
         Expression::LiteralString(_) => true,
         Expression::VariableReference(name) => declared
             .get(name)
-            .map(|t| t.as_str() == "Text" || t.as_str() == "Path")
+            .map(|t| matches!(normalize_type_token(t).as_str(), "Text" | "Path"))
             .unwrap_or(false),
         Expression::MemberAccess { .. } => false,
         Expression::Call { name, .. } => {
             matches!(
                 name.as_str(),
                 "input" | "read" | "slice" | "concat" | "fs.join"
-            ) || call_return_type(name, declared)
-                .map(normalize_type_token)
-                .map(|ty| matches!(ty.as_str(), "Text" | "Path"))
-                .unwrap_or(false)
+            ) || name.ends_with(".read_all")
+                || call_return_type(name, declared)
+                    .map(normalize_type_token)
+                    .map(|ty| matches!(ty.as_str(), "Text" | "Path"))
+                    .unwrap_or(false)
         }
         _ => false,
     }
@@ -6897,16 +7077,20 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
         Expression::LiteralDuration { .. } => ExprKind::Int,
         Expression::LiteralByteSize { .. } => ExprKind::Int,
         Expression::LiteralAngle { .. } => ExprKind::Float,
-        Expression::VariableReference(name) => match declared.get(name).map(String::as_str) {
-            Some("f64") => ExprKind::F64,
-            Some("Float" | "f32" | "Angle") => ExprKind::Float,
-            Some("bool" | "Bool") => ExprKind::Bool,
-            Some("char" | "Char") => ExprKind::Char,
-            Some("Text" | "Path") => ExprKind::Text,
-            Some(_) => ExprKind::Int,
-            None if matches!(name.as_str(), "PI" | "TAU" | "E" | "EPSILON") => ExprKind::Float,
-            None => ExprKind::Unknown,
-        },
+        Expression::VariableReference(name) => {
+            match declared.get(name).map(|ty| normalize_type_token(ty)) {
+                Some(ty) => match ty.as_str() {
+                    "f64" => ExprKind::F64,
+                    "Float" | "f32" | "Angle" => ExprKind::Float,
+                    "bool" | "Bool" => ExprKind::Bool,
+                    "char" | "Char" => ExprKind::Char,
+                    "Text" | "Path" => ExprKind::Text,
+                    _ => ExprKind::Int,
+                },
+                None if matches!(name.as_str(), "PI" | "TAU" | "E" | "EPSILON") => ExprKind::Float,
+                None => ExprKind::Unknown,
+            }
+        }
         Expression::Call { name, .. } => {
             match name.as_str() {
                 "contains" | "fs.is_dir" | "is_nan" | "is_finite" | "is_infinite"
@@ -6919,6 +7103,7 @@ fn expr_kind(expr: &Expression, declared: &HashMap<String, String>) -> ExprKind 
                 "as_f32" => ExprKind::Float,
                 "as_f64" => ExprKind::F64,
                 "input" | "read" | "slice" | "concat" | "fs.join" => ExprKind::Text,
+                _ if name.ends_with(".read_all") => ExprKind::Text,
                 "abs" | "min" | "max" | "clamp" | "sign" if matches!(expr, Expression::Call { args, .. } if args.iter().all(|arg| expr_kind(arg, declared) == ExprKind::Int)) => {
                     ExprKind::Int
                 }
@@ -7342,6 +7527,7 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             match resource_type.as_str() {
                 "Canvas" => format!("sk_canvas_move(&{name})"),
                 "Window" => format!("sk_window_move(&{name})"),
+                "File" => format!("sk_file_move(&{name})"),
                 "Interrupt" => format!("sk_interrupt_move(&{name})"),
                 _ if channel_elem_from_decl(&resource_type).is_some() => {
                     format!("sk_channel_move(&{name})")

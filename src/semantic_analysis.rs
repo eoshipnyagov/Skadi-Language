@@ -36,6 +36,8 @@ enum ValueType {
     Rect,
     Canvas,
     Window,
+    File,
+    FileMode,
     Memory,
     Interrupt,
     Task(Option<Box<ValueType>>),
@@ -144,6 +146,7 @@ fn is_movable_resource(ty: &ValueType) -> bool {
         ty,
         ValueType::Canvas
             | ValueType::Window
+            | ValueType::File
             | ValueType::Interrupt
             | ValueType::Channel(_)
             | ValueType::ExternalResource(_)
@@ -155,6 +158,7 @@ fn requires_explicit_resource_mode(ty: &ValueType) -> bool {
         ty,
         ValueType::Canvas
             | ValueType::Window
+            | ValueType::File
             | ValueType::Interrupt
             | ValueType::ExternalResource(_)
     )
@@ -296,6 +300,124 @@ fn require_open_resource(state: &MemoryState, name: &str, operation: &str) -> Re
             ),
         )),
         _ => Ok(()),
+    }
+}
+
+fn is_file_mode_variant(name: &str) -> bool {
+    matches!(name, "Read" | "Write" | "Append" | "ReadWrite")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_file_open_call(
+    args: &[Expression],
+    scope: &HashMap<String, ValueType>,
+    memory_state: &MemoryState,
+    functions: &HashMap<String, FunctionSig>,
+    structs: &HashMap<String, StructInfo>,
+    fn_ctx: Option<&FnContext>,
+) -> Result<(), String> {
+    if args.len() != 2 {
+        return Err(sem_err(
+            SEM_ARG_COUNT,
+            format!("fs.open expects 2 arguments, got {}.", args.len()),
+        ));
+    }
+    let path_ty = infer_expression_type(&args[0], scope, memory_state, functions, structs, fn_ctx)?;
+    if !matches!(path_ty, ValueType::Text) {
+        return Err(sem_err(
+            SEM_ARG_TYPE,
+            format!("fs.open path expects Text or Path, got {:?}.", path_ty),
+        ));
+    }
+    let mode_ty = infer_expression_type(&args[1], scope, memory_state, functions, structs, fn_ctx)?;
+    if mode_ty != ValueType::FileMode {
+        return Err(sem_err(
+            SEM_ARG_TYPE,
+            format!("fs.open mode expects FileMode, got {:?}.", mode_ty),
+        ));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_file_method_call(
+    file_name: &str,
+    method: &str,
+    args: &[Expression],
+    scope: &HashMap<String, ValueType>,
+    memory_state: &MemoryState,
+    functions: &HashMap<String, FunctionSig>,
+    structs: &HashMap<String, StructInfo>,
+    fn_ctx: Option<&FnContext>,
+) -> Result<ValueType, String> {
+    if scope.get(file_name) != Some(&ValueType::File) {
+        return Err(sem_err(
+            SEM_TYPE_MISMATCH,
+            format!(
+                "file operation '{}.{}' requires File receiver.",
+                file_name, method
+            ),
+        ));
+    }
+    require_open_resource(memory_state, file_name, method)?;
+    if memory_state.views.contains(file_name) {
+        return Err(sem_err(
+            SEM_INVALID_CONTEXT,
+            format!(
+                "view parameter '{}' cannot call cursor-mutating File method '{}'.",
+                file_name, method
+            ),
+        ));
+    }
+    match method {
+        "read_all" => {
+            if !args.is_empty() {
+                return Err(sem_err(
+                    SEM_ARG_COUNT,
+                    format!("File.read_all expects 0 arguments, got {}.", args.len()),
+                ));
+            }
+            Ok(ValueType::Text)
+        }
+        "write" => {
+            if args.len() != 1 {
+                return Err(sem_err(
+                    SEM_ARG_COUNT,
+                    format!("File.write expects 1 argument, got {}.", args.len()),
+                ));
+            }
+            let data_ty =
+                infer_expression_type(&args[0], scope, memory_state, functions, structs, fn_ctx)?;
+            if data_ty != ValueType::Text {
+                return Err(sem_err(
+                    SEM_ARG_TYPE,
+                    format!("File.write expects Text, got {:?}.", data_ty),
+                ));
+            }
+            Ok(ValueType::Unknown)
+        }
+        "close" => {
+            if !args.is_empty() {
+                return Err(sem_err(
+                    SEM_ARG_COUNT,
+                    format!("File.close expects 0 arguments, got {}.", args.len()),
+                ));
+            }
+            if !memory_state.resource_lifecycles.contains_key(file_name) {
+                return Err(sem_err(
+                    SEM_INVALID_CONTEXT,
+                    format!(
+                        "only owning File binding may close '{}'; borrowed File parameters cannot close their owner.",
+                        file_name
+                    ),
+                ));
+            }
+            Ok(ValueType::Unknown)
+        }
+        _ => Err(sem_err(
+            SEM_UNKNOWN_FUNCTION,
+            format!("unknown File method '{}.{}'.", file_name, method),
+        )),
     }
 }
 
@@ -1109,6 +1231,8 @@ pub fn semantic_style_warnings(program: &Program) -> Vec<String> {
                 | "Rect"
                 | "Canvas"
                 | "Window"
+                | "File"
+                | "FileMode"
                 | "Interrupt"
                 | "Bool"
                 | "Char"
@@ -1653,6 +1777,8 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "Rect" => ValueType::Rect,
         "Canvas" => ValueType::Canvas,
         "Window" => ValueType::Window,
+        "File" => ValueType::File,
+        "FileMode" => ValueType::FileMode,
         _ => ValueType::Unknown,
     }
 }
@@ -2629,6 +2755,7 @@ fn is_value_safe_channel_message(ty: &ValueType, structs: &HashMap<String, Struc
         | ValueType::Buffer(_)
         | ValueType::Canvas
         | ValueType::Window
+        | ValueType::File
         | ValueType::Interrupt
         | ValueType::ExternalResource(_) => false,
         _ => true,
@@ -2664,6 +2791,7 @@ fn is_task_safe_boundary_type(
         | ValueType::Vec4
         | ValueType::Color
         | ValueType::Rect
+        | ValueType::FileMode
         | ValueType::Label(_)
         | ValueType::Tag(_) => true,
         ValueType::Struct(name) => structs
@@ -2683,6 +2811,7 @@ fn is_task_safe_boundary_type(
         | ValueType::Interrupt
         | ValueType::Canvas
         | ValueType::Window
+        | ValueType::File
         | ValueType::ExternalResource(_)
         | ValueType::Task(_)
         | ValueType::Unknown => false,
@@ -2695,23 +2824,25 @@ fn ensure_memory_type_allowed(
     context: &str,
     allow_direct_memory: bool,
 ) -> Result<(), String> {
-    fn contains_external_resource(ty: &ValueType) -> bool {
+    fn contains_explicit_resource(ty: &ValueType) -> bool {
         match ty {
-            ValueType::ExternalResource(_) => true,
+            ValueType::File | ValueType::ExternalResource(_) => true,
             ValueType::List(inner)
             | ValueType::Buffer(inner)
             | ValueType::Channel(inner)
-            | ValueType::Task(Some(inner)) => contains_external_resource(inner),
+            | ValueType::Task(Some(inner)) => contains_explicit_resource(inner),
             _ => false,
         }
     }
 
-    if !matches!(ty, ValueType::ExternalResource(_)) && contains_external_resource(ty) {
+    if !matches!(ty, ValueType::File | ValueType::ExternalResource(_))
+        && contains_explicit_resource(ty)
+    {
         return Err(err_at_code(
             stmt,
             SEM_INVALID_CONTEXT,
             format!(
-                "{} cannot contain an owning external resource; keep each handle in its own binding and transfer it explicitly with 'move'.",
+                "{} cannot contain an owning resource; keep each handle in its own binding and transfer it explicitly with 'move'.",
                 context
             ),
         ));
@@ -3073,83 +3204,151 @@ fn analyze_statement(
                             .to_string(),
                     ));
                 };
-                if builtin_from_name(call_name).is_some() {
-                    return Err(err_at_code(
-                        stmt,
-                        SEM_INVALID_CONTEXT,
-                        format!(
-                            "fallible declaration requires danger fn call: builtin '{}' is not danger.",
-                            call_name
-                        ),
-                    ));
-                }
-                let Some(resolved_name) = resolve_function_name(call_name, scope, functions) else {
-                    return Err(err_at_code(
-                        stmt,
-                        SEM_UNKNOWN_FUNCTION,
-                        format!("unknown function '{}' in fallible declaration.", call_name),
-                    ));
+                let builtin_result = if call_name == "fs.open" {
+                    validate_file_open_call(
+                        args,
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
+                    Some(ValueType::File)
+                } else if let Some((file_name, method)) = call_name.split_once('.')
+                    && scope.get(file_name) == Some(&ValueType::File)
+                {
+                    let result = validate_file_method_call(
+                        file_name,
+                        method,
+                        args,
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
+                    if result == ValueType::Unknown {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TYPE_MISMATCH,
+                            format!(
+                                "File method '{}.{}' does not return a value for declaration '{}'.",
+                                file_name, method, name
+                            ),
+                        ));
+                    }
+                    Some(result)
+                } else {
+                    None
                 };
-                let sig = functions
-                    .get(resolved_name)
-                    .expect("resolved function must exist");
-                if !sig.is_danger {
-                    return Err(err_at_code(
-                        stmt,
-                        SEM_INVALID_CONTEXT,
-                        format!(
-                            "fallible declaration requires danger fn call: '{}' is not declared as danger.",
-                            call_name
-                        ),
-                    ));
+                if let Some(return_type) = builtin_result {
+                    for arg in args {
+                        record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+                    }
+                    let mut handler_scope = scope.clone();
+                    let mut handler_memory_state = memory_state.clone();
+                    analyze_block(
+                        on_error,
+                        &mut handler_scope,
+                        &mut handler_memory_state,
+                        functions,
+                        labels,
+                        structs,
+                        task_context_functions,
+                        fn_ctx.clone(),
+                        in_loop,
+                    )?;
+                    if !block_guarantees_termination(on_error) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "fallible declaration '{}' requires its 'on error' handler to terminate with return or return error; the binding does not exist on failure.",
+                                name
+                            ),
+                        ));
+                    }
+                    return_type
+                } else {
+                    if builtin_from_name(call_name).is_some() {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "fallible declaration requires danger fn call: builtin '{}' is not danger.",
+                                call_name
+                            ),
+                        ));
+                    }
+                    let Some(resolved_name) = resolve_function_name(call_name, scope, functions)
+                    else {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_UNKNOWN_FUNCTION,
+                            format!("unknown function '{}' in fallible declaration.", call_name),
+                        ));
+                    };
+                    let sig = functions
+                        .get(resolved_name)
+                        .expect("resolved function must exist");
+                    if !sig.is_danger {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "fallible declaration requires danger fn call: '{}' is not declared as danger.",
+                                call_name
+                            ),
+                        ));
+                    }
+                    let Some(return_type) = sig.return_type.clone() else {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_TYPE_MISMATCH,
+                            format!(
+                                "danger fn '{}' does not return a value for declaration '{}'.",
+                                call_name, name
+                            ),
+                        ));
+                    };
+                    validate_call_args(
+                        resolved_name,
+                        args,
+                        sig,
+                        scope,
+                        memory_state,
+                        functions,
+                        structs,
+                        fn_ctx.as_ref(),
+                    )?;
+                    for arg in args {
+                        record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
+                    }
+                    let mut handler_scope = scope.clone();
+                    let mut handler_memory_state = memory_state.clone();
+                    analyze_block(
+                        on_error,
+                        &mut handler_scope,
+                        &mut handler_memory_state,
+                        functions,
+                        labels,
+                        structs,
+                        task_context_functions,
+                        fn_ctx.clone(),
+                        in_loop,
+                    )?;
+                    if !block_guarantees_termination(on_error) {
+                        return Err(err_at_code(
+                            stmt,
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "fallible declaration '{}' requires its 'on error' handler to terminate with return or return error; the binding does not exist on failure.",
+                                name
+                            ),
+                        ));
+                    }
+                    return_type
                 }
-                let Some(return_type) = sig.return_type.clone() else {
-                    return Err(err_at_code(
-                        stmt,
-                        SEM_TYPE_MISMATCH,
-                        format!(
-                            "danger fn '{}' does not return a value for declaration '{}'.",
-                            call_name, name
-                        ),
-                    ));
-                };
-                validate_call_args(
-                    resolved_name,
-                    args,
-                    sig,
-                    scope,
-                    memory_state,
-                    functions,
-                    structs,
-                    fn_ctx.as_ref(),
-                )?;
-                for arg in args {
-                    record_task_effects_in_expr(stmt, arg, scope, memory_state)?;
-                }
-                let mut handler_scope = scope.clone();
-                let mut handler_memory_state = memory_state.clone();
-                analyze_block(
-                    on_error,
-                    &mut handler_scope,
-                    &mut handler_memory_state,
-                    functions,
-                    labels,
-                    structs,
-                    task_context_functions,
-                    fn_ctx.clone(),
-                    in_loop,
-                )?;
-                if !block_guarantees_termination(on_error) {
-                    return Err(err_at_code(
-                        stmt,
-                        SEM_INVALID_CONTEXT,
-                        format!(
-                            "fallible declaration '{}' requires its 'on error' handler to terminate with return or return error; the binding does not exist on failure.",
-                            name
-                        ),
-                    ));
-                }
-                return_type
             } else {
                 infer_expression_type(
                     value,
@@ -3249,6 +3448,7 @@ fn analyze_statement(
                         | ValueType::Rect
                         | ValueType::Canvas
                         | ValueType::Window
+                        | ValueType::File
                         | ValueType::Memory
                         | ValueType::Task(_)
                         | ValueType::Channel(_)
@@ -3303,6 +3503,7 @@ fn analyze_statement(
                         | ValueType::Interrupt
                         | ValueType::Canvas
                         | ValueType::Window
+                        | ValueType::File
                         | ValueType::Task(_)
                         | ValueType::Channel(_)
                         | ValueType::ExternalResource(_)
@@ -3379,7 +3580,10 @@ fn analyze_statement(
                     },
                 );
             }
-            if matches!(final_ty, ValueType::Window | ValueType::Channel(_)) {
+            if matches!(
+                final_ty,
+                ValueType::Window | ValueType::File | ValueType::Channel(_)
+            ) {
                 let lifecycle = match value.as_ref() {
                     Expression::Move(source) => memory_state
                         .resource_lifecycles
@@ -3441,7 +3645,7 @@ fn analyze_statement(
             }
             if matches!(
                 target_ty,
-                ValueType::Canvas | ValueType::Window | ValueType::Interrupt
+                ValueType::Canvas | ValueType::Window | ValueType::File | ValueType::Interrupt
             ) {
                 return Err(err_at_code(
                     stmt,
@@ -3721,7 +3925,10 @@ fn analyze_statement(
                             moved_to: None,
                         },
                     );
-                    if matches!(pty, ValueType::Window | ValueType::Channel(_)) {
+                    if matches!(
+                        pty,
+                        ValueType::Window | ValueType::File | ValueType::Channel(_)
+                    ) {
                         fn_memory_state
                             .resource_lifecycles
                             .insert(p.name.clone(), ResourceLifecycle::Open);
@@ -4436,6 +4643,57 @@ fn analyze_statement(
             on_error,
             ..
         } => {
+            if let Some((file_name, "read_all")) = call_name.split_once('.')
+                && scope.get(file_name) == Some(&ValueType::File)
+            {
+                let result_type = validate_file_method_call(
+                    file_name,
+                    "read_all",
+                    args,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
+                let Some(target_type) = scope.get(target) else {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_USE_BEFORE_DEF,
+                        format!("use-before-definition: '{}' is not defined.", target),
+                    ));
+                };
+                if let Some(kind) = read_only_binding_kind(memory_state, target) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_INVALID_CONTEXT,
+                        format!("{} '{}' cannot be reassigned.", kind, target),
+                    ));
+                }
+                if !can_assign(target_type, &result_type) {
+                    return Err(err_at_code(
+                        stmt,
+                        SEM_TYPE_MISMATCH,
+                        format!(
+                            "File.read_all target mismatch: '{}' expects {:?}, method returns {:?}.",
+                            target, target_type, result_type
+                        ),
+                    ));
+                }
+                let mut on_error_scope = scope.clone();
+                let mut on_error_memory_state = memory_state.clone();
+                return analyze_block(
+                    on_error,
+                    &mut on_error_scope,
+                    &mut on_error_memory_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx,
+                    in_loop,
+                );
+            }
             if call_name == "__task_wait_for" {
                 let (task_name, result_type) = validate_timed_task_wait(
                     stmt,
@@ -4731,6 +4989,38 @@ fn analyze_statement(
             on_error,
             ..
         } => {
+            if let Some((file_name, method @ ("write" | "close"))) = call_name.split_once('.')
+                && scope.get(file_name) == Some(&ValueType::File)
+            {
+                validate_file_method_call(
+                    file_name,
+                    method,
+                    args,
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx.as_ref(),
+                )?;
+                if method == "close" {
+                    memory_state
+                        .resource_lifecycles
+                        .insert(file_name.to_string(), ResourceLifecycle::Closed);
+                }
+                let mut on_error_scope = scope.clone();
+                let mut on_error_memory_state = memory_state.clone();
+                return analyze_block(
+                    on_error,
+                    &mut on_error_scope,
+                    &mut on_error_memory_state,
+                    functions,
+                    labels,
+                    structs,
+                    task_context_functions,
+                    fn_ctx,
+                    in_loop,
+                );
+            }
             if call_name == "__task_wait_for" {
                 let (task_name, _) = validate_timed_task_wait(
                     stmt,
@@ -5278,7 +5568,10 @@ fn analyze_statement(
                 structs,
                 fn_ctx.as_ref(),
             )?;
-            if matches!(expression_type, ValueType::ExternalResource(_)) {
+            if matches!(
+                expression_type,
+                ValueType::File | ValueType::ExternalResource(_)
+            ) {
                 return Err(err_at_code(
                     stmt,
                     SEM_INVALID_CONTEXT,
@@ -5324,7 +5617,10 @@ fn analyze_statement(
                                 moved_to: None,
                             },
                         );
-                        if matches!(pty, ValueType::Window | ValueType::Channel(_)) {
+                        if matches!(
+                            pty,
+                            ValueType::Window | ValueType::File | ValueType::Channel(_)
+                        ) {
                             method_memory_state
                                 .resource_lifecycles
                                 .insert(p.name.clone(), ResourceLifecycle::Open);
@@ -6317,6 +6613,9 @@ fn infer_expression_type(
                 if base == "Color" && is_color_constant(field) {
                     return Ok(ValueType::Color);
                 }
+                if base == "FileMode" && is_file_mode_variant(field) {
+                    return Ok(ValueType::FileMode);
+                }
                 if memory_state
                     .labels
                     .get(base)
@@ -6457,6 +6756,14 @@ fn infer_expression_type(
             {
                 require_owned_resource(memory_state, receiver)?;
             }
+            if name == "fs.open" {
+                validate_file_open_call(args, scope, memory_state, functions, structs, fn_ctx)?;
+                return Err(sem_err(
+                    SEM_INVALID_CONTEXT,
+                    "fs.open is fallible and requires a typed declaration with 'on error'."
+                        .to_string(),
+                ));
+            }
             if matches!(name.as_str(), "color" | "color_hex" | "rect" | "canvas")
                 || name == "windows.open"
             {
@@ -6578,6 +6885,26 @@ fn infer_expression_type(
             }
             if let Some((base, method)) = name.split_once('.') {
                 if let Some(receiver_ty) = scope.get(base) {
+                    if *receiver_ty == ValueType::File {
+                        require_open_resource(memory_state, base, method)?;
+                        let _ = validate_file_method_call(
+                            base,
+                            method,
+                            args,
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        return Err(sem_err(
+                            SEM_INVALID_CONTEXT,
+                            format!(
+                                "File method '{}.{}' is fallible and requires 'on error'.",
+                                base, method
+                            ),
+                        ));
+                    }
                     if memory_state.views.contains(base)
                         && (matches!(receiver_ty, ValueType::Canvas) && method != "checksum"
                             || matches!(receiver_ty, ValueType::Window))
@@ -7791,6 +8118,21 @@ fn infer_expression_type(
                             ));
                         }
                         Ok(ValueType::Vec3)
+                    }
+                    Builtin::FsOpen => {
+                        validate_file_open_call(
+                            args,
+                            scope,
+                            memory_state,
+                            functions,
+                            structs,
+                            fn_ctx,
+                        )?;
+                        Err(sem_err(
+                            SEM_INVALID_CONTEXT,
+                            "fs.open requires a typed File declaration with an 'on error' handler."
+                                .to_string(),
+                        ))
                     }
                     Builtin::Color | Builtin::ColorHex => Ok(ValueType::Color),
                     Builtin::Rect => Ok(ValueType::Rect),

@@ -81,6 +81,7 @@ Legend:
 | `Color` / `Rect` | P (type identifiers) | Y | Y | Y | Y | Canvas v0 value-safe visual types |
 | `Canvas` / drawing methods | P (type identifiers) | Y | Y | Y | Y | linear software framebuffer, primitives and checksum |
 | `Window` / `windows.open` / `present` | P (identifiers) | Y | Y | Y | P | Win32 presenter; compile/link shape tested without opening CI window |
+| `File` / `FileMode` / `fs.open` | P (type/builtin identifiers) | Y | Y | Y | Y | owning synchronous resource; typed fallible open/read/write/close and scope cleanup |
 | ASCII Char literal `'a'` / escapes | Y | Y | Y | Y | Y | invalid/Unicode forms use `SC-PARSE-221` |
 
 ## 2. Operator / Form Matrix
@@ -114,6 +115,7 @@ Legend:
 - Angle frontend/runtime: `tests/angle_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_15_angle_navigation.skd`
 - Vector frontend/runtime: `tests/vector_model.rs`, `tests/codegen_e2e.rs`, `benchmarks/bench_16_vector_navigation.skd`
 - Canvas frontend/runtime/showcase: `tests/canvas_model.rs`, `tests/showcase_programs.rs`, `tests/showcase_builds.rs`, `benchmarks/bench_17_canvas_palette.skd`
+- File lifecycle/runtime/showcase: `tests/file_resource_model.rs`, `tests/analysis_facts.rs`, `benchmarks/bench_19_file_resource.skd`
 - Transition surfaces and Char literals: `tests/transition_surfaces.rs`, `tests/codegen_e2e.rs`
 - Multi-file/import graph and mutation-like negative e2e: `tools/skadi-cli/src/pipeline.rs` tests
 - C ABI parser/semantic/codegen/formatter: `tests/c_abi_model.rs`; manifest/native compile-run: `tools/skadi-cli/tests/smoke.rs`

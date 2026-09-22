@@ -66,8 +66,8 @@
   - selection helpers закрепляют single-evaluation lowering для `min/max/clamp`
   - showcase coverage через `bench_09_math_navigation.skd` и `bench_10_v1_1_toolbox.skd`
 - showcase coverage
-  - compile-pipeline shape tests покрывают `bench_01..18`
-  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..18`
+  - compile-pipeline shape tests покрывают `bench_01..19`
+  - native build suite подтверждает `Skadi -> C -> native exe` для `bench_01..19`
   - runtime showcase e2e покрывает:
     - CLI-driven subset `bench_01..05`
     - stable subset `bench_06..09`
@@ -161,6 +161,12 @@
   - invalid dynamic integer arithmetic использует runtime diagnostic
     `SC-RT-350`; literal zero divisor и negative integer exponent ловятся до C
   - `bench_18_bit_registers.skd` входит в showcase gate
+- built-in File resource coverage
+  - `tests/file_resource_model.rs` проверяет nominal `FileMode`, typed fallible
+    open/read declaration, write/close calls, view restriction, use-after-close,
+    container rejection, C shape и реальный native round trip
+  - `tests/analysis_facts.rs` закрепляет generic create/borrow/close chain для TUI
+  - `bench_19_file_resource.skd` входит в native showcase gate
 - explicit `f64` coverage
   - parser сохраняет literal precision до semantic target selection
   - semantic tests отделяют диапазоны `Float/f32` и `f64`

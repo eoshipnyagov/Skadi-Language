@@ -1,6 +1,6 @@
 # Skadi Showcase Programs
 
-This page collects 18 small showcase programs and several focused project
+This page collects 19 small showcase programs and several focused project
 examples for the current Skadi toolchain.
 
 They serve three roles:
@@ -58,6 +58,9 @@ They serve three roles:
     indexes, a logical right shift of a signed bit pattern, explicit wrapping,
     checked float/integer conversion through `on error`, and safe `f64`
     widening.
+19. `bench_19_file_resource.skd`
+    Explicit owning `File` lifecycle with nominal modes, fallible open/read/
+    write/close, early close, and automatic scope cleanup.
 
 Focused native examples also cover:
 
@@ -107,14 +110,14 @@ POSIX shell:
 
 ## Coverage notes
 
-- compile-pipeline showcase tests cover `bench_01..18`;
-- native build tests cover `bench_01..18`;
+- compile-pipeline showcase tests cover `bench_01..19`;
+- native build tests cover `bench_01..19`;
 - runtime e2e coverage is split into:
   - CLI-driven showcase subset `bench_01..05`,
   - stable showcase subset `bench_06..09`,
   - dedicated `bench_10` showcase e2e,
   - native Task/Channel and combined systems coverage through `bench_11..12`,
-  - time, byte-size, angle, vector, Canvas, and bit coverage through `bench_13..18`.
+  - time, byte-size, angle, vector, Canvas, bit, and File coverage through `bench_13..19`.
 
 See the [Concurrency Guide](concurrency.md) for Task/Channel lifecycle,
 multi-worker, cancellation, and timed-wait patterns, platform details, and the

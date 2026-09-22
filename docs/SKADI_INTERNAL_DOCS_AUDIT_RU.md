@@ -252,11 +252,14 @@ backend и embedded display adapter.
 2. Timed Channel operations и path-sensitive timed Task wait на основе
    `Duration` — выполнены. `select` обсуждать только после укрепления анализа
    blocking/lifecycle цепочек.
-3. Подключать Resource lifecycle для файлов, портов и device handles только
-   вместе с появлением соответствующих долгоживущих API.
+3. Built-in `File` подключён к общей Resource lifecycle: typed fallible factory,
+   `view/edit/move`, owner-only close, scope cleanup, analyzer/TUI timeline и
+   native Windows/POSIX stdio backend выполнены. `Port`, `Socket` и device
+   handles остаются future и должны входить только вместе с реальным API.
 4. Hardware interrupt binding поверх готового host periodic/semantic MVP.
 5. Embedded target contract и первый ESP32/FreeRTOS spike.
-6. `Ring`/bounded `Pool` для явной `drop oldest` семантики.
+6. `Ring`/bounded `Pool` для явной `drop oldest` семантики - отложено до
+   отдельного design review; текущий `allow drop` не обещает такую коллекцию.
 7. Canvas events, text/images и следующие presentation backends.
 8. Ограниченный C ABI slice включает `external fn`, fixed scalar types,
    call-scoped `view`/`edit Buffer(T)` и `[native]` sources/libraries. Первый

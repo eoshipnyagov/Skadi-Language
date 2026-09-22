@@ -130,6 +130,22 @@
     ],
     "description": "Declare a mutable Canvas borrow"
   },
+  "Owning file": {
+    "prefix": "fileopen",
+    "body": [
+      "new File ${1:file} = fs.open(${2:path}, FileMode.${3:Read}) on error {",
+      "    ${4:return -1}",
+      "}",
+      "new Text ${5:contents} = ${1:file}.read_all() on error {",
+      "    ${6:return -2}",
+      "}",
+      "${1:file}.close() on error {",
+      "    ${7:return -3}",
+      "}",
+      "${0}"
+    ],
+    "description": "Open, read, and close an owning File with explicit recovery"
+  },
   "Canvas window": {
     "prefix": "canvaswindow",
     "body": [

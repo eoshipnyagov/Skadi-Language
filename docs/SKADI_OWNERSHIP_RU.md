@@ -4,7 +4,7 @@ Skadi разделяет обычные значения и owning resources.
 
 - `Int`, `Float`, `Bool`, `Char`, specialized numeric types и небольшие
   value-структуры копируются по значению.
-- `Canvas`, `Window`, `Interrupt`, owning `Channel` и объявленные через
+- `Canvas`, `Window`, `File`, `Interrupt`, owning `Channel` и объявленные через
   `external resource` C handles имеют ровно одного владельца.
 - `Memory` является region capability и не передаётся через `move`.
 - `Task` имеет отдельный lifecycle: owner обязан завершить его через `wait`.
@@ -84,6 +84,12 @@ owner внутри итерации, верните ресурс или пере
 Если scope всё ещё владеет ресурсом при выходе, generated runtime освобождает
 его автоматически в обратном порядке создания. После `move` cleanup выполняет
 только новый owner.
+
+Built-in `File` следует общему правилу, но знает свой runtime destructor:
+незакрытый owner автоматически закрывается на выходе из scope. `file.close()
+on error { ... }` позволяет освободить дескриптор раньше. `read_all` и `write`
+допустимы через owner или `edit File`; `view File` не меняет курсор, а закрыть
+borrowed handle нельзя.
 
 Исключение — opaque `external resource`: Skadi не знает чужой destructor и не
 угадывает его по имени. Такой owner обязан покинуть scope через явный вызов с

@@ -165,3 +165,49 @@ wait worker_task for 1ms on error {
     assert_eq!(timed_wait.subject.as_deref(), Some("worker_task"));
     assert!(timed_wait.explanation.contains("handle remains live"));
 }
+
+#[test]
+fn file_resource_forms_a_generic_lifecycle_chain() {
+    let facts = analyze(
+        r#"
+fn inspect(Path path) returns Int {
+    new File file = fs.open(path, FileMode.Read) on error {
+        return -1
+    }
+    new Text data = file.read_all() on error {
+        return -2
+    }
+    output(data)
+    file.close() on error {
+        return -3
+    }
+    return 0
+}
+"#,
+    );
+
+    let file_facts = facts
+        .iter()
+        .filter(|fact| fact.subject.as_deref() == Some("file"))
+        .collect::<Vec<_>>();
+    assert!(
+        file_facts
+            .iter()
+            .any(|fact| fact.kind == AnalysisFactKind::ResourceCreated)
+    );
+    assert!(
+        file_facts
+            .iter()
+            .any(|fact| fact.kind == AnalysisFactKind::ResourceBorrowed)
+    );
+    assert!(
+        file_facts
+            .iter()
+            .any(|fact| fact.kind == AnalysisFactKind::ResourceClosed)
+    );
+    assert!(
+        file_facts
+            .iter()
+            .all(|fact| fact.subject_kind == Some(AnalysisSubjectKind::Resource))
+    );
+}

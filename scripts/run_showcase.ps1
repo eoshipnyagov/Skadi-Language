@@ -28,7 +28,8 @@ $benches = @(
     @{ name = "bench_15_angle_navigation"; file = "benchmarks/bench_15_angle_navigation.skd"; args = @() },
     @{ name = "bench_16_vector_navigation"; file = "benchmarks/bench_16_vector_navigation.skd"; args = @() },
     @{ name = "bench_17_canvas_palette"; file = "benchmarks/bench_17_canvas_palette.skd"; args = @() },
-    @{ name = "bench_18_bit_registers"; file = "benchmarks/bench_18_bit_registers.skd"; args = @() }
+    @{ name = "bench_18_bit_registers"; file = "benchmarks/bench_18_bit_registers.skd"; args = @() },
+    @{ name = "bench_19_file_resource"; file = "benchmarks/bench_19_file_resource.skd"; args = @() }
 )
 
 function Invoke-Step {
@@ -101,4 +102,5 @@ if ($errors.Count -gt 0) {
 }
 
 Write-Host ""
+Remove-Item -LiteralPath (Join-Path $root "benchmarks/showcase-data/file_resource_output.txt") -Force -ErrorAction SilentlyContinue
 Write-Host "Showcase run completed successfully." -ForegroundColor Green

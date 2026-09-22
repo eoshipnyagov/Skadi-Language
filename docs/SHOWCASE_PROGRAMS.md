@@ -1,6 +1,6 @@
 # Showcase-программы Skadi
 
-В этом разделе собраны 18 небольших showcase-программ и несколько фокусных
+В этом разделе собраны 19 небольших showcase-программ и несколько фокусных
 project examples.
 
 Их цель:
@@ -31,6 +31,7 @@ project examples.
   <li><code>bench_16_vector_navigation.skd</code><ul><li>Навигационный расчёт с встроенными векторами.</li><li>Покрытие: <code>Vec2/Vec3/Vec4</code>, components, vector/scalar arithmetic, <code>normalize</code>, <code>distance</code>, <code>length</code> и <code>cross</code>.</li></ul></li>
   <li><code>bench_17_canvas_palette.skd</code><ul><li>Детерминированная headless-сцена Canvas v0.</li><li>Покрытие: <code>Color</code>, <code>color_hex</code>, 16-цветная терминальная палитра, <code>Rect</code>, <code>Canvas</code>, clipping, alpha blending, прямоугольники, окружности и framebuffer checksum.</li></ul></li>
   <li><code>bench_18_bit_registers.skd</code><ul><li>Модель fixed-width управляющего регистра.</li><li>Покрытие: radix literals, checked bit operations, explicit wrapping, checked float/integer conversions и <code>f64</code>.</li></ul></li>
+  <li><code>bench_19_file_resource.skd</code><ul><li>Явный жизненный цикл файлового ресурса.</li><li>Покрытие: <code>File</code>, <code>FileMode</code>, fallible open/read/write/close, ранний close и автоматическая cleanup.</li></ul></li>
 </ol>
 
 ## Фокусные примеры memory и ownership
@@ -104,6 +105,7 @@ Pop-Location
 .\bench_16_vector_navigation.exe
 .\bench_17_canvas_palette.exe
 .\bench_18_bit_registers.exe
+.\bench_19_file_resource.exe
 ```
 
 Или через вспомогательные скрипты:
@@ -136,6 +138,8 @@ Pop-Location
 - `bench_18` показывает fixed-width регистр, radix literals, проверяемые битовые
   операции, explicit wrapping, checked float/integer conversion через
   `on error` и safe widening в `f64`.
+- `bench_19` читает стабильный fixture через owning `File`, пишет временный
+  отчёт и показывает lifecycle-факты в TUI; smoke-скрипт удаляет отчёт.
 - В `v1.1` проверка showcase-программ остаётся CLI/script-driven, но теперь опирается на репозиторные fixture-данные.
 - `skadi-cli tui` можно использовать внутри showcase-проекта для ручного `check`, `build` и `run`, но отдельного браузера showcase-программ в TUI пока нет.
 

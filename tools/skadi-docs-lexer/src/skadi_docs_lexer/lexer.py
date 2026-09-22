@@ -83,6 +83,8 @@ class SkadiLexer(RegexLexer):
                         "Channel",
                         "Buffer",
                         "Interrupt",
+                        "File",
+                        "FileMode",
                         "List",
                         "Link",
                         "Canvas",
@@ -120,7 +122,7 @@ class SkadiLexer(RegexLexer):
             (r"\b\d(?:_?\d)*\.\d(?:_?\d)*\b", Number.Float),
             (r"\b\d(?:_?\d)*\b", Number.Integer),
             (words(("true", "false", "null", "PI", "TAU", "E", "EPSILON"), suffix=r"\b"), Name.Constant),
-            (r"\bfs\.(list|read|write|is_dir|join)\b", Name.Builtin.Pseudo),
+            (r"\bfs\.(list|read|write|is_dir|join|open)\b", Name.Builtin.Pseudo),
             (r"\b(?:windows\.open|interrupts\.periodic)\b", Name.Builtin.Pseudo),
             (r"\bmemory\.(?:child|static)\b(?=\s*\()", Name.Builtin.Pseudo),
             (

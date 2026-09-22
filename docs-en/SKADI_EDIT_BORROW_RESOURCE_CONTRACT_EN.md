@@ -35,6 +35,6 @@ Readability and ownership-transfer scenarios are evaluated in the
   `constant` cannot be combined with a borrow marker.
 
 `.close()` is not a universal resource interface. It is currently meaningful
-for `Window` and `Channel`; future `File`, `Port`, and `Socket` handles may use
+for `Window`, `Channel`, and built-in `File`; future `Port` and `Socket` handles may use
 the same lifecycle engine. `Task`, `Interrupt`, `Memory`, and `Canvas` retain
 their domain operations or automatic cleanup.

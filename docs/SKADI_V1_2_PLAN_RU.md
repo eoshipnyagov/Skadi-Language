@@ -729,6 +729,24 @@ TOML editor и новые TUI-функции не входят в distribution s
 
 Полный future contract: [Systems Additions MVP](systems-additions-mvp.md).
 
+### Завершённый спринт: generic lifecycle и File resource
+
+Статус на 2026-08-25: выполнен.
+
+- встроены owning `File` и nominal `FileMode`;
+- `fs.open`, `read_all`, `write`, `close` используют явный `on error`;
+- owner поддерживает `move`, owner/edit операции и запрет мутации через `view`;
+- известный file destructor выполняет автоматическую scope cleanup, а owner-only
+  `close` освобождает ресурс раньше;
+- C lowering использует переносимый stdio path на Windows/POSIX;
+- analyzer/TUI показывают create/borrow/close как общий lifecycle ресурса;
+- parser/semantic/codegen/native coverage закреплена `tests/file_resource_model.rs`;
+- `bench_19_file_resource.skd` включён в showcase build/smoke gate;
+- RU/EN user docs, syntax status, highlighters и coverage matrices синхронизированы.
+
+`Ring` и bounded `Pool` в этот спринт не входят и остаются предметом отдельного
+обсуждения.
+
 ## 8. Короткая формула
 
 `v1.1` сделал Skadi удобным прототипом языка и инструментария.

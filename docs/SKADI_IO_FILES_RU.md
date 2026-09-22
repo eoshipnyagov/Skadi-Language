@@ -26,6 +26,8 @@ output("count: ", count, ", ready: ", ready)
 
 ## Файлы
 
+Для короткой операции над целым файлом остаются простые builtins:
+
 ```skadi
 new Path path = "notes.txt"
 new Int written = write(path, "hello")
@@ -35,6 +37,45 @@ output(content)
 
 `read` и `write` являются обычными builtins текущего runtime, а не `danger fn`.
 Не добавляйте к ним `on error`: такой формы сейчас нет.
+
+Если нужен явный ресурс, раннее закрытие или несколько операций над одним
+дескриптором, используйте built-in `File`:
+
+```skadi
+fn copy_preview(Path path) returns Int {
+    new File file = fs.open(path, FileMode.Read) on error {
+        output("open failed")
+        return -1
+    }
+    new Text content = file.read_all() on error {
+        output("read failed")
+        return -2
+    }
+    file.close() on error {
+        output("close failed")
+        return -3
+    }
+    output(content)
+    return 0
+}
+```
+
+Режимы: `FileMode.Read`, `FileMode.Write`, `FileMode.Append` и
+`FileMode.ReadWrite`. `fs.open`, `File.read_all`, `File.write` и `File.close`
+являются fallible operations и требуют `on error`.
+
+- `Read` открывает существующий файл только для чтения;
+- `Write` создает файл или очищает существующий;
+- `Append` создает файл при необходимости и пишет в конец;
+- `ReadWrite` открывает существующий файл для чтения и записи без очистки.
+
+`read_all` читает файл целиком от начала и оставляет курсор в конце файла.
+
+`File` имеет одного владельца. Его можно передать через `view`, `edit` или
+`move`, но `read_all` и `write` меняют состояние курсора и поэтому доступны
+только owner или `edit File`. Закрыть ресурс может только owner. Если явный
+`close` не вызван, открытый дескриптор автоматически закрывается при выходе из
+scope; явный `close` нужен для раннего освобождения и проверки ошибки закрытия.
 
 ## Пути и каталоги
 
@@ -59,9 +100,13 @@ iterate names as name {
 | `output(value, ...)` | `Int`; минимум один printable-аргумент |
 | `read(path)` | `Text` |
 | `write(path, text)` | `Int` |
+| `fs.open(path, FileMode)` | `File`; только typed fallible declaration |
+| `file.read_all()` | `Text`; требует `on error` |
+| `file.write(text)` | без результата; требует `on error` |
+| `file.close()` | без результата; требует `on error` |
 | `fs.list(path)` | `Text List` |
 | `fs.join(left, right)` | `Text` |
 | `fs.is_dir(path)` | `Bool` |
 
-Streams, async I/O, typed file errors и resource handles остаются отдельным
-будущим design track.
+Streams, async I/O, seek и typed file error values пока не реализованы. Текущий
+`File` является небольшим синхронным resource API, а не stream abstraction.

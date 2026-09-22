@@ -21,7 +21,7 @@ Skadi surface.
 1. Build package:
    - `npx @vscode/vsce package --allow-missing-repository`
 2. Install in VS Code:
-   - `code --install-extension skadi-syntax-0.3.9.vsix`
+   - `code --install-extension skadi-syntax-0.3.10.vsix`
 
 ## File extensions and naming
 
@@ -47,6 +47,7 @@ Skadi surface.
 - `Angle`, angle literals (`45deg`, `0.25rad`) and trigonometry integration
 - `Vec2`, `Vec3`, `Vec4`, component fields and vector math builtins
 - `Interrupt`, `interrupts.periodic`, and paired `on interrupt`
+- `File`, `FileMode`, `fs.open`, and file lifecycle methods
 - `Color`, `Rect`, `Canvas`, `Window`, `windows.open`, and current drawing
   methods
 - label members, struct field declarations, and typed variable declarations

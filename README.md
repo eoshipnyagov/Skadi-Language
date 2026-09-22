@@ -49,6 +49,8 @@ The repository includes:
 - experimental fixed/growing/child/root-static Memory runtime for `v1.2`,
 - explicit `view`/`edit` borrows and `move` ownership transfer for current
   linear resources,
+- an owning synchronous `File` resource with nominal modes, explicit fallible
+  open/read/write/close, early close, and automatic scope cleanup,
 - experimental native Task/Channel runtime and periodic host Interrupts for
   `v1.2`, including cancellation-aware Channel operations and Duration-bounded
   Channel/Task waits,

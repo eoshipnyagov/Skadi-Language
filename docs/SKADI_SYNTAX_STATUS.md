@@ -154,6 +154,9 @@
 - `fs.list` - `Stable`
 - `fs.is_dir` - `Stable`
 - `fs.join` - `Stable`
+- `fs.open(Path, FileMode)` - `Experimental`
+  - возвращает owning `File` только через typed fallible declaration с `on error`;
+  - режимы: `Read`, `Write`, `Append`, `ReadWrite`.
 - `args` - `Stable`
 - `output` - `Stable`
   - принимает 1+ значений `Int`, `Float`, `Bool`, `Char` и `Text`;
@@ -161,6 +164,9 @@
 - `input` - `Stable`
 - `read` - `Stable`
 - `write` - `Stable`
+- `File.read_all`, `File.write`, `File.close` - `Experimental`
+  - синхронные fallible resource operations с обязательным `on error`;
+  - owner автоматически закрывается на выходе из scope; явный `close` доступен только owner.
 
 ## Math core (`v1.1`)
 
@@ -178,6 +184,7 @@
 - `Float` - `Stable`
 - `Bool` / `bool` - `Stable`
 - `Char` / `char` - `Stable`
+- `File`, `FileMode` - `Experimental`
   - значения доступны через индексирование `Text` и ASCII literals;
   - поддержаны escapes `'\n'`, `'\r'`, `'\t'`, `'\0'`, `'\''`, `'\\'`;
   - Unicode, empty и multi-character literals отклоняются с `SC-PARSE-221`.

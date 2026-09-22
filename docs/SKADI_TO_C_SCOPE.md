@@ -93,11 +93,16 @@ Math core понижается через `math.h` и generated helper expressio
 
 ## Ownership transfer (`v1.2`, experimental)
 
-- `move` lower'ится для `Canvas`, `Window`, `Interrupt` и owning `Channel`;
+- `move` lower'ится для `Canvas`, `Window`, `File`, `Interrupt` и owning `Channel`;
 - move-helper извлекает handle и обнуляет moved-from binding;
 - owning параметры освобождают ресурс на normal fallthrough;
 - early return освобождает только оставшихся текущих owners;
 - `return move resource` переносит handle вызывающему коду без double cleanup.
+
+Built-in `File` lowering использует `SkFile { FILE *handle; }`, nominal
+`SkFileMode`, status-returning `sk_file_open/read_all/write/close`, move с
+обнулением source и идемпотентный scope destructor. Это переносимый stdio слой
+для Windows/POSIX, не stream API и не platform-specific async I/O.
 
 ## Task/Channel runtime (`v1.2`, experimental)
 

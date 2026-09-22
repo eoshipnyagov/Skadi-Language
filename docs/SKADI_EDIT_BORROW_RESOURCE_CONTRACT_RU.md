@@ -53,22 +53,23 @@ damage(edit player, 10)
 
 ## 4. Resource handles
 
-`File`, `Port`, `Window`, `Display` и похожие types являются linear owning
+Реализованные `File` и `Window`, а также будущие `Port`/`Display`, являются linear owning
 capabilities:
 
 - не копируются;
 - автоматически закрываются в конце scope;
 - могут быть закрыты раньше через `.close()`;
 - операция над `maybe closed` или `closed` требует `on error`;
-- заведомо закрытая операция с handler допустима, но получает warning;
+- заведомо закрытая операция отклоняется статически даже при наличии handler;
 - `move` и нарушение borrow-прав не являются runtime-ошибками и не обходятся
   через `on error`;
 - cleanup идёт в обратном порядке acquisition;
 - owning resource передаётся функции через явный `move` в сигнатуре и call site;
 - factory возвращает resource только как `return move resource`.
 
-Текущие однооперационные `read`/`write` не требуют немедленного появления
-долгоживущего `File` handle.
+Однооперационные `read`/`write` остаются удобным whole-file API. Для
+долгоживущего handle реализованы `fs.open`, `File.read_all/write/close`,
+`FileMode`, `view/edit/move` и автоматическая scope cleanup.
 
 Opaque C handle объявляется через `external resource Name`. Он использует те же
 `view`/`edit`/`move` правила, но не имеет автоматического cleanup: frontend не
@@ -76,7 +77,7 @@ Opaque C handle объявляется через `external resource Name`. Он
 consuming external-функции на каждом пути до выхода из scope.
 
 `.close()` не является универсальным resource API. Сейчас он предметно
-реализован у `Window` и `Channel`; будущие `File`, `Port` и `Socket` смогут
+реализован у `Window`, `Channel` и `File`; будущие `Port` и `Socket` смогут
 использовать тот же lifecycle engine. `Task`, `Interrupt`, `Memory` и `Canvas`
 сохраняют собственные естественные операции `wait`/`stop`, `clear` либо только
 автоматический cleanup.

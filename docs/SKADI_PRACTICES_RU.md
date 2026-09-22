@@ -69,6 +69,17 @@ new Text data = read("input.txt") on error {
 }
 ```
 
+Если нужен проверяемый I/O, выберите явный ресурс вместо выдуманной формы:
+
+```skadi
+new File file = fs.open("input.txt", FileMode.Read) on error {
+    return
+}
+new Text data = file.read_all() on error {
+    return
+}
+```
+
 Не передавайте mutable/capability state между tasks:
 
 ```skadi

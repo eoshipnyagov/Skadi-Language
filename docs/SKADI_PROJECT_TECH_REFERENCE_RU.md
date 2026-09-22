@@ -117,7 +117,8 @@ runtime helpers. Реализованы:
 - typed List, Text, filesystem и I/O runtime;
 - `math.h` lowering;
 - fixed/growing/child/root-static Memory regions и thread-local active region;
-- explicit ownership transfer и typed cleanup для current linear resources;
+- explicit ownership transfer и typed cleanup для current linear resources,
+  включая встроенный синхронный `File` с общим lifecycle analysis;
 - Win32/pthread Task runtime и typed results;
 - bounded blocking Channel с mutex/condition variables;
 - monotonic Time/Duration runtime на Win32/POSIX;

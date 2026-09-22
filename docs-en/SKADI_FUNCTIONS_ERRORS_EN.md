@@ -30,3 +30,7 @@ checked = require_positive(10) on error {
 
 `ErrorCode` must start with `Ok`. `return error` is valid only in `danger fn`,
 and a danger call requires visible `on error` recovery.
+
+Ordinary whole-file `read` and `write` builtins do not accept `on error`.
+The explicit resource operations `fs.open`, `File.read_all`, `File.write`, and
+`File.close` are fallible and do require it.

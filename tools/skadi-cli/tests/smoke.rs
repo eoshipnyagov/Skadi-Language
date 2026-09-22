@@ -253,6 +253,7 @@ fn native_c_source_builds_and_runs_through_project_manifest() {
         stdout.contains("Opaque handle value: 400 -> 405"),
         "{stdout}"
     );
+    assert!(stdout.contains("Handle allocation failed"), "{stdout}");
 
     let _ = fs::remove_dir_all(project_dir);
 }
