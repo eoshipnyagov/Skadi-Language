@@ -239,7 +239,18 @@ def main() -> int:
             errors.append(f"syntax status does not mention '{surface}'")
 
     cli_reference = read(ROOT / "docs" / "SKADI_CLI_REFERENCE_RU.md")
-    for command in ["new", "init", "check", "build", "run", "target list", "format", "doctor", "tui"]:
+    for command in [
+        "new",
+        "init",
+        "check",
+        "build",
+        "run",
+        "target list",
+        "format",
+        "doctor",
+        "tui",
+        "embedded",
+    ]:
         if f"`{command}" not in cli_reference:
             errors.append(f"CLI reference does not mention command '{command}'")
 

@@ -98,6 +98,7 @@ fn doctor_and_target_list_smoke() {
     assert!(targets_out.contains("host"));
     assert!(targets_out.contains("x86_64-w64-mingw32"));
     assert!(targets_out.contains("x86_64-unknown-linux-gnu"));
+    assert!(targets_out.contains("esp32-idf"));
 
     let debug_help = run_cli(&temp, &["debug", "--help"]);
     assert!(
@@ -108,6 +109,37 @@ fn doctor_and_target_list_smoke() {
     let debug_help_out = stdout_text(&debug_help);
     assert!(debug_help_out.contains("skadi-cli debug"));
     assert!(debug_help_out.contains("continue (c), step (s), quit (q)"));
+
+    let _ = fs::remove_dir_all(temp);
+}
+
+#[test]
+fn embedded_prepare_stages_an_idf_project_without_sdk() {
+    let temp = unique_temp_dir("embedded_prepare");
+    let init = run_cli(&temp, &["init"]);
+    assert!(init.status.success(), "init failed: {}", stderr_text(&init));
+    fs::write(
+        temp.join("src/main.skd"),
+        "Channel(Int) ticks = channel(2)\nInterrupt timer = interrupts.periodic(10ms)\non interrupt timer {\n    ticks.try_send(1)\n}\nticks.close()\n",
+    )
+    .expect("write embedded entry");
+
+    let prepare = run_cli(&temp, &["embedded", "prepare"]);
+    assert!(
+        prepare.status.success(),
+        "embedded prepare failed: {}",
+        stderr_text(&prepare)
+    );
+    let output = stdout_text(&prepare);
+    assert!(output.contains("ESP-IDF project prepared"), "{output}");
+    let generated = temp.join("build/esp32-idf/main/skadi_program.c");
+    let cmake = temp.join("build/esp32-idf/main/CMakeLists.txt");
+    assert!(generated.is_file());
+    assert!(cmake.is_file());
+    let c = fs::read_to_string(generated).expect("read generated embedded C");
+    assert!(c.contains("void app_main(void)"));
+    assert!(c.contains("gptimer_new_timer"));
+    assert!(c.contains("xQueueSendFromISR"));
 
     let _ = fs::remove_dir_all(temp);
 }

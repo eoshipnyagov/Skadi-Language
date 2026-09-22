@@ -107,8 +107,10 @@ handles, callbacks, and header verification remain future FFI work.
 ### Embedded and Canvas
 
 The host MVP implements typed periodic `Interrupt` and a strict interrupt-safe
-handler subset. ESP32 still needs a toolchain profile, RTOS/bare-metal runtime
-adapters, linker/flash workflow, and validation. Canvas v0 now provides
+handler subset. The experimental `esp32-idf` backend now adds direct FreeRTOS
+Task/Channel, hardware GPTimer, ISR-safe `try_send`, and project/build/flash
+tooling. It still needs real-device or HIL validation and a static allocation
+policy. Canvas v0 now provides
 `Color`, `Rect`, a software `Canvas`, deterministic drawing/checksum, and a
 Win32 `Window` presenter; events, text/images, transforms, and other backends
 remain future.
@@ -119,8 +121,10 @@ remain future.
 2. Consider `select` only after the ordinary and timed blocking boundaries are
    stable.
 3. Add long-lived File/Port/device handles only together with concrete APIs.
-4. Design the first ESP32/FreeRTOS platform slice and hardware interrupt binding.
-5. Add explicit `Ring`/bounded `Pool` semantics for `drop oldest`.
+4. Validate the ESP32/FreeRTOS vertical slice on hardware and add CI/HIL,
+   static storage policy, and manifest stack/priority/core controls.
+5. Keep `Ring`/bounded `Pool` as research candidates until real use cases
+   justify them.
 6. Grow Canvas with events, text/images, and additional presenters.
 7. The bounded C ABI slice includes `external fn`, fixed scalar values,
    call-scoped `view`/`edit Buffer(T)`, and manifest native sources/libraries.

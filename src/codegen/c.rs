@@ -76,6 +76,14 @@ impl IntWidth {
 pub struct CodegenOptions {
     pub debug_probes: bool,
     pub int_width: IntWidth,
+    pub target: CTarget,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CTarget {
+    #[default]
+    Desktop,
+    EspIdf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1179,7 +1187,11 @@ fn emit_vector_runtime(out: &mut String, include_length_helpers: bool) {
     out.push_str("static Vec3 sk_vec3_cross(Vec3 a, Vec3 b) { return (Vec3){.x = a.y * b.z - a.z * b.y, .y = a.z * b.x - a.x * b.z, .z = a.x * b.y - a.y * b.x}; }\n\n");
 }
 
-fn emit_time_runtime(out: &mut String) {
+fn emit_time_runtime(out: &mut String, target: CTarget) {
+    if target == CTarget::EspIdf {
+        emit_esp_idf_time_runtime(out);
+        return;
+    }
     out.push_str("static void sk_time_panic(const char *message) {\n");
     out.push_str("    fprintf(stderr, \"Skadi time runtime error [SC-RT-320]: %s\\n\", message ? message : \"unknown\");\n");
     out.push_str("    abort();\n");
@@ -1220,6 +1232,35 @@ fn emit_time_runtime(out: &mut String) {
     out.push_str("#endif\n");
     out.push_str("    return 0;\n");
     out.push_str("}\n\n");
+}
+
+fn emit_esp_idf_time_runtime(out: &mut String) {
+    out.push_str(
+        r#"static void sk_time_panic(const char *message) {
+    fprintf(stderr, "Skadi time runtime error [SC-RT-320]: %s\n", message ? message : "unknown");
+    abort();
+}
+
+static int64_t sk_time_now(void) {
+    return esp_timer_get_time() * 1000LL;
+}
+
+static int64_t sk_time_elapsed(int64_t started_at) {
+    int64_t finished_at = sk_time_now();
+    return finished_at >= started_at ? finished_at - started_at : 0;
+}
+
+static int64_t sk_time_sleep(int64_t duration_ns) {
+    if (duration_ns <= 0) return 0;
+    uint64_t millis = ((uint64_t)duration_ns + 999999ULL) / 1000000ULL;
+    TickType_t ticks = pdMS_TO_TICKS(millis);
+    if (ticks == 0) ticks = 1;
+    vTaskDelay(ticks);
+    return 0;
+}
+
+"#,
+    );
 }
 
 fn map_function_name(name: &str) -> &str {
@@ -1708,6 +1749,36 @@ pub fn ensure_codegen_supported_with_options(
     program: &Program,
     options: CodegenOptions,
 ) -> Result<(), String> {
+    if options.target == CTarget::EspIdf {
+        if options.debug_probes {
+            return Err(
+                "[SC-CG-303] debug probes are not supported by target 'esp32-idf'; use a host target for the current debugger."
+                    .to_string(),
+            );
+        }
+        let (uses_fs_list, uses_fs_is_dir, _) = program_uses_fs_runtime(program);
+        let uses_unsupported_io = program
+            .statements
+            .iter()
+            .any(|statement| stmt_uses_expression(statement, expression_uses_esp_unsupported_io));
+        if program_uses_args_runtime(program)
+            || uses_fs_list
+            || uses_fs_is_dir
+            || uses_unsupported_io
+        {
+            return Err(
+                "[SC-CG-303] target 'esp32-idf' does not support args, input, file I/O, or directory inspection yet; use output and a declared native board adapter."
+                    .to_string(),
+            );
+        }
+        if program_uses_visual_runtime(program) {
+            return Err(
+                "[SC-CG-303] Canvas and Window do not have an ESP-IDF backend yet; use a declared native display adapter."
+                    .to_string(),
+            );
+        }
+    }
+
     fn literal_fits(value: i64, width: IntWidth) -> bool {
         match width {
             IntWidth::I8 => i8::try_from(value).is_ok(),
@@ -2001,7 +2072,191 @@ fn collect_task_entries(program: &Program) -> HashSet<String> {
     entries
 }
 
-fn emit_task_runtime(out: &mut String) {
+fn emit_task_runtime(out: &mut String, target: CTarget) {
+    if target == CTarget::EspIdf {
+        emit_esp_idf_task_runtime(out);
+    } else {
+        emit_desktop_task_runtime(out);
+    }
+}
+
+fn emit_esp_idf_task_runtime(out: &mut String) {
+    out.push_str(
+        r#"typedef TaskHandle_t SkPlatformThread;
+
+typedef struct SkTask SkTask;
+typedef void (*SkTaskEntry)(SkTask *task, void *context);
+typedef void (*SkTaskWake)(void *context);
+
+struct SkTask {
+    SkPlatformThread thread;
+    void *context;
+    bool started;
+    bool joined;
+    volatile bool stop_requested;
+    volatile bool completed;
+    size_t active_controls;
+    SemaphoreHandle_t completion;
+    portMUX_TYPE lock;
+    void *wait_context;
+    SkTaskWake wake_wait;
+};
+
+static SK_THREAD_LOCAL SkTask *sk_current_task = NULL;
+static SK_THREAD_LOCAL bool sk_operation_timed_out_state = false;
+
+static bool sk_operation_timed_out(void) {
+    return sk_operation_timed_out_state;
+}
+
+typedef struct {
+    SkTask *task;
+    SkTaskEntry entry;
+} SkTaskLaunch;
+
+static void sk_task_panic(const char *code, const char *message) {
+    fprintf(stderr, "Runtime error: [%s] %s\n", code, message);
+    abort();
+}
+
+static void sk_task_platform_entry(void *raw) {
+    SkTaskLaunch *launch = (SkTaskLaunch*)raw;
+    SkTask *task = launch->task;
+    SkTaskEntry entry = launch->entry;
+    free(launch);
+    sk_current_task = task;
+    entry(task, task->context);
+    taskENTER_CRITICAL(&task->lock);
+    task->completed = true;
+    taskEXIT_CRITICAL(&task->lock);
+    for (;;) {
+        taskENTER_CRITICAL(&task->lock);
+        bool controls_finished = task->active_controls == 0;
+        if (controls_finished) task->thread = NULL;
+        taskEXIT_CRITICAL(&task->lock);
+        if (controls_finished) break;
+        taskYIELD();
+    }
+    xSemaphoreGive(task->completion);
+    sk_current_task = NULL;
+    vTaskDelete(NULL);
+}
+
+#ifndef SKADI_TASK_STACK_WORDS
+#define SKADI_TASK_STACK_WORDS 4096
+#endif
+
+#ifndef SKADI_TASK_PRIORITY
+#define SKADI_TASK_PRIORITY (tskIDLE_PRIORITY + 1)
+#endif
+
+static bool sk_task_start(SkTask *task, SkTaskEntry entry, void *context) {
+    if (!task || !entry || !context) return false;
+    memset(task, 0, sizeof(*task));
+    task->context = context;
+    task->lock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
+    task->completion = xSemaphoreCreateBinary();
+    if (!task->completion) return false;
+    SkTaskLaunch *launch = (SkTaskLaunch*)malloc(sizeof(SkTaskLaunch));
+    if (!launch) { vSemaphoreDelete(task->completion); task->completion = NULL; return false; }
+    launch->task = task;
+    launch->entry = entry;
+    BaseType_t created = xTaskCreate(
+        sk_task_platform_entry,
+        "skadi-task",
+        SKADI_TASK_STACK_WORDS,
+        launch,
+        SKADI_TASK_PRIORITY,
+        &task->thread
+    );
+    if (created != pdPASS) {
+        free(launch);
+        vSemaphoreDelete(task->completion);
+        task->completion = NULL;
+        return false;
+    }
+    task->started = true;
+    return true;
+}
+
+static void sk_task_request_stop(SkTask *task) {
+    if (!task || !task->started || task->joined) sk_task_panic("SC-RT-303", "invalid task state at stop");
+    taskENTER_CRITICAL(&task->lock);
+    task->stop_requested = true;
+    TaskHandle_t thread = task->thread;
+    bool should_abort = !task->completed && thread != NULL;
+    if (should_abort) task->active_controls += 1;
+    taskEXIT_CRITICAL(&task->lock);
+    if (should_abort) {
+        xTaskAbortDelay(thread);
+        taskENTER_CRITICAL(&task->lock);
+        task->active_controls -= 1;
+        taskEXIT_CRITICAL(&task->lock);
+    }
+}
+
+static bool sk_task_register_wait(void *context, SkTaskWake wake_wait) {
+    SkTask *task = sk_current_task;
+    if (!task) return true;
+    taskENTER_CRITICAL(&task->lock);
+    bool registered = !task->stop_requested;
+    if (registered) { task->wait_context = context; task->wake_wait = wake_wait; }
+    taskEXIT_CRITICAL(&task->lock);
+    return registered;
+}
+
+static bool sk_task_finish_wait(void *context) {
+    SkTask *task = sk_current_task;
+    if (!task) return true;
+    taskENTER_CRITICAL(&task->lock);
+    bool active = !task->stop_requested;
+    if (task->wait_context == context) { task->wait_context = NULL; task->wake_wait = NULL; }
+    taskEXIT_CRITICAL(&task->lock);
+    return active;
+}
+
+static bool sk_task_is_stopping(void) {
+    SkTask *task = sk_current_task;
+    if (!task) sk_task_panic("SC-RT-303", "stopping evaluated outside task context");
+    taskENTER_CRITICAL(&task->lock);
+    bool requested = task->stop_requested;
+    taskEXIT_CRITICAL(&task->lock);
+    return requested;
+}
+
+static void sk_task_join(SkTask *task) {
+    if (!task || !task->started || task->joined) sk_task_panic("SC-RT-303", "invalid task state at wait");
+    if (xSemaphoreTake(task->completion, portMAX_DELAY) != pdTRUE)
+        sk_task_panic("SC-RT-302", "task join failed");
+    vSemaphoreDelete(task->completion);
+    task->completion = NULL;
+    task->joined = true;
+}
+
+static bool sk_task_join_for(SkTask *task, int64_t timeout_ns) {
+    if (!task || !task->started || task->joined) sk_task_panic("SC-RT-303", "invalid task state at timed wait");
+    if (timeout_ns < 0) timeout_ns = 0;
+    uint64_t millis = ((uint64_t)timeout_ns + 999999ULL) / 1000000ULL;
+    TickType_t ticks = timeout_ns == 0 ? 0 : pdMS_TO_TICKS(millis);
+    if (timeout_ns > 0 && ticks == 0) ticks = 1;
+    if (xSemaphoreTake(task->completion, ticks) != pdTRUE) return false;
+    vSemaphoreDelete(task->completion);
+    task->completion = NULL;
+    task->joined = true;
+    return true;
+}
+
+static void sk_task_release_context(SkTask *task) {
+    if (!task || !task->joined || !task->context) sk_task_panic("SC-RT-303", "invalid task state at context release");
+    free(task->context);
+    task->context = NULL;
+}
+
+"#,
+    );
+}
+
+fn emit_desktop_task_runtime(out: &mut String) {
     out.push_str("#if defined(_WIN32)\n");
     out.push_str("typedef HANDLE SkPlatformThread;\n");
     out.push_str("#else\n");
@@ -2236,7 +2491,193 @@ fn emit_task_runtime(out: &mut String) {
     out.push_str("}\n\n");
 }
 
-fn emit_channel_runtime(out: &mut String) {
+fn emit_channel_runtime(out: &mut String, target: CTarget) {
+    if target == CTarget::EspIdf {
+        emit_esp_idf_channel_runtime(out);
+    } else {
+        emit_desktop_channel_runtime(out);
+    }
+}
+
+fn emit_esp_idf_channel_runtime(out: &mut String) {
+    out.push_str(
+        r#"typedef enum {
+    SK_CHANNEL_OK = 0,
+    SK_CHANNEL_CLOSED = 1,
+    SK_CHANNEL_CANCELLED = 2,
+    SK_CHANNEL_TIMED_OUT = 3
+} SkChannelStatus;
+
+typedef struct SkChannel {
+    QueueHandle_t queue;
+    size_t capacity;
+    size_t element_size;
+    volatile bool closed;
+    size_t active_senders;
+    portMUX_TYPE lock;
+} SkChannel;
+
+static void sk_channel_panic(const char *code, const char *message) {
+    fprintf(stderr, "Runtime error: [%s] %s\n", code, message);
+    abort();
+}
+
+static TickType_t sk_channel_timeout_ticks(int64_t timeout_ns) {
+    if (timeout_ns < 0) return portMAX_DELAY;
+    if (timeout_ns == 0) return 0;
+    uint64_t millis = ((uint64_t)timeout_ns + 999999ULL) / 1000000ULL;
+    TickType_t ticks = pdMS_TO_TICKS(millis);
+    return ticks == 0 ? 1 : ticks;
+}
+
+#ifndef SKADI_CHANNEL_POLL_TICKS
+#define SKADI_CHANNEL_POLL_TICKS 1
+#endif
+
+static TickType_t sk_channel_wait_slice(TickType_t remaining) {
+    TickType_t slice = SKADI_CHANNEL_POLL_TICKS == 0 ? 1 : SKADI_CHANNEL_POLL_TICKS;
+    return remaining == portMAX_DELAY || remaining > slice ? slice : remaining;
+}
+
+static SkChannel* sk_channel_create(int64_t capacity_value, size_t element_size) {
+    if (capacity_value <= 0 || element_size == 0 || (uint64_t)capacity_value > SIZE_MAX / element_size)
+        sk_channel_panic("SC-RT-312", "channel capacity must be positive and fit addressable memory");
+    SkChannel *channel = (SkChannel*)calloc(1, sizeof(SkChannel));
+    if (!channel) sk_channel_panic("SC-RT-311", "channel allocation failed");
+    channel->capacity = (size_t)capacity_value;
+    channel->element_size = element_size;
+    channel->lock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
+    channel->queue = xQueueCreate((UBaseType_t)channel->capacity, (UBaseType_t)element_size);
+    if (!channel->queue) { free(channel); sk_channel_panic("SC-RT-311", "channel queue allocation failed"); }
+    return channel;
+}
+
+static void sk_channel_wake_waiters(void *context) {
+    (void)context;
+}
+
+static bool sk_channel_begin_send(SkChannel *channel) {
+    taskENTER_CRITICAL(&channel->lock);
+    bool allowed = !channel->closed;
+    if (allowed) channel->active_senders += 1;
+    taskEXIT_CRITICAL(&channel->lock);
+    return allowed;
+}
+
+static void sk_channel_finish_send(SkChannel *channel) {
+    taskENTER_CRITICAL(&channel->lock);
+    channel->active_senders -= 1;
+    taskEXIT_CRITICAL(&channel->lock);
+}
+
+static bool SK_INTERRUPT_ATTR sk_channel_begin_send_from_isr(SkChannel *channel) {
+    taskENTER_CRITICAL_ISR(&channel->lock);
+    bool allowed = !channel->closed;
+    if (allowed) channel->active_senders += 1;
+    taskEXIT_CRITICAL_ISR(&channel->lock);
+    return allowed;
+}
+
+static void SK_INTERRUPT_ATTR sk_channel_finish_send_from_isr(SkChannel *channel) {
+    taskENTER_CRITICAL_ISR(&channel->lock);
+    channel->active_senders -= 1;
+    taskEXIT_CRITICAL_ISR(&channel->lock);
+}
+
+static bool sk_channel_is_closed(SkChannel *channel) {
+    taskENTER_CRITICAL(&channel->lock);
+    bool closed = channel->closed;
+    taskEXIT_CRITICAL(&channel->lock);
+    return closed;
+}
+
+static SkChannelStatus sk_channel_send_raw(SkChannel *channel, const void *value, int64_t timeout_ns) {
+    if (!channel || !value) sk_channel_panic("SC-RT-313", "invalid channel send state");
+    TickType_t timeout = sk_channel_timeout_ticks(timeout_ns);
+    TickType_t started = xTaskGetTickCount();
+    for (;;) {
+        if (!sk_channel_begin_send(channel)) return SK_CHANNEL_CLOSED;
+        BaseType_t sent = xQueueSend(channel->queue, value, 0);
+        sk_channel_finish_send(channel);
+        if (sent == pdTRUE) return SK_CHANNEL_OK;
+        if (timeout == 0) return SK_CHANNEL_TIMED_OUT;
+        TickType_t elapsed = xTaskGetTickCount() - started;
+        if (timeout != portMAX_DELAY && elapsed >= timeout) return SK_CHANNEL_TIMED_OUT;
+        TickType_t remaining = timeout == portMAX_DELAY ? portMAX_DELAY : timeout - elapsed;
+        if (!sk_task_register_wait(channel, sk_channel_wake_waiters)) return SK_CHANNEL_CANCELLED;
+        vTaskDelay(sk_channel_wait_slice(remaining));
+        if (!sk_task_finish_wait(channel)) return SK_CHANNEL_CANCELLED;
+    }
+}
+
+static SkChannelStatus sk_channel_receive_raw(SkChannel *channel, void *out_value, int64_t timeout_ns) {
+    if (!channel || !out_value) sk_channel_panic("SC-RT-313", "invalid channel receive state");
+    TickType_t timeout = sk_channel_timeout_ticks(timeout_ns);
+    TickType_t started = xTaskGetTickCount();
+    for (;;) {
+        BaseType_t received = xQueueReceive(channel->queue, out_value, 0);
+        if (received == pdTRUE) return SK_CHANNEL_OK;
+        if (sk_channel_is_closed(channel)) return SK_CHANNEL_CLOSED;
+        if (timeout == 0) return SK_CHANNEL_TIMED_OUT;
+        TickType_t elapsed = xTaskGetTickCount() - started;
+        if (timeout != portMAX_DELAY && elapsed >= timeout) return SK_CHANNEL_TIMED_OUT;
+        TickType_t remaining = timeout == portMAX_DELAY ? portMAX_DELAY : timeout - elapsed;
+        if (!sk_task_register_wait(channel, sk_channel_wake_waiters)) return SK_CHANNEL_CANCELLED;
+        vTaskDelay(sk_channel_wait_slice(remaining));
+        if (!sk_task_finish_wait(channel)) return SK_CHANNEL_CANCELLED;
+    }
+}
+
+static bool SK_INTERRUPT_ATTR sk_channel_try_send_raw(SkChannel *channel, const void *value) {
+    if (!channel || !value) return false;
+    if (xPortInIsrContext()) {
+        if (!sk_channel_begin_send_from_isr(channel)) return false;
+        BaseType_t higher_priority_woken = pdFALSE;
+        BaseType_t sent = xQueueSendFromISR(channel->queue, value, &higher_priority_woken);
+        sk_channel_finish_send_from_isr(channel);
+        if (higher_priority_woken == pdTRUE) portYIELD_FROM_ISR();
+        return sent == pdTRUE;
+    }
+    if (!sk_channel_begin_send(channel)) return false;
+    BaseType_t sent = xQueueSend(channel->queue, value, 0);
+    sk_channel_finish_send(channel);
+    return sent == pdTRUE;
+}
+
+static bool sk_channel_close(SkChannel *channel) {
+    if (!channel) return false;
+    taskENTER_CRITICAL(&channel->lock);
+    bool changed = !channel->closed;
+    channel->closed = true;
+    taskEXIT_CRITICAL(&channel->lock);
+    while (changed) {
+        taskENTER_CRITICAL(&channel->lock);
+        bool senders_finished = channel->active_senders == 0;
+        taskEXIT_CRITICAL(&channel->lock);
+        if (senders_finished) break;
+        taskYIELD();
+    }
+    return changed;
+}
+
+static void sk_channel_destroy(SkChannel *channel) {
+    if (!channel) return;
+    vQueueDelete(channel->queue);
+    free(channel);
+}
+
+static SkChannel* sk_channel_move(SkChannel **source) {
+    if (!source) return NULL;
+    SkChannel *result = *source;
+    *source = NULL;
+    return result;
+}
+
+"#,
+    );
+}
+
+fn emit_desktop_channel_runtime(out: &mut String) {
     out.push_str("typedef enum {\n");
     out.push_str("    SK_CHANNEL_OK = 0,\n");
     out.push_str("    SK_CHANNEL_CLOSED = 1,\n");
@@ -2512,7 +2953,7 @@ fn emit_channel_typed_wrapper(out: &mut String, skadi_type: &str) {
     out.push_str("    if (status == SK_CHANNEL_CANCELLED) sk_channel_panic(\"SC-RT-315\", \"cancelled channel send requires 'on error'\");\n");
     out.push_str("    if (status == SK_CHANNEL_CLOSED) sk_channel_panic(\"SC-RT-314\", \"send on closed channel requires 'on error'\");\n");
     out.push_str("}\n\n");
-    out.push_str("static bool sk_channel_try_send_");
+    out.push_str("static bool SK_INTERRUPT_ATTR sk_channel_try_send_");
     out.push_str(&suffix);
     out.push_str("(SkChannel *channel, ");
     out.push_str(&c_type);
@@ -2820,33 +3261,48 @@ pub fn transpile_program_to_c_with_options(
         || needs_interrupt_runtime
         || options.debug_probes
     {
-        out.push_str("#if defined(_WIN32)\n");
-        if options.debug_probes {
-            out.push_str("#include <winsock2.h>\n#include <ws2tcpip.h>\n");
+        if options.target == CTarget::EspIdf {
+            out.push_str("#include \"freertos/FreeRTOS.h\"\n");
+            out.push_str("#include \"freertos/task.h\"\n");
+            out.push_str("#include \"freertos/queue.h\"\n");
+            out.push_str("#include \"freertos/semphr.h\"\n");
+            out.push_str("#include \"esp_timer.h\"\n");
+            out.push_str("#include \"esp_attr.h\"\n");
+            if needs_interrupt_runtime {
+                out.push_str("#include \"driver/gptimer.h\"\n");
+                out.push_str("#include \"esp_err.h\"\n");
+            }
+            out.push_str("#define SK_INTERRUPT_ATTR IRAM_ATTR\n\n");
+        } else {
+            out.push_str("#if defined(_WIN32)\n");
+            if options.debug_probes {
+                out.push_str("#include <winsock2.h>\n#include <ws2tcpip.h>\n");
+            }
+            out.push_str("#include <windows.h>\n");
+            out.push_str("#else\n");
+            if needs_task_runtime
+                || needs_channel_runtime
+                || needs_interrupt_runtime
+                || options.debug_probes
+            {
+                out.push_str("#include <pthread.h>\n");
+            }
+            if needs_task_runtime
+                || needs_channel_runtime
+                || needs_time_runtime
+                || needs_interrupt_runtime
+            {
+                out.push_str("#include <errno.h>\n");
+                out.push_str("#include <time.h>\n");
+            }
+            if options.debug_probes {
+                out.push_str("#include <arpa/inet.h>\n");
+                out.push_str("#include <sys/socket.h>\n");
+                out.push_str("#include <unistd.h>\n");
+            }
+            out.push_str("#endif\n");
+            out.push_str("#define SK_INTERRUPT_ATTR\n\n");
         }
-        out.push_str("#include <windows.h>\n");
-        out.push_str("#else\n");
-        if needs_task_runtime
-            || needs_channel_runtime
-            || needs_interrupt_runtime
-            || options.debug_probes
-        {
-            out.push_str("#include <pthread.h>\n");
-        }
-        if needs_task_runtime
-            || needs_channel_runtime
-            || needs_time_runtime
-            || needs_interrupt_runtime
-        {
-            out.push_str("#include <errno.h>\n");
-            out.push_str("#include <time.h>\n");
-        }
-        if options.debug_probes {
-            out.push_str("#include <arpa/inet.h>\n");
-            out.push_str("#include <sys/socket.h>\n");
-            out.push_str("#include <unistd.h>\n");
-        }
-        out.push_str("#endif\n\n");
     }
     if needs_window_runtime
         && !(needs_task_runtime
@@ -2864,7 +3320,7 @@ pub fn transpile_program_to_c_with_options(
         emit_visual_runtime(&mut out, needs_window_runtime);
     }
     if needs_time_runtime {
-        emit_time_runtime(&mut out);
+        emit_time_runtime(&mut out, options.target);
     }
     if needs_memory_runtime || needs_task_runtime || options.debug_probes {
         emit_thread_local_support(&mut out);
@@ -2873,13 +3329,13 @@ pub fn transpile_program_to_c_with_options(
         emit_debug_runtime(&mut out);
     }
     if needs_task_runtime {
-        emit_task_runtime(&mut out);
+        emit_task_runtime(&mut out, options.target);
     }
     if needs_channel_runtime {
-        emit_channel_runtime(&mut out);
+        emit_channel_runtime(&mut out, options.target);
     }
     if needs_interrupt_runtime {
-        emit_interrupt_runtime(&mut out);
+        emit_interrupt_runtime(&mut out, options.target);
     }
     if needs_fs_list || needs_fs_is_dir || needs_fs_join {
         out.push_str("#include <dirent.h>\n");
@@ -2945,7 +3401,12 @@ pub fn transpile_program_to_c_with_options(
     emit_struct_methods(program, &mut out, &mut codegen_state);
     codegen_state.interrupt_handler_index = 0;
 
-    if needs_args_runtime {
+    if options.target == CTarget::EspIdf {
+        out.push_str("void app_main(void) {\n");
+        if needs_args_runtime {
+            out.push_str("    int argc = 0;\n    char **argv = NULL;\n");
+        }
+    } else if needs_args_runtime {
         out.push_str("int main(int argc, char **argv) {\n");
     } else {
         out.push_str("int main(void) {\n");
@@ -2977,7 +3438,9 @@ pub fn transpile_program_to_c_with_options(
     if options.debug_probes {
         out.push_str("    sk_debug_leave();\n");
     }
-    out.push_str("    return 0;\n");
+    if options.target == CTarget::Desktop {
+        out.push_str("    return 0;\n");
+    }
     out.push_str("}\n");
 
     codegen_state
@@ -3835,7 +4298,109 @@ fn emit_nominal_enums(program: &Program, out: &mut String) {
     }
 }
 
-fn emit_interrupt_runtime(out: &mut String) {
+fn emit_interrupt_runtime(out: &mut String, target: CTarget) {
+    if target == CTarget::EspIdf {
+        emit_esp_idf_interrupt_runtime(out);
+    } else {
+        emit_desktop_interrupt_runtime(out);
+    }
+}
+
+fn emit_esp_idf_interrupt_runtime(out: &mut String) {
+    out.push_str(
+        r#"typedef void (*SkInterruptHandler)(void *context);
+
+typedef struct {
+    int64_t period_ns;
+    SkInterruptHandler handler;
+    void *context;
+    bool started;
+    gptimer_handle_t timer;
+} SkInterrupt;
+
+static void sk_interrupt_panic(const char *message) {
+    fprintf(stderr, "Runtime error: [SC-RT-320] %s\n", message);
+    abort();
+}
+
+static bool IRAM_ATTR sk_interrupt_alarm_callback(
+    gptimer_handle_t timer,
+    const gptimer_alarm_event_data_t *event_data,
+    void *opaque
+) {
+    (void)timer;
+    (void)event_data;
+    SkInterrupt *interrupt = (SkInterrupt*)opaque;
+    if (interrupt && interrupt->handler) interrupt->handler(interrupt->context);
+    return false;
+}
+
+static SkInterrupt* sk_interrupt_periodic(int64_t period_ns) {
+    if (period_ns <= 0) sk_interrupt_panic("periodic interrupt duration must be positive");
+    SkInterrupt *interrupt = (SkInterrupt*)calloc(1, sizeof(SkInterrupt));
+    if (!interrupt) sk_interrupt_panic("interrupt allocation failed");
+    interrupt->period_ns = period_ns;
+    gptimer_config_t timer_config = {
+        .clk_src = GPTIMER_CLK_SRC_DEFAULT,
+        .direction = GPTIMER_COUNT_UP,
+        .resolution_hz = 1000000,
+    };
+    if (gptimer_new_timer(&timer_config, &interrupt->timer) != ESP_OK) {
+        free(interrupt);
+        sk_interrupt_panic("hardware timer creation failed");
+    }
+    return interrupt;
+}
+
+static void sk_interrupt_bind(SkInterrupt *interrupt, SkInterruptHandler handler, void *context) {
+    if (!interrupt || !handler || interrupt->started) sk_interrupt_panic("invalid or duplicate interrupt binding");
+    interrupt->handler = handler;
+    interrupt->context = context;
+    gptimer_event_callbacks_t callbacks = {
+        .on_alarm = sk_interrupt_alarm_callback,
+    };
+    if (gptimer_register_event_callbacks(interrupt->timer, &callbacks, interrupt) != ESP_OK)
+        sk_interrupt_panic("hardware timer callback registration failed");
+    uint64_t period_us = ((uint64_t)interrupt->period_ns + 999ULL) / 1000ULL;
+    if (period_us == 0) period_us = 1;
+    gptimer_alarm_config_t alarm = {
+        .alarm_count = period_us,
+        .reload_count = 0,
+        .flags.auto_reload_on_alarm = true,
+    };
+    if (gptimer_set_alarm_action(interrupt->timer, &alarm) != ESP_OK)
+        sk_interrupt_panic("hardware timer alarm configuration failed");
+    if (gptimer_enable(interrupt->timer) != ESP_OK || gptimer_start(interrupt->timer) != ESP_OK)
+        sk_interrupt_panic("hardware timer start failed");
+    interrupt->started = true;
+}
+
+static void sk_interrupt_destroy(SkInterrupt *interrupt) {
+    if (!interrupt) return;
+    if (interrupt->started) {
+        if (gptimer_stop(interrupt->timer) != ESP_OK)
+            sk_interrupt_panic("hardware timer stop failed");
+        if (gptimer_disable(interrupt->timer) != ESP_OK)
+            sk_interrupt_panic("hardware timer disable failed");
+    }
+    if (gptimer_del_timer(interrupt->timer) != ESP_OK)
+        sk_interrupt_panic("hardware timer destroy failed");
+    free(interrupt->context);
+    free(interrupt);
+}
+
+static SkInterrupt* sk_interrupt_move(SkInterrupt **source) {
+    if (!source) return NULL;
+    SkInterrupt *result = *source;
+    *source = NULL;
+    return result;
+}
+
+"#,
+    );
+}
+
+fn emit_desktop_interrupt_runtime(out: &mut String) {
     out.push_str("typedef void (*SkInterruptHandler)(void *context);\n\n");
     out.push_str("typedef struct {\n");
     out.push_str("    int64_t period_ns;\n");
@@ -4452,26 +5017,6 @@ fn program_uses_visual_runtime(program: &Program) -> bool {
             | Statement::OnErrorBlock { statements, .. } => {
                 statements.iter().any(statement_uses_visual)
             }
-            Statement::ExpressionStatement { expr, .. } => matches!(
-                expr.as_ref(),
-                Expression::Call { name, .. }
-                    if name.split_once('.').map(|(_, method)| {
-                        matches!(
-                            method,
-                            "clear"
-                                | "pixel"
-                                | "line"
-                                | "rect"
-                                | "fill_rect"
-                                | "circle"
-                                | "fill_circle"
-                                | "checksum"
-                                | "present"
-                                | "is_open"
-                                | "close"
-                        )
-                    }).unwrap_or(false)
-            ),
             _ => false,
         }
     }
@@ -4635,7 +5180,7 @@ fn emit_interrupt_handlers(program: &Program, out: &mut String, state: &mut Code
         }
         out.push_str(&format!("}} SkInterruptContext_{index};\n\n"));
         out.push_str(&format!(
-            "static void sk_interrupt_handler_{index}(void *opaque) {{\n"
+            "static void SK_INTERRUPT_ATTR sk_interrupt_handler_{index}(void *opaque) {{\n"
         ));
         out.push_str(&format!(
             "    SkInterruptContext_{index} *context = (SkInterruptContext_{index}*)opaque;\n"
@@ -8418,6 +8963,33 @@ fn expression_uses_math_call(expr: &Expression) -> bool {
     }
 }
 
+fn expression_uses_esp_unsupported_io(expr: &Expression) -> bool {
+    match expr {
+        Expression::Call { name, args } => {
+            matches!(
+                name.as_str(),
+                "args" | "input" | "read" | "write" | "fs.open" | "fs.list" | "fs.is_dir"
+            ) || args.iter().any(expression_uses_esp_unsupported_io)
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            expression_uses_esp_unsupported_io(left)
+                || right
+                    .as_deref()
+                    .map(expression_uses_esp_unsupported_io)
+                    .unwrap_or(false)
+        }
+        Expression::Index { base, index } => {
+            expression_uses_esp_unsupported_io(base) || expression_uses_esp_unsupported_io(index)
+        }
+        Expression::ListLiteral(items) => items.iter().any(expression_uses_esp_unsupported_io),
+        Expression::StructConstruction { fields } => fields
+            .values()
+            .any(|value| expression_uses_esp_unsupported_io(value)),
+        Expression::RunTask { args, .. } => args.iter().any(expression_uses_esp_unsupported_io),
+        _ => false,
+    }
+}
+
 fn stmt_uses_expression(stmt: &Statement, expression_matches: fn(&Expression) -> bool) -> bool {
     match stmt {
         Statement::VarDecl {
@@ -8468,6 +9040,10 @@ fn stmt_uses_expression(stmt: &Statement, expression_matches: fn(&Expression) ->
                     .any(|stmt| stmt_uses_expression(stmt, expression_matches))
         }
         Statement::LoopStatement { body, .. } => body
+            .statements
+            .iter()
+            .any(|stmt| stmt_uses_expression(stmt, expression_matches)),
+        Statement::OnBlock { body, .. } => body
             .statements
             .iter()
             .any(|stmt| stmt_uses_expression(stmt, expression_matches)),
@@ -8531,6 +9107,23 @@ fn stmt_uses_expression(stmt: &Statement, expression_matches: fn(&Expression) ->
             .statements
             .iter()
             .any(|stmt| stmt_uses_expression(stmt, expression_matches)),
+        Statement::PlaceIn { body, on_error, .. } => {
+            body.statements
+                .iter()
+                .any(|stmt| stmt_uses_expression(stmt, expression_matches))
+                || on_error.as_ref().is_some_and(|block| {
+                    block
+                        .statements
+                        .iter()
+                        .any(|stmt| stmt_uses_expression(stmt, expression_matches))
+                })
+        }
+        Statement::MemoryDecl { on_error, .. } => on_error.as_ref().is_some_and(|block| {
+            block
+                .statements
+                .iter()
+                .any(|stmt| stmt_uses_expression(stmt, expression_matches))
+        }),
         Statement::FunctionDef { body, .. } => body
             .statements
             .iter()

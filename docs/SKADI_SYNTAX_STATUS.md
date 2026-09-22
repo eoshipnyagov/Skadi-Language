@@ -225,8 +225,8 @@
 
 ## Частично реализованное / переходное
 
-- `Interrupt tick = interrupts.periodic(Duration)` - `Host MVP`
-- `on interrupt tick { ... }` - `Host MVP`
+- `Interrupt tick = interrupts.periodic(Duration)` - `Host + ESP-IDF MVP`
+- `on interrupt tick { ... }` - `Host + ESP-IDF MVP`
   - регистрация разрешена владельцу на top level;
   - handler допускает конечные scalar-вычисления и `Channel.try_send`;
   - blocking, allocation, I/O, task/resource management и обычные вызовы запрещены;
@@ -237,7 +237,8 @@
   - `now`, `elapsed`, `sleep`, `delay` работают через Win32/POSIX monotonic runtime;
   - разрешена только явная time/duration арифметика без смешивания с `Int/Float`;
   - `Time` и `Duration` value-safe для struct/List/Task/Channel;
-  - wall-clock, `Timer`, fractional literals и embedded backend отложены;
+  - ESP-IDF использует ESP Timer/FreeRTOS; wall-clock, `Timer` и fractional
+    literals отложены;
   - полный контракт: [Время и длительности](time-duration.md).
 - byte-size systems MVP - `Experimental / Runtime MVP`
   - nominal type `ByteSize` проходит parser/semantic/C codegen;

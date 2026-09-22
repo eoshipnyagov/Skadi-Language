@@ -188,19 +188,23 @@
   - зафиксирована для `v1` как fail-soft (`List` index -> `0`, `Text` index -> `'\0'`)
   - codegen contract tests проверяют форму вспомогательных runtime helpers
 - transition surfaces
-  - typed periodic `on interrupt` проходит semantic/codegen/runtime; hardware IRQ binding остаётся TODO
+  - typed periodic `on interrupt` проходит semantic/codegen/host runtime;
+    ESP-IDF shape test закрепляет hardware GPTimer и ISR-safe `try_send`
   - compound assignments проверяются от parser desugaring до C lowering
   - legacy typed returns принимаются с warning и formatter переводит их в `returns`
   - legacy C-style `for` сохраняет parser/formatter coverage, но имеет обязательный negative semantic gate `SC-SEM-040`
   - ASCII `Char` literals/escapes, invalid forms, typed List и native execution покрыты
   - untyped scalar declarations получают корректный C type; composite declarations без типа отклоняются с `SC-SEM-020`
-  - platform hardware binding для interrupts/events остаётся TODO
+  - GPIO/прочие platform interrupt sources и hardware execution остаются TODO
 - task/channel backend/runtime
   - void и `Task(T)` run/wait, `stop`, `stopping`, bounded Channel и cancellation
     blocking `send/receive` реализованы через Win32/pthread backend
   - `send_for/receive_for`, timed Task wait, `timed_out` и
-    success/close/stop/timeout precedence покрыты native e2e; `select`, task
-    groups и embedded APIs остаются TODO
+    success/close/stop/timeout precedence покрыты native e2e
+  - `tests/embedded_codegen.rs` закрепляет direct FreeRTOS Task/Queue backend без
+    pthread, а CLI smoke проверяет staging ESP-IDF project; реальный SDK build и
+    hardware execution остаются TODO
+  - `select` и task groups остаются TODO
 - structured analysis foundation
   - `tests/analysis_facts.rs` закрепляет task-aware blocking/timed Channel facts,
     timed Task wait, explainable incomplete `when` и subject-linked lifecycle chains

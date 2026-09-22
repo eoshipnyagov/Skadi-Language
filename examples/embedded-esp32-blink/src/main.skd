@@ -1,0 +1,28 @@
+import "./board.skd" as board
+
+fn blink(Channel(Int) ticks) returns Int {
+    new Int handled = 0
+    while handled < 6 {
+        new Int signal = ticks.receive()
+        handled = handled + signal
+        new Bool enabled = handled mod 2 == 1
+        board.board_set_led(enabled)
+        output("embedded tick: ", handled)
+    }
+    board.board_set_led(false)
+    return handled
+}
+
+board.board_init()
+
+Channel(Int) ticks = channel(4)
+Task(Int) worker = run blink(ticks)
+Interrupt timer = interrupts.periodic(500ms)
+
+on interrupt timer {
+    ticks.try_send(1)
+}
+
+new Int handled = wait worker
+ticks.close()
+output("embedded smoke complete: ", handled)

@@ -747,6 +747,30 @@ TOML editor и новые TUI-функции не входят в distribution s
 `Ring` и bounded `Pool` в этот спринт не входят и остаются предметом отдельного
 обсуждения.
 
+### Embedded-спринт: первый ESP32 vertical slice
+
+Статус: compiler/runtime/CLI slice выполнен, hardware acceptance ожидается.
+
+- добавлен experimental target `esp32-idf` с default `Int = i32`;
+- отдельный generated-C backend создаёт `app_main` и использует ESP Timer,
+  FreeRTOS tasks/queues и hardware GPTimer без POSIX compatibility;
+- `on interrupt` получает настоящий ISR path, а `Channel.try_send` использует
+  ISR-safe FreeRTOS API;
+- Channel close/drain и cooperative task cancellation сохраняются с проверкой
+  ожидания не реже одного RTOS tick;
+- CLI поддерживает `embedded prepare/build/flash/monitor`, а общий `build`
+  принимает `--target esp32-idf`;
+- staging создаёт воспроизводимый ESP-IDF component и включает declared native
+  board adapters;
+- `examples/embedded-esp32-blink` проверяет цепочку
+  `GPTimer -> on interrupt -> Channel -> Task -> GPIO/serial`;
+- structural Rust и CLI smoke tests не требуют установленного SDK.
+
+До закрытия embedded milestone остаются build/flash/monitor smoke на реальной
+ESP32, CI/HIL решение, static/region-backed storage policy и manifest controls
+для stack/priority/core. GPIO interrupts, общий device API и bare metal являются
+следующими slices, а не частью текущего.
+
 ## 8. Короткая формула
 
 `v1.1` сделал Skadi удобным прототипом языка и инструментария.

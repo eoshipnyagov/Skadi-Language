@@ -123,6 +123,10 @@ Wrapper/stage codes used by CLI pipeline:
   - stage: target-aware frontend/codegen validation
   - meaning: an `Int` literal does not fit `[numeric] int`
   - hint: use an explicit fixed-width type or widen the project `Int`
+- `SC-CG-303`
+  - stage: target-aware frontend/codegen validation
+  - meaning: the language form has no backend/capability on the selected target
+  - hint: use a supported API, a declared native platform adapter, or another target
 - `SC-RT-350`
   - stage: generated numeric runtime
   - meaning: checked integer arithmetic detected overflow, division/remainder by

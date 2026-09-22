@@ -55,6 +55,7 @@ cargo run -p skadi-cli -- check
 - `run` собирает и запускает программу;
 - `debug` запускает opt-in debug build с breakpoints по `.skd`, `continue` и `step`;
 - `quick-run` собирает и запускает один `.skd` без `Skadi.toml`;
+- `embedded prepare/build/flash/monitor` управляет experimental ESP-IDF flow;
 - `doctor` проверяет host и cross toolchains;
 - `target list` показывает поддерживаемые target profiles;
 - `tui` открывает полноэкранный интерфейс проекта.
@@ -67,7 +68,9 @@ Skadi call stack и базовые scalar-locals. Тот же машинный d
 экраном Debug внутри TUI.
 
 `build` и `run` принимают `--target` и `--cc`. C-компилятор является внешней
-зависимостью и не устанавливается вместе со Skadi.
+зависимостью и не устанавливается вместе со Skadi. Для `esp32-idf` C toolchain
+выбирает ESP-IDF 5.4+, `--cc` не применяется, а firmware запускается через
+`embedded flash`, а не host-командой `run`.
 
 Project manifest может подключать проверенные C sources и libraries через
 `[native]`; Skadi-граница объявляется bodyless `external fn` с fixed scalar

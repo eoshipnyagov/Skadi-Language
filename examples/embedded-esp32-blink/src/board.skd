@@ -1,0 +1,2 @@
+external fn board_init()
+external fn board_set_led(Bool enabled)

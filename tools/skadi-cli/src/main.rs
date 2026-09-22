@@ -1,6 +1,7 @@
 mod actions;
 mod commands;
 mod debug_session;
+mod embedded;
 mod pipeline;
 mod project;
 mod targets;
@@ -24,6 +25,7 @@ fn help_text() -> String {
         "  run [--target] [--cc]    Build and run project",
         "  debug [-b file:line]      Build and debug project interactively",
         "  quick-run <file.skd> [-- <args>]  Run one file without a manifest",
+        "  embedded <command>  Prepare, build, flash, or monitor an ESP-IDF project",
         "  target list        List supported targets",
         "  tui                Full-screen interactive workflow",
         "  format [--check] [path ...]  Format Skadi source files",
@@ -56,6 +58,7 @@ fn main() {
         "run" => commands::run_cmd::run(&args[2..]),
         "debug" => commands::debug_cmd::run(&args[2..]),
         "quick-run" => commands::quick_run_cmd::run(&args[2..]),
+        "embedded" => commands::embedded_cmd::run(&args[2..]),
         "target" => commands::target_cmd::run(&args[2..]),
         "tui" => commands::tui_cmd::run(&args[2..]),
         "format" => commands::format_cmd::run(&args[2..]),
@@ -94,6 +97,7 @@ mod tests {
         assert!(help.contains("-V, --version"));
         assert!(help.contains("format [--check] [path ...]  Format Skadi source files"));
         assert!(help.contains("quick-run <file.skd> [-- <args>]"));
+        assert!(help.contains("embedded <command>"));
         assert!(help.contains("debug [-b file:line]"));
         assert!(help.contains("analyze [--json]"));
         assert!(help.contains("tui                Full-screen interactive workflow"));

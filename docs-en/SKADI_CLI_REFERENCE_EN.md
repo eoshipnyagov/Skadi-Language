@@ -36,6 +36,7 @@ skadi-cli tui
 | `build [--target name] [--cc compiler]` | Build a native binary | Yes |
 | `run [--target name] [--cc compiler]` | Build and execute | Yes |
 | `quick-run <file.skd> [-- <args ...>]` | Build and run one file without a manifest | Yes |
+| `embedded <command>` | Prepare, build, flash, or monitor an ESP-IDF project | ESP-IDF |
 | `doctor` | Inspect host and cross toolchains | No |
 | `target list` | List target profiles | No |
 | `tui` | Open the full-screen project workflow | Per action |
@@ -115,6 +116,27 @@ file. The generated C and executable live in a temporary directory and are
 removed after execution. The command uses the host target, accepts `--cc`, and
 forwards arguments only after `--`. Cargo is not required by an installed CLI.
 
+## Embedded
+
+The experimental ESP32 workflow requires ESP-IDF 5.4+ for build and device
+commands:
+
+```powershell
+skadi-cli embedded prepare
+skadi-cli embedded build
+skadi-cli embedded flash --port COM7 --monitor
+skadi-cli embedded monitor --port COM7
+```
+
+`prepare` runs the frontend and stages an ESP-IDF project under
+`build/esp32-idf`, even when the SDK is not installed. Build, flash, and monitor
+require an activated environment with `idf.py` and `IDF_PATH`. `SKADI_IDF_PY`
+overrides the launcher.
+
+`skadi-cli build --target esp32-idf` uses the same path. Host `run` and `--cc`
+are intentionally unavailable for firmware targets. See the
+[embedded status](embedded.en.md) for the exact support boundary.
+
 ## TUI
 
 Screens cover project status, diagnostics, build/run output, doctor, bootstrap,
@@ -142,4 +164,4 @@ explanatory facts, not a second class of hard compiler errors.
 - background TUI actions;
 - richer per-command help;
 - package/dependency commands after a module/package design exists;
-- embedded build/flash after a platform runtime is approved.
+- ESP32 hardware CI/HIL, GPIO interrupts, and manifest stack/priority/core controls.

@@ -1,0 +1,241 @@
+{
+  "entries": [
+    {
+      "generated": {
+        "end_line": 1928,
+        "start_line": 1928
+      },
+      "kind": "expression",
+      "source": {
+        "col": 5,
+        "line": 23,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@24:5#1"
+    },
+    {
+      "generated": {
+        "end_line": 1949,
+        "start_line": 1949
+      },
+      "kind": "variable_declaration",
+      "source": {
+        "col": 5,
+        "line": 4,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@5:5#1"
+    },
+    {
+      "generated": {
+        "end_line": 1962,
+        "start_line": 1951
+      },
+      "kind": "while",
+      "source": {
+        "col": 5,
+        "line": 5,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@6:5#1"
+    },
+    {
+      "generated": {
+        "end_line": 1953,
+        "start_line": 1953
+      },
+      "kind": "variable_declaration",
+      "source": {
+        "col": 9,
+        "line": 6,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@7:9#1"
+    },
+    {
+      "generated": {
+        "end_line": 1955,
+        "start_line": 1955
+      },
+      "kind": "assignment",
+      "source": {
+        "col": 9,
+        "line": 7,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@8:9#1"
+    },
+    {
+      "generated": {
+        "end_line": 1957,
+        "start_line": 1957
+      },
+      "kind": "variable_declaration",
+      "source": {
+        "col": 9,
+        "line": 8,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@9:9#1"
+    },
+    {
+      "generated": {
+        "end_line": 1959,
+        "start_line": 1959
+      },
+      "kind": "expression",
+      "source": {
+        "col": 9,
+        "line": 9,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@10:9#1"
+    },
+    {
+      "generated": {
+        "end_line": 1961,
+        "start_line": 1961
+      },
+      "kind": "expression",
+      "source": {
+        "col": 9,
+        "line": 10,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@11:9#1"
+    },
+    {
+      "generated": {
+        "end_line": 1964,
+        "start_line": 1964
+      },
+      "kind": "expression",
+      "source": {
+        "col": 5,
+        "line": 12,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@13:5#1"
+    },
+    {
+      "generated": {
+        "end_line": 1966,
+        "start_line": 1966
+      },
+      "kind": "return",
+      "source": {
+        "col": 5,
+        "line": 13,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@14:5#1"
+    },
+    {
+      "generated": {
+        "end_line": 1972,
+        "start_line": 1972
+      },
+      "kind": "expression",
+      "source": {
+        "col": 1,
+        "line": 16,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@17:1#1"
+    },
+    {
+      "generated": {
+        "end_line": 1974,
+        "start_line": 1974
+      },
+      "kind": "variable_declaration",
+      "source": {
+        "col": 1,
+        "line": 18,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@19:1#1"
+    },
+    {
+      "generated": {
+        "end_line": 1980,
+        "start_line": 1976
+      },
+      "kind": "variable_declaration",
+      "source": {
+        "col": 1,
+        "line": 19,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@20:1#1"
+    },
+    {
+      "generated": {
+        "end_line": 1982,
+        "start_line": 1982
+      },
+      "kind": "variable_declaration",
+      "source": {
+        "col": 1,
+        "line": 20,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@21:1#1"
+    },
+    {
+      "generated": {
+        "end_line": 1987,
+        "start_line": 1984
+      },
+      "kind": "event_handler",
+      "source": {
+        "col": 1,
+        "line": 22,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@23:1#1"
+    },
+    {
+      "generated": {
+        "end_line": 1991,
+        "start_line": 1989
+      },
+      "kind": "variable_declaration",
+      "source": {
+        "col": 1,
+        "line": 26,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@27:1#1"
+    },
+    {
+      "generated": {
+        "end_line": 1993,
+        "start_line": 1993
+      },
+      "kind": "expression",
+      "source": {
+        "col": 1,
+        "line": 27,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@28:1#1"
+    },
+    {
+      "generated": {
+        "end_line": 1995,
+        "start_line": 1995
+      },
+      "kind": "expression",
+      "source": {
+        "col": 1,
+        "line": 28,
+        "path": "//?/D:/YandexDisk/Skadi/v01/examples/embedded-esp32-blink/src/main.skd"
+      },
+      "statement_id": "SK-STMT@29:1#1"
+    }
+  ],
+  "entry": "src/main.skd",
+  "generated_c": "build/esp32-idf/main/skadi_program.c",
+  "schema": "skadi.debug-map.v1"
+}

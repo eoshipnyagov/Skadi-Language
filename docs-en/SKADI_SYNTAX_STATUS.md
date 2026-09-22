@@ -26,6 +26,7 @@ Date: 2026-08-25
 - owning `File`, nominal `FileMode`, fallible `fs.open/read_all/write/close`,
   early close, move/borrow rules, and automatic scope cleanup;
 - periodic `Interrupt` sources and `on interrupt`;
+- experimental ESP-IDF lowering for FreeRTOS Task/Channel and GPTimer interrupts;
 - Channel `try_send`, `close`/drain, cancellation-aware blocking operations,
   `send_for`/`receive_for`, and contextual `timed_out`;
 - path-sensitive `wait task for Duration on error { ... }`;
@@ -58,7 +59,7 @@ checks, and explicit angle/unit representation access. Duration literals cover
 - automatic `allow drop` reclamation;
 - Git/registry dependencies, transitive resolution, lock files, and re-exports;
 - Channel `select`/`try_receive`, and async/task groups;
-- ESP32/RTOS backend;
+- release-tested ESP32 hardware matrix and other MCU backends;
 - Matrix2D, Canvas events/text/images, non-Windows presenters, and generic units/vectors.
 
 The [quick reference](language-quick-reference.en.md) lists every public form and

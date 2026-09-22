@@ -109,8 +109,9 @@ backend и автоматической стратегии reclamation для `a
 обязательный `wait`, cooperative `stop` и bounded FIFO channels с
 `send/receive/try_send/close` и drain-after-close.
 
-Пока нет scheduler abstraction, async/await, task groups, `select`, cancellation
-произвольного I/O и RTOS backend. Blocking Channel
+Пока нет scheduler abstraction, async/await, task groups, `select` и cancellation
+произвольного I/O. Experimental ESP-IDF backend использует прямые FreeRTOS
+Task/Queue, но ещё не имеет hardware release gate и static allocation policy. Blocking Channel
 `send/receive` отменяются через `stop`; `send_for/receive_for` используют
 `Duration` и контекстный `timed_out`. Timed Task wait сохраняет live handle в
 timeout-handler и поглощает его только при успешном join.
@@ -196,14 +197,19 @@ Host MVP поддерживает `Interrupt tick = interrupts.periodic(Duration
 может выполнять конечные scalar-вычисления и `Channel.try_send`, но не blocking,
 allocation, I/O или task/resource management.
 
-Desktop target profiles и generated C не означают поддержку ESP32. До
-embedded-ready состояния не хватает:
+Первый ESP32 vertical slice реализован как отдельный `esp32-idf` backend, а не
+как повторное использование POSIX C:
 
-- target/toolchain profile для конкретной платформы;
-- runtime adapter для RTOS/bare metal;
-- allocation, time, task и I/O contracts без POSIX/Win32;
-- linker/flash workflow;
-- CI или hardware-in-the-loop gate.
+- CLI знает target и staging ESP-IDF project;
+- generated C использует `app_main`, FreeRTOS Task/Queue и ESP Timer;
+- periodic `Interrupt` lower'ится в hardware GPTimer callback;
+- interrupt handler и `Channel.try_send` используют ISR-safe path;
+- `embedded prepare/build/flash/monitor` образуют официальный workflow;
+- `examples/embedded-esp32-blink` связывает timer, Channel, Task, GPIO и serial.
+
+До release-tested embedded-ready состояния остаются hardware/CI gate,
+static/region-backed Task/Channel allocation, manifest policy для stack,
+priority/core и более широкий device/I/O layer. Bare metal не реализован.
 
 ### Visual Core / Canvas
 
@@ -226,7 +232,7 @@ backend и embedded display adapter.
 | `edit` / `view` | Реализованный borrow contract | Использовать для явной mutable/read-only передачи без владения |
 | `move` | Реализованный bounded ownership transfer | Использовать явно в signature, call site, binding и resource return |
 | `allow grow` / `allow drop` | Реализованы только как contextual Memory policies | Не превращать `allow` в общий modifier |
-| `on interrupt` | Host MVP для typed periodic Interrupt | Hardware IRQ backend остаётся future |
+| `on interrupt` | Host MVP и experimental ESP-IDF GPTimer backend | GPIO и другие hardware sources остаются future |
 | `for (init; cond; update)` | Parse/format compatibility + hard rejection | Не использовать в новом коде |
 | `fn name(...) Type` | Legacy compatibility | Formatter переводит в `returns Type` |
 | `for ... in ...` | Работает | Каноническая витринная форма всё ещё `iterate ... as ...` |
@@ -256,14 +262,11 @@ backend и embedded display adapter.
    `view/edit/move`, owner-only close, scope cleanup, analyzer/TUI timeline и
    native Windows/POSIX stdio backend выполнены. `Port`, `Socket` и device
    handles остаются future и должны входить только вместе с реальным API.
-4. Hardware interrupt binding и ESP32/FreeRTOS backend проверять одним
-   прикладным vertical slice. RTOS является реализационной деталью target, а не
-   новой пользовательской моделью конкурентности: Skadi-код продолжает говорить
-   на языке `Task`, `Channel`, `Duration`, `Memory` и `on interrupt`.
-5. Первый embedded slice должен доказать полезный сценарий целиком: hardware
-   event, безопасный bridge из interrupt context, обработка в обычной задаче,
-   bounded memory, build/flash и hardware smoke. Отдельные RTOS wrappers без
-   такого сценария не считаются прогрессом языка.
+4. Hardware GPTimer binding и ESP32/FreeRTOS vertical slice реализованы без
+   новой пользовательской concurrency model. Осталось подтвердить generated
+   project на реальной ESP32 и добавить этот smoke в release gate.
+5. Следующий embedded этап: static/region-backed Task/Channel storage,
+   manifest-настройки stack/priority/core, GPIO interrupt source и CI/HIL.
 6. `Ring`/bounded `Pool` больше не являются ожидаемым milestone. Это research-
    кандидаты: они возвращаются в очередь только после нескольких реальных задач,
    где обычные `List`/`Channel`/`Memory` дают заметно худший и менее ясный код.

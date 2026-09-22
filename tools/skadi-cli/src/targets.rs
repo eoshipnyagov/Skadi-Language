@@ -20,6 +20,7 @@ pub struct TargetProfile {
 pub enum OutputKind {
     WindowsExe,
     LinuxElf,
+    EspIdfProject,
 }
 
 fn gnu_link_args(c: &str, out: &str, pthread: bool, windows: bool) -> Vec<String> {
@@ -41,7 +42,7 @@ const HOST_OUTPUT_KIND: OutputKind = if cfg!(windows) {
     OutputKind::LinuxElf
 };
 
-const PROFILES: [TargetProfile; 3] = [
+const PROFILES: [TargetProfile; 4] = [
     TargetProfile {
         triple: "host",
         description: "Current host toolchain auto-detection",
@@ -56,6 +57,11 @@ const PROFILES: [TargetProfile; 3] = [
         triple: "x86_64-unknown-linux-gnu",
         description: "Linux GNU via cross GCC/Clang",
         output_kind: OutputKind::LinuxElf,
+    },
+    TargetProfile {
+        triple: "esp32-idf",
+        description: "ESP32 via ESP-IDF project backend (experimental)",
+        output_kind: OutputKind::EspIdfProject,
     },
 ];
 
@@ -74,7 +80,9 @@ pub fn resolve_profile(target: &str) -> Result<TargetProfile, String> {
 pub fn resolve_int_width(target: &str, configured: &str) -> Result<IntWidth, String> {
     match configured.trim() {
         "target" => match target {
-            "host" | "x86_64-w64-mingw32" | "x86_64-unknown-linux-gnu" => Ok(IntWidth::I32),
+            "host" | "x86_64-w64-mingw32" | "x86_64-unknown-linux-gnu" | "esp32-idf" => {
+                Ok(IntWidth::I32)
+            }
             other => Err(format!(
                 "target '{other}' does not define a default Int width yet"
             )),
@@ -155,6 +163,10 @@ pub fn candidate_invocations(
                 ],
             },
         ],
+        "esp32-idf" => vec![CompilerInvocation {
+            program: "idf.py".to_string(),
+            args: vec!["build".to_string()],
+        }],
         other => return Err(format!("target '{other}' is not implemented yet.")),
     };
     Ok(inv)
@@ -166,6 +178,12 @@ pub fn single_compiler_invocation(
     c_path: &Path,
     exe_path: &Path,
 ) -> Result<CompilerInvocation, String> {
+    if target == "esp32-idf" {
+        return Err(
+            "target 'esp32-idf' is built by ESP-IDF; --cc is not supported. Use idf.py from an activated ESP-IDF environment."
+                .to_string(),
+        );
+    }
     let c = c_path.display().to_string();
     let out = exe_path.display().to_string();
     let object = c_path.with_extension("obj").display().to_string();
@@ -252,6 +270,9 @@ pub fn target_hint(triple: &str) -> &'static str {
         "x86_64-unknown-linux-gnu" => {
             "Install x86_64-linux-gnu-gcc cross toolchain or clang with Linux target support."
         }
+        "esp32-idf" => {
+            "Install ESP-IDF 5.4+, activate its environment so idf.py is in PATH, then run `skadi-cli embedded prepare` or `skadi-cli build --target esp32-idf`."
+        }
         _ => "Install matching target toolchain and ensure compiler is available in PATH.",
     }
 }
@@ -260,7 +281,11 @@ pub fn target_hint(triple: &str) -> &'static str {
 mod tests {
     use std::path::Path;
 
-    use super::{candidate_invocations, linux_install_hint_with, single_compiler_invocation};
+    use super::{
+        OutputKind, builtin_profiles, candidate_invocations, linux_install_hint_with,
+        resolve_int_width, single_compiler_invocation,
+    };
+    use v01::codegen::IntWidth;
 
     #[test]
     fn host_order_starts_with_gcc_clang() {
@@ -352,5 +377,23 @@ mod tests {
                 .iter()
                 .any(|arg| arg == "/Fo:temp/script.obj" || arg == "/Fo:temp\\script.obj")
         );
+    }
+
+    #[test]
+    fn esp_idf_profile_uses_i32_and_owns_its_toolchain() {
+        let profile = builtin_profiles()
+            .iter()
+            .find(|profile| profile.triple == "esp32-idf")
+            .expect("ESP-IDF profile");
+        assert_eq!(profile.output_kind, OutputKind::EspIdfProject);
+        assert_eq!(
+            resolve_int_width("esp32-idf", "target").expect("ESP-IDF Int width"),
+            IntWidth::I32
+        );
+
+        let error =
+            single_compiler_invocation("esp32-idf", "gcc", Path::new("a.c"), Path::new("a.bin"))
+                .expect_err("ESP-IDF must reject --cc");
+        assert!(error.contains("--cc is not supported"));
     }
 }

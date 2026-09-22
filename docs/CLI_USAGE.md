@@ -27,6 +27,7 @@
 - `build`
 - `run`
 - `quick-run <file.skd> [-- <args ...>]`
+- `embedded prepare|build|flash|monitor`
 - `format`
 - `doctor`
 - `target list`

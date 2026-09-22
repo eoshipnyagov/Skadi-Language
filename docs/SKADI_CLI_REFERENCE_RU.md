@@ -51,6 +51,7 @@ skadi-cli tui
 | `run [--target name] [--cc compiler]` | Собрать и запустить | Да |
 | `debug [-b file.skd:line] [-- <args ...>]` | Отладочная сборка, breakpoints и step | Да |
 | `quick-run <file.skd> [-- <args ...>]` | Собрать и запустить один файл без manifest | Да |
+| `embedded <command>` | Подготовить, собрать, прошить или наблюдать ESP-IDF project | ESP-IDF |
 | `doctor` | Проверить host/cross toolchains | Нет |
 | `target list` | Показать target profiles | Нет |
 | `tui` | Открыть full-screen project workflow | Зависит от action |
@@ -213,6 +214,28 @@ skadi-cli quick-run tools/inspect.skd -- input.txt --verbose
 через `--cc`, а аргументы программы передаются только после `--`. Установленному
 `skadi-cli` Cargo для этого не нужен.
 
+## `embedded`
+
+Экспериментальный ESP32 workflow использует ESP-IDF 5.4+:
+
+```powershell
+skadi-cli embedded prepare
+skadi-cli embedded build
+skadi-cli embedded flash --port COM7
+skadi-cli embedded flash --port COM7 --monitor
+skadi-cli embedded monitor --port COM7
+```
+
+`prepare` выполняет frontend-проверку и создаёт ESP-IDF-проект в
+`build/esp32-idf`, поэтому полезен даже без установленного SDK. Остальные
+команды требуют активированной ESP-IDF environment с `idf.py` и `IDF_PATH`.
+Переменная `SKADI_IDF_PY` переопределяет launcher.
+
+Обычный `skadi-cli build --target esp32-idf` использует тот же backend.
+`run` для firmware-target запрещён, а `--cc` неприменим: toolchain выбирает
+ESP-IDF. Полный статус и ограничения описаны на странице
+[Embedded](embedded.md).
+
 ## Targets и doctor
 
 Ширина обычного `Int` задаётся в `skadi.toml` и применяется одинаково в CLI и
@@ -231,9 +254,10 @@ skadi-cli target list
 skadi-cli doctor
 ```
 
-`doctor` отдельно показывает readiness host compiler и cross-target candidates,
-а также actionable hints. Наличие target profile не означает готовый runtime:
-ESP32/FreeRTOS пока [запланирован](embedded.md), но не поддерживается end-to-end.
+`doctor` отдельно показывает readiness host compiler, ESP-IDF и cross-target
+candidates, а также actionable hints. `esp32-idf` является experimental target:
+compiler/runtime/CLI slice реализован, но hardware smoke и release gate ещё не
+закрыты.
 
 ## TUI
 
@@ -303,7 +327,7 @@ cargo run -p skadi-cli -- check
 - background task execution внутри TUI;
 - более подробные per-command help pages;
 - package/dependency commands после появления module/package model;
-- embedded build/flash workflow после утверждения platform runtime.
+- ESP32 hardware CI/HIL, GPIO interrupts и manifest-настройки stack/priority/core.
 
 Имена текущих команд являются стабильной automation surface; планируемые
 возможности не следует закладывать в scripts заранее.

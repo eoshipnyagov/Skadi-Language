@@ -9,10 +9,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 
 pub use v01::analysis::{AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind};
-use v01::codegen::CodegenOptions;
+use v01::codegen::{CTarget, CodegenOptions};
 use v01::formatter::format_source;
 
 use crate::debug_session::{DebugCommand, DebugEvent, DebugIoMode, DebugStop, start_debug_session};
+use crate::embedded::{ESP_IDF_TARGET, run_idf, stage_esp_idf_project};
 use crate::pipeline::{
     DebugSourceMapEntry, NativeLinkOptions, compile_c_to_exe_detailed_with_native,
     compile_frontend_with_options,
@@ -117,6 +118,24 @@ pub struct BuildResult {
 pub struct RunResult {
     pub build: BuildResult,
     pub exit_status: String,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct EmbeddedPrepareResult {
+    pub project_dir: PathBuf,
+    pub generated_c: PathBuf,
+    pub artifact: PathBuf,
+    pub project_name: String,
+    pub warnings: Vec<DiagnosticSummary>,
+}
+
+#[derive(Clone, Debug)]
+pub struct EmbeddedCommandResult {
+    pub prepared: EmbeddedPrepareResult,
+    pub invocation: crate::targets::CompilerInvocation,
+    pub status: String,
     pub stdout: String,
     pub stderr: String,
 }
@@ -629,6 +648,11 @@ fn run_build_at_mode(
         CodegenOptions {
             debug_probes,
             int_width,
+            target: if options.target == "esp32-idf" {
+                CTarget::EspIdf
+            } else {
+                CTarget::Desktop
+            },
         },
     )
     .map_err(|e| {
@@ -640,7 +664,7 @@ fn run_build_at_mode(
     let build_dir =
         ensure_build_dir(&project.root).map_err(|e| ActionError::new(FailureSource::Io, e))?;
     let c_path = build_dir.join(format!("{}.c", project.name));
-    fs::write(&c_path, frontend.c_code).map_err(|e| {
+    fs::write(&c_path, &frontend.c_code).map_err(|e| {
         ActionError::new(
             FailureSource::Io,
             format!(
@@ -649,24 +673,39 @@ fn run_build_at_mode(
             ),
         )
     })?;
+    let native = resolve_native_link_options(&project)?;
+    let (toolchain, exe_path, result_c_path) = if profile.output_kind == OutputKind::EspIdfProject {
+        if options.cc.is_some() {
+            return Err(ActionError::new(
+                FailureSource::Usage,
+                "esp32-idf is built by ESP-IDF and does not accept --cc",
+            ));
+        }
+        let staged = stage_esp_idf_project(&project, &frontend.c_code, &build_dir)
+            .map_err(|error| ActionError::new(FailureSource::Project, error))?;
+        let toolchain = run_idf(&staged, &["build".to_string()])
+            .map_err(|error| ActionError::new(FailureSource::Toolchain, error))?;
+        (toolchain, staged.artifact, staged.generated_c)
+    } else {
+        let exe_name = match profile.output_kind {
+            OutputKind::WindowsExe => format!("{}.exe", project.name),
+            OutputKind::LinuxElf => project.name.clone(),
+            OutputKind::EspIdfProject => unreachable!(),
+        };
+        let exe_path = build_dir.join(exe_name);
+        let toolchain = compile_native(&c_path, &exe_path, options, &native)?;
+        (toolchain, exe_path, c_path)
+    };
+
     let debug_map = frontend.debug_map.clone();
     let debug_map_path = build_dir.join(format!("{}.skadi-debug.json", project.name));
     write_debug_map(
         &debug_map_path,
         &project.root,
         &project.entry,
-        &c_path,
+        &result_c_path,
         &frontend.debug_map,
     )?;
-
-    let exe_name = match profile.output_kind {
-        OutputKind::WindowsExe => format!("{}.exe", project.name),
-        OutputKind::LinuxElf => project.name.clone(),
-    };
-    let exe_path = build_dir.join(exe_name);
-
-    let native = resolve_native_link_options(&project)?;
-    let toolchain = compile_native(&c_path, &exe_path, options, &native)?;
 
     Ok(BuildResult {
         project: summary,
@@ -683,10 +722,89 @@ fn run_build_at_mode(
         toolchain_status: toolchain.status,
         toolchain_stdout: toolchain.stdout,
         toolchain_stderr: toolchain.stderr,
-        c_path,
+        c_path: result_c_path,
         debug_map_path,
         debug_map,
         exe_path,
+    })
+}
+
+pub fn prepare_esp_idf() -> Result<EmbeddedPrepareResult, ActionError> {
+    let cwd = std::env::current_dir()
+        .map_err(|error| ActionError::new(FailureSource::Io, format!("cwd failed: {error}")))?;
+    prepare_esp_idf_at(&cwd)
+}
+
+pub fn prepare_esp_idf_at(root: &Path) -> Result<EmbeddedPrepareResult, ActionError> {
+    let project =
+        load_project_at(root).map_err(|error| ActionError::new(FailureSource::Project, error))?;
+    let int_width = resolve_int_width(ESP_IDF_TARGET, &project.int_width)
+        .map_err(|error| ActionError::new(FailureSource::Project, error))?;
+    let frontend = compile_frontend_with_options(
+        &project.entry,
+        CodegenOptions {
+            int_width,
+            target: CTarget::EspIdf,
+            ..CodegenOptions::default()
+        },
+    )
+    .map_err(|error| {
+        ActionError::new(
+            FailureSource::Frontend,
+            format!("Skadi frontend error: {error}"),
+        )
+    })?;
+    let build_dir = ensure_build_dir(&project.root)
+        .map_err(|error| ActionError::new(FailureSource::Io, error))?;
+    let staged = stage_esp_idf_project(&project, &frontend.c_code, &build_dir)
+        .map_err(|error| ActionError::new(FailureSource::Project, error))?;
+    let debug_map_path = build_dir.join(format!("{}.skadi-debug.json", project.name));
+    write_debug_map(
+        &debug_map_path,
+        &project.root,
+        &project.entry,
+        &staged.generated_c,
+        &frontend.debug_map,
+    )?;
+
+    Ok(EmbeddedPrepareResult {
+        project_dir: staged.root,
+        generated_c: staged.generated_c,
+        artifact: staged.artifact,
+        project_name: staged.project_name,
+        warnings: frontend
+            .warnings
+            .iter()
+            .flat_map(|warning| parse_warning(warning))
+            .collect(),
+    })
+}
+
+pub fn run_esp_idf_command(
+    port: Option<&str>,
+    commands: &[String],
+) -> Result<EmbeddedCommandResult, ActionError> {
+    let prepared = prepare_esp_idf()?;
+    let staged = crate::embedded::EspIdfProject {
+        root: prepared.project_dir.clone(),
+        generated_c: prepared.generated_c.clone(),
+        artifact: prepared.artifact.clone(),
+        project_name: prepared.project_name.clone(),
+    };
+    let mut idf_commands = Vec::new();
+    if let Some(port) = port {
+        idf_commands.push("-p".to_string());
+        idf_commands.push(port.to_string());
+    }
+    idf_commands.extend(commands.iter().cloned());
+    let toolchain = run_idf(&staged, &idf_commands)
+        .map_err(|error| ActionError::new(FailureSource::Toolchain, error))?;
+    Ok(EmbeddedCommandResult {
+        prepared,
+        invocation: toolchain.invocation,
+        status: toolchain.status,
+        stdout: toolchain.stdout,
+        stderr: toolchain.stderr,
     })
 }
 
@@ -754,6 +872,15 @@ pub fn run_project(options: &BuildOptions) -> Result<RunResult, ActionError> {
 }
 
 pub fn run_project_at(root: &Path, options: &BuildOptions) -> Result<RunResult, ActionError> {
+    if options.target == ESP_IDF_TARGET {
+        return Err(ActionError::new(
+            FailureSource::Usage,
+            format!(
+                "run cannot execute firmware target '{}'; use `skadi-cli build --target {}` or the embedded flash workflow",
+                options.target, options.target
+            ),
+        ));
+    }
     let build = run_build_at(root, options)?;
     let output = Command::new(&build.exe_path)
         .stdout(Stdio::piped())
@@ -1084,6 +1211,7 @@ pub fn prepare_quick_run(options: &QuickRunOptions) -> Result<QuickRunPrepared, 
     let exe_name = match profile.output_kind {
         OutputKind::WindowsExe => format!("{artifact_name}.exe"),
         OutputKind::LinuxElf => artifact_name,
+        OutputKind::EspIdfProject => unreachable!("quick-run rejects cross targets"),
     };
     let exe_path = build_dir.path.join(exe_name);
     let toolchain = compile_native(

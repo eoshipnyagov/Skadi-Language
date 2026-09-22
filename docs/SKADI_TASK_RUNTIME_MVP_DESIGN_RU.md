@@ -277,27 +277,18 @@ Generated source выбирает backend через `_WIN32`. CLI добавл�
 GCC/Clang на POSIX host и Linux target. Для MSVC и MinGW Win32 primitives не
 требуют отдельного pthread runtime.
 
-### 10.1. ESP32 / RTOS roadmap
+### 10.1. ESP32 / RTOS experimental backend
 
-ESP32, ESP-IDF, FreeRTOS и bare-metal не входят в текущий backend и не считаются
-поддержанными targets. Наличие pthread compatibility layer в ESP-IDF само по себе
-не делает generated POSIX C готовым embedded port.
+Первый `esp32-idf` slice реализован отдельно от pthread compatibility. Generated
+C использует FreeRTOS Task/Queue, ESP Timer и hardware GPTimer, а CLI создаёт
+ESP-IDF project и поддерживает build/flash/monitor. Пользовательская модель
+остаётся общей: `Task`, `Channel`, `Duration` и `on interrupt`.
 
-Рекомендуемый порядок реализации:
-
-1. ESP-IDF target profiles для Xtensa и RISC-V chips;
-2. toolchain discovery, build и flash boundaries в `skadi-cli`;
-3. минимальный bring-up через ESP-IDF pthread compatibility;
-4. прямой FreeRTOS backend для явных stack size, priority, core affinity и static
-   allocation;
-5. отказ от безусловного heap allocation task context и Channel buffer в пользу
-   profile-controlled static или region-backed storage;
-6. emulator smoke и hardware-in-the-loop regression suite.
-
-Перед портом должны быть зафиксированы resource exhaustion policy, максимальное
-число tasks, размеры stack, priority model, pinning и источник памяти Channel.
-Текущий desktop backend не даёт hard real-time guarantees и не является
-достаточным контрактом для production firmware.
+Это ещё не production firmware contract. Task context и Channel storage
+динамические; manifest не задаёт stack size, priority, core affinity и static
+allocation. Следующие обязательные шаги: hardware/HIL regression, явная
+resource-exhaustion policy, profile-controlled static или region-backed storage
+и документированный предел tasks/channels. Bare-metal targets остаются future.
 
 ## 11. Channel runtime, второй slice
 

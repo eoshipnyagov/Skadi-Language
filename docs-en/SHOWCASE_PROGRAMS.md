@@ -74,6 +74,9 @@ Focused native examples also cover:
   `send_for`/`receive_for` and `timed_out` handling;
 - `examples/concurrency/05_timed_task_wait.skd` for conditional Task-handle
   consumption across success and timeout paths.
+- `examples/embedded-esp32-blink/` for the ESP-IDF vertical path: hardware
+  GPTimer, `on interrupt`, ISR-safe `try_send`, Task, GPIO, and serial output.
+  Structural and staging smoke does not require the SDK; hardware smoke does.
 - `examples/c-abi/` for a manifest project using `external fn`, a native C
   source, fixed-width values, a by-value `external struct`, an opaque owning
   `external resource`, and `view`/`edit Buffer(u8)` at the ABI boundary.
@@ -120,7 +123,7 @@ POSIX shell:
   - time, byte-size, angle, vector, Canvas, bit, and File coverage through `bench_13..19`.
 
 See the [Concurrency Guide](concurrency.md) for Task/Channel lifecycle,
-multi-worker, cancellation, and timed-wait patterns, platform details, and the
-ESP32/RTOS roadmap.
+multi-worker, cancellation, timed-wait patterns, and the experimental ESP-IDF
+backend.
 
 Russian remains the primary source of truth for the full showcase documentation.

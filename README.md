@@ -54,6 +54,9 @@ The repository includes:
 - experimental native Task/Channel runtime and periodic host Interrupts for
   `v1.2`, including cancellation-aware Channel operations and Duration-bounded
   Channel/Task waits,
+- an experimental `esp32-idf` backend with direct FreeRTOS Task/Channel,
+  hardware GPTimer interrupts, ISR-safe `try_send`, project staging, and
+  build/flash/monitor commands,
 - structured analysis facts with stable IDs/source anchors for blocking/timed
   operations, incomplete `when`, and resource lifecycle chains displayed in a
   dedicated TUI workspace and exported by `analyze --json`,
@@ -346,8 +349,10 @@ Interrupts. `stop` also wakes a task blocked in Channel `send/receive` without
 closing or draining the channel. `send_for`/`receive_for` bound waits with a
 `Duration`; their `on error` handlers distinguish cancellation with `stopping`
 and deadlines with `timed_out`. Timed Task wait consumes the handle on success
-and preserves it in the timeout handler. Cancellation of file I/O, hardware IRQ
-binding, advanced scheduling, and embedded/RTOS targets remain future work. See the
+and preserves it in the timeout handler. The experimental `esp32-idf` target
+maps the same surface to FreeRTOS tasks/queues and hardware GPTimer interrupts;
+its hardware release gate and static-allocation policy are still open.
+Cancellation of file I/O and advanced scheduling remain future work. See the
 [Concurrency Guide](https://eoshipnyagov.github.io/Skadi-Language/en/user/concurrency/).
 
 ### 3. Canvas
@@ -561,6 +566,7 @@ skadi-cli build
 skadi-cli run
 skadi-cli debug [-b file.skd:line]
 skadi-cli quick-run <file.skd> [-- <args>]
+skadi-cli embedded prepare|build|flash|monitor
 skadi-cli format
 skadi-cli tui
 skadi-cli target list
@@ -582,6 +588,7 @@ User-facing docs:
 - [Byte Sizes](docs/SKADI_BYTE_SIZE_RU.md)
 - [Angles](docs/SKADI_ANGLE_RU.md)
 - [Integer model and bit operations](docs/SKADI_BITS_RU.md)
+- [Embedded / ESP-IDF status](docs/SKADI_EMBEDDED_STATUS_RU.md)
 - [Ownership and borrowing](docs/SKADI_OWNERSHIP_RU.md)
 - [Concurrency](docs/SKADI_CONCURRENCY_GUIDE_RU.md)
 - [Canvas and Visual Core](docs/SKADI_VISUAL_CORE_MVP_CONTRACT_RU.md)

@@ -1,6 +1,6 @@
 # Контракт `on interrupt`
 
-Статус: **Accepted design, implementation track**.
+Статус: **Accepted design, host и experimental ESP-IDF periodic MVP реализованы**.
 
 ## 1. Typed source
 
@@ -53,8 +53,9 @@ owner scope и снимается до освобождения captured capabil
 - Windows/POSIX host backend предоставляет simulated periodic interrupt для
   semantic/runtime/showcase validation;
 - backend не выдаётся за hardware IRQ;
-- ESP32/RTOS backend позже связывает тот же frontend contract с настоящими
-  timer/GPIO ISR primitives.
+- ESP-IDF backend связывает `interrupts.periodic` с hardware GPTimer callback и
+  использует ISR-safe `Channel.try_send`;
+- GPIO ISR и другие hardware sources пока не реализованы.
 
 ## 5. Отложено
 
@@ -63,4 +64,3 @@ owner scope и снимается до освобождения captured capabil
 - dynamic handler replacement;
 - arbitrary device registry;
 - platform-specific interrupt payloads.
-

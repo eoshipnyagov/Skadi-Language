@@ -163,10 +163,10 @@ new Duration received = samples.receive()
 
 - Windows: `QueryPerformanceCounter` и `Sleep`;
 - POSIX: `clock_gettime(CLOCK_MONOTONIC)` и interrupt-safe retry вокруг `nanosleep`.
+- ESP-IDF: `esp_timer_get_time` и `vTaskDelay` с округлением до RTOS tick.
 
 Runtime failure monotonic clock или sleep завершается диагностикой `SC-RT-320`.
-ESP32/FreeRTOS backend пока не реализован; desktop API не следует принимать за
-готовый embedded timing contract.
+ESP-IDF timing является experimental и пока не обещает hard-real-time latency.
 
 ## Текущие ограничения
 

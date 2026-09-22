@@ -187,12 +187,14 @@ Release matrix проверяет generated C на:
 - macOS host compiler;
 - GCC ThreadSanitizer для concurrency runtime.
 
-ESP32/FreeRTOS, AVR и другие embedded runtimes пока являются отдельным target
-roadmap, а не скрытым обещанием desktop C backend.
+Экспериментальный `esp32-idf` target использует отдельный direct FreeRTOS/ESP-IDF
+backend: `app_main`, tasks/queues, ESP Timer и hardware GPTimer. Его project
+staging и build/flash/monitor flow реализованы, но реальная плата и HIL пока не
+входят в release matrix. AVR, bare metal и другие MCU остаются roadmap.
 
 ## Не реализовано в backend
 
-- hardware interrupt backends поверх periodic host MVP;
+- hardware interrupt sources кроме periodic ESP-IDF GPTimer;
 - wall-clock/calendar/timezone API;
 - task groups и `select`; cancellation, Duration-bounded Channel operations и
   path-sensitive timed Task wait реализованы как расширение `v1.2`;

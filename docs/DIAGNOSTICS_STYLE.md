@@ -66,6 +66,8 @@ Backend/runtime error без source location использует форму:
 
 - `SC-CG-301` — зарезервирован для будущей frontend-формы без lowering; в текущем
   Task/Channel MVP активного backend gate нет
+- `SC-CG-302` — `Int` literal не помещается в выбранную project/target width
+- `SC-CG-303` — языковая форма не имеет capability на выбранном target
 - `SC-RT-301..305` — task creation/join/state/stop/completion-synchronization failures
 - `SC-RT-311..313` — channel allocation/capacity/synchronization failures
 - `SC-RT-314` — unhandled operation on a closed Channel

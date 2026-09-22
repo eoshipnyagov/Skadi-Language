@@ -360,29 +360,27 @@ no affinity, priority, stack-size, or real-time scheduling guarantees.
 
 ## ESP32 and microcontrollers
 
-ESP32, ESP-IDF, FreeRTOS, and bare-metal targets are not yet supported by the
-official CLI, backend, or CI. Generated POSIX C must not be treated as an ESP32
-port even though ESP-IDF offers a pthread compatibility layer.
+`esp32-idf` is now an experimental official CLI target. It is not the POSIX
+backend rebuilt through pthread compatibility: generated C directly uses
+FreeRTOS tasks and queues plus ESP-IDF GPTimer. Skadi source keeps the same
+`Task`, `Channel`, `Duration`, and `on interrupt` surface.
 
-The preferred implementation path is:
+The first vertical slice provides `app_main`, FreeRTOS Task and bounded Channel,
+cooperative stop, ordinary and timed wait, drain-after-close with a close check
+at least once per RTOS tick, hardware periodic interrupts, ISR-safe `try_send`,
+and CLI prepare/build/flash/monitor commands. The checked example is
+`examples/embedded-esp32-blink`.
 
-1. make ESP-IDF the first target family, covering Xtensa and RISC-V chips;
-2. add target profiles and toolchain discovery to `skadi-cli`;
-3. validate a minimal backend through ESP-IDF pthread compatibility;
-4. add a direct FreeRTOS backend for stack, priority, core affinity, and static
-   allocation control;
-5. replace unconditional heap allocation of task contexts and channel buffers
-   with configurable static or region-backed storage;
-6. add emulator smoke tests and hardware-in-the-loop tests.
+Task contexts and queues still use dynamic ESP-IDF allocation. Stack size,
+priority, core affinity, and static allocation are not configurable through the
+manifest, and hardware smoke is not in CI. The backend therefore makes no hard
+real-time, bounded-allocation, or production-readiness guarantee. A single-core
+ESP32 provides concurrency without physical parallel execution; a multi-core
+chip is scheduled by FreeRTOS.
 
-Before that port, Skadi must define stack size, priority, core pinning, task
-limits, Channel storage, and resource-exhaustion behavior. A single-core ESP32
-provides concurrency without true parallel execution; dual-core chips may run
-tasks in parallel when the scheduler permits it.
-
-The current runtime is not hard real-time. Cooperative stop, dynamic native-thread
-creation, and heap-backed channels do not provide bounded latency or deterministic
-allocation.
+The next platform slice should add a real board to the release gate,
+emulator/HIL smoke, manifest stack/priority/core policy, and static or
+region-backed storage. Bare-metal and other MCU families remain future work.
 
 ## Current limitations
 
@@ -395,7 +393,7 @@ The following features are not available yet:
 - cancellation of file or arbitrary platform I/O;
 - general-purpose scheduling beyond typed host `interrupts.periodic`;
 - affinity, priority, and stack-size configuration;
-- RTOS, ESP32, and bare-metal backends;
+- a release-tested ESP32 hardware matrix and bare-metal backends;
 - hard real-time guarantees.
 
 ## Further reading

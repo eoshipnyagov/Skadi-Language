@@ -3,6 +3,7 @@ pub mod build_cmd;
 pub mod check_cmd;
 pub mod debug_cmd;
 pub mod doctor_cmd;
+pub mod embedded_cmd;
 pub mod format_cmd;
 pub mod init_cmd;
 pub mod new_cmd;

@@ -46,6 +46,9 @@ project examples.
   заблокированной на пустом Channel;
 - `examples/concurrency/04_timed_channel.skd` — Duration-bounded Channel waits;
 - `examples/concurrency/05_timed_task_wait.skd` — path-sensitive timed Task wait.
+- `examples/embedded-esp32-blink/` — manifest project для ESP-IDF: hardware
+  GPTimer, `on interrupt`, ISR-safe `try_send`, Task, GPIO и serial output;
+  structural/staging smoke не требует SDK, hardware smoke требует ESP32.
 - `examples/c-abi/` — полноценный manifest project с `external fn`, native C
   source, fixed-width параметрами, by-value `external struct`, opaque owning
   `external resource` и `view`/`edit Buffer(u8)` на ABI-границе.
@@ -80,6 +83,14 @@ project examples.
 
 Практические правила Task/Channel и пример запуска нескольких workers описаны в
 [руководстве по многопоточности](concurrency.md).
+
+Embedded example подготавливается отдельно, поскольку обычный desktop showcase
+script не должен требовать ESP-IDF:
+
+```powershell
+cd examples/embedded-esp32-blink
+skadi-cli embedded prepare
+```
 
 ## Smoke-запуск
 

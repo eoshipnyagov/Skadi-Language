@@ -96,12 +96,13 @@ new Duration measured = wait measurement_task
 
 ## Platforms and limits
 
-The C runtime uses `QueryPerformanceCounter`/`Sleep` on Windows and
-`clock_gettime(CLOCK_MONOTONIC)`/`nanosleep` on POSIX. Runtime failures use
-`SC-RT-320`.
+The C runtime uses `QueryPerformanceCounter`/`Sleep` on Windows,
+`clock_gettime(CLOCK_MONOTONIC)`/`nanosleep` on POSIX, and
+`esp_timer_get_time`/`vTaskDelay` on the experimental ESP-IDF target. Runtime
+failures use `SC-RT-320`.
 
-Wall-clock/calendar APIs, `Timer`, fractional literals, and an
-ESP32/FreeRTOS backend remain future work. Channel `send_for`/`receive_for` and
+Wall-clock/calendar APIs, `Timer`, fractional literals, and hard-real-time
+guarantees remain future work. Channel `send_for`/`receive_for` and
 `wait task for Duration` use the nominal duration as their bounded-wait contract.
 
 Compile-checked showcase: `benchmarks/bench_13_time_budget.skd`.

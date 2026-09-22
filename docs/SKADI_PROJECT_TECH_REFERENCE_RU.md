@@ -161,8 +161,14 @@ editor persistence.
 ### `targets.rs`
 
 Хранит target profiles, compiler candidates, platform hints и output naming.
-Текущий release gate ориентирован на desktop host compilers; embedded profiles
-не означают готовый ESP32/RTOS runtime.
+`esp32-idf` выбирает отдельный C backend и ESP-IDF project flow; hardware
+release gate для него пока не закрыт.
+
+### `embedded.rs`
+
+Создаёт воспроизводимый ESP-IDF project в `build/esp32-idf`, переносит declared
+native board adapters и запускает `idf.py` для build/flash/monitor. В generated
+component CMake фиксируются нужные GPIO, GPTimer и ESP Timer components.
 
 ### `tui.rs`
 
@@ -205,6 +211,7 @@ native layer; собственный machine debugger не является це
 - bounded Memory runtime с fixed/grow/child/static regions;
 - call-scoped `view`/`edit` и explicit resource `move`;
 - native Task/Channel MVP на Win32/pthread;
+- experimental ESP-IDF backend с FreeRTOS Task/Channel и hardware GPTimer;
 - nominal Time/Duration и monotonic runtime;
 - реализованные bounded milestones: Time/Duration, ByteSize, Angle и Vec2/Vec3/Vec4;
 - переходные формы закрыты явными diagnostics и compatibility policy.
@@ -257,14 +264,14 @@ CI проверяет:
 
 Пока не являются текущей реализованной поверхностью:
 
-- hardware `on interrupt` backends;
+- hardware interrupt sources кроме periodic ESP-IDF GPTimer;
 - Git/registry dependencies, transitive resolution, lock-файл и re-exports;
 - Channel `select`, task groups и async/await;
 - shared mutable state model;
-- ESP32/FreeRTOS и другие embedded runtime backends;
+- release-tested ESP32 matrix и другие embedded runtime backends;
 - Canvas events/text/images, Matrix2D, generic units и operator overloading;
 - remote package manager и dependency version resolution;
-- готовый embedded/ESP32 runtime и flash workflow;
+- static-allocation embedded runtime policy и hardware CI/HIL;
 - non-Windows и embedded Canvas presentation backends.
 
 Актуальный порядок работ фиксируется в [плане v1.2](v1-2-plan.md), а найденные

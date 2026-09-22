@@ -430,30 +430,32 @@ MVP выдаёт coded runtime diagnostic и завершает процесс. 
 
 ## ESP32 и микроконтроллеры
 
-ESP32, ESP-IDF, FreeRTOS и bare-metal targets пока не поддерживаются официальным
-CLI, backend и CI. Сгенерированный POSIX C нельзя считать готовым ESP32 port даже
-при наличии pthread compatibility layer в ESP-IDF.
+`esp32-idf` теперь является экспериментальным target официального CLI. Это не
+перекомпиляция POSIX backend через pthread compatibility: generated C напрямую
+использует FreeRTOS tasks, queues и ESP-IDF GPTimer. Обычный Skadi-код при этом
+сохраняет `Task`, `Channel`, `Duration` и `on interrupt`.
 
-Предпочтительный путь реализации:
+Первый vertical slice поддерживает:
 
-1. первым target family сделать ESP-IDF, отдельно для Xtensa и RISC-V chips;
-2. добавить target profile и toolchain discovery в `skadi-cli`;
-3. сначала проверить минимальный backend через ESP-IDF pthread compatibility;
-4. затем сделать прямой FreeRTOS backend для управления stack, priority, core
-   affinity и static allocation;
-5. заменить безусловные heap allocations task context и channel buffer на
-   настраиваемую static/region-backed политику;
-6. добавить emulator smoke и hardware-in-the-loop tests.
+- `app_main`, FreeRTOS Task и bounded Channel;
+- cooperative stop, обычный и timed wait;
+- закрытие Channel с drain ранее отправленных значений и проверкой не реже
+  одного RTOS tick;
+- hardware periodic interrupt через GPTimer;
+- ISR-safe `try_send` как bridge в normal task context;
+- `embedded prepare/build/flash/monitor` и пример
+  `examples/embedded-esp32-blink`.
 
-До такого port нужно зафиксировать несколько design decisions: размер stack,
-priority, pinning на core, лимит задач, источник памяти Channel и поведение при
-исчерпании ресурсов. На ESP32 с одним core модель даст concurrency без настоящего
-parallel execution; dual-core chips смогут исполнять задачи параллельно, если это
-разрешит scheduler.
+Task contexts и queues пока используют динамическое размещение ESP-IDF. Stack,
+priority, core affinity и static allocation не настраиваются через manifest, а
+hardware smoke ещё не входит в CI. Поэтому backend не обещает hard real-time,
+bounded allocation или production readiness. На одноядерном ESP32 задачи
+конкурентны без физического parallel execution; на многоядерном фактический
+параллелизм определяется scheduler.
 
-Текущий runtime не является hard real-time runtime. Кооперативный `stop`,
-динамическое создание native threads и heap-backed channels не дают bounded
-latency и deterministic allocation, необходимых для серьёзного embedded профиля.
+Следующий platform slice должен добавить реальную плату в release gate,
+emulator/HIL smoke, manifest policy для stack/priority/core и static либо
+region-backed storage. Bare-metal и другие MCU family остаются future work.
 
 ## Текущие ограничения
 
@@ -467,7 +469,7 @@ latency и deterministic allocation, необходимых для серьёз�
 - отмена файлового и произвольного платформенного I/O;
 - general-purpose timer/scheduler beyond typed host `interrupts.periodic`;
 - affinity, priority и stack-size configuration;
-- RTOS, ESP32 и bare-metal backend;
+- release-tested ESP32 hardware matrix и bare-metal backend;
 - гарантии hard real-time.
 
 ## Куда смотреть дальше
@@ -481,3 +483,4 @@ latency и deterministic allocation, необходимых для серьёз�
 - `examples/concurrency/03_cancel_blocked_channel.skd`
 - `examples/concurrency/04_timed_channel.skd`
 - `examples/concurrency/05_timed_task_wait.skd`
+- `examples/embedded-esp32-blink`

@@ -26,7 +26,9 @@
 - strict Memory MVP как experimental `v1.2` systems layer;
 - Task/Channel runtime MVP как experimental `v1.2` systems layer;
 - Time/Duration, ByteSize, Angle и bounded Vector runtime MVP;
-- typed periodic host Interrupt и строгий `on interrupt` context;
+- typed periodic host/ESP-IDF Interrupt и строгий `on interrupt` context;
+- experimental ESP-IDF target с FreeRTOS Task/Channel, GPTimer и
+  build/flash/monitor workflow;
 - portable headless Canvas v0 и Win32 presenter;
 - showcase-программы и набор регрессионных тестов;
 - HTML-сайт документации на базе `MkDocs` с RU/EN user reference;
@@ -133,7 +135,8 @@ GitHub Pages.
   timeout boundaries;
 - Canvas events, text/images, transforms и non-Windows presenters;
 - systems additions;
-- hardware/RTOS backend для `on interrupt` поверх готового host periodic MVP;
+- hardware/CI acceptance, static allocation policy и GPIO interrupt source для
+  первого ESP32 backend;
 - расширенные path-sensitive ownership/lifecycle facts и Skadi-level debugger в
   TUI; CLI уже поддерживает первый probe-based breakpoint/step slice, а
   structured analysis покрывает blocking Channel и incomplete `when`.
