@@ -62,8 +62,8 @@ project-level policy hooks
 3. `Interrupt context rules`
 4. `Project tooling / policy layer`
 5. `Static diagnostics for architectural rules`
-6. `Data-oriented containers`
-7. `Device abstractions`
+6. `Device abstractions` через один прикладной embedded vertical slice
+7. `Data-oriented containers` только после подтверждения реальной необходимости
 
 Это важнее и безопаснее, чем сразу браться за весь широкий стек идей.
 
@@ -245,7 +245,7 @@ platform provides concrete implementations
 
 ## 13. Data-oriented containers contract
 
-Это хороший future-track, но не ближайший core priority.
+Это не обязательный future-track и не ближайший core priority.
 
 Кандидаты:
 
@@ -256,10 +256,20 @@ Grid(T)
 Matrix(T)
 ```
 
-Полезно заранее зафиксировать только две вещи:
+Эти имена являются кандидатами, а не обещанием языка. До проектирования хотя бы
+одной из коллекций нужно показать несколько реальных программ, в которых
+композиция существующих `List`, `Channel` и `Memory` оказывается существенно
+менее ясной или предсказуемой.
+
+Полезно заранее зафиксировать четыре вещи:
 
 1. Они должны решать реальные systems/game/embedded задачи.
 2. Их нельзя путать с visual/math constructs вроде `Matrix2D`.
+3. Capacity, storage и поведение при переполнении должны быть видны из кода.
+4. Автоматическая потеря старых данных не может быть поведением по умолчанию.
+
+Если кандидат не проходит этот фильтр, он остаётся библиотечной реализацией или
+отбрасывается; core не обязан иметь `Ring` или `Pool` ради полноты списка.
 
 ## 14. Prelude contract
 
