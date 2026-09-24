@@ -21,7 +21,9 @@ fn showcase_tree_compiles() {
     assert!(c.contains("int main(int argc, char **argv) {"));
     assert!(c.contains("cli_args = sk_args(argc, argv);"));
     assert!(c.contains("sk_fs_list("));
-    assert!(c.contains("(void)(walk(full, dirs_only, max_depth, sk_num_add_int(current_depth, 1)));"));
+    assert!(
+        c.contains("(void)(walk(full, dirs_only, max_depth, sk_num_add_int(current_depth, 1)));")
+    );
     assert!(c.contains("strcmp(__when_tmp_"));
 }
 
