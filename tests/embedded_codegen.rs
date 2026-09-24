@@ -161,6 +161,10 @@ values.close()
         generated.contains("static SkTaskContext_echo worker_context_storage = {0}"),
         "{generated}"
     );
+    assert!(
+        generated.contains("(void)((sk_channel_close(values) ? 0 : 1));"),
+        "{generated}"
+    );
 }
 
 #[test]

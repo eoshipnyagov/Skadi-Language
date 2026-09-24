@@ -7273,8 +7273,9 @@ fn emit_statement_body(
                 out.push_str(task_name);
                 out.push_str(");\n");
             } else {
+                out.push_str("(void)(");
                 out.push_str(&emit_expr(expr, declared));
-                out.push_str(";\n");
+                out.push_str(");\n");
             }
         }
         Statement::ReturnError { code, .. } => {
