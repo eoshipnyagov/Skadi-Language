@@ -150,7 +150,7 @@ new Bool passed = measured >= 1ms
     assert!(c.contains("clock_gettime(CLOCK_MONOTONIC"));
     assert!(c.contains("nanosleep(&request, &request)"));
     assert!(c.contains("int64_t started_at = sk_time_now();"));
-    assert!(c.contains("sk_time_sleep(5000000);"));
+    assert!(c.contains("(void)(sk_time_sleep(5000000));"));
     assert!(c.contains("int64_t measured = sk_time_elapsed(started_at);"));
 }
 

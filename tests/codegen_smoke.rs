@@ -562,7 +562,7 @@ new Int ok = write("out.txt", body)
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("sk_output_text(\"hello\");"));
+    assert!(c.contains("(void)(sk_output_text(\"hello\"));"));
     assert!(c.contains("const char* name = sk_input(\"name: \");"));
     assert!(c.contains("const char* body = sk_read_file(\"in.txt\");"));
     assert!(c.contains("SkInt ok = sk_write_file(\"out.txt\", body);"));
@@ -907,8 +907,8 @@ output(read("in.txt"))
     let program = parse_program(&tokens).expect("parse should succeed");
     semantic_analyze(&program).expect("semantic should pass");
     let c = transpile_program_to_c(&program);
-    assert!(c.contains("sk_output_text(sk_text_concat(a, b));"));
-    assert!(c.contains("sk_output_text(sk_read_file(\"in.txt\"));"));
+    assert!(c.contains("(void)(sk_output_text(sk_text_concat(a, b)));"));
+    assert!(c.contains("(void)(sk_output_text(sk_read_file(\"in.txt\")));"));
 }
 
 #[test]

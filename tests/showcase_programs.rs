@@ -21,7 +21,7 @@ fn showcase_tree_compiles() {
     assert!(c.contains("int main(int argc, char **argv) {"));
     assert!(c.contains("cli_args = sk_args(argc, argv);"));
     assert!(c.contains("sk_fs_list("));
-    assert!(c.contains("walk(full, dirs_only, max_depth, sk_num_add_int(current_depth, 1));"));
+    assert!(c.contains("(void)(walk(full, dirs_only, max_depth, sk_num_add_int(current_depth, 1)));"));
     assert!(c.contains("strcmp(__when_tmp_"));
 }
 
@@ -35,7 +35,7 @@ fn showcase_read_stats_compiles() {
     assert!(c.contains("sk_read_file("));
     assert!(c.contains("sk_text_slice(data, start, n)"));
     assert!(c.contains("sk_text_find("));
-    assert!(c.contains("sk_output_text(sk_text_concat(\"file: \", path));"));
+    assert!(c.contains("(void)(sk_output_text(sk_text_concat(\"file: \", path)));"));
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn showcase_find_count_compiles() {
     assert!(c.contains("const char* data = sk_read_file(path);"));
     assert!(c.contains("sk_text_slice("));
     assert!(c.contains("sk_text_find("));
-    assert!(c.contains("sk_output_text(sk_text_concat(\"needle: \", needle));"));
+    assert!(c.contains("(void)(sk_output_text(sk_text_concat(\"needle: \", needle)));"));
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn showcase_sum_ints_compiles() {
     assert!(c.contains("SkadiList_i64"));
     assert!(c.contains("sk_list_i64_push("));
     assert!(c.contains("for (size_t __i = 0; __i < xs.len; ++__i) {"));
-    assert!(c.contains("sk_output_int(sum);"));
+    assert!(c.contains("(void)(sk_output_int(sum));"));
 }
 
 #[test]
