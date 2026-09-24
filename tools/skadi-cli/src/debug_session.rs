@@ -430,9 +430,10 @@ fn decode_hex_field(value: &str) -> Result<String, String> {
     if !value.len().is_multiple_of(2) {
         return Err("debug protocol error: odd-length text field".to_string());
     }
-    let bytes = value
-        .as_bytes()
-        .chunks_exact(2)
+    let (pairs, remainder) = value.as_bytes().as_chunks::<2>();
+    debug_assert!(remainder.is_empty());
+    let bytes = pairs
+        .iter()
         .map(|pair| {
             let text = std::str::from_utf8(pair)
                 .map_err(|_| "debug protocol error: invalid text field".to_string())?;

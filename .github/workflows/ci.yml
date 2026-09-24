@@ -109,6 +109,7 @@ jobs:
       - name: Compile static ESP32 showcases through ESP-IDF
         shell: bash
         run: |
+          source "$IDF_PATH/export.sh"
           for project in embedded-esp32-blink embedded-esp32-gpio; do
             cd "$GITHUB_WORKSPACE/examples/$project"
             cargo run --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- embedded build
