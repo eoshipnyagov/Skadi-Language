@@ -1,5 +1,5 @@
 [package]
-name = "esp32_interrupt_blink"
+name = "esp32_gpio_interrupt"
 version = "0.1.0"
 edition = "v1"
 
@@ -10,7 +10,7 @@ entry = "src/main.skd"
 int = "target"
 
 [native]
-sources = ["native/board.c"]
+sources = []
 libraries = []
 library_paths = []
 

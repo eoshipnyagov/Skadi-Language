@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 
 pub use v01::analysis::{AnalysisFact, AnalysisFactLevel, AnalysisSubjectKind};
-use v01::codegen::{CTarget, CodegenOptions};
+use v01::codegen::{CTarget, CodegenOptions, EmbeddedCodegenOptions, RuntimeAllocation};
 use v01::formatter::format_source;
 
 use crate::debug_session::{DebugCommand, DebugEvent, DebugIoMode, DebugStop, start_debug_session};
@@ -245,6 +245,7 @@ pub struct FormatResult {
 pub struct TargetInfo {
     pub triple: String,
     pub description: String,
+    pub capabilities: String,
 }
 
 #[derive(Clone, Debug)]
@@ -287,6 +288,7 @@ pub struct ManifestConfigResult {
     pub native_sources: Vec<String>,
     pub native_libraries: Vec<String>,
     pub native_library_paths: Vec<String>,
+    pub embedded: crate::project::EmbeddedConfig,
 }
 
 pub fn project_summary() -> ProjectSummary {
@@ -643,16 +645,18 @@ fn run_build_at_mode(
     };
     let int_width = resolve_int_width(&options.target, &project.int_width)
         .map_err(|e| ActionError::new(FailureSource::Project, e))?;
+    let target = if options.target == ESP_IDF_TARGET {
+        CTarget::EspIdf
+    } else {
+        CTarget::Desktop
+    };
     let frontend = compile_frontend_with_options(
         &project.entry,
         CodegenOptions {
             debug_probes,
             int_width,
-            target: if options.target == "esp32-idf" {
-                CTarget::EspIdf
-            } else {
-                CTarget::Desktop
-            },
+            target,
+            embedded: embedded_codegen_options(&project),
         },
     )
     .map_err(|e| {
@@ -745,6 +749,7 @@ pub fn prepare_esp_idf_at(root: &Path) -> Result<EmbeddedPrepareResult, ActionEr
         CodegenOptions {
             int_width,
             target: CTarget::EspIdf,
+            embedded: embedded_codegen_options(&project),
             ..CodegenOptions::default()
         },
     )
@@ -778,6 +783,23 @@ pub fn prepare_esp_idf_at(root: &Path) -> Result<EmbeddedPrepareResult, ActionEr
             .flat_map(|warning| parse_warning(warning))
             .collect(),
     })
+}
+
+fn embedded_codegen_options(project: &crate::project::ProjectConfig) -> EmbeddedCodegenOptions {
+    EmbeddedCodegenOptions {
+        allocation: if project.embedded.allocation == "static" {
+            RuntimeAllocation::Static
+        } else {
+            RuntimeAllocation::Dynamic
+        },
+        task_stack_bytes: project.embedded.task_stack_bytes,
+        task_priority: project.embedded.task_priority,
+        task_core: match project.embedded.task_core.as_str() {
+            "0" => 0,
+            "1" => 1,
+            _ => -1,
+        },
+    }
 }
 
 pub fn run_esp_idf_command(
@@ -1318,6 +1340,15 @@ pub fn list_targets() -> TargetListResult {
             .map(|p| TargetInfo {
                 triple: p.triple.to_string(),
                 description: p.description.to_string(),
+                capabilities: format!(
+                    "tasks={} channels={} interrupts={} static={} fs={} canvas={}",
+                    p.capabilities.tasks,
+                    p.capabilities.channels,
+                    p.capabilities.interrupts,
+                    p.capabilities.static_runtime,
+                    p.capabilities.filesystem,
+                    p.capabilities.canvas,
+                ),
             })
             .collect(),
     }
@@ -1392,6 +1423,7 @@ pub fn load_manifest_config(root: &Path) -> Result<ManifestConfigResult, ActionE
         native_sources: manifest.native_sources,
         native_libraries: manifest.native_libraries,
         native_library_paths: manifest.native_library_paths,
+        embedded: manifest.embedded,
     })
 }
 
@@ -1409,6 +1441,7 @@ pub fn save_manifest_config(
         native_sources: manifest.native_sources.clone(),
         native_libraries: manifest.native_libraries.clone(),
         native_library_paths: manifest.native_library_paths.clone(),
+        embedded: manifest.embedded.clone(),
     };
     save_manifest_config_at(root, &updated).map_err(|e| ActionError::new(FailureSource::Io, e))?;
     load_manifest_config(root)

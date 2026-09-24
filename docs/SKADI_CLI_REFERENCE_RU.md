@@ -327,7 +327,8 @@ cargo run -p skadi-cli -- check
 - background task execution внутри TUI;
 - более подробные per-command help pages;
 - package/dependency commands после появления module/package model;
-- ESP32 hardware CI/HIL, GPIO interrupts и manifest-настройки stack/priority/core.
+- ESP32 flash/monitor HIL на эталонной плате и дальнейший device API; SDK build,
+  GPIO interrupts и manifest-настройки уже реализованы.
 
 Имена текущих команд являются стабильной automation surface; планируемые
 возможности не следует закладывать в scripts заранее.

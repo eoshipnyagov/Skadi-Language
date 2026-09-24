@@ -92,6 +92,28 @@ jobs:
       - name: Build MkDocs site
         run: python -m mkdocs build --strict
 
+  esp-idf-build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:release-v5.4
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Compile static ESP32 showcases through ESP-IDF
+        shell: bash
+        run: |
+          for project in embedded-esp32-blink embedded-esp32-gpio; do
+            cd "$GITHUB_WORKSPACE/examples/$project"
+            cargo run --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" -p skadi-cli -- embedded build
+          done
+
   concurrency-tsan:
     runs-on: ubuntu-latest
     env:

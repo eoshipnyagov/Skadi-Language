@@ -48,7 +48,11 @@ project examples.
 - `examples/concurrency/05_timed_task_wait.skd` — path-sensitive timed Task wait.
 - `examples/embedded-esp32-blink/` — manifest project для ESP-IDF: hardware
   GPTimer, `on interrupt`, ISR-safe `try_send`, Task, GPIO и serial output;
-  structural/staging smoke не требует SDK, hardware smoke требует ESP32.
+  static Task/Channel storage включён через manifest;
+- `examples/embedded-esp32-gpio/` — GPIO edge interrupt с явными
+  `InterruptEdge`/`GpioPull` и переносом работы из ISR в обычную Task через
+  Channel; оба embedded-проекта собираются ESP-IDF SDK в CI, flash smoke требует
+  реальную ESP32.
 - `examples/c-abi/` — полноценный manifest project с `external fn`, native C
   source, fixed-width параметрами, by-value `external struct`, opaque owning
   `external resource` и `view`/`edit Buffer(u8)` на ABI-границе.
@@ -91,6 +95,8 @@ script не должен требовать ESP-IDF:
 cd examples/embedded-esp32-blink
 skadi-cli embedded prepare
 ```
+
+Для GPIO-сценария используйте `examples/embedded-esp32-gpio` тем же способом.
 
 ## Smoke-запуск
 

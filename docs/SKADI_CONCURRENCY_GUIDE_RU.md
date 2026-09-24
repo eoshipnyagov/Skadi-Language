@@ -441,21 +441,23 @@ MVP выдаёт coded runtime diagnostic и завершает процесс. 
 - cooperative stop, обычный и timed wait;
 - закрытие Channel с drain ранее отправленных значений и проверкой не реже
   одного RTOS tick;
-- hardware periodic interrupt через GPTimer;
+- hardware periodic interrupt через GPTimer и GPIO edge/level interrupts;
 - ISR-safe `try_send` как bridge в normal task context;
-- `embedded prepare/build/flash/monitor` и пример
-  `examples/embedded-esp32-blink`.
+- manifest-настройки chip, allocation, Task stack/priority/core;
+- статическое размещение пользовательских Task и Channel;
+- `embedded prepare/build/flash/monitor` и примеры
+  `examples/embedded-esp32-blink`, `examples/embedded-esp32-gpio`.
 
-Task contexts и queues пока используют динамическое размещение ESP-IDF. Stack,
-priority, core affinity и static allocation не настраиваются через manifest, а
-hardware smoke ещё не входит в CI. Поэтому backend не обещает hard real-time,
-bounded allocation или production readiness. На одноядерном ESP32 задачи
+ESP-IDF build входит в CI, но hardware smoke ещё не входит в release gate.
+Static policy ограничивает heap для пользовательских Task/Channel, но пока не
+покрывает все ESP-IDF services и Interrupt context. Поэтому backend не обещает
+hard real-time или production readiness. На одноядерном ESP32 задачи
 конкурентны без физического parallel execution; на многоядерном фактический
 параллелизм определяется scheduler.
 
 Следующий platform slice должен добавить реальную плату в release gate,
-emulator/HIL smoke, manifest policy для stack/priority/core и static либо
-region-backed storage. Bare-metal и другие MCU family остаются future work.
+emulator/HIL smoke и последовательно расширить bounded/static policy на прочие
+platform resources. Bare-metal и другие MCU family остаются future work.
 
 ## Текущие ограничения
 
@@ -467,8 +469,7 @@ region-backed storage. Bare-metal и другие MCU family остаются fu
 - hard kill;
 - `select`, `try_receive`;
 - отмена файлового и произвольного платформенного I/O;
-- general-purpose timer/scheduler beyond typed host `interrupts.periodic`;
-- affinity, priority и stack-size configuration;
+- general-purpose scheduler beyond typed `interrupts.periodic` и ESP32 GPIO;
 - release-tested ESP32 hardware matrix и bare-metal backend;
 - гарантии hard real-time.
 

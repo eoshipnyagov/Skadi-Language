@@ -307,6 +307,23 @@ fn is_file_mode_variant(name: &str) -> bool {
     matches!(name, "Read" | "Write" | "Append" | "ReadWrite")
 }
 
+fn is_interrupt_edge_expression(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::MemberAccess { base, field }
+            if base == "InterruptEdge"
+                && matches!(field.as_str(), "Rising" | "Falling" | "Change" | "Low" | "High")
+    )
+}
+
+fn is_gpio_pull_expression(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::MemberAccess { base, field }
+            if base == "GpioPull" && matches!(field.as_str(), "None" | "Up" | "Down")
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn validate_file_open_call(
     args: &[Expression],
@@ -6853,6 +6870,45 @@ fn infer_expression_type(
                             "interrupts.periodic expects Duration, got {:?}.",
                             duration_ty
                         ),
+                    ));
+                }
+                return Ok(ValueType::Interrupt);
+            }
+            if name == "interrupts.gpio" {
+                if args.len() != 3 {
+                    return Err(sem_err(
+                        SEM_ARG_COUNT,
+                        format!(
+                            "interrupts.gpio expects pin, InterruptEdge, and GpioPull arguments, got {}.",
+                            args.len()
+                        ),
+                    ));
+                }
+                let pin_ty = infer_expression_type(
+                    &args[0],
+                    scope,
+                    memory_state,
+                    functions,
+                    structs,
+                    fn_ctx,
+                )?;
+                if pin_ty != ValueType::Int {
+                    return Err(sem_err(
+                        SEM_ARG_TYPE,
+                        format!("interrupts.gpio pin expects Int, got {:?}.", pin_ty),
+                    ));
+                }
+                if !is_interrupt_edge_expression(&args[1]) {
+                    return Err(sem_err(
+                        SEM_ARG_TYPE,
+                        "interrupts.gpio edge expects InterruptEdge.Rising, Falling, Change, Low, or High."
+                            .to_string(),
+                    ));
+                }
+                if !is_gpio_pull_expression(&args[2]) {
+                    return Err(sem_err(
+                        SEM_ARG_TYPE,
+                        "interrupts.gpio pull expects GpioPull.None, Up, or Down.".to_string(),
                     ));
                 }
                 return Ok(ValueType::Interrupt);

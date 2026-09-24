@@ -111,7 +111,8 @@ backend и автоматической стратегии reclamation для `a
 
 Пока нет scheduler abstraction, async/await, task groups, `select` и cancellation
 произвольного I/O. Experimental ESP-IDF backend использует прямые FreeRTOS
-Task/Queue, но ещё не имеет hardware release gate и static allocation policy. Blocking Channel
+Task/Queue, SDK build gate, GPIO ISR и static Task/Channel policy, но ещё не
+имеет hardware release gate. Blocking Channel
 `send/receive` отменяются через `stop`; `send_for/receive_for` используют
 `Duration` и контекстный `timed_out`. Timed Task wait сохраняет live handle в
 timeout-handler и поглощает его только при успешном join.
@@ -232,7 +233,7 @@ backend и embedded display adapter.
 | `edit` / `view` | Реализованный borrow contract | Использовать для явной mutable/read-only передачи без владения |
 | `move` | Реализованный bounded ownership transfer | Использовать явно в signature, call site, binding и resource return |
 | `allow grow` / `allow drop` | Реализованы только как contextual Memory policies | Не превращать `allow` в общий modifier |
-| `on interrupt` | Host MVP и experimental ESP-IDF GPTimer backend | GPIO и другие hardware sources остаются future |
+| `on interrupt` | Host MVP и experimental ESP-IDF GPTimer/GPIO backend | Другие device IRQ sources остаются future |
 | `for (init; cond; update)` | Parse/format compatibility + hard rejection | Не использовать в новом коде |
 | `fn name(...) Type` | Legacy compatibility | Formatter переводит в `returns Type` |
 | `for ... in ...` | Работает | Каноническая витринная форма всё ещё `iterate ... as ...` |
@@ -265,8 +266,9 @@ backend и embedded display adapter.
 4. Hardware GPTimer binding и ESP32/FreeRTOS vertical slice реализованы без
    новой пользовательской concurrency model. Осталось подтвердить generated
    project на реальной ESP32 и добавить этот smoke в release gate.
-5. Следующий embedded этап: static/region-backed Task/Channel storage,
-   manifest-настройки stack/priority/core, GPIO interrupt source и CI/HIL.
+5. Static Task/Channel storage, manifest-настройки stack/priority/core, GPIO
+   interrupt source и ESP-IDF SDK CI выполнены. Следующий embedded этап:
+   эталонная плата/HIL, resource limits и device APIs для ADC/PWM/UART/SPI/I2C.
 6. `Ring`/bounded `Pool` больше не являются ожидаемым milestone. Это research-
    кандидаты: они возвращаются в очередь только после нескольких реальных задач,
    где обычные `List`/`Channel`/`Memory` дают заметно худший и менее ясный код.

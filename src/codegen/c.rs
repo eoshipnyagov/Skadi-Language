@@ -26,6 +26,8 @@ struct CodegenState {
     statement_collisions: HashMap<(u32, u32), usize>,
     source_map: Vec<CodegenSourceMapEntry>,
     debug_probes: bool,
+    runtime_allocation: RuntimeAllocation,
+    target: CTarget,
 }
 
 impl CodegenState {
@@ -77,6 +79,34 @@ pub struct CodegenOptions {
     pub debug_probes: bool,
     pub int_width: IntWidth,
     pub target: CTarget,
+    pub embedded: EmbeddedCodegenOptions,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RuntimeAllocation {
+    #[default]
+    Dynamic,
+    Static,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EmbeddedCodegenOptions {
+    pub allocation: RuntimeAllocation,
+    pub task_stack_bytes: u32,
+    pub task_priority: u8,
+    /// -1 means no affinity; non-negative values select a platform core.
+    pub task_core: i8,
+}
+
+impl Default for EmbeddedCodegenOptions {
+    fn default() -> Self {
+        Self {
+            allocation: RuntimeAllocation::Dynamic,
+            task_stack_bytes: 4096,
+            task_priority: 1,
+            task_core: -1,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1741,6 +1771,19 @@ fn statement_list_uses_deferred_task_surface(statements: &[Statement]) -> bool {
     statements.iter().any(statement_uses_deferred_task_surface)
 }
 
+fn expression_has_non_static_channel_capacity(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Call { name, args }
+            if name == "channel"
+                && !matches!(args.as_slice(), [Expression::LiteralInt(value)] if *value > 0)
+    )
+}
+
+fn expression_uses_gpio_interrupt(expression: &Expression) -> bool {
+    matches!(expression, Expression::Call { name, .. } if name == "interrupts.gpio")
+}
+
 pub fn ensure_codegen_supported(program: &Program) -> Result<(), String> {
     ensure_codegen_supported_with_options(program, CodegenOptions::default())
 }
@@ -1775,6 +1818,32 @@ pub fn ensure_codegen_supported_with_options(
             return Err(
                 "[SC-CG-303] Canvas and Window do not have an ESP-IDF backend yet; use a declared native display adapter."
                     .to_string(),
+            );
+        }
+        if options.embedded.allocation == RuntimeAllocation::Static
+            && program.statements.iter().any(|statement| {
+                stmt_uses_expression(statement, expression_has_non_static_channel_capacity)
+            })
+        {
+            return Err(
+                "[SC-CG-304] static embedded allocation requires channel capacity to be a positive integer literal."
+                    .to_string(),
+            );
+        }
+    } else {
+        if options.embedded.allocation == RuntimeAllocation::Static {
+            return Err(
+                "[SC-CG-303] static Task/Channel allocation is currently available only for target 'esp32-idf'."
+                    .to_string(),
+            );
+        }
+        if program
+            .statements
+            .iter()
+            .any(|statement| stmt_uses_expression(statement, expression_uses_gpio_interrupt))
+        {
+            return Err(
+                "[SC-CG-303] interrupts.gpio currently requires target 'esp32-idf'.".to_string(),
             );
         }
     }
@@ -2072,8 +2141,8 @@ fn collect_task_entries(program: &Program) -> HashSet<String> {
     entries
 }
 
-fn emit_task_runtime(out: &mut String, target: CTarget) {
-    if target == CTarget::EspIdf {
+fn emit_task_runtime(out: &mut String, options: CodegenOptions) {
+    if options.target == CTarget::EspIdf {
         emit_esp_idf_task_runtime(out);
     } else {
         emit_desktop_task_runtime(out);
@@ -2100,6 +2169,12 @@ struct SkTask {
     portMUX_TYPE lock;
     void *wait_context;
     SkTaskWake wake_wait;
+#if SKADI_STATIC_RUNTIME
+    StaticTask_t task_buffer;
+    StaticSemaphore_t completion_buffer;
+    StackType_t stack[SKADI_TASK_STACK_BYTES] __attribute__((aligned(portBYTE_ALIGNMENT)));
+    SkTaskEntry entry;
+#endif
 };
 
 static SK_THREAD_LOCAL SkTask *sk_current_task = NULL;
@@ -2109,10 +2184,12 @@ static bool sk_operation_timed_out(void) {
     return sk_operation_timed_out_state;
 }
 
+#if !SKADI_STATIC_RUNTIME
 typedef struct {
     SkTask *task;
     SkTaskEntry entry;
 } SkTaskLaunch;
+#endif
 
 static void sk_task_panic(const char *code, const char *message) {
     fprintf(stderr, "Runtime error: [%s] %s\n", code, message);
@@ -2120,10 +2197,15 @@ static void sk_task_panic(const char *code, const char *message) {
 }
 
 static void sk_task_platform_entry(void *raw) {
+#if SKADI_STATIC_RUNTIME
+    SkTask *task = (SkTask*)raw;
+    SkTaskEntry entry = task->entry;
+#else
     SkTaskLaunch *launch = (SkTaskLaunch*)raw;
     SkTask *task = launch->task;
     SkTaskEntry entry = launch->entry;
     free(launch);
+#endif
     sk_current_task = task;
     entry(task, task->context);
     taskENTER_CRITICAL(&task->lock);
@@ -2132,42 +2214,52 @@ static void sk_task_platform_entry(void *raw) {
     for (;;) {
         taskENTER_CRITICAL(&task->lock);
         bool controls_finished = task->active_controls == 0;
-        if (controls_finished) task->thread = NULL;
         taskEXIT_CRITICAL(&task->lock);
         if (controls_finished) break;
         taskYIELD();
     }
     xSemaphoreGive(task->completion);
     sk_current_task = NULL;
-    vTaskDelete(NULL);
+    vTaskSuspend(NULL);
 }
-
-#ifndef SKADI_TASK_STACK_WORDS
-#define SKADI_TASK_STACK_WORDS 4096
-#endif
-
-#ifndef SKADI_TASK_PRIORITY
-#define SKADI_TASK_PRIORITY (tskIDLE_PRIORITY + 1)
-#endif
 
 static bool sk_task_start(SkTask *task, SkTaskEntry entry, void *context) {
     if (!task || !entry || !context) return false;
     memset(task, 0, sizeof(*task));
     task->context = context;
     task->lock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
+#if SKADI_STATIC_RUNTIME
+    task->completion = xSemaphoreCreateBinaryStatic(&task->completion_buffer);
+    task->entry = entry;
+#else
     task->completion = xSemaphoreCreateBinary();
+#endif
     if (!task->completion) return false;
+#if SKADI_STATIC_RUNTIME
+    task->thread = xTaskCreateStaticPinnedToCore(
+        sk_task_platform_entry,
+        "skadi-task",
+        SKADI_TASK_STACK_BYTES,
+        task,
+        SKADI_TASK_PRIORITY,
+        task->stack,
+        &task->task_buffer,
+        SKADI_TASK_CORE
+    );
+    if (!task->thread) { task->completion = NULL; return false; }
+#else
     SkTaskLaunch *launch = (SkTaskLaunch*)malloc(sizeof(SkTaskLaunch));
     if (!launch) { vSemaphoreDelete(task->completion); task->completion = NULL; return false; }
     launch->task = task;
     launch->entry = entry;
-    BaseType_t created = xTaskCreate(
+    BaseType_t created = xTaskCreatePinnedToCore(
         sk_task_platform_entry,
         "skadi-task",
-        SKADI_TASK_STACK_WORDS,
+        SKADI_TASK_STACK_BYTES,
         launch,
         SKADI_TASK_PRIORITY,
-        &task->thread
+        &task->thread,
+        SKADI_TASK_CORE
     );
     if (created != pdPASS) {
         free(launch);
@@ -2175,6 +2267,7 @@ static bool sk_task_start(SkTask *task, SkTaskEntry entry, void *context) {
         task->completion = NULL;
         return false;
     }
+#endif
     task->started = true;
     return true;
 }
@@ -2228,7 +2321,11 @@ static void sk_task_join(SkTask *task) {
     if (!task || !task->started || task->joined) sk_task_panic("SC-RT-303", "invalid task state at wait");
     if (xSemaphoreTake(task->completion, portMAX_DELAY) != pdTRUE)
         sk_task_panic("SC-RT-302", "task join failed");
+    vTaskDelete(task->thread);
+    task->thread = NULL;
+#if !SKADI_STATIC_RUNTIME
     vSemaphoreDelete(task->completion);
+#endif
     task->completion = NULL;
     task->joined = true;
 }
@@ -2240,7 +2337,11 @@ static bool sk_task_join_for(SkTask *task, int64_t timeout_ns) {
     TickType_t ticks = timeout_ns == 0 ? 0 : pdMS_TO_TICKS(millis);
     if (timeout_ns > 0 && ticks == 0) ticks = 1;
     if (xSemaphoreTake(task->completion, ticks) != pdTRUE) return false;
+    vTaskDelete(task->thread);
+    task->thread = NULL;
+#if !SKADI_STATIC_RUNTIME
     vSemaphoreDelete(task->completion);
+#endif
     task->completion = NULL;
     task->joined = true;
     return true;
@@ -2248,7 +2349,9 @@ static bool sk_task_join_for(SkTask *task, int64_t timeout_ns) {
 
 static void sk_task_release_context(SkTask *task) {
     if (!task || !task->joined || !task->context) sk_task_panic("SC-RT-303", "invalid task state at context release");
+#if !SKADI_STATIC_RUNTIME
     free(task->context);
+#endif
     task->context = NULL;
 }
 
@@ -2491,8 +2594,8 @@ fn emit_desktop_task_runtime(out: &mut String) {
     out.push_str("}\n\n");
 }
 
-fn emit_channel_runtime(out: &mut String, target: CTarget) {
-    if target == CTarget::EspIdf {
+fn emit_channel_runtime(out: &mut String, options: CodegenOptions) {
+    if options.target == CTarget::EspIdf {
         emit_esp_idf_channel_runtime(out);
     } else {
         emit_desktop_channel_runtime(out);
@@ -2515,6 +2618,7 @@ typedef struct SkChannel {
     volatile bool closed;
     size_t active_senders;
     portMUX_TYPE lock;
+    bool owns_storage;
 } SkChannel;
 
 static void sk_channel_panic(const char *code, const char *message) {
@@ -2547,8 +2651,34 @@ static SkChannel* sk_channel_create(int64_t capacity_value, size_t element_size)
     channel->capacity = (size_t)capacity_value;
     channel->element_size = element_size;
     channel->lock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
+    channel->owns_storage = true;
     channel->queue = xQueueCreate((UBaseType_t)channel->capacity, (UBaseType_t)element_size);
     if (!channel->queue) { free(channel); sk_channel_panic("SC-RT-311", "channel queue allocation failed"); }
+    return channel;
+}
+
+static SkChannel* sk_channel_create_static(
+    SkChannel *channel,
+    StaticQueue_t *queue_storage,
+    uint8_t *item_storage,
+    int64_t capacity_value,
+    size_t element_size
+) {
+    if (!channel || !queue_storage || !item_storage || capacity_value <= 0 || element_size == 0
+        || (uint64_t)capacity_value > SIZE_MAX / element_size)
+        sk_channel_panic("SC-RT-312", "static channel capacity must be positive and fit addressable memory");
+    memset(channel, 0, sizeof(*channel));
+    channel->capacity = (size_t)capacity_value;
+    channel->element_size = element_size;
+    channel->lock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
+    channel->owns_storage = false;
+    channel->queue = xQueueCreateStatic(
+        (UBaseType_t)channel->capacity,
+        (UBaseType_t)element_size,
+        item_storage,
+        queue_storage
+    );
+    if (!channel->queue) sk_channel_panic("SC-RT-311", "static channel creation failed");
     return channel;
 }
 
@@ -2663,7 +2793,7 @@ static bool sk_channel_close(SkChannel *channel) {
 static void sk_channel_destroy(SkChannel *channel) {
     if (!channel) return;
     vQueueDelete(channel->queue);
-    free(channel);
+    if (channel->owns_storage) free(channel);
 }
 
 static SkChannel* sk_channel_move(SkChannel **source) {
@@ -3160,6 +3290,8 @@ pub fn transpile_program_to_c_with_options(
             })
             .collect(),
         debug_probes: options.debug_probes,
+        runtime_allocation: options.embedded.allocation,
+        target: options.target,
         ..CodegenState::default()
     };
     let struct_names = collect_struct_names(program);
@@ -3270,8 +3402,28 @@ pub fn transpile_program_to_c_with_options(
             out.push_str("#include \"esp_attr.h\"\n");
             if needs_interrupt_runtime {
                 out.push_str("#include \"driver/gptimer.h\"\n");
+                out.push_str("#include \"driver/gpio.h\"\n");
                 out.push_str("#include \"esp_err.h\"\n");
+                out.push_str("#include \"esp_intr_alloc.h\"\n");
             }
+            out.push_str(&format!(
+                "#define SKADI_STATIC_RUNTIME {}\n",
+                usize::from(options.embedded.allocation == RuntimeAllocation::Static)
+            ));
+            out.push_str(&format!(
+                "#define SKADI_TASK_STACK_BYTES {}\n",
+                options.embedded.task_stack_bytes
+            ));
+            out.push_str(&format!(
+                "#define SKADI_TASK_PRIORITY {}\n",
+                options.embedded.task_priority
+            ));
+            let task_core = if options.embedded.task_core < 0 {
+                "tskNO_AFFINITY".to_string()
+            } else {
+                options.embedded.task_core.to_string()
+            };
+            out.push_str(&format!("#define SKADI_TASK_CORE {task_core}\n"));
             out.push_str("#define SK_INTERRUPT_ATTR IRAM_ATTR\n\n");
         } else {
             out.push_str("#if defined(_WIN32)\n");
@@ -3329,10 +3481,10 @@ pub fn transpile_program_to_c_with_options(
         emit_debug_runtime(&mut out);
     }
     if needs_task_runtime {
-        emit_task_runtime(&mut out, options.target);
+        emit_task_runtime(&mut out, options);
     }
     if needs_channel_runtime {
-        emit_channel_runtime(&mut out, options.target);
+        emit_channel_runtime(&mut out, options);
     }
     if needs_interrupt_runtime {
         emit_interrupt_runtime(&mut out, options.target);
@@ -4310,8 +4462,29 @@ fn emit_esp_idf_interrupt_runtime(out: &mut String) {
     out.push_str(
         r#"typedef void (*SkInterruptHandler)(void *context);
 
+typedef enum {
+    InterruptEdge_Rising = 0,
+    InterruptEdge_Falling = 1,
+    InterruptEdge_Change = 2,
+    InterruptEdge_Low = 3,
+    InterruptEdge_High = 4
+} SkInterruptEdge;
+
+typedef enum {
+    GpioPull_None = 0,
+    GpioPull_Up = 1,
+    GpioPull_Down = 2
+} SkGpioPull;
+
+typedef enum {
+    SK_INTERRUPT_TIMER,
+    SK_INTERRUPT_GPIO
+} SkInterruptKind;
+
 typedef struct {
+    SkInterruptKind kind;
     int64_t period_ns;
+    int gpio_pin;
     SkInterruptHandler handler;
     void *context;
     bool started;
@@ -4335,10 +4508,27 @@ static bool IRAM_ATTR sk_interrupt_alarm_callback(
     return false;
 }
 
+static void IRAM_ATTR sk_interrupt_gpio_callback(void *opaque) {
+    SkInterrupt *interrupt = (SkInterrupt*)opaque;
+    if (interrupt && interrupt->handler) interrupt->handler(interrupt->context);
+}
+
+static gpio_int_type_t sk_interrupt_gpio_edge(SkInterruptEdge edge) {
+    switch (edge) {
+        case InterruptEdge_Rising: return GPIO_INTR_POSEDGE;
+        case InterruptEdge_Falling: return GPIO_INTR_NEGEDGE;
+        case InterruptEdge_Change: return GPIO_INTR_ANYEDGE;
+        case InterruptEdge_Low: return GPIO_INTR_LOW_LEVEL;
+        case InterruptEdge_High: return GPIO_INTR_HIGH_LEVEL;
+        default: sk_interrupt_panic("unsupported GPIO interrupt edge"); return GPIO_INTR_DISABLE;
+    }
+}
+
 static SkInterrupt* sk_interrupt_periodic(int64_t period_ns) {
     if (period_ns <= 0) sk_interrupt_panic("periodic interrupt duration must be positive");
     SkInterrupt *interrupt = (SkInterrupt*)calloc(1, sizeof(SkInterrupt));
     if (!interrupt) sk_interrupt_panic("interrupt allocation failed");
+    interrupt->kind = SK_INTERRUPT_TIMER;
     interrupt->period_ns = period_ns;
     gptimer_config_t timer_config = {
         .clk_src = GPTIMER_CLK_SRC_DEFAULT,
@@ -4352,10 +4542,43 @@ static SkInterrupt* sk_interrupt_periodic(int64_t period_ns) {
     return interrupt;
 }
 
+static SkInterrupt* sk_interrupt_gpio(int64_t pin, SkInterruptEdge edge, SkGpioPull pull) {
+    if (pin < 0 || pin >= GPIO_NUM_MAX) sk_interrupt_panic("GPIO interrupt pin is out of range");
+    SkInterrupt *interrupt = (SkInterrupt*)calloc(1, sizeof(SkInterrupt));
+    if (!interrupt) sk_interrupt_panic("interrupt allocation failed");
+    interrupt->kind = SK_INTERRUPT_GPIO;
+    interrupt->gpio_pin = (int)pin;
+    gpio_config_t config = {
+        .pin_bit_mask = 1ULL << (uint64_t)pin,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = pull == GpioPull_Up ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
+        .pull_down_en = pull == GpioPull_Down ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
+        .intr_type = sk_interrupt_gpio_edge(edge),
+    };
+    if (gpio_config(&config) != ESP_OK) {
+        free(interrupt);
+        sk_interrupt_panic("GPIO interrupt configuration failed");
+    }
+    return interrupt;
+}
+
 static void sk_interrupt_bind(SkInterrupt *interrupt, SkInterruptHandler handler, void *context) {
     if (!interrupt || !handler || interrupt->started) sk_interrupt_panic("invalid or duplicate interrupt binding");
     interrupt->handler = handler;
     interrupt->context = context;
+    if (interrupt->kind == SK_INTERRUPT_GPIO) {
+        esp_err_t service = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+        if (service != ESP_OK && service != ESP_ERR_INVALID_STATE)
+            sk_interrupt_panic("GPIO ISR service installation failed");
+        if (gpio_isr_handler_add(
+                (gpio_num_t)interrupt->gpio_pin,
+                sk_interrupt_gpio_callback,
+                interrupt
+            ) != ESP_OK)
+            sk_interrupt_panic("GPIO ISR handler registration failed");
+        interrupt->started = true;
+        return;
+    }
     gptimer_event_callbacks_t callbacks = {
         .on_alarm = sk_interrupt_alarm_callback,
     };
@@ -4377,6 +4600,14 @@ static void sk_interrupt_bind(SkInterrupt *interrupt, SkInterruptHandler handler
 
 static void sk_interrupt_destroy(SkInterrupt *interrupt) {
     if (!interrupt) return;
+    if (interrupt->kind == SK_INTERRUPT_GPIO) {
+        if (interrupt->started
+            && gpio_isr_handler_remove((gpio_num_t)interrupt->gpio_pin) != ESP_OK)
+            sk_interrupt_panic("GPIO ISR handler removal failed");
+        free(interrupt->context);
+        free(interrupt);
+        return;
+    }
     if (interrupt->started) {
         if (gptimer_stop(interrupt->timer) != ESP_OK)
             sk_interrupt_panic("hardware timer stop failed");
@@ -7260,13 +7491,49 @@ fn emit_statement_body(
                 && call_name == "channel"
             {
                 out.push_str(&pad);
-                out.push_str("SkChannel *");
-                out.push_str(name);
-                out.push_str(" = sk_channel_create(");
-                out.push_str(&emit_expr(&args[0], declared));
-                out.push_str(", sizeof(");
-                out.push_str(&map_skadi_type_to_c(Some(channel_element)));
-                out.push_str("));\n");
+                if state.target == CTarget::EspIdf
+                    && state.runtime_allocation == RuntimeAllocation::Static
+                {
+                    let capacity = emit_expr(&args[0], declared);
+                    let c_type = map_skadi_type_to_c(Some(channel_element));
+                    out.push_str("static SkChannel ");
+                    out.push_str(name);
+                    out.push_str("_storage = {0};\n");
+                    out.push_str(&pad);
+                    out.push_str("static StaticQueue_t ");
+                    out.push_str(name);
+                    out.push_str("_queue_storage;\n");
+                    out.push_str(&pad);
+                    out.push_str("static uint8_t ");
+                    out.push_str(name);
+                    out.push_str("_item_storage[");
+                    out.push_str(&capacity);
+                    out.push_str(" * sizeof(");
+                    out.push_str(&c_type);
+                    out.push_str(")];\n");
+                    out.push_str(&pad);
+                    out.push_str("SkChannel *");
+                    out.push_str(name);
+                    out.push_str(" = sk_channel_create_static(&");
+                    out.push_str(name);
+                    out.push_str("_storage, &");
+                    out.push_str(name);
+                    out.push_str("_queue_storage, ");
+                    out.push_str(name);
+                    out.push_str("_item_storage, ");
+                    out.push_str(&capacity);
+                    out.push_str(", sizeof(");
+                    out.push_str(&c_type);
+                    out.push_str("));\n");
+                } else {
+                    out.push_str("SkChannel *");
+                    out.push_str(name);
+                    out.push_str(" = sk_channel_create(");
+                    out.push_str(&emit_expr(&args[0], declared));
+                    out.push_str(", sizeof(");
+                    out.push_str(&map_skadi_type_to_c(Some(channel_element)));
+                    out.push_str("));\n");
+                }
                 declared.insert(name.clone(), format!("Channel({channel_element})@owned"));
                 return;
             }
@@ -7308,25 +7575,51 @@ fn emit_statement_body(
                 && let Expression::RunTask { call_name, args } = value.as_ref()
             {
                 out.push_str(&pad);
+                if state.target == CTarget::EspIdf
+                    && state.runtime_allocation == RuntimeAllocation::Static
+                {
+                    out.push_str("static ");
+                }
                 out.push_str("SkTask ");
                 out.push_str(name);
                 out.push_str(" = {0};\n");
                 out.push_str(&pad);
+                if state.target == CTarget::EspIdf
+                    && state.runtime_allocation == RuntimeAllocation::Static
+                {
+                    out.push_str("static ");
+                }
                 out.push_str("SkTaskContext_");
                 out.push_str(call_name);
-                out.push_str(" *");
-                out.push_str(name);
-                out.push_str("_context = (SkTaskContext_");
-                out.push_str(call_name);
-                out.push_str("*)malloc(sizeof(SkTaskContext_");
-                out.push_str(call_name);
-                out.push_str("));\n");
-                out.push_str(&pad);
-                out.push_str("if (!");
-                out.push_str(name);
-                out.push_str(
-                    "_context) sk_task_panic(\"SC-RT-301\", \"task context allocation failed\");\n",
-                );
+                if state.target == CTarget::EspIdf
+                    && state.runtime_allocation == RuntimeAllocation::Static
+                {
+                    out.push(' ');
+                    out.push_str(name);
+                    out.push_str("_context_storage = {0};\n");
+                    out.push_str(&pad);
+                    out.push_str("SkTaskContext_");
+                    out.push_str(call_name);
+                    out.push_str(" *");
+                    out.push_str(name);
+                    out.push_str("_context = &");
+                    out.push_str(name);
+                    out.push_str("_context_storage;\n");
+                } else {
+                    out.push_str(" *");
+                    out.push_str(name);
+                    out.push_str("_context = (SkTaskContext_");
+                    out.push_str(call_name);
+                    out.push_str("*)malloc(sizeof(SkTaskContext_");
+                    out.push_str(call_name);
+                    out.push_str("));\n");
+                    out.push_str(&pad);
+                    out.push_str("if (!");
+                    out.push_str(name);
+                    out.push_str(
+                        "_context) sk_task_panic(\"SC-RT-301\", \"task context allocation failed\");\n",
+                    );
+                }
                 if args.is_empty() && declared_type.as_deref() == Some("Task") {
                     out.push_str(&pad);
                     out.push_str(name);
@@ -7349,11 +7642,19 @@ fn emit_statement_body(
                 out.push_str(call_name);
                 out.push_str(", ");
                 out.push_str(name);
-                out.push_str("_context)) { free(");
-                out.push_str(name);
-                out.push_str(
-                    "_context); sk_task_panic(\"SC-RT-301\", \"native task creation failed\"); }\n",
-                );
+                if state.target == CTarget::EspIdf
+                    && state.runtime_allocation == RuntimeAllocation::Static
+                {
+                    out.push_str(
+                        "_context)) { sk_task_panic(\"SC-RT-301\", \"native task creation failed\"); }\n",
+                    );
+                } else {
+                    out.push_str("_context)) { free(");
+                    out.push_str(name);
+                    out.push_str(
+                        "_context); sk_task_panic(\"SC-RT-301\", \"native task creation failed\"); }\n",
+                    );
+                }
                 declared.insert(
                     name.clone(),
                     format!(
@@ -8210,6 +8511,14 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             }
             if name == "interrupts.periodic" && args.len() == 1 {
                 return format!("sk_interrupt_periodic({})", emit_expr(&args[0], declared));
+            }
+            if name == "interrupts.gpio" && args.len() == 3 {
+                return format!(
+                    "sk_interrupt_gpio({}, {}, {})",
+                    emit_expr(&args[0], declared),
+                    emit_expr(&args[1], declared),
+                    emit_expr(&args[2], declared)
+                );
             }
             if let Some((channel_name, method)) = name.split_once('.')
                 && let Some(channel_element) = declared

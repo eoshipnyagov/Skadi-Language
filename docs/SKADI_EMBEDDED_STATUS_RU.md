@@ -24,10 +24,15 @@ release-протестированный MCU toolchain.
 - cooperative `stop`, `wait`, timed wait и проверка закрытия Channel на каждом
   RTOS tick;
 - `interrupts.periodic(Duration)` поверх hardware GPTimer;
+- `interrupts.gpio(pin, InterruptEdge.*, GpioPull.*)` поверх GPIO ISR;
 - настоящий ISR handler для `on interrupt` и ISR-safe `Channel.try_send`;
+- настраиваемые chip, Task stack/priority/core и стратегия размещения через
+  `[embedded]`;
+- статическое размещение Task context/TCB/stack/completion и Channel/queue;
 - staging воспроизводимого ESP-IDF-проекта с declared native board adapters;
 - CLI-команды `prepare`, `build`, `flash` и `monitor`;
-- вертикальный пример `examples/embedded-esp32-blink`.
+- вертикальные примеры `examples/embedded-esp32-blink` и
+  `examples/embedded-esp32-gpio`.
 
 Generated C использует FreeRTOS и ESP-IDF напрямую, но исходная Skadi-программа
 не содержит RTOS-типов или handles.
@@ -68,6 +73,38 @@ skadi-cli build --target esp32-idf
 4. board-specific GPIO остаётся в небольшом declared C adapter;
 5. CLI создаёт, собирает, прошивает и открывает monitor одного ESP-IDF-проекта.
 
+GPIO-вариант использует ту же границу ISR:
+
+```skadi
+Channel(Int) events = channel(4)
+Interrupt button = interrupts.gpio(4, InterruptEdge.Falling, GpioPull.Up)
+
+on interrupt button {
+    events.try_send(4)
+}
+```
+
+`InterruptEdge` поддерживает `Rising`, `Falling`, `Change`, `Low`, `High`;
+`GpioPull` поддерживает `None`, `Up`, `Down`. Обработка события, I/O и прочая
+обычная работа должны оставаться вне ISR.
+
+## Embedded-настройки проекта
+
+```toml
+[embedded]
+chip = "esp32"
+allocation = "static"
+task_stack_bytes = 4096
+task_priority = 2
+task_core = "any"
+```
+
+`allocation = "dynamic"` сохраняет прежнее поведение. При `static` емкость
+каждого `channel(N)` должна быть положительным integer literal: это позволяет
+compiler заранее сформировать queue storage. `task_core` принимает `"any"`,
+`"0"` или `"1"`; неподдерживаемая конкретной микросхемой affinity будет
+отклонена ESP-IDF при сборке/запуске.
+
 ## Текущая матрица
 
 | Платформа | Статус |
@@ -75,34 +112,32 @@ skadi-cli build --target esp32-idf
 | Windows x64 | Release-tested desktop |
 | Linux x64 | Release-tested desktop |
 | macOS x64/arm64 | Release-tested desktop |
-| ESP32 / ESP-IDF | Experimental compiler/runtime/CLI slice; hardware smoke pending |
+| ESP32 / ESP-IDF | Experimental compiler/runtime/CLI slice; SDK build in CI, hardware smoke pending |
 | Bare metal MCU | Future research |
 
 ## Ограничения первого slice
 
-- hardware build/flash пока не входит в CI и должен быть проверен на реальной
-  ESP32-плате;
-- Task, Channel и их runtime context используют динамическое размещение ESP-IDF;
-  static task/channel storage policy ещё не реализована;
+- ESP-IDF SDK build входит в CI, но flash/monitor ещё должны быть проверены на
+  реальной ESP32-плате;
+- static policy покрывает пользовательские Task и Channel, но Interrupt context
+  и некоторые сервисы ESP-IDF пока могут использовать heap;
 - `Memory.static` не заменяет отдельный embedded allocator contract;
-- доступны periodic GPTimer interrupts, но ещё нет GPIO interrupt source и
-  общего device API;
+- доступны GPTimer и GPIO interrupts, но общего device API для ADC, PWM, UART,
+  SPI и I2C ещё нет;
 - `[native].sources` поддерживаются, а `libraries` и `library_paths` для ESP-IDF
   пока отклоняются: зависимости board adapter задаются ESP-IDF components;
 - `args`, input/file/directory I/O, Canvas и Window отклоняются до C toolchain с
   `SC-CG-303`; serial `output` и declared native adapters доступны;
-- stack size, priority, core affinity и chip variant пока не настраиваются через
-  `Skadi.toml`;
 - нет hard real-time guarantees, emulator/HIL matrix и embedded Canvas backend.
 
-`SKADI_TASK_STACK_WORDS`, `SKADI_TASK_PRIORITY` и `SKADI_CHANNEL_POLL_TICKS`
-существуют как generated-C integration knobs, а не как стабильный публичный
-Skadi API.
+`SKADI_CHANNEL_POLL_TICKS` остаётся generated-C integration knob. Пользовательские
+stack/priority/core/allocation задаются через `Skadi.toml`, без FreeRTOS-имен в
+исходном Skadi-коде.
 
 ## Критерий завершённой поддержки
 
 Target станет release-tested только после build/flash/monitor smoke на реальном
 устройстве, CI или hardware-in-the-loop проверки, зафиксированной платы и
-pinout, а также явной политики bounded/static runtime allocation. Наличие
+pinout и HIL-проверки. Наличие
 профиля и успешно сгенерированного ESP-IDF-проекта само по себе не означает
 hard-real-time или production-ready поддержку.

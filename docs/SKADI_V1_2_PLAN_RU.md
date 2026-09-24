@@ -413,9 +413,8 @@ vector slice до матриц или transform framework.
 После завершения ByteSize, Angle и Vector MVP закрыты формы, которые выглядели
 частично реализованными:
 
-- `on interrupt` прошёл следующий отдельный host runtime slice с typed periodic
-  `Interrupt` и строгим interrupt-safe subset; hardware IRQ backend остаётся
-  future;
+- `on interrupt` прошёл host runtime slice и ESP-IDF hardware backend с GPTimer,
+  GPIO IRQ и строгим interrupt-safe subset;
 - compound assignments десахарируются без потери левого операнда;
 - formatter канонизирует typed returns через `returns` и compound assignments через явную форму;
 - legacy typed-return syntax принимается с warning для compatibility;
@@ -762,14 +761,18 @@ TOML editor и новые TUI-функции не входят в distribution s
   принимает `--target esp32-idf`;
 - staging создаёт воспроизводимый ESP-IDF component и включает declared native
   board adapters;
+- `[embedded]` задаёт chip, allocation, Task stack/priority/core, а static
+  lowering использует статические FreeRTOS Task/Queue primitives;
+- GPIO source поддерживает явные `InterruptEdge` и `GpioPull`;
 - `examples/embedded-esp32-blink` проверяет цепочку
   `GPTimer -> on interrupt -> Channel -> Task -> GPIO/serial`;
-- structural Rust и CLI smoke tests не требуют установленного SDK.
+- `examples/embedded-esp32-gpio` проверяет GPIO ISR boundary;
+- structural Rust/CLI smoke дополняет настоящий ESP-IDF SDK build в CI.
 
 До закрытия embedded milestone остаются build/flash/monitor smoke на реальной
-ESP32, CI/HIL решение, static/region-backed storage policy и manifest controls
-для stack/priority/core. GPIO interrupts, общий device API и bare metal являются
-следующими slices, а не частью текущего.
+ESP32 и CI/HIL решение. Общий device API, полная static policy для прочих
+platform resources и bare metal являются следующими slices, а не частью
+текущего.
 
 ## 8. Короткая формула
 

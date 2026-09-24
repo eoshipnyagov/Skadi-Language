@@ -56,6 +56,8 @@ cargo run -p skadi-cli -- check
 - `debug` запускает opt-in debug build с breakpoints по `.skd`, `continue` и `step`;
 - `quick-run` собирает и запускает один `.skd` без `Skadi.toml`;
 - `embedded prepare/build/flash/monitor` управляет experimental ESP-IDF flow;
+- `[embedded]` в `Skadi.toml` задаёт chip, dynamic/static allocation,
+  Task stack/priority/core;
 - `doctor` проверяет host и cross toolchains;
 - `target list` показывает поддерживаемые target profiles;
 - `tui` открывает полноэкранный интерфейс проекта.

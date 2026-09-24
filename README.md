@@ -572,6 +572,13 @@ skadi-cli tui
 skadi-cli target list
 ```
 
+ESP32 projects use the same `Task`, `Channel`, `Duration`, and `on interrupt`
+surface as host programs. The experimental ESP-IDF backend supports GPTimer and
+GPIO interrupt sources, configurable task stack/priority/core, and static
+Task/Channel allocation through the `[embedded]` manifest section. See the
+[embedded status and guide](docs/SKADI_EMBEDDED_STATUS_RU.md) for the exact
+capability boundary and hardware-validation status.
+
 ## Documentation
 
 User-facing docs:

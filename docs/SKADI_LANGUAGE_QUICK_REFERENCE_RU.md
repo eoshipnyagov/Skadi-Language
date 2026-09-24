@@ -256,6 +256,9 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `jobs.send_for(value, 250ms) on error { ... }` | Blocking send с deadline | Experimental |
 | `value = jobs.receive_for(250ms) on error { ... }` | Blocking receive с deadline | Experimental |
 | `timed_out` | Причина timed Channel/Task handler; контекстный identifier | Experimental |
+| `Interrupt tick = interrupts.periodic(10ms)` | Типизированный periodic source на host и ESP-IDF | Experimental |
+| `Interrupt pin = interrupts.gpio(4, InterruptEdge.Falling, GpioPull.Up)` | GPIO IRQ source на ESP-IDF | Experimental |
+| `on interrupt tick { jobs.try_send(1) }` | Строгий interrupt-safe handler | Experimental |
 
 ## Specialized arithmetic
 
@@ -300,8 +303,6 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 
 | Идея | Статус |
 |---|---:|
-| `Interrupt tick = interrupts.periodic(10ms)` | Host MVP: typed periodic source |
-| `on interrupt tick { channel.try_send(1) }` | Host MVP: строгий interrupt context |
 | Отдельный `on error { ... }` | Reserved: recovery должен быть связан с danger-вызовом |
 | Одинарные `&`, `\|` и общий `:` | Lexer-only tokens без текущей semantic формы |
 | `allow grow`, `allow drop` вне `memory(...)` | Не является общей языковой формой |

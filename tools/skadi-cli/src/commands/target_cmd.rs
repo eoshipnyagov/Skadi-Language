@@ -5,7 +5,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("list") => {
             let result = actions::list_targets();
             for p in result.targets {
-                println!("{}    {}", p.triple, p.description);
+                println!("{}    {}\n    {}", p.triple, p.description, p.capabilities);
             }
             Ok(())
         }

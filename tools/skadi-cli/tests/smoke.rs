@@ -99,6 +99,7 @@ fn doctor_and_target_list_smoke() {
     assert!(targets_out.contains("x86_64-w64-mingw32"));
     assert!(targets_out.contains("x86_64-unknown-linux-gnu"));
     assert!(targets_out.contains("esp32-idf"));
+    assert!(targets_out.contains("static=true"));
 
     let debug_help = run_cli(&temp, &["debug", "--help"]);
     assert!(
@@ -120,9 +121,15 @@ fn embedded_prepare_stages_an_idf_project_without_sdk() {
     assert!(init.status.success(), "init failed: {}", stderr_text(&init));
     fs::write(
         temp.join("src/main.skd"),
-        "Channel(Int) ticks = channel(2)\nInterrupt timer = interrupts.periodic(10ms)\non interrupt timer {\n    ticks.try_send(1)\n}\nticks.close()\n",
+        "Channel(Int) ticks = channel(2)\nInterrupt timer = interrupts.periodic(10ms)\non interrupt timer {\n    ticks.try_send(1)\n}\nInterrupt button = interrupts.gpio(4, InterruptEdge.Falling, GpioPull.Up)\non interrupt button {\n    ticks.try_send(2)\n}\nticks.close()\n",
     )
     .expect("write embedded entry");
+    let manifest_path = temp.join("Skadi.toml");
+    let mut manifest = fs::read_to_string(&manifest_path).expect("read manifest");
+    manifest.push_str(
+        "\n[embedded]\nchip = \"esp32c3\"\nallocation = \"static\"\ntask_stack_bytes = 4096\ntask_priority = 2\ntask_core = \"0\"\n",
+    );
+    fs::write(&manifest_path, manifest).expect("write embedded manifest");
 
     let prepare = run_cli(&temp, &["embedded", "prepare"]);
     assert!(
@@ -139,7 +146,13 @@ fn embedded_prepare_stages_an_idf_project_without_sdk() {
     let c = fs::read_to_string(generated).expect("read generated embedded C");
     assert!(c.contains("void app_main(void)"));
     assert!(c.contains("gptimer_new_timer"));
+    assert!(c.contains("gpio_isr_handler_add"));
     assert!(c.contains("xQueueSendFromISR"));
+    assert!(c.contains("xQueueCreateStatic"));
+    assert!(c.contains("#define SKADI_TASK_PRIORITY 2"));
+    let root_cmake =
+        fs::read_to_string(temp.join("build/esp32-idf/CMakeLists.txt")).expect("root cmake");
+    assert!(root_cmake.contains("set(IDF_TARGET \"esp32c3\""));
 
     let _ = fs::remove_dir_all(temp);
 }

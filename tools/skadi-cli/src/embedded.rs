@@ -72,7 +72,8 @@ pub fn stage_esp_idf_project(
     }
 
     let root_cmake = format!(
-        "cmake_minimum_required(VERSION 3.16)\ninclude($ENV{{IDF_PATH}}/tools/cmake/project.cmake)\nproject({project_name})\n"
+        "cmake_minimum_required(VERSION 3.16)\nset(IDF_TARGET \"{}\" CACHE STRING \"ESP-IDF target\")\ninclude($ENV{{IDF_PATH}}/tools/cmake/project.cmake)\nproject({project_name})\n",
+        project.embedded.chip
     );
     fs::write(root.join("CMakeLists.txt"), root_cmake)
         .map_err(|error| format!("write ESP-IDF root CMakeLists.txt failed: {error}"))?;
@@ -187,6 +188,7 @@ mod tests {
             native_sources: vec!["native/board.c".to_string()],
             native_libraries: Vec::new(),
             native_library_paths: Vec::new(),
+            embedded: crate::project::EmbeddedConfig::default(),
         };
 
         let staged =
@@ -199,6 +201,9 @@ mod tests {
         assert!(component.contains("skadi_program.c"));
         assert!(component.contains("native_0_board.c"));
         assert!(component.contains("REQUIRES esp_driver_gpio esp_driver_gptimer esp_timer"));
+        let root_cmake =
+            fs::read_to_string(staged.root.join("CMakeLists.txt")).expect("read root CMake");
+        assert!(root_cmake.contains("set(IDF_TARGET \"esp32\""));
 
         fs::remove_dir_all(root).expect("remove fixture");
     }

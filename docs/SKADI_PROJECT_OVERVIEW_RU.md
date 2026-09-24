@@ -135,8 +135,8 @@ GitHub Pages.
   timeout boundaries;
 - Canvas events, text/images, transforms и non-Windows presenters;
 - systems additions;
-- hardware/CI acceptance, static allocation policy и GPIO interrupt source для
-  первого ESP32 backend;
+- hardware/HIL acceptance и расширение static policy/device API для первого
+  ESP32 backend; SDK CI, Task/Channel static allocation и GPIO IRQ уже готовы;
 - расширенные path-sensitive ownership/lifecycle facts и Skadi-level debugger в
   TUI; CLI уже поддерживает первый probe-based breakpoint/step slice, а
   structured analysis покрывает blocking Channel и incomplete `when`.

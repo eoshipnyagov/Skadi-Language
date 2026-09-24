@@ -226,11 +226,13 @@
 ## Частично реализованное / переходное
 
 - `Interrupt tick = interrupts.periodic(Duration)` - `Host + ESP-IDF MVP`
+- `Interrupt pin = interrupts.gpio(Int, InterruptEdge.*, GpioPull.*)` -
+  `ESP-IDF experimental`
 - `on interrupt tick { ... }` - `Host + ESP-IDF MVP`
   - регистрация разрешена владельцу на top level;
   - handler допускает конечные scalar-вычисления и `Channel.try_send`;
   - blocking, allocation, I/O, task/resource management и обычные вызовы запрещены;
-  - hardware IRQ backends остаются planned.
+  - ESP-IDF реализует GPTimer и GPIO ISR; другие device IRQ backends planned.
 - time/duration systems MVP - `Experimental / Runtime MVP`
   - nominal types `Time` и `Duration` проходят parser/semantic/C codegen;
   - integer literals `ns`, `us`, `ms`, `s`, `min`, `h` проверяются на overflow;

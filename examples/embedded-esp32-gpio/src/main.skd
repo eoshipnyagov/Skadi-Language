@@ -1,0 +1,17 @@
+fn await_press(Channel(Int) events) returns Int {
+    new Int event = events.receive()
+    output("GPIO interrupt received on pin ", event)
+    return event
+}
+
+Channel(Int) events = channel(4)
+Task(Int) listener = run await_press(events)
+
+Interrupt button = interrupts.gpio(4, InterruptEdge.Falling, GpioPull.Up)
+on interrupt button {
+    events.try_send(4)
+}
+
+new Int pin = wait listener
+events.close()
+output("button workflow complete: ", pin)

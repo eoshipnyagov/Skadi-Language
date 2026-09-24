@@ -10,6 +10,28 @@ pub struct ProjectConfig {
     pub native_sources: Vec<String>,
     pub native_libraries: Vec<String>,
     pub native_library_paths: Vec<String>,
+    pub embedded: EmbeddedConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EmbeddedConfig {
+    pub chip: String,
+    pub allocation: String,
+    pub task_stack_bytes: u32,
+    pub task_priority: u8,
+    pub task_core: String,
+}
+
+impl Default for EmbeddedConfig {
+    fn default() -> Self {
+        Self {
+            chip: "esp32".to_string(),
+            allocation: "dynamic".to_string(),
+            task_stack_bytes: 4096,
+            task_priority: 1,
+            task_core: "any".to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +45,7 @@ pub struct ManifestConfig {
     pub native_sources: Vec<String>,
     pub native_libraries: Vec<String>,
     pub native_library_paths: Vec<String>,
+    pub embedded: EmbeddedConfig,
 }
 
 const TEMPLATE_MAIN: &str = "new Text greeting = \"Hello from Skadi\"\n\noutput(greeting)\n\nnew Angle quarter_turn = 90deg\n\noutput(\"Quarter turn: \", rad_to_deg(quarter_turn), \" degrees\")\n";
@@ -40,6 +63,7 @@ pub fn load_project_at(root: &Path) -> Result<ProjectConfig, String> {
         native_sources: manifest.native_sources,
         native_libraries: manifest.native_libraries,
         native_library_paths: manifest.native_library_paths,
+        embedded: manifest.embedded,
     })
 }
 
@@ -67,6 +91,28 @@ pub fn load_manifest_config_at(root: &Path) -> Result<ManifestConfig, String> {
         native_sources: extract_section_string_array(&content, "native", "sources")?,
         native_libraries: extract_section_string_array(&content, "native", "libraries")?,
         native_library_paths: extract_section_string_array(&content, "native", "library_paths")?,
+        embedded: EmbeddedConfig {
+            chip: extract_section_string_value(&content, "embedded", "chip")
+                .unwrap_or_else(|| "esp32".to_string()),
+            allocation: extract_section_string_value(&content, "embedded", "allocation")
+                .unwrap_or_else(|| "dynamic".to_string()),
+            task_stack_bytes: extract_section_integer_value(
+                &content,
+                "embedded",
+                "task_stack_bytes",
+            )?
+            .unwrap_or(4096),
+            task_priority: extract_section_integer_value(&content, "embedded", "task_priority")?
+                .map(|value| {
+                    u8::try_from(value).map_err(|_| {
+                        "manifest field 'embedded.task_priority' must fit u8".to_string()
+                    })
+                })
+                .transpose()?
+                .unwrap_or(1),
+            task_core: extract_section_string_value(&content, "embedded", "task_core")
+                .unwrap_or_else(|| "any".to_string()),
+        },
     };
     validate_manifest_config(&config)?;
     Ok(config)
@@ -159,6 +205,33 @@ fn extract_section_string_array(
         return Ok(values);
     }
     Ok(Vec::new())
+}
+
+fn extract_section_integer_value(
+    content: &str,
+    section: &str,
+    key: &str,
+) -> Result<Option<u32>, String> {
+    let mut current_section = "";
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            current_section = &trimmed[1..trimmed.len() - 1];
+            continue;
+        }
+        if current_section != section {
+            continue;
+        }
+        let Some((left, right)) = trimmed.split_once('=') else {
+            continue;
+        };
+        if left.trim() == key {
+            return right.trim().parse::<u32>().map(Some).map_err(|_| {
+                format!("manifest field '{section}.{key}' must be a non-negative integer")
+            });
+        }
+    }
+    Ok(None)
 }
 
 fn extract_section_string_map(
@@ -268,6 +341,7 @@ pub fn create_project(root: &Path, name: &str) -> Result<(), String> {
         native_sources: Vec::new(),
         native_libraries: Vec::new(),
         native_library_paths: Vec::new(),
+        embedded: EmbeddedConfig::default(),
     };
     fs::write(&toml_path, render_manifest_config(&manifest))
         .map_err(|e| format!("write {} failed: {e}", toml_path.display()))?;
@@ -307,6 +381,7 @@ pub fn init_project(root: &Path) -> Result<(), String> {
             native_sources: Vec::new(),
             native_libraries: Vec::new(),
             native_library_paths: Vec::new(),
+            embedded: EmbeddedConfig::default(),
         };
         fs::write(&toml_path, render_manifest_config(&manifest))
             .map_err(|e| format!("write {} failed: {e}", toml_path.display()))?;
@@ -328,8 +403,20 @@ fn render_manifest_config(manifest: &ManifestConfig) -> String {
         .map(|(name, path)| format!("{name} = \"{path}\""))
         .collect::<Vec<_>>()
         .join("\n");
+    let embedded = if manifest.embedded == EmbeddedConfig::default() {
+        String::new()
+    } else {
+        format!(
+            "\n[embedded]\nchip = \"{}\"\nallocation = \"{}\"\ntask_stack_bytes = {}\ntask_priority = {}\ntask_core = \"{}\"\n",
+            manifest.embedded.chip,
+            manifest.embedded.allocation,
+            manifest.embedded.task_stack_bytes,
+            manifest.embedded.task_priority,
+            manifest.embedded.task_core,
+        )
+    };
     format!(
-        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"{}\"\n\n[build]\nentry = \"{}\"\n\n[numeric]\nint = \"{}\"\n\n[dependencies]\n{}\n\n[native]\nsources = {}\nlibraries = {}\nlibrary_paths = {}\n",
+        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"{}\"\n\n[build]\nentry = \"{}\"\n\n[numeric]\nint = \"{}\"\n\n[dependencies]\n{}\n\n[native]\nsources = {}\nlibraries = {}\nlibrary_paths = {}\n{}",
         manifest.name,
         manifest.version,
         manifest.edition,
@@ -339,6 +426,7 @@ fn render_manifest_config(manifest: &ManifestConfig) -> String {
         render_string_array(&manifest.native_sources),
         render_string_array(&manifest.native_libraries),
         render_string_array(&manifest.native_library_paths),
+        embedded,
     )
 }
 
@@ -373,6 +461,34 @@ fn validate_manifest_config(manifest: &ManifestConfig) -> Result<(), String> {
         return Err(
             "manifest field 'numeric.int' must be target, i8, i16, i32, or i64".to_string(),
         );
+    }
+    if manifest.embedded.chip.trim().is_empty()
+        || !manifest
+            .embedded
+            .chip
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return Err(
+            "manifest field 'embedded.chip' must be a non-empty chip identifier".to_string(),
+        );
+    }
+    if !matches!(manifest.embedded.allocation.as_str(), "dynamic" | "static") {
+        return Err("manifest field 'embedded.allocation' must be dynamic or static".to_string());
+    }
+    if manifest.embedded.task_stack_bytes < 1024
+        || !manifest.embedded.task_stack_bytes.is_multiple_of(16)
+    {
+        return Err(
+            "manifest field 'embedded.task_stack_bytes' must be at least 1024 and divisible by 16"
+                .to_string(),
+        );
+    }
+    if manifest.embedded.task_priority == 0 || manifest.embedded.task_priority > 24 {
+        return Err("manifest field 'embedded.task_priority' must be between 1 and 24".to_string());
+    }
+    if !matches!(manifest.embedded.task_core.as_str(), "any" | "0" | "1") {
+        return Err("manifest field 'embedded.task_core' must be any, 0, or 1".to_string());
     }
     for (name, path) in &manifest.dependencies {
         let mut characters = name.chars();
@@ -458,8 +574,9 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        ManifestConfig, ensure_entry_file_at, init_project, load_manifest_config_at,
-        resolve_local_dependencies, save_manifest_config_at, validate_manifest_config,
+        EmbeddedConfig, ManifestConfig, ensure_entry_file_at, init_project,
+        load_manifest_config_at, resolve_local_dependencies, save_manifest_config_at,
+        validate_manifest_config,
     };
 
     fn unique_temp_dir(stem: &str) -> std::path::PathBuf {
@@ -490,6 +607,13 @@ mod tests {
             native_sources: vec!["native/helper.c".to_string()],
             native_libraries: vec!["helper".to_string()],
             native_library_paths: vec!["native/lib".to_string()],
+            embedded: EmbeddedConfig {
+                chip: "esp32c3".to_string(),
+                allocation: "static".to_string(),
+                task_stack_bytes: 6144,
+                task_priority: 3,
+                task_core: "0".to_string(),
+            },
         };
         save_manifest_config_at(&temp, &updated).expect("save");
         let loaded = load_manifest_config_at(&temp).expect("load");
@@ -541,6 +665,7 @@ mod tests {
             native_sources: Vec::new(),
             native_libraries: Vec::new(),
             native_library_paths: Vec::new(),
+            embedded: EmbeddedConfig::default(),
         };
 
         let mut absolute = base.clone();
@@ -580,6 +705,7 @@ mod tests {
             native_sources: Vec::new(),
             native_libraries: Vec::new(),
             native_library_paths: Vec::new(),
+            embedded: EmbeddedConfig::default(),
         };
         assert!(
             validate_manifest_config(&manifest)

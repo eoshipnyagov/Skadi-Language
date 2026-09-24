@@ -284,11 +284,12 @@ C использует FreeRTOS Task/Queue, ESP Timer и hardware GPTimer, а CL
 ESP-IDF project и поддерживает build/flash/monitor. Пользовательская модель
 остаётся общей: `Task`, `Channel`, `Duration` и `on interrupt`.
 
-Это ещё не production firmware contract. Task context и Channel storage
-динамические; manifest не задаёт stack size, priority, core affinity и static
-allocation. Следующие обязательные шаги: hardware/HIL regression, явная
-resource-exhaustion policy, profile-controlled static или region-backed storage
-и документированный предел tasks/channels. Bare-metal targets остаются future.
+Это ещё не production firmware contract. Manifest уже задаёт stack size,
+priority, core affinity и dynamic/static policy; static ESP-IDF lowering убирает
+runtime allocation из пользовательских Task и Channel. Следующие обязательные
+шаги: hardware/HIL regression, явная resource-exhaustion policy, расширение
+static policy на Interrupt/device context и документированный предел
+tasks/channels. Bare-metal targets остаются future.
 
 ## 11. Channel runtime, второй slice
 

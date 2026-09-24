@@ -14,7 +14,36 @@ pub struct TargetProfile {
     pub triple: &'static str,
     pub description: &'static str,
     pub output_kind: OutputKind,
+    pub capabilities: TargetCapabilities,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TargetCapabilities {
+    pub tasks: bool,
+    pub channels: bool,
+    pub interrupts: bool,
+    pub static_runtime: bool,
+    pub filesystem: bool,
+    pub canvas: bool,
+}
+
+const DESKTOP_CAPABILITIES: TargetCapabilities = TargetCapabilities {
+    tasks: true,
+    channels: true,
+    interrupts: true,
+    static_runtime: false,
+    filesystem: true,
+    canvas: true,
+};
+
+const ESP_IDF_CAPABILITIES: TargetCapabilities = TargetCapabilities {
+    tasks: true,
+    channels: true,
+    interrupts: true,
+    static_runtime: true,
+    filesystem: false,
+    canvas: false,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputKind {
@@ -47,21 +76,25 @@ const PROFILES: [TargetProfile; 4] = [
         triple: "host",
         description: "Current host toolchain auto-detection",
         output_kind: HOST_OUTPUT_KIND,
+        capabilities: DESKTOP_CAPABILITIES,
     },
     TargetProfile {
         triple: "x86_64-w64-mingw32",
         description: "Windows via MinGW GCC",
         output_kind: OutputKind::WindowsExe,
+        capabilities: DESKTOP_CAPABILITIES,
     },
     TargetProfile {
         triple: "x86_64-unknown-linux-gnu",
         description: "Linux GNU via cross GCC/Clang",
         output_kind: OutputKind::LinuxElf,
+        capabilities: DESKTOP_CAPABILITIES,
     },
     TargetProfile {
         triple: "esp32-idf",
         description: "ESP32 via ESP-IDF project backend (experimental)",
         output_kind: OutputKind::EspIdfProject,
+        capabilities: ESP_IDF_CAPABILITIES,
     },
 ];
 
