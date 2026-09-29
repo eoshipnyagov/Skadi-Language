@@ -104,6 +104,55 @@ dimensions must match when calling `present`.
 not block the presentation loop, otherwise the operating system will correctly
 mark the window as unresponsive.
 
+## Keyboard and mouse input
+
+On Win32, `Window` collects input while pumping window messages. No explicit
+polling call is needed: `is_open()` processes messages before a frame, and
+`present()` services the window after drawing. `window.input` returns a copyable
+snapshot for that frame:
+
+```skadi
+while window.is_open() {
+    new Input controls = window.input
+    new ButtonState forward = controls.key(Key.W)
+    new MouseInput mouse = controls.mouse
+    new ButtonState click = mouse.button(MouseButton.Left)
+
+    if forward.down {
+        player.y = player.y - 4.0
+    }
+    if click.pressed {
+        player = mouse.position
+    }
+
+    frame.clear(Color.black)
+    frame.fill_circle(player, 12.0, Color.terminal_cyan)
+    window.present(edit frame)
+}
+```
+
+| Type | Role |
+|---|---|
+| `Window` | Owns the window and live input state; not copyable |
+| `Input` | Copyable per-window, per-frame input snapshot |
+| `Key` | Named keys: `A`–`Z`, `Digit0`–`Digit9`, `F1`–`F12`, `Space`, `Escape`, `Enter`, `Tab`, `Backspace`, arrows, `Shift`, `Control`, `Alt` |
+| `ButtonState` | `down` now; `pressed` and `released` since the previous frame |
+| `MouseInput` | `position`, `delta` in window coordinates, `wheel` in scroll steps, and `button(...)` |
+| `MouseButton` | `Left`, `Middle`, `Right` |
+
+Both `pressed` and `released` can be true when a button is pressed and released
+between frames; `down` is then false. The current snapshot remains stable until
+the next `present()`. The first `is_open()` or `window.input` read in the next
+frame publishes accumulated transitions. Re-reading within a frame does not
+clear them. First mouse movement sets the position without a delta jump; losing
+window focus releases held keys and buttons.
+
+`Key` and `MouseButton` are Canvas API types, not keywords or new Skadi syntax.
+The compiler recognizes their named values in the current implementation.
+`Key.W` names a key, not a text character. `Input` belongs to one `Window` and
+is unrelated to the console-reading `input()` builtin. The full runnable project
+is `examples/canvas-input/` (`skadi-cli check`, `build`, `run`).
+
 After a conditional `window.close()`, `present()` requires a handler:
 
 ```skadi
@@ -117,7 +166,8 @@ handler never accesses a released Win32 handle.
 
 ## Not included yet
 
-- keyboard and mouse events;
+- ordered events and layout-aware text input;
+- touchscreen and gamepad input;
 - a continuous application loop and frame timing;
 - text and fonts;
 - images and codecs;

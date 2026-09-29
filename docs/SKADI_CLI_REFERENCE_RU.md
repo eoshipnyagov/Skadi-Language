@@ -1,6 +1,6 @@
 # Справочник Skadi CLI и TUI
 
-`skadi-cli` — основной пользовательский toolchain Skadi `v1.2.0-rc.1`.
+`skadi-cli` — основной пользовательский toolchain Skadi линии `v1.2`.
 Обычные команды предназначены для terminal/scripts/CI, а `tui` — для
 интерактивной работы.
 

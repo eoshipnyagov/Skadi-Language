@@ -293,6 +293,10 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `windows.open(title, width, height)` | Создать Win32 `Window` |
 | `window.present(edit canvas)` | Показать Canvas с явным borrow |
 | `window.is_open()` / `window.close()` | Lifecycle окна |
+| `new Input controls = window.input` | Копируемый снимок ввода за кадр |
+| `controls.key(Key.W)` | `ButtonState` клавиши: `down`, `pressed`, `released` |
+| `controls.mouse` | `MouseInput` с `position`, `delta`, `wheel` |
+| `mouse.button(MouseButton.Left)` | `ButtonState` кнопки мыши |
 
 `Color` и `Rect` — value types. `Canvas` и `Window` — линейные ресурсы: они не
 копируются, временно передаются через `view`/`edit`, а ownership передаётся
@@ -308,7 +312,7 @@ Constants без imports: `PI`, `TAU`, `E`, `EPSILON` (`Float`).
 | `allow grow`, `allow drop` вне `memory(...)` | Не является общей языковой формой |
 | Channel `select` и `try_receive` | Future |
 | async/await, futures, task groups | Future |
-| `Matrix2D`, Canvas text/images/events и non-Windows Window | Future |
+| `Matrix2D`, Canvas text/images/ordered events и non-Windows Window | Future |
 | Generics, decorators, operator overloading | Conscious non-goals текущего языка |
 
 Подробности: [полная справка](language-reference.md) и

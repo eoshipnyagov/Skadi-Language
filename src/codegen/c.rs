@@ -4745,6 +4745,28 @@ fn emit_visual_runtime(out: &mut String, needs_window_runtime: bool) {
     out.push_str(
         r##"typedef struct { uint8_t r; uint8_t g; uint8_t b; uint8_t a; } SkColor;
 typedef struct { float x; float y; float width; float height; } SkRect;
+typedef struct { bool down; bool pressed; bool released; } SkButtonState;
+typedef struct {
+    Vec2 position;
+    Vec2 delta;
+    float wheel;
+    SkButtonState buttons[3];
+} SkMouseInput;
+typedef struct {
+    SkButtonState keys[256];
+    SkMouseInput mouse;
+} SkInput;
+
+static SkButtonState sk_input_key(const SkInput *input, int64_t key) {
+    SkButtonState empty = {0};
+    return input && key >= 0 && key < 256 ? input->keys[key] : empty;
+}
+
+static SkButtonState sk_mouse_button(const SkMouseInput *mouse, int64_t button) {
+    SkButtonState empty = {0};
+    return mouse && button >= 0 && button < 3 ? mouse->buttons[button] : empty;
+}
+
 typedef struct {
     int64_t width;
     int64_t height;
@@ -5001,45 +5023,113 @@ static int64_t sk_canvas_checksum(const SkCanvas *canvas) {
         return;
     }
     out.push_str(
-        r##"typedef struct {
+        r##"typedef struct SkWindowState {
     bool open;
     int64_t width;
     int64_t height;
+    bool needs_snapshot;
+    SkInput pending;
+    SkInput current;
+    bool mouse_position_valid;
 #if defined(_WIN32)
     HWND hwnd;
     BITMAPINFO bitmap;
 #endif
-} SkWindow;
+} SkWindowState;
+typedef struct { SkWindowState *state; } SkWindow;
+
+static void sk_window_publish_input(SkWindowState *state) {
+    if (!state || !state->needs_snapshot) return;
+    state->current = state->pending;
+    for (int key = 0; key < 256; key++) {
+        state->pending.keys[key].pressed = false;
+        state->pending.keys[key].released = false;
+    }
+    for (int button = 0; button < 3; button++) {
+        state->pending.mouse.buttons[button].pressed = false;
+        state->pending.mouse.buttons[button].released = false;
+    }
+    state->pending.mouse.delta = (Vec2){0};
+    state->pending.mouse.wheel = 0.0f;
+    state->needs_snapshot = false;
+}
 
 #if defined(_WIN32)
+static void sk_window_button(SkButtonState *button, bool down) {
+    if (down && !button->down) button->pressed = true;
+    if (!down && button->down) button->released = true;
+    button->down = down;
+}
+
+static void sk_window_mouse_position(SkWindowState *state, LPARAM lparam) {
+    float x = (float)(short)LOWORD(lparam);
+    float y = (float)(short)HIWORD(lparam);
+    if (state->mouse_position_valid) {
+        state->pending.mouse.delta.x += x - state->pending.mouse.position.x;
+        state->pending.mouse.delta.y += y - state->pending.mouse.position.y;
+    }
+    state->pending.mouse.position = (Vec2){x, y};
+    state->mouse_position_valid = true;
+}
+
 static LRESULT CALLBACK sk_window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
-    SkWindow *window = (SkWindow*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+    SkWindowState *state = (SkWindowState*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
     if (message == WM_NCCREATE) {
         CREATESTRUCTA *create = (CREATESTRUCTA*)lparam;
-        window = (SkWindow*)create->lpCreateParams;
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)window);
-        window->hwnd = hwnd;
+        state = (SkWindowState*)create->lpCreateParams;
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)state);
+        state->hwnd = hwnd;
     }
     if (message == WM_CLOSE) {
-        if (window) window->open = false;
+        if (state) state->open = false;
         DestroyWindow(hwnd);
         return 0;
     }
     if (message == WM_DESTROY) {
-        if (window) { window->open = false; window->hwnd = NULL; }
+        if (state) { state->open = false; state->hwnd = NULL; }
         return 0;
     }
+    if (state && message == WM_KILLFOCUS) {
+        for (int key = 0; key < 256; key++) sk_window_button(&state->pending.keys[key], false);
+        for (int button = 0; button < 3; button++) sk_window_button(&state->pending.mouse.buttons[button], false);
+        state->mouse_position_valid = false;
+    }
+    if (state && (message == WM_KEYDOWN || message == WM_SYSKEYDOWN || message == WM_KEYUP || message == WM_SYSKEYUP)) {
+        if (wparam < 256) sk_window_button(&state->pending.keys[wparam], message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
+    }
+    if (state && message == WM_MOUSEMOVE) sk_window_mouse_position(state, lparam);
+    if (state && (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_MBUTTONDOWN || message == WM_MBUTTONUP || message == WM_RBUTTONDOWN || message == WM_RBUTTONUP)) {
+        sk_window_mouse_position(state, lparam);
+        int button = (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP) ? 0 :
+            (message == WM_MBUTTONDOWN || message == WM_MBUTTONUP) ? 1 : 2;
+        bool down = message == WM_LBUTTONDOWN || message == WM_MBUTTONDOWN || message == WM_RBUTTONDOWN;
+        sk_window_button(&state->pending.mouse.buttons[button], down);
+        if (down) SetCapture(hwnd);
+        else if (!state->pending.mouse.buttons[0].down && !state->pending.mouse.buttons[1].down && !state->pending.mouse.buttons[2].down && GetCapture() == hwnd) ReleaseCapture();
+    }
+    if (state && message == WM_MOUSEWHEEL) {
+        state->pending.mouse.wheel += (float)(short)HIWORD(wparam) / (float)WHEEL_DELTA;
+    }
     return DefWindowProcA(hwnd, message, wparam, lparam);
+}
+
+static void sk_window_pump(void) {
+    MSG message;
+    while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&message);
+        DispatchMessageA(&message);
+    }
 }
 #endif
 
 static SkWindow sk_window_open(const char *title, int64_t width, int64_t height) {
     if (width <= 0 || height <= 0) sk_visual_panic("window dimensions must be positive");
-    SkWindow window = {true, width, height
-#if defined(_WIN32)
-        , NULL, {0}
-#endif
-    };
+    SkWindowState *state = (SkWindowState*)calloc(1, sizeof(SkWindowState));
+    if (!state) sk_visual_panic("window state allocation failed");
+    state->open = true;
+    state->width = width;
+    state->height = height;
+    state->needs_snapshot = true;
 #if defined(_WIN32)
     static bool class_registered = false;
     const char *class_name = "SkadiCanvasWindow";
@@ -5059,72 +5149,83 @@ static SkWindow sk_window_open(const char *title, int64_t width, int64_t height)
     HWND hwnd = CreateWindowExA(
         0, class_name, title ? title : "Skadi Canvas", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, bounds.right - bounds.left, bounds.bottom - bounds.top,
-        NULL, NULL, instance, &window
+        NULL, NULL, instance, state
     );
-    if (!hwnd) sk_visual_panic("Win32 window creation failed");
-    window.hwnd = hwnd;
-    window.bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    window.bitmap.bmiHeader.biWidth = (LONG)width;
-    window.bitmap.bmiHeader.biHeight = -(LONG)height;
-    window.bitmap.bmiHeader.biPlanes = 1;
-    window.bitmap.bmiHeader.biBitCount = 32;
-    window.bitmap.bmiHeader.biCompression = BI_RGB;
+    if (!hwnd) {
+        free(state);
+        sk_visual_panic("Win32 window creation failed");
+    }
+    state->hwnd = hwnd;
+    state->bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    state->bitmap.bmiHeader.biWidth = (LONG)width;
+    state->bitmap.bmiHeader.biHeight = -(LONG)height;
+    state->bitmap.bmiHeader.biPlanes = 1;
+    state->bitmap.bmiHeader.biBitCount = 32;
+    state->bitmap.bmiHeader.biCompression = BI_RGB;
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
 #else
     (void)title;
     sk_visual_panic("windows.open is available only on the Win32 backend");
 #endif
-    return window;
+    return (SkWindow){state};
 }
 
 static int64_t sk_window_present(SkWindow *window, const SkCanvas *canvas) {
-    if (!window || !canvas || !canvas->pixels) sk_visual_panic("present requires live Window and Canvas");
-    if (window->width != canvas->width || window->height != canvas->height)
+    if (!window || !window->state || !canvas || !canvas->pixels) sk_visual_panic("present requires live Window and Canvas");
+    SkWindowState *state = window->state;
+    if (state->width != canvas->width || state->height != canvas->height)
         sk_visual_panic("Window and Canvas dimensions must match");
 #if defined(_WIN32)
-    MSG message;
-    while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&message);
-        DispatchMessageA(&message);
-    }
-    if (!window->open || !window->hwnd) return 1;
-    HDC dc = GetDC(window->hwnd);
+    sk_window_pump();
+    if (!state->open || !state->hwnd) return 1;
+    HDC dc = GetDC(state->hwnd);
     if (!dc) sk_visual_panic("Win32 device context acquisition failed");
     StretchDIBits(
-        dc, 0, 0, (int)window->width, (int)window->height,
+        dc, 0, 0, (int)state->width, (int)state->height,
         0, 0, (int)canvas->width, (int)canvas->height,
-        canvas->pixels, &window->bitmap, DIB_RGB_COLORS, SRCCOPY
+        canvas->pixels, &state->bitmap, DIB_RGB_COLORS, SRCCOPY
     );
-    ReleaseDC(window->hwnd, dc);
+    ReleaseDC(state->hwnd, dc);
 #endif
+    state->needs_snapshot = true;
     return 0;
 }
 
 static bool sk_window_is_open(SkWindow *window) {
+    if (!window || !window->state) return false;
 #if defined(_WIN32)
-    MSG message;
-    while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&message);
-        DispatchMessageA(&message);
-    }
+    sk_window_pump();
 #endif
-    return window && window->open;
+    sk_window_publish_input(window->state);
+    return window->state->open;
+}
+
+static SkInput sk_window_input(SkWindow *window) {
+    SkInput empty = {0};
+    if (!window || !window->state) return empty;
+#if defined(_WIN32)
+    sk_window_pump();
+#endif
+    sk_window_publish_input(window->state);
+    return window->state->current;
 }
 
 static int64_t sk_window_close(SkWindow *window) {
-    if (!window || !window->open) return 1;
-    window->open = false;
+    if (!window || !window->state || !window->state->open) return 1;
+    window->state->open = false;
 #if defined(_WIN32)
-    if (window->hwnd) DestroyWindow(window->hwnd);
-    window->hwnd = NULL;
+    if (window->state->hwnd) DestroyWindow(window->state->hwnd);
+    window->state->hwnd = NULL;
 #endif
     return 0;
 }
 
 static void sk_window_destroy(SkWindow *window) {
-    if (!window) return;
+    if (!window || !window->state) return;
     sk_window_close(window);
+    free(window->state);
+    window->state = NULL;
 }
 
 static SkWindow sk_window_move(SkWindow *source) {
@@ -5160,7 +5261,15 @@ fn program_uses_visual_runtime(program: &Program) -> bool {
     fn visual_type(raw: &str) -> bool {
         matches!(
             normalize_type_token(raw).as_str(),
-            "Color" | "Rect" | "Canvas" | "Window"
+            "Color"
+                | "Rect"
+                | "Canvas"
+                | "Window"
+                | "Input"
+                | "MouseInput"
+                | "ButtonState"
+                | "Key"
+                | "MouseButton"
         )
     }
 
@@ -7800,6 +7909,10 @@ fn map_skadi_type_to_c(skadi_type: Option<&str>) -> String {
         "Vec2" | "Vec3" | "Vec4" => normalized.to_string(),
         "Color" => "SkColor".to_string(),
         "Rect" => "SkRect".to_string(),
+        "Input" => "SkInput".to_string(),
+        "MouseInput" => "SkMouseInput".to_string(),
+        "ButtonState" => "SkButtonState".to_string(),
+        "Key" | "MouseButton" => "int64_t".to_string(),
         "Canvas" => "SkCanvas".to_string(),
         "Window" => "SkWindow".to_string(),
         "File" => "SkFile".to_string(),
@@ -8383,8 +8496,21 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
             }
         }
         Expression::MemberAccess { base, field } => {
-            if base == "my" {
+            if let Some(value) = input_constant_value(base, field) {
+                value.to_string()
+            } else if base == "my" {
                 format!("my->{}", field)
+            } else if declared
+                .get(base)
+                .is_some_and(|ty| normalize_type_token(ty) == "Window")
+                && field == "input"
+            {
+                let receiver = if declared.get(base).is_some_and(|ty| ty.ends_with("@borrow")) {
+                    base.to_string()
+                } else {
+                    format!("&{base}")
+                };
+                format!("sk_window_input({receiver})")
             } else if declared
                 .get(base)
                 .map(|ty| ty.ends_with("@borrow"))
@@ -8467,6 +8593,27 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
                     emit_expr(&args[1], declared),
                     emit_expr(&args[2], declared)
                 );
+            }
+            if let Some((receiver_name, method)) = name.split_once('.')
+                && let Some(receiver_type) = declared.get(receiver_name)
+                && matches!(
+                    normalize_type_token(receiver_type).as_str(),
+                    "Input" | "MouseInput"
+                )
+            {
+                let function = match method {
+                    "key" => "sk_input_key",
+                    "button" => "sk_mouse_button",
+                    _ => "",
+                };
+                if !function.is_empty() && args.len() == 1 {
+                    let receiver = if receiver_type.ends_with("@borrow") {
+                        receiver_name.to_string()
+                    } else {
+                        format!("&{receiver_name}")
+                    };
+                    return format!("{function}({receiver}, {})", emit_expr(&args[0], declared));
+                }
             }
             if let Some((receiver_name, method)) = name.split_once('.')
                 && let Some(receiver_type) = declared.get(receiver_name)
@@ -9129,6 +9276,49 @@ fn emit_expr(expr: &Expression, declared: &HashMap<String, String>) -> String {
         }
         Expression::StructConstruction { fields } => emit_struct_literal(fields, None, declared),
         Expression::ListLiteral(_) => "0 /* TODO(v1): list literal */".to_string(),
+    }
+}
+
+fn input_constant_value(base: &str, field: &str) -> Option<i64> {
+    if base == "MouseButton" {
+        return match field {
+            "Left" => Some(0),
+            "Middle" => Some(1),
+            "Right" => Some(2),
+            _ => None,
+        };
+    }
+    if base != "Key" {
+        return None;
+    }
+    if field.len() == 1 && field.as_bytes()[0].is_ascii_uppercase() {
+        return Some(i64::from(field.as_bytes()[0]));
+    }
+    if let Some(digit) = field.strip_prefix("Digit")
+        && digit.len() == 1
+        && digit.as_bytes()[0].is_ascii_digit()
+    {
+        return Some(i64::from(digit.as_bytes()[0]));
+    }
+    if let Some(number) = field.strip_prefix('F').and_then(|n| n.parse::<i64>().ok())
+        && (1..=12).contains(&number)
+    {
+        return Some(0x6f + number);
+    }
+    match field {
+        "Space" => Some(0x20),
+        "Escape" => Some(0x1b),
+        "Enter" => Some(0x0d),
+        "Tab" => Some(0x09),
+        "Backspace" => Some(0x08),
+        "Left" => Some(0x25),
+        "Up" => Some(0x26),
+        "Right" => Some(0x27),
+        "Down" => Some(0x28),
+        "Shift" => Some(0x10),
+        "Control" => Some(0x11),
+        "Alt" => Some(0x12),
+        _ => None,
     }
 }
 

@@ -43,6 +43,9 @@ jobs:
       - name: Build all showcase programs through native backend path
         run: cargo test -q --test showcase_builds
 
+      - name: Check and build Canvas input showcase through CLI
+        run: cargo test -q -p skadi-cli --test smoke canvas_input_showcase_checks_formats_and_builds_through_cli
+
   quality-gates:
     runs-on: ubuntu-latest
 

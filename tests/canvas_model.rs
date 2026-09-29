@@ -46,13 +46,16 @@ fn compile_and_run(compiler: &str, c_source: &str) -> std::process::Output {
         exe_path.set_extension("exe");
     }
     fs::write(&c_path, c_source).expect("write Canvas C");
-    let compile = Command::new(compiler)
+    let mut compile_command = Command::new(compiler);
+    compile_command
         .arg(&c_path)
         .arg("-o")
         .arg(&exe_path)
-        .arg("-lm")
-        .output()
-        .expect("compile Canvas C");
+        .arg("-lm");
+    if cfg!(windows) && c_source.contains("StretchDIBits") {
+        compile_command.arg("-lgdi32").arg("-luser32");
+    }
+    let compile = compile_command.output().expect("compile Canvas C");
     assert!(
         compile.status.success(),
         "Canvas C compile failed: {}",
@@ -87,6 +90,231 @@ frame.line({x = 4.0, y = 4.0}, {x = 59.0, y = 43.0}, Color.terminal_bright_cyan)
 window.present(edit frame)
 window.close()
 "#;
+
+const INPUT_SCENE: &str = include_str!("../examples/canvas-input/src/main.skd");
+
+#[test]
+fn window_input_snapshot_has_typed_keyboard_and_mouse_queries() {
+    let program = semantic_ok(INPUT_SCENE);
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_window_input(&window)"), "{c}");
+    assert!(c.contains("sk_input_key(&controls, 87)"), "{c}");
+    assert!(c.contains("sk_mouse_button(&mouse, 0)"), "{c}");
+    assert!(c.contains("SkWindowState *state"), "{c}");
+    assert!(c.contains("state->current = state->pending"), "{c}");
+}
+
+#[test]
+fn window_input_rejects_wrong_key_and_button_types() {
+    let bad_key = semantic_err(
+        r#"
+Window window = windows.open("Input", 8, 8)
+new Input controls = window.input
+new ButtonState state = controls.key("W")
+"#,
+    );
+    assert!(bad_key.contains("SC-SEM-032"), "{bad_key}");
+    assert!(bad_key.contains("expects Key"), "{bad_key}");
+
+    let bad_button = semantic_err(
+        r#"
+Window window = windows.open("Input", 8, 8)
+new Input controls = window.input
+new MouseInput mouse = controls.mouse
+new ButtonState state = mouse.button(Key.W)
+"#,
+    );
+    assert!(bad_button.contains("SC-SEM-032"), "{bad_button}");
+    assert!(bad_button.contains("MouseButton"), "{bad_button}");
+}
+
+#[test]
+fn input_constants_lower_without_a_window() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping input constants e2e: no C compiler in PATH.");
+        return;
+    };
+    let program = semantic_ok(
+        r#"
+if Key.W == Key.A {
+    output("wrong")
+} else {
+    if MouseButton.Left == MouseButton.Left {
+        output("ok")
+    }
+}
+"#,
+    );
+    let c = transpile_program_to_c(&program);
+    assert!(!c.contains("typedef struct { SkWindowState *state; } SkWindow"));
+    let run = compile_and_run(compiler, &c);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "ok");
+}
+
+#[test]
+fn input_methods_accept_read_only_function_borrows() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping borrowed input e2e: no C compiler in PATH.");
+        return;
+    };
+    let program = semantic_ok(
+        r#"
+fn walking(view Input controls) returns Bool {
+    new ButtonState state = controls.key(Key.W)
+    return state.down
+}
+
+fn clicking(view MouseInput mouse) returns Bool {
+    new ButtonState state = mouse.button(MouseButton.Left)
+    return state.pressed
+}
+
+output("ok")
+"#,
+    );
+    let c = transpile_program_to_c(&program);
+    assert!(c.contains("sk_input_key(controls, 87)"), "{c}");
+    assert!(c.contains("sk_mouse_button(mouse, 0)"), "{c}");
+    let run = compile_and_run(compiler, &c);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "ok");
+}
+
+#[test]
+fn window_input_preserves_fast_edges_and_resets_them_next_frame() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping input frame e2e: no C compiler in PATH.");
+        return;
+    };
+    let program = semantic_ok(
+        r#"
+external fn verify_input_frames() returns Bool
+
+fn include_window_runtime() {
+    Window window = windows.open("unused", 8, 8)
+    window.close()
+}
+
+output(verify_input_frames())
+"#,
+    );
+    let mut c = transpile_program_to_c(&program);
+    c.push_str(
+        r#"
+bool verify_input_frames(void) {
+    SkWindowState state = {0};
+    SkWindow window = {&state};
+    state.open = true;
+    state.needs_snapshot = true;
+    state.pending.keys[87].pressed = true;
+    state.pending.keys[87].released = true;
+    state.pending.mouse.buttons[0].pressed = true;
+    state.pending.mouse.buttons[0].released = true;
+    SkInput first = sk_window_input(&window);
+    SkButtonState key = sk_input_key(&first, 87);
+    SkButtonState button = sk_mouse_button(&first.mouse, 0);
+    if (key.down || !key.pressed || !key.released) return false;
+    if (button.down || !button.pressed || !button.released) return false;
+    state.needs_snapshot = true;
+    SkInput next = sk_window_input(&window);
+    key = sk_input_key(&next, 87);
+    button = sk_mouse_button(&next.mouse, 0);
+    return !key.down && !key.pressed && !key.released &&
+           !button.down && !button.pressed && !button.released;
+}
+"#,
+    );
+    let run = compile_and_run(compiler, &c);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "true");
+}
+
+#[cfg(windows)]
+#[test]
+fn win32_window_messages_feed_frame_input() {
+    let Some(compiler) = find_c_compiler() else {
+        eprintln!("Skipping Win32 input e2e: no C compiler in PATH.");
+        return;
+    };
+    let program = semantic_ok(
+        r#"
+external fn verify_win32_input() returns Bool
+
+fn include_window_runtime() {
+    Window window = windows.open("unused", 8, 8)
+    window.close()
+}
+
+output(verify_win32_input())
+"#,
+    );
+    let mut c = transpile_program_to_c(&program);
+    c.push_str(
+        r#"
+bool verify_win32_input(void) {
+    SkWindow window = sk_window_open("Skadi input test", 8, 8);
+    ShowWindow(window.state->hwnd, SW_HIDE);
+    SkCanvas frame = sk_canvas_create(8, 8);
+    HWND hwnd = window.state->hwnd;
+
+    PostMessageA(hwnd, WM_KEYDOWN, 'W', 0);
+    PostMessageA(hwnd, WM_KEYUP, 'W', 0);
+    PostMessageA(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(3, 4));
+    PostMessageA(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(5, 7));
+    PostMessageA(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(5, 7));
+    PostMessageA(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(5, 7));
+    PostMessageA(hwnd, WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), 0);
+    bool ok = sk_window_is_open(&window);
+    SkInput first = sk_window_input(&window);
+    SkButtonState key = sk_input_key(&first, 'W');
+    SkButtonState button = sk_mouse_button(&first.mouse, 0);
+    ok = ok && !key.down && key.pressed && key.released;
+    ok = ok && !button.down && button.pressed && button.released;
+    ok = ok && first.mouse.position.x == 5 && first.mouse.position.y == 7;
+    ok = ok && first.mouse.delta.x == 2 && first.mouse.delta.y == 3;
+    ok = ok && first.mouse.wheel == 1;
+
+    PostMessageA(hwnd, WM_KEYDOWN, 'A', 0);
+    SkInput same_frame = sk_window_input(&window);
+    ok = ok && !sk_input_key(&same_frame, 'A').pressed;
+    sk_window_present(&window, &frame);
+    SkInput second = sk_window_input(&window);
+    ok = ok && sk_input_key(&second, 'A').down && sk_input_key(&second, 'A').pressed;
+    ok = ok && !sk_input_key(&second, 'W').pressed;
+    ok = ok && second.mouse.delta.x == 0 && second.mouse.wheel == 0;
+
+    PostMessageA(hwnd, WM_KILLFOCUS, 0, 0);
+    sk_window_present(&window, &frame);
+    SkInput third = sk_window_input(&window);
+    ok = ok && !sk_input_key(&third, 'A').down && sk_input_key(&third, 'A').released;
+
+    sk_canvas_destroy(&frame);
+    sk_window_destroy(&window);
+    return ok;
+}
+"#,
+    );
+    let run = compile_and_run(compiler, &c);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "true");
+}
 
 #[test]
 fn canvas_frontend_accepts_palette_hex_and_shape_primitives() {

@@ -64,6 +64,8 @@ They serve three roles:
 
 Focused native examples also cover:
 
+- `examples/canvas-input/` for Win32 frame input, keyboard and mouse button
+  transitions, and a small interactive Canvas scene;
 - `examples/memory/positive/06_extended_regions.skd` for grow/drop policies,
   child regions, and static storage;
 - `examples/ownership/01_move_canvas_factory.skd` for resource factories and

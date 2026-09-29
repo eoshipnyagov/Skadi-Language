@@ -42,6 +42,9 @@ project examples.
   child и static regions;
 - `examples/ownership/01_move_canvas_factory.skd` — factory return и передача
   Canvas owner через `move`;
+- `examples/canvas-input/` — Win32-проект с покадровым `Input`: WASD двигает
+  круг, щелчок мышью переносит его, Escape закрывает окно; проходит
+  `skadi-cli check/build` и входит в Canvas regression tests;
 - `examples/concurrency/03_cancel_blocked_channel.skd` — cancellation task,
   заблокированной на пустом Channel;
 - `examples/concurrency/04_timed_channel.skd` — Duration-bounded Channel waits;

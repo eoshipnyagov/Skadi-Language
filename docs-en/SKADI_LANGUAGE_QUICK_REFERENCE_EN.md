@@ -186,10 +186,20 @@ operators are checked, and unary `-` is rejected for unsigned values.
 | `value = q.receive_for(250ms) on error { ... }` | Blocking receive with a deadline | Experimental |
 | `timed_out` | Timed Channel/Task handler reason; contextual identifier | Experimental |
 
+## Canvas input (experimental Win32)
+
+| Form | Meaning |
+|---|---|
+| `new Input controls = window.input` | Per-frame, per-window input snapshot |
+| `controls.key(Key.W)` | `ButtonState` with `down`, `pressed`, `released` |
+| `controls.mouse` | Mouse position, movement delta, and wheel delta |
+| `mouse.button(MouseButton.Left)` | Mouse button state |
+
+See the [Canvas guide](canvas.en.md) for the full key set and frame contract.
+
 Standalone `on error { ... }`, automatic `allow drop` reclamation, channel
-`select`, `try_receive`, async/await, Matrix2D, Canvas
-events/text/images, non-Windows window presenters, and package imports are not
-implemented.
+`select`, `try_receive`, async/await, Matrix2D, ordered Canvas events,
+text input/images, and non-Windows window presenters are not implemented.
 
 See the [topic reference](language-reference.en.md) and
 [syntax status](syntax-status.en.md).

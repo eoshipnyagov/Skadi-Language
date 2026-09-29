@@ -194,12 +194,12 @@ staging и build/flash/monitor flow реализованы, но реальна�
 
 ## Не реализовано в backend
 
-- hardware interrupt sources кроме periodic ESP-IDF GPTimer;
+- hardware interrupt sources кроме ESP-IDF GPTimer и GPIO;
 - wall-clock/calendar/timezone API;
 - task groups и `select`; cancellation, Duration-bounded Channel operations и
   path-sensitive timed Task wait реализованы как расширение `v1.2`;
 - shared mutable state primitives;
-- Canvas events, text/images, transforms, Matrix2D и non-Windows presenters;
+- Canvas ordered events, text/images, transforms, Matrix2D и non-Windows presenters;
 - automatic `allow drop` reclamation и user drop hooks;
 - перенос ownership для самого `Memory` и `Task`;
 - generic units algebra, `Timer`, matrices, SIMD lowering, swizzles и расширенная vector algebra;

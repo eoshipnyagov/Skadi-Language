@@ -48,13 +48,13 @@ Skadi surface.
 - `Vec2`, `Vec3`, `Vec4`, component fields and vector math builtins
 - `Interrupt`, `interrupts.periodic`, and paired `on interrupt`
 - `File`, `FileMode`, `fs.open`, and file lifecycle methods
-- `Color`, `Rect`, `Canvas`, `Window`, `windows.open`, and current drawing
-  methods
+- `Color`, `Rect`, `Canvas`, `Window`, `Input`, `MouseInput`, `ButtonState`,
+  `Key`, `MouseButton`, `windows.open`, and current drawing/input methods
 - label members, struct field declarations, and typed variable declarations
 - paired control forms like `on error`, `place in`, and `iterate ... as ...`
 - operators and function call highlighting
 - snippets for functions, error handling, regions, tasks/channels, interrupts,
-  ownership borrows, and Canvas windows
+  ownership borrows, Canvas windows, and frame input
 
 ## Next step
 

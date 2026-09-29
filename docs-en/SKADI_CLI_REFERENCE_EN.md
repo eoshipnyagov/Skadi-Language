@@ -1,6 +1,6 @@
 # Skadi CLI and TUI Reference
 
-`skadi-cli` is the primary toolchain for Skadi `v1.2.0-rc.1`.
+`skadi-cli` is the primary toolchain for the Skadi `v1.2` line.
 
 ## Essentials
 

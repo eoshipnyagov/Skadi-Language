@@ -133,7 +133,7 @@ GitHub Pages.
 - автоматическая reclamation по `allow drop` и полный lifetime calculus;
 - `select` и task groups поверх стабилизированных Channel/Task cancellation и
   timeout boundaries;
-- Canvas events, text/images, transforms и non-Windows presenters;
+- Canvas ordered events, text/images, transforms и non-Windows presenters;
 - systems additions;
 - hardware/HIL acceptance и расширение static policy/device API для первого
   ESP32 backend; SDK CI, Task/Channel static allocation и GPIO IRQ уже готовы;

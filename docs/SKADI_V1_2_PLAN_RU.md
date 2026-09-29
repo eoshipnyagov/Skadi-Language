@@ -1,7 +1,8 @@
 # Skadi v1.2 Plan (RU)
 
-Дата: 2026-07-30
-Статус: release hardening и документационный checkpoint завершены; Memory,
+Дата: 2026-09-30
+Статус: контрольная версия `v1.2.0-rc.2`; release hardening и
+документационный checkpoint завершены; Memory,
 ownership, Task/Channel, Time/Duration, ByteSize, Angle, Vector, Interrupt и
 Canvas slices исполняемы и остаются experimental API текущей линии `v1.2`.
 
@@ -106,7 +107,7 @@ API, а не из-за отсутствующего backend.
 - shared mutable state model;
 - automatic `allow drop` reclamation и user drop hooks;
 - child/static allocators как замороженный stable API;
-- Canvas events, text/images, transforms и дополнительные presenters;
+- Canvas ordered events, text/images, transforms и дополнительные presenters;
 - Git/registry dependencies, transitive package resolver, lock-файл и re-exports
   поверх реализованных path-imports, aliases и local `[dependencies]` slice.
 
@@ -622,8 +623,8 @@ Release evidence:
 
 Цель: превратить завершённую функциональную линию в воспроизводимый
 дистрибутив, который устанавливается без клонирования репозитория и без Rust.
-Первая контрольная версия — `v1.2.0-rc.1`; после проверки тех же артефактов
-выпускается `v1.2.0`.
+Первая контрольная версия — `v1.2.0-rc.1`; следующая после расширения systems
+и Canvas slices — `v1.2.0-rc.2`. Финальный `v1.2.0` требует отдельного решения.
 
 Обязательный scope:
 
@@ -773,6 +774,29 @@ TOML editor и новые TUI-функции не входят в distribution s
 ESP32 и CI/HIL решение. Общий device API, полная static policy для прочих
 platform resources и bare metal являются следующими slices, а не частью
 текущего.
+
+### Canvas Input: первый интерактивный slice
+
+- Win32 `Window` предоставляет покадровый снимок `window.input` без явного
+  `poll_input` в пользовательском цикле;
+- `Input`, `MouseInput` и `ButtonState` являются копируемыми значениями;
+- `Key` и `MouseButton` проверяются семантически; `down`, `pressed`, `released`
+  сохраняют быстрые переходы между кадрами;
+- устойчивое heap-состояние Win32 Window переживает возврат и `move` owner;
+- `examples/canvas-input/` проходит CLI `check/build`, типовые и C runtime tests;
+- ordered events, text input, touch/gamepad и non-Windows presenters остаются
+  отдельными следующими шагами.
+
+### Контрольный RC2 gate
+
+- CLI, compiler и установочные инструкции используют `1.2.0-rc.2`;
+- `examples/canvas-input/` проверяется через CLI `check`, `format --check` и
+  native `build` в тестовой матрице и Windows smoke установленного архива;
+- Win32 regression проверяет реальные оконные сообщения, быстрые переходы,
+  снимок ввода и потерю фокуса;
+- перед публикацией нужны зелёные quality/release gates и повторная установка
+  новых архивов на Windows, Linux и macOS. Проверка ESP32 на физической плате
+  остаётся отдельной и не заявляется выполненной.
 
 ## 8. Короткая формула
 

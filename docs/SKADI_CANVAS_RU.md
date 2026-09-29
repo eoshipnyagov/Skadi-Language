@@ -106,6 +106,57 @@ host-целях. Размеры Window и Canvas при `present` должны �
 длительную работу нельзя помещать между двумя итерациями presentation loop:
 иначе операционная система справедливо сочтёт окно не отвечающим.
 
+## Ввод с клавиатуры и мыши
+
+`Window` на Win32 собирает ввод вместе с обработкой сообщений окна. Отдельная
+команда опроса не нужна: `is_open()` принимает сообщения перед кадром,
+`present()` обслуживает окно после рисования. `window.input` возвращает
+копируемый снимок для текущего кадра. Для него используется обычное объявление
+значения с `new`:
+
+```skadi
+while window.is_open() {
+    new Input controls = window.input
+    new ButtonState forward = controls.key(Key.W)
+    new MouseInput mouse = controls.mouse
+    new ButtonState click = mouse.button(MouseButton.Left)
+
+    if forward.down {
+        player.y = player.y - 4.0
+    }
+    if click.pressed {
+        player = mouse.position
+    }
+
+    frame.clear(Color.black)
+    frame.fill_circle(player, 12.0, Color.terminal_cyan)
+    window.present(edit frame)
+}
+```
+
+| Тип | Роль |
+|---|---|
+| `Window` | Владеет окном и его живым состоянием ввода; не копируется |
+| `Input` | Копируемый снимок ввода данного окна за кадр |
+| `Key` | Именованные клавиши: `A`–`Z`, `Digit0`–`Digit9`, `F1`–`F12`, `Space`, `Escape`, `Enter`, `Tab`, `Backspace`, стрелки, `Shift`, `Control`, `Alt` |
+| `ButtonState` | `down` сейчас, `pressed` и `released` с прошлого кадра |
+| `MouseInput` | `position`, `delta` в координатах окна, `wheel` в шагах прокрутки, `button(...)` |
+| `MouseButton` | `Left`, `Middle`, `Right` |
+
+`Key` и `MouseButton` — типы Canvas API, а не ключевые слова или новые формы
+синтаксиса Skadi. В текущей реализации компилятор знает их именованные
+значения; `Key.W` обозначает клавишу, а не текстовый символ: текстовый ввод
+имеет другую семантику. `pressed` и `released` могут одновременно быть `true`, если кнопку
+успели нажать и отпустить между кадрами; `down` тогда будет `false`. Снимок
+сохраняется до следующего `present()`, а новые переходы публикуются при первом
+`is_open()` или чтении `window.input` в следующем кадре. Повторное чтение внутри
+кадра не сбрасывает признаки. Первое движение мыши задаёт позицию без скачка
+`delta`; потеря фокуса отпускает удерживаемые клавиши и кнопки.
+
+`Input` относится к конкретному `Window`, не является глобальным состоянием и
+не связан со стандартной функцией `input()` для чтения текста из консоли.
+Полный пример: `examples/canvas-input/` (`skadi-cli check`, `build`, `run`).
+
 После условного `window.close()` вызов `present()` требует обработчик:
 
 ```skadi
@@ -119,7 +170,8 @@ handler не обращается к уже освобождённому Win32 h
 
 ## Что пока не входит
 
-- события клавиатуры и мыши;
+- упорядоченный поток событий и текстовый ввод с учётом раскладки;
+- touchscreen и gamepad;
 - непрерывный application loop и frame timing;
 - text и fonts;
 - images и codecs;

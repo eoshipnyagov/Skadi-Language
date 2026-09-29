@@ -10,7 +10,7 @@ Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
 
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
 
-The current distributed line is `v1.2.0-rc.1`. It builds on the stable `v1.1`
+The current release candidate is `v1.2.0-rc.2`. It builds on the stable `v1.1`
 toolchain surface and includes experimental Memory and ownership,
 Task/Channel/Interrupt, Time/Duration, ByteSize, Angle, vector, and Canvas MVPs.
 
@@ -387,7 +387,10 @@ while window.is_open() {
 ```
 
 The software Canvas and headless checksum path are portable. The interactive
-window presenter currently targets Win32. Future presenters are intended for:
+window presenter currently targets Win32. This source checkout also includes
+keyboard/mouse frame snapshots; see the
+[Canvas input example](examples/canvas-input/README.md). Future presenters are
+intended for:
 
 - a small OLED display,
 - additional desktop systems,
@@ -496,24 +499,24 @@ The goal is to make the language real enough to test syntax, semantics, diagnost
 
 ## Quick Start
 
-Install the `v1.2.0-rc.1` release candidate first.
+Install the `v1.2.0-rc.2` release candidate first.
 
 Windows PowerShell:
 
 ```powershell
 $installer = Join-Path $env:TEMP "skadi-install.ps1"
 Invoke-WebRequest `
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/install.ps1 `
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.2/install/install.ps1 `
   -OutFile $installer
-& $installer -Version 1.2.0-rc.1
+& $installer -Version 1.2.0-rc.2
 ```
 
 Linux or macOS:
 
 ```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/install.sh \
-  | sh -s -- --version 1.2.0-rc.1
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.2/install/install.sh \
+  | sh -s -- --version 1.2.0-rc.2
 ```
 
 The installer verifies the release SHA-256 and installs `skadi-cli` without

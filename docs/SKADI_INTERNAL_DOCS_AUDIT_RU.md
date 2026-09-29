@@ -1,7 +1,8 @@
 # Аудит внутренней документации Skadi
 
-Дата сверки: 2026-07-30  
-База сверки: ветка `develop`, release candidate `v1.2.0-rc.1`
+Дата сверки: 2026-09-30
+
+База сверки: ветка `develop`, контрольная версия `v1.2.0-rc.2`
 
 ## 1. Зачем нужен этот документ
 
@@ -221,8 +222,10 @@ Canvas-first immediate-mode модель перешла в experimental Canvas v
 - software RGBA framebuffer и deterministic rasterizer;
 - line/rect/circle primitives, alpha blending и headless checksum;
 - Win32 presenter через `window.present(edit canvas)`.
+- Win32 покадровый `window.input` с клавиатурой и мышью, типами `Key`,
+  `MouseButton`, `ButtonState` и отдельным интерактивным showcase.
 
-Пока отсутствуют events, text/images, transforms, `Matrix2D`, non-Windows window
+Пока отсутствуют ordered events, text/images, transforms, `Matrix2D`, non-Windows window
 backend и embedded display adapter.
 
 ## 5. Зарезервированные и переходные формы
@@ -273,7 +276,9 @@ backend и embedded display adapter.
    кандидаты: они возвращаются в очередь только после нескольких реальных задач,
    где обычные `List`/`Channel`/`Memory` дают заметно худший и менее ясный код.
    `allow drop` не обещает ни такую коллекцию, ни неявную потерю данных.
-7. Canvas events, text/images и следующие presentation backends.
+7. Win32 Canvas Input snapshot, keyboard/mouse state и interactive showcase
+   выполнены. Ordered events, text input, text/images и следующие presentation
+   backends остаются впереди.
 8. Ограниченный C ABI slice включает `external fn`, fixed scalar types,
    call-scoped `view`/`edit Buffer(T)` и `[native]` sources/libraries. Первый
    local-path package resolver через `[dependencies]` также готов и сохраняет

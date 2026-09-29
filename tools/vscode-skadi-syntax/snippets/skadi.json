@@ -161,5 +161,23 @@
       "}"
     ],
     "description": "Create a software Canvas and present it in a Win32 window"
+  },
+  "Canvas input": {
+    "prefix": "canvasinput",
+    "body": [
+      "Canvas ${1:frame} = canvas(${2:640}, ${3:360})",
+      "Window ${4:window} = windows.open(\"${5:Skadi Input}\", ${2:640}, ${3:360})",
+      "",
+      "while ${4:window}.is_open() {",
+      "    new Input ${6:controls} = ${4:window}.input",
+      "    new ButtonState ${7:move_right} = ${6:controls}.key(Key.D)",
+      "    if ${7:move_right}.down {",
+      "        ${0:pass}",
+      "    }",
+      "    ${1:frame}.clear(Color.terminal_black)",
+      "    ${4:window}.present(edit ${1:frame})",
+      "}"
+    ],
+    "description": "Read per-frame keyboard input in a Canvas window"
   }
 }

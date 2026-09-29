@@ -1,7 +1,8 @@
 # Internal Documentation Audit
 
-Review date: 2026-07-30  
-Baseline: `develop`, release candidate `v1.2.0-rc.1`
+Review date: 2026-09-30
+
+Baseline: `develop`, release candidate `v1.2.0-rc.2`
 
 ## Source-of-truth order
 
@@ -42,14 +43,14 @@ feature by itself.
 
 | Area | Current state |
 |---|---|
-| Compiler/CLI/backend references | Living and synchronized with `v1.2.0-rc.1` |
+| Compiler/CLI/backend references | Living and aligned to `v1.2.0-rc.2` |
 | `v1` Text/List/error/style contracts | Accepted historical baseline |
 | `v1.1` plans | Historical and completed |
 | `v1.2` plan | Living release ledger |
 | Memory and Task/Channel MVP contracts | Executable experimental runtime MVP |
 | Time, ByteSize, Angle, Vector contracts | Executable experimental runtime MVP |
 | Systems Additions | Partly implemented; resources/context/devices remain future |
-| Visual Core / Canvas | Experimental Canvas v0 with headless renderer and Win32 presenter |
+| Visual Core / Canvas | Experimental Canvas v0 with headless renderer, Win32 presenter, and frame input |
 | CLI RFC v0.1 | Historical and superseded by the current reference |
 
 ## Main design/implementation gaps
@@ -74,8 +75,8 @@ The runtime uses Win32/pthread native threads, linear owning handles, mandatory
 `wait`, cooperative stop, and bounded FIFO channels with
 `send/receive/try_send/close`, drain-after-close, cancellation-aware blocking
 operations, Duration-bounded `send_for/receive_for`, and path-sensitive timed
-Task wait. Scheduler abstraction, async/await, task groups, select, and RTOS
-backends remain future work.
+Task wait. The experimental ESP-IDF backend uses FreeRTOS Task/Queue; scheduler
+abstraction, async/await, task groups, and select remain future work.
 
 ### Specialized types
 
@@ -107,12 +108,12 @@ handles, callbacks, and header verification remain future FFI work.
 ### Embedded and Canvas
 
 The host MVP implements typed periodic `Interrupt` and a strict interrupt-safe
-handler subset. The experimental `esp32-idf` backend now adds direct FreeRTOS
-Task/Channel, hardware GPTimer, ISR-safe `try_send`, and project/build/flash
-tooling. It still needs real-device or HIL validation and a static allocation
-policy. Canvas v0 now provides
-`Color`, `Rect`, a software `Canvas`, deterministic drawing/checksum, and a
-Win32 `Window` presenter; events, text/images, transforms, and other backends
+handler subset. The experimental `esp32-idf` backend adds FreeRTOS
+Task/Channel, static allocation, hardware GPTimer/GPIO, ISR-safe `try_send`,
+and project/build/flash tooling. It still needs real-device or HIL validation.
+Canvas v0 provides `Color`, `Rect`, a software `Canvas`, deterministic
+drawing/checksum, a Win32 `Window` presenter, and frame snapshots for keyboard
+and mouse input. Ordered events, text/images, transforms, and other presenters
 remain future.
 
 ## Priority after the 2026-07-30 checkpoint
@@ -125,7 +126,7 @@ remain future.
    static storage policy, and manifest stack/priority/core controls.
 5. Keep `Ring`/bounded `Pool` as research candidates until real use cases
    justify them.
-6. Grow Canvas with events, text/images, and additional presenters.
+6. Grow Canvas with ordered events, text/images, and additional presenters.
 7. The bounded C ABI slice includes `external fn`, fixed scalar values,
    call-scoped `view`/`edit Buffer(T)`, and manifest native sources/libraries.
    Continue remote package/module ergonomics, lockfiles, custom struct layout, opaque

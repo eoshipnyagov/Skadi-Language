@@ -14,8 +14,9 @@ skadi-cli format --check
 skadi-cli build
 ```
 
-The CLI should report `1.2.0-rc.1`. The `version` in `Skadi.toml` belongs to
-the project and does not need to match the toolchain version.
+The CLI version should match the installed archive (`1.2.0-rc.2` for this
+candidate). The `version` in `Skadi.toml` belongs to the project and need not
+match the toolchain version.
 
 ## New capabilities
 

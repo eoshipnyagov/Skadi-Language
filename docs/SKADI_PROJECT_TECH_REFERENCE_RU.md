@@ -264,14 +264,14 @@ CI проверяет:
 
 Пока не являются текущей реализованной поверхностью:
 
-- hardware interrupt sources кроме periodic ESP-IDF GPTimer;
+- hardware interrupt sources кроме ESP-IDF GPTimer и GPIO;
 - Git/registry dependencies, transitive resolution, lock-файл и re-exports;
 - Channel `select`, task groups и async/await;
 - shared mutable state model;
 - release-tested ESP32 matrix и другие embedded runtime backends;
-- Canvas events/text/images, Matrix2D, generic units и operator overloading;
+- Canvas ordered events/text/images, Matrix2D, generic units и operator overloading;
 - remote package manager и dependency version resolution;
-- static-allocation embedded runtime policy и hardware CI/HIL;
+- static policy для остальных embedded resources и hardware CI/HIL;
 - non-Windows и embedded Canvas presentation backends.
 
 Актуальный порядок работ фиксируется в [плане v1.2](v1-2-plan.md), а найденные

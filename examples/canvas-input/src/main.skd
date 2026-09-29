@@ -1,0 +1,41 @@
+Canvas frame = canvas(640, 360)
+
+Window window = windows.open("Skadi Input", 640, 360)
+
+new Vec2 player = {x = 320.0, y = 180.0}
+
+while window.is_open() {
+    new Input controls = window.input
+    new MouseInput mouse = controls.mouse
+    new ButtonState left = controls.key(Key.A)
+    new ButtonState right = controls.key(Key.D)
+    new ButtonState up = controls.key(Key.W)
+    new ButtonState down = controls.key(Key.S)
+    new ButtonState escape = controls.key(Key.Escape)
+    new ButtonState click = mouse.button(MouseButton.Left)
+    if escape.pressed {
+        window.close()
+        break
+    }
+    if left.down {
+        player.x = player.x - 4.0
+    }
+    if right.down {
+        player.x = player.x + 4.0
+    }
+    if up.down {
+        player.y = player.y - 4.0
+    }
+    if down.down {
+        player.y = player.y + 4.0
+    }
+    if click.pressed {
+        player = mouse.position
+    }
+    frame.clear(Color.terminal_black)
+    frame.fill_circle(player, 14.0, Color.terminal_bright_cyan)
+    window.present(edit frame) on error {
+        break
+    }
+    sleep(16ms)
+}

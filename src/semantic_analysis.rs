@@ -34,6 +34,11 @@ enum ValueType {
     Vec4,
     Color,
     Rect,
+    Input,
+    MouseInput,
+    ButtonState,
+    Key,
+    MouseButton,
     Canvas,
     Window,
     File,
@@ -305,6 +310,36 @@ fn require_open_resource(state: &MemoryState, name: &str, operation: &str) -> Re
 
 fn is_file_mode_variant(name: &str) -> bool {
     matches!(name, "Read" | "Write" | "Append" | "ReadWrite")
+}
+
+fn is_key_variant(name: &str) -> bool {
+    (name.len() == 1 && name.as_bytes()[0].is_ascii_uppercase())
+        || name
+            .strip_prefix("Digit")
+            .is_some_and(|digit| digit.len() == 1 && digit.as_bytes()[0].is_ascii_digit())
+        || matches!(
+            name,
+            "Space"
+                | "Escape"
+                | "Enter"
+                | "Tab"
+                | "Backspace"
+                | "Left"
+                | "Right"
+                | "Up"
+                | "Down"
+                | "Shift"
+                | "Control"
+                | "Alt"
+        )
+        || name
+            .strip_prefix('F')
+            .and_then(|number| number.parse::<u8>().ok())
+            .is_some_and(|number| (1..=12).contains(&number))
+}
+
+fn is_mouse_button_variant(name: &str) -> bool {
+    matches!(name, "Left" | "Middle" | "Right")
 }
 
 fn is_interrupt_edge_expression(expression: &Expression) -> bool {
@@ -1792,6 +1827,11 @@ fn parse_primitive_type_name(name: &str) -> ValueType {
         "Vec4" => ValueType::Vec4,
         "Color" => ValueType::Color,
         "Rect" => ValueType::Rect,
+        "Input" => ValueType::Input,
+        "MouseInput" => ValueType::MouseInput,
+        "ButtonState" => ValueType::ButtonState,
+        "Key" => ValueType::Key,
+        "MouseButton" => ValueType::MouseButton,
         "Canvas" => ValueType::Canvas,
         "Window" => ValueType::Window,
         "File" => ValueType::File,
@@ -2808,6 +2848,11 @@ fn is_task_safe_boundary_type(
         | ValueType::Vec4
         | ValueType::Color
         | ValueType::Rect
+        | ValueType::Input
+        | ValueType::MouseInput
+        | ValueType::ButtonState
+        | ValueType::Key
+        | ValueType::MouseButton
         | ValueType::FileMode
         | ValueType::Label(_)
         | ValueType::Tag(_) => true,
@@ -6633,6 +6678,12 @@ fn infer_expression_type(
                 if base == "FileMode" && is_file_mode_variant(field) {
                     return Ok(ValueType::FileMode);
                 }
+                if base == "Key" && is_key_variant(field) {
+                    return Ok(ValueType::Key);
+                }
+                if base == "MouseButton" && is_mouse_button_variant(field) {
+                    return Ok(ValueType::MouseButton);
+                }
                 if memory_state
                     .labels
                     .get(base)
@@ -6694,6 +6745,19 @@ fn infer_expression_type(
                 })?
             };
             if let Expression::MemberAccess { field, .. } = expr {
+                let input_field = match (&owner_ty, field.as_str()) {
+                    (ValueType::Window, "input") => Some(ValueType::Input),
+                    (ValueType::Input, "mouse") => Some(ValueType::MouseInput),
+                    (ValueType::MouseInput, "position" | "delta") => Some(ValueType::Vec2),
+                    (ValueType::MouseInput, "wheel") => Some(ValueType::Float),
+                    (ValueType::ButtonState, "down" | "pressed" | "released") => {
+                        Some(ValueType::Bool)
+                    }
+                    _ => None,
+                };
+                if let Some(ty) = input_field {
+                    return Ok(ty);
+                }
                 if vector_dimension(&owner_ty).is_some() {
                     let valid_field = match &owner_ty {
                         ValueType::Vec2 => matches!(field.as_str(), "x" | "y"),
@@ -7019,6 +7083,12 @@ fn infer_expression_type(
                         }
                         (ValueType::Window, "is_open") => Some((vec![], ValueType::Bool)),
                         (ValueType::Window, "close") => Some((vec![], ValueType::Int)),
+                        (ValueType::Input, "key") => {
+                            Some((vec![ValueType::Key], ValueType::ButtonState))
+                        }
+                        (ValueType::MouseInput, "button") => {
+                            Some((vec![ValueType::MouseButton], ValueType::ButtonState))
+                        }
                         _ => None,
                     };
                     if let Some((expected, result)) = expected {
@@ -7059,7 +7129,13 @@ fn infer_expression_type(
                         }
                         return Ok(result);
                     }
-                    if matches!(receiver_ty, ValueType::Canvas | ValueType::Window) {
+                    if matches!(
+                        receiver_ty,
+                        ValueType::Canvas
+                            | ValueType::Window
+                            | ValueType::Input
+                            | ValueType::MouseInput
+                    ) {
                         return Err(sem_err(
                             SEM_UNKNOWN_FUNCTION,
                             format!("unknown visual method '{}.{}'.", base, method),

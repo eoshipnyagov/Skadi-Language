@@ -30,7 +30,7 @@ Date: 2026-08-25
 - Channel `try_send`, `close`/drain, cancellation-aware blocking operations,
   `send_for`/`receive_for`, and contextual `timed_out`;
 - path-sensitive `wait task for Duration on error { ... }`;
-- Canvas v0 with a Win32 presenter and portable headless rasterizer.
+- Canvas v0 with a Win32 presenter, frame-based keyboard/mouse `Input`, and portable headless rasterizer.
 - local path dependencies in `Skadi.toml` and
   `import "package/path/file.skd"`, with package-root confinement.
 
@@ -60,7 +60,7 @@ checks, and explicit angle/unit representation access. Duration literals cover
 - Git/registry dependencies, transitive resolution, lock files, and re-exports;
 - Channel `select`/`try_receive`, and async/task groups;
 - release-tested ESP32 hardware matrix and other MCU backends;
-- Matrix2D, Canvas events/text/images, non-Windows presenters, and generic units/vectors.
+- Matrix2D, ordered Canvas events, text input/text/images, non-Windows presenters, and generic units/vectors.
 
 The [quick reference](language-quick-reference.en.md) lists every public form and
 builtin.

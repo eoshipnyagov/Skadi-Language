@@ -103,6 +103,19 @@ try {
         if ($Compiler) {
             Invoke-Checked "skadi-cli" @("build", "--target", "host", "--cc", $Compiler)
             Invoke-Checked "skadi-cli" @("run", "--target", "host", "--cc", $Compiler)
+
+            $canvasSource = Join-Path $repoRoot "examples\canvas-input"
+            $canvasProject = Join-Path $projectParent "canvas_input"
+            New-Item -ItemType Directory -Path (Join-Path $canvasProject "src") -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $canvasSource "Skadi.toml") -Destination $canvasProject
+            Copy-Item -LiteralPath (Join-Path $canvasSource "src\main.skd") -Destination (Join-Path $canvasProject "src")
+            Set-Location $canvasProject
+            Invoke-Checked "skadi-cli" @("check")
+            Invoke-Checked "skadi-cli" @("format", "--check")
+            Invoke-Checked "skadi-cli" @("build", "--target", "host", "--cc", $Compiler)
+            if (-not (Test-Path -LiteralPath (Join-Path $canvasProject "build\canvas_input.exe"))) {
+                throw "Installed CLI did not build the Canvas input showcase."
+            }
         }
     } finally {
         Pop-Location

@@ -23,6 +23,10 @@ portable software Canvas + separate platform presenter
 | `Rect` | value-safe | четыре `f64`: `x`, `y`, `width`, `height` |
 | `Canvas` | linear resource | размеры и owning RGBA framebuffer |
 | `Window` | linear resource | platform presentation handle |
+| `Input` | value-safe | снимок клавиатуры и мыши за кадр |
+| `MouseInput` | value-safe | позиция, движение, прокрутка и кнопки |
+| `ButtonState` | value-safe | независимые `down`, `pressed`, `released` |
+| `Key`, `MouseButton` | nominal values | платформенно-независимые имена клавиш и кнопок |
 
 `Color` и `Rect` копируются по значению и разрешены в struct/List/Task/Channel.
 `Canvas` и `Window` не являются task-safe или channel-safe.
@@ -136,9 +140,28 @@ Headless Canvas не должен включать или линковать Win
 
 На не-Windows target вызов `windows.open` пока завершается `SC-RT-330`.
 
+### 6.1. Win32 Input slice
+
+`Window` хранит живое состояние ввода, а `window.input` отдаёт копируемый
+`Input` текущего кадра. В пользовательском цикле нет отдельного `poll`:
+`is_open()` и `present()` обслуживают Win32 messages. Переходы клавиш и
+кнопок накапливаются между кадрами; первое чтение после `present()` публикует
+их как один снимок. Повторное чтение в том же кадре не стирает edge flags.
+
+`input.key(Key.W)` и `mouse.button(MouseButton.Left)` возвращают
+`ButtonState`. `down` отражает последнее состояние, `pressed` и `released`
+независимо фиксируют хотя бы один переход за кадр. Нажатие и отпускание
+между кадрами выставляет оба edge flags. `MouseInput` содержит `position`,
+`delta` и `wheel`; координаты относятся к клиентской области Window, начало
+слева сверху. Потеря фокуса снимает удерживаемые состояния.
+
+Win32 WndProc хранит указатель на heap-allocated `SkWindowState`: возвращение
+или `move` значения `Window` не меняет адрес состояния, а owner cleanup
+освобождает его после уничтожения HWND. `Canvas` не зависит от Input.
+
 ## 7. Отложено
 
-- event/input model;
+- ordered event stream, layout-aware text input, touchscreen и gamepad;
 - resize, scaling и DPI policy;
 - `Image`, text/fonts и codecs;
 - transforms, clipping stack и `Matrix2D`;

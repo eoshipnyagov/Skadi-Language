@@ -1,0 +1,10 @@
+[package]
+name = "canvas_input"
+version = "0.1.0"
+edition = "v1"
+
+[build]
+entry = "src/main.skd"
+
+[numeric]
+int = "target"

@@ -8,6 +8,8 @@ versions.
 
 ## Unreleased
 
+## [1.2.0-rc.2] - 2026-09-30
+
 - Added `skadi-cli quick-run <file.skd> [-- <args>]` for manifest-free scripts
   and examples, with temporary native artifacts, inherited standard streams,
   and no Cargo requirement after installation.
@@ -31,6 +33,14 @@ versions.
   operations, incomplete `when` branches, and ownership/resource lifecycle
   chains surfaced in the TUI diagnostics workspace.
 - Focused native examples and RU/EN ownership documentation.
+- Win32 Canvas keyboard/mouse frame snapshots through the `Input`,
+  `MouseInput`, `ButtonState`, `Key`, and `MouseButton` domain types, with an
+  interactive project example and CLI/Win32 smoke coverage.
+- Owning `File` handles, a bounded native C ABI, local-path package imports,
+  and a probe-based Skadi-level debugger slice.
+- An experimental ESP-IDF backend with static Task/Channel storage, GPTimer
+  and GPIO interrupts, and SDK build coverage; physical-board validation is
+  still outstanding.
 
 ### Safety
 
@@ -85,4 +95,5 @@ versions.
 - Memory, Task/Channel, Time/Duration, ByteSize, Angle, and Vector surfaces are
   released as experimental `v1.2` tracks.
 
+[1.2.0-rc.2]: https://github.com/eoshipnyagov/Skadi-Language/releases/tag/v1.2.0-rc.2
 [1.2.0-rc.1]: https://github.com/eoshipnyagov/Skadi-Language/releases/tag/v1.2.0-rc.1

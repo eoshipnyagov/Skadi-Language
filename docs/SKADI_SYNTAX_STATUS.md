@@ -307,7 +307,8 @@
   - `clear`, `pixel`, `line`, `rect`, `fill_rect`, `circle`, `fill_circle` и `checksum` проходят semantic/C runtime;
   - `Window` является отдельным linear resource, а `present` требует `edit Canvas`;
   - первый Window backend реализован для Win32; headless Canvas остаётся переносимым;
-  - events, text/images, transforms, `Matrix2D` и остальные оконные backend отложены;
+  - Win32 `window.input` даёт покадровый `Input` с `Key`, `MouseInput`, `MouseButton` и `ButtonState`;
+  - ordered events, text input, text/images, transforms, `Matrix2D` и остальные оконные backend отложены;
   - полный контракт: [Canvas и Visual Core](canvas.md).
 - formatter coverage - `Partial`
   - ориентирован на текущий рабочий слой `v1.1` и экспериментальные формы `v1.2`, где это безопасно;
@@ -316,7 +317,7 @@
 ## Сознательно отложенное
 
 - Git/registry dependencies, transitive resolver, lock-файл и re-export
-- расширение Canvas: events, text/images, transforms и дополнительные backends
+- расширение Canvas: ordered events, text input, text/images, transforms и дополнительные backends
 - systems additions track
 - более строгая модель ошибок индексации
 - async/background execution внутри TUI

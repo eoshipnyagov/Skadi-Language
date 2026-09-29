@@ -74,6 +74,47 @@ fn host_compiler_ready() -> bool {
 }
 
 #[test]
+fn canvas_input_showcase_checks_formats_and_builds_through_cli() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("examples/canvas-input");
+    let project = unique_temp_dir("canvas_input_showcase");
+    fs::create_dir_all(project.join("src")).expect("create showcase source dir");
+    fs::copy(source.join("Skadi.toml"), project.join("Skadi.toml"))
+        .expect("copy showcase manifest");
+    fs::copy(source.join("src/main.skd"), project.join("src/main.skd"))
+        .expect("copy showcase entry");
+
+    for args in [&["check"][..], &["format", "--check"][..]] {
+        let result = run_cli(&project, args);
+        assert!(
+            result.status.success(),
+            "skadi-cli {} failed: {}{}",
+            args.join(" "),
+            stdout_text(&result),
+            stderr_text(&result)
+        );
+    }
+    if host_compiler_ready() {
+        let build = run_cli(&project, &["build"]);
+        assert!(
+            build.status.success(),
+            "skadi-cli build failed: {}{}",
+            stdout_text(&build),
+            stderr_text(&build)
+        );
+        let binary = project.join("build").join(if cfg!(windows) {
+            "canvas_input.exe"
+        } else {
+            "canvas_input"
+        });
+        assert!(binary.is_file(), "missing {}", binary.display());
+    }
+
+    fs::remove_dir_all(project).expect("remove showcase project");
+}
+
+#[test]
 fn doctor_and_target_list_smoke() {
     let temp = unique_temp_dir("doctor");
 

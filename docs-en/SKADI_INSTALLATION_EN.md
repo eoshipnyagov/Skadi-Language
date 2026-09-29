@@ -1,6 +1,6 @@
 # Installing Skadi CLI
 
-Current release candidate: `v1.2.0-rc.1`.
+Current release candidate: `v1.2.0-rc.2`.
 
 The installer places a prebuilt `skadi-cli` in a user-local directory, verifies
 the archive SHA-256, and records an installation manifest. Rust and Cargo are
@@ -18,9 +18,9 @@ Open PowerShell:
 ```powershell
 $installer = Join-Path $env:TEMP "skadi-install.ps1"
 Invoke-WebRequest `
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/install.ps1 `
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.2/install/install.ps1 `
   -OutFile $installer
-& $installer -Version 1.2.0-rc.1
+& $installer -Version 1.2.0-rc.2
 ```
 
 The default binary location is:
@@ -43,8 +43,8 @@ Use either MSVC Build Tools (`cl`) or MSYS2/MinGW-w64 (`gcc`) for native builds.
 
 ```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/install.sh \
-  | sh -s -- --version 1.2.0-rc.1
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.2/install/install.sh \
+  | sh -s -- --version 1.2.0-rc.2
 ```
 
 The default installation is a statically linked musl binary at
@@ -75,8 +75,8 @@ Use the same POSIX installer:
 
 ```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/install.sh \
-  | sh -s -- --version 1.2.0-rc.1
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.2/install/install.sh \
+  | sh -s -- --version 1.2.0-rc.2
 ```
 
 Separate archives are provided for Intel (`x86_64`) and Apple Silicon
@@ -137,8 +137,8 @@ Windows:
 
 ```powershell
 .\install.ps1 `
-  -Version 1.2.0-rc.1 `
-  -ArchivePath .\skadi-cli-v1.2.0-rc.1-x86_64-pc-windows-msvc.zip `
+  -Version 1.2.0-rc.2 `
+  -ArchivePath .\skadi-cli-v1.2.0-rc.2-x86_64-pc-windows-msvc.zip `
   -ChecksumPath .\SHA256SUMS
 ```
 
@@ -146,8 +146,8 @@ Linux/macOS:
 
 ```bash
 sh install.sh \
-  --version 1.2.0-rc.1 \
-  --archive ./skadi-cli-v1.2.0-rc.1-x86_64-unknown-linux-musl.tar.gz \
+  --version 1.2.0-rc.2 \
+  --archive ./skadi-cli-v1.2.0-rc.2-x86_64-unknown-linux-musl.tar.gz \
   --checksum-file ./SHA256SUMS
 ```
 
@@ -160,7 +160,7 @@ Windows:
 ```powershell
 $uninstaller = Join-Path $env:TEMP "skadi-uninstall.ps1"
 Invoke-WebRequest `
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/uninstall.ps1 `
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.2/install/uninstall.ps1 `
   -OutFile $uninstaller
 & $uninstaller
 ```
@@ -169,7 +169,7 @@ Linux/macOS:
 
 ```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.1/install/uninstall.sh \
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.2/install/uninstall.sh \
   | sh
 ```
 
