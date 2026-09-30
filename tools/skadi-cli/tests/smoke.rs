@@ -74,6 +74,42 @@ fn host_compiler_ready() -> bool {
 }
 
 #[test]
+fn installed_cli_identity_and_help_match_supported_commands() {
+    let cwd = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let version = run_cli(cwd, &["--version"]);
+    assert!(version.status.success());
+    assert_eq!(
+        stdout_text(&version).trim(),
+        concat!("skadi-cli ", env!("CARGO_PKG_VERSION"))
+    );
+
+    let help = run_cli(cwd, &["--help"]);
+    assert!(help.status.success());
+    let text = stdout_text(&help);
+    for command in [
+        "new <name>",
+        "init",
+        "check",
+        "analyze [--json]",
+        "build [--target name] [--cc compiler]",
+        "run [--target name] [--cc compiler]",
+        "debug [-b file.skd:line] [--cc compiler]",
+        "quick-run <file.skd> [--cc compiler]",
+        "embedded <command>",
+        "target list",
+        "tui",
+        "format [--check]",
+        "doctor",
+    ] {
+        assert!(text.contains(command), "help is missing {command}");
+    }
+
+    let quick_help = run_cli(cwd, &["quick-run", "--help"]);
+    assert!(quick_help.status.success());
+    assert!(stdout_text(&quick_help).contains("--cc <compiler>"));
+}
+
+#[test]
 fn canvas_input_showcase_checks_formats_and_builds_through_cli() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")

@@ -26,7 +26,7 @@
 - `analyze [--json]`
 - `build`
 - `run`
-- `quick-run <file.skd> [-- <args ...>]`
+- `quick-run <file.skd> [--cc compiler] [-- <args ...>]`
 - `embedded prepare|build|flash|monitor`
 - `format`
 - `doctor`

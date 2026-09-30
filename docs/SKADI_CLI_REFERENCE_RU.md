@@ -50,7 +50,7 @@ skadi-cli tui
 | `build [--target name] [--cc compiler]` | Собрать native binary | Да |
 | `run [--target name] [--cc compiler]` | Собрать и запустить | Да |
 | `debug [-b file.skd:line] [-- <args ...>]` | Отладочная сборка, breakpoints и step | Да |
-| `quick-run <file.skd> [-- <args ...>]` | Собрать и запустить один файл без manifest | Да |
+| `quick-run <file.skd> [--cc compiler] [-- <args ...>]` | Собрать и запустить один файл без manifest | Да |
 | `embedded <command>` | Подготовить, собрать, прошить или наблюдать ESP-IDF project | ESP-IDF |
 | `doctor` | Проверить host/cross toolchains | Нет |
 | `target list` | Показать target profiles | Нет |

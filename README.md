@@ -10,7 +10,7 @@ Documentation: [GitHub Pages](https://eoshipnyagov.github.io/Skadi-Language/)
 
 The current implementation is a working prototype: lexer, parser, semantic analysis, formatter, CLI/TUI, documentation tooling, and a practical `Skadi -> C` backend.
 
-The current release candidate is `v1.2.0-rc.3`. It builds on the stable `v1.1`
+The current release candidate is `v1.2.0-rc.4`. It builds on the stable `v1.1`
 toolchain surface and includes experimental Memory and ownership,
 Task/Channel/Interrupt, Time/Duration, ByteSize, Angle, vector, and Canvas MVPs.
 
@@ -499,24 +499,24 @@ The goal is to make the language real enough to test syntax, semantics, diagnost
 
 ## Quick Start
 
-Install the `v1.2.0-rc.3` release candidate first.
+Install the `v1.2.0-rc.4` release candidate first.
 
 Windows PowerShell:
 
 ```powershell
 $installer = Join-Path $env:TEMP "skadi-install.ps1"
 Invoke-WebRequest `
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.3/install/install.ps1 `
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.4/install/install.ps1 `
   -OutFile $installer
-& $installer -Version 1.2.0-rc.3
+& $installer -Version 1.2.0-rc.4
 ```
 
 Linux or macOS:
 
 ```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.3/install/install.sh \
-  | sh -s -- --version 1.2.0-rc.3
+  https://raw.githubusercontent.com/eoshipnyagov/Skadi-Language/v1.2.0-rc.4/install/install.sh \
+  | sh -s -- --version 1.2.0-rc.4
 ```
 
 The installer verifies the release SHA-256 and installs `skadi-cli` without

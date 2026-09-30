@@ -21,10 +21,10 @@ fn help_text() -> String {
         "  init               Initialize Skadi project in current directory",
         "  check              Run frontend checks",
         "  analyze [--json]   Explain lifecycle and blocking behavior",
-        "  build [--target] [--cc]  Build project",
-        "  run [--target] [--cc]    Build and run project",
-        "  debug [-b file:line]      Build and debug project interactively",
-        "  quick-run <file.skd> [-- <args>]  Run one file without a manifest",
+        "  build [--target name] [--cc compiler]  Build project",
+        "  run [--target name] [--cc compiler]    Build and run project",
+        "  debug [-b file.skd:line] [--cc compiler]  Build and debug project",
+        "  quick-run <file.skd> [--cc compiler] [-- <args>]  Run one file",
         "  embedded <command>  Prepare, build, flash, or monitor an ESP-IDF project",
         "  target list        List supported targets",
         "  tui                Full-screen interactive workflow",
@@ -96,9 +96,10 @@ mod tests {
         assert!(help.contains("skadi-cli <command> [args]"));
         assert!(help.contains("-V, --version"));
         assert!(help.contains("format [--check] [path ...]  Format Skadi source files"));
-        assert!(help.contains("quick-run <file.skd> [-- <args>]"));
+        assert!(help.contains("quick-run <file.skd> [--cc compiler] [-- <args>]"));
         assert!(help.contains("embedded <command>"));
-        assert!(help.contains("debug [-b file:line]"));
+        assert!(help.contains("debug [-b file.skd:line] [--cc compiler]"));
+        assert!(help.contains("build [--target name] [--cc compiler]"));
         assert!(help.contains("analyze [--json]"));
         assert!(help.contains("tui                Full-screen interactive workflow"));
     }

@@ -4,6 +4,8 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#char-literals" },
+    { "include": "#imports" },
     { "include": "#duration-literals" },
     { "include": "#memory-size-literals" },
     { "include": "#angle-literals" },
@@ -47,6 +49,22 @@
             { "name": "constant.character.escape.skd", "match": "\\\\." },
             { "name": "variable.interpolation.skd", "match": "__[A-Za-z_][A-Za-z0-9_]*__" }
           ]
+        }
+      ]
+    },
+    "char-literals": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.skd",
+          "match": "'(?:\\\\.|[^'\\\\\r\n])'"
+        }
+      ]
+    },
+    "imports": {
+      "patterns": [
+        {
+          "name": "keyword.control.import.skd",
+          "match": "\\bimport\\b"
         }
       ]
     },
@@ -337,7 +355,7 @@
       "patterns": [
         {
           "name": "constant.language.skd",
-          "match": "\\b(true|false|null|PI|TAU|E|EPSILON)\\b"
+          "match": "\\b(true|false|PI|TAU|E|EPSILON)\\b"
         },
         {
           "name": "constant.other.error-code.skd",
@@ -404,7 +422,7 @@
       "patterns": [
         {
           "name": "keyword.operator.skd",
-          "match": "\\b(and|or|not|xor|div|mod)\\b|==|!=|<=|>=|\\+\\=|\\-\\=|\\*\\=|\\/\\=|\\+\\+|\\-\\-|=|<|>|\\+|\\-|\\*|\\/|\\^"
+          "match": "\\b(and|or|not|xor|div|mod)\\b|&&|\\|\\||==|!=|<=|>=|\\+\\=|\\-\\=|\\*\\=|\\/\\=|\\+\\+|\\-\\-|=|<|>|\\+|\\-|\\*|\\/|\\^|%|!|&|\\|"
         }
       ]
     },

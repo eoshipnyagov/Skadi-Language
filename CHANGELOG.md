@@ -8,7 +8,12 @@ versions.
 
 ## Unreleased
 
-## [1.2.0-rc.3] - 2026-09-30
+## [1.2.0-rc.4] - 2026-09-30
+
+The `v1.2.0-rc.3` tag passed the complete release matrix but remained a draft
+while editor/tooling parity was checked. This candidate updates VS Code syntax
+highlighting for imports, characters, and operators; removes stale highlighting
+from the documentation lexer; and aligns CLI help with supported flags.
 
 The `v1.2.0-rc.2` tag did not pass the Windows distribution smoke and was not
 published. This candidate fixes explicit Win32 `user32` linkage for Canvas on
@@ -99,5 +104,5 @@ MSVC and MinGW.
 - Memory, Task/Channel, Time/Duration, ByteSize, Angle, and Vector surfaces are
   released as experimental `v1.2` tracks.
 
-[1.2.0-rc.3]: https://github.com/eoshipnyagov/Skadi-Language/releases/tag/v1.2.0-rc.3
+[1.2.0-rc.4]: https://github.com/eoshipnyagov/Skadi-Language/releases/tag/v1.2.0-rc.4
 [1.2.0-rc.1]: https://github.com/eoshipnyagov/Skadi-Language/releases/tag/v1.2.0-rc.1

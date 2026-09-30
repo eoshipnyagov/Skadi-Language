@@ -6,7 +6,7 @@ on:
       version:
         description: Release version (with or without v prefix)
         required: true
-        default: 1.2.0-rc.3
+        default: 1.2.0-rc.4
       publish:
         description: Create a draft GitHub prerelease (the matching tag must exist)
         required: true
@@ -68,6 +68,7 @@ jobs:
           cargo clippy --workspace --all-targets -- -D warnings
           cargo test --workspace --locked -- --skip e2e_
           python -m unittest scripts/release/test_package_release.py -v
+          python -m unittest scripts/test_syntax_highlighting.py -v
           python scripts/check_docs_consistency.py
           python scripts/sync_docs_site.py
           python -m mkdocs build --strict

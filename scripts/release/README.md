@@ -5,12 +5,12 @@ GitHub Actions. It uses only the Python standard library.
 
 ```bash
 python scripts/release/package_release.py verify-version \
-  --version v1.2.0-rc.3
+  --version v1.2.0-rc.4
 
 python scripts/release/package_release.py package \
   --binary target/x86_64-unknown-linux-musl/release/skadi-cli \
   --target x86_64-unknown-linux-musl \
-  --version 1.2.0-rc.3 \
+  --version 1.2.0-rc.4 \
   --output-dir dist
 
 python scripts/release/package_release.py checksums \

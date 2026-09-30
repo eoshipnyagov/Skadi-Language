@@ -1,7 +1,7 @@
 # Skadi v1.2 Plan (RU)
 
 Дата: 2026-09-30
-Статус: контрольная версия `v1.2.0-rc.3`; release hardening продолжается,
+Статус: контрольная версия `v1.2.0-rc.4`; release hardening продолжается,
 документационный checkpoint завершён; Memory,
 ownership, Task/Channel, Time/Duration, ByteSize, Angle, Vector, Interrupt и
 Canvas slices исполняемы и остаются experimental API текущей линии `v1.2`.
@@ -624,7 +624,7 @@ Release evidence:
 Цель: превратить завершённую функциональную линию в воспроизводимый
 дистрибутив, который устанавливается без клонирования репозитория и без Rust.
 Первая контрольная версия — `v1.2.0-rc.1`; следующая после расширения systems
-и Canvas slices — `v1.2.0-rc.3`. Финальный `v1.2.0` требует отдельного решения.
+и Canvas slices — `v1.2.0-rc.4`. Финальный `v1.2.0` требует отдельного решения.
 
 Обязательный scope:
 
@@ -787,11 +787,16 @@ platform resources и bare metal являются следующими slices, �
 - ordered events, text input, touch/gamepad и non-Windows presenters остаются
   отдельными следующими шагами.
 
-### Контрольный RC3 gate
+### Контрольный RC4 gate
 
 - Тег `v1.2.0-rc.2` не прошёл Windows distribution smoke: MSVC не получил
   `user32.lib` при сборке Canvas showcase. Публичный релиз не создан;
-- CLI, compiler и установочные инструкции используют `1.2.0-rc.3`;
+- `v1.2.0-rc.3` прошёл полный release matrix, но остался draft до проверки
+  editor/tooling parity;
+- CLI, compiler и установочные инструкции используют `1.2.0-rc.4`;
+- VS Code extension `0.3.11` и HTML-lexer синхронизированы с актуальными
+  imports, Char literals, операторами и builtin-поверхностью;
+- CLI help и smoke-проверка закрепляют реальные команды и аргументы;
 - Windows GNU/MSVC link paths теперь явно подключают `user32` для Canvas;
 - `examples/canvas-input/` проверяется через CLI `check`, `format --check` и
   native `build` в тестовой матрице и Windows smoke установленного архива;

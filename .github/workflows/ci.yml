@@ -89,6 +89,9 @@ jobs:
       - name: Check VS Code extension
         run: python scripts/check_vscode_extension.py
 
+      - name: Test syntax highlighting
+        run: python -m unittest scripts/test_syntax_highlighting.py -v
+
       - name: Sync docs sources
         run: python scripts/sync_docs_site.py
 

@@ -1,7 +1,7 @@
 # skadi-cli
 
 Основной пользовательский интерфейс Skadi линии `v1.2`.
-Текущий release candidate: `1.2.0-rc.3`.
+Текущий release candidate: `1.2.0-rc.4`.
 
 - [Установка](../../docs/SKADI_INSTALLATION_RU.md)
 - [Быстрый старт CLI](../../docs/SKADI_CLI_QUICK_START_RU.md)

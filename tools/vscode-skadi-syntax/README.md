@@ -21,7 +21,7 @@ Skadi surface.
 1. Build package:
    - `npx @vscode/vsce package --allow-missing-repository`
 2. Install in VS Code:
-   - `code --install-extension skadi-syntax-0.3.10.vsix`
+   - `code --install-extension skadi-syntax-0.3.11.vsix`
 
 ## File extensions and naming
 
@@ -33,9 +33,9 @@ Skadi surface.
 ## Current scope
 
 - comments (`//`, `/* */`)
-- strings with `__var__` interpolation token highlighting
+- strings with `__var__` interpolation and single-quoted `Char` literals
 - numbers
-- declarations (`fn`, `struct`, `label`, `tag`) and function signatures
+- imports, declarations (`fn`, `struct`, `label`, `tag`) and function signatures
 - control-flow and modifiers (`danger`, `new`, `on error`, `allow grow/drop`,
   `edit`, `view`, `move`, contextual `external resource`, etc.)
 - core type names, constants, and canonical aliases (`Bool`, `Char`, `PI`, `TAU`, `EPSILON`)

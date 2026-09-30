@@ -35,7 +35,7 @@ skadi-cli tui
 | `format [--check] [path ...]` | Write or verify canonical formatting | No |
 | `build [--target name] [--cc compiler]` | Build a native binary | Yes |
 | `run [--target name] [--cc compiler]` | Build and execute | Yes |
-| `quick-run <file.skd> [-- <args ...>]` | Build and run one file without a manifest | Yes |
+| `quick-run <file.skd> [--cc compiler] [-- <args ...>]` | Build and run one file without a manifest | Yes |
 | `embedded <command>` | Prepare, build, flash, or monitor an ESP-IDF project | ESP-IDF |
 | `doctor` | Inspect host and cross toolchains | No |
 | `target list` | List target profiles | No |
