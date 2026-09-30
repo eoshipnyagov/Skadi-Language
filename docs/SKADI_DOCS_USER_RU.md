@@ -1,6 +1,6 @@
 # Пользовательская документация Skadi
 
-Текущий release candidate — `v1.2.0-rc.2`: stable base `v1.1` плюс
+Текущий release candidate — `v1.2.0-rc.3`: stable base `v1.1` плюс
 experimental, но исполняемые Memory, Task/Channel, Time/Duration, ByteSize,
 Angle и Vector MVP.
 

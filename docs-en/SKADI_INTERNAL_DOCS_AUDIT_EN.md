@@ -2,7 +2,7 @@
 
 Review date: 2026-09-30
 
-Baseline: `develop`, release candidate `v1.2.0-rc.2`
+Baseline: `develop`, release candidate `v1.2.0-rc.3`
 
 ## Source-of-truth order
 
@@ -43,7 +43,7 @@ feature by itself.
 
 | Area | Current state |
 |---|---|
-| Compiler/CLI/backend references | Living and aligned to `v1.2.0-rc.2` |
+| Compiler/CLI/backend references | Living and aligned to `v1.2.0-rc.3` |
 | `v1` Text/List/error/style contracts | Accepted historical baseline |
 | `v1.1` plans | Historical and completed |
 | `v1.2` plan | Living release ledger |

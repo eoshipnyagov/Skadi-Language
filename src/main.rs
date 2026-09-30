@@ -31,6 +31,7 @@ fn compile_c_to_exe(c_path: &str, exe_path: &str) -> Result<(), String> {
         command.arg(c_path).arg("-o").arg(exe_path).arg("-lm");
         if cfg!(windows) {
             command.arg("-lgdi32");
+            command.arg("-luser32");
         } else {
             command.arg("-pthread");
         }

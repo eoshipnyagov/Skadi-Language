@@ -6,7 +6,7 @@ on:
       version:
         description: Release version (with or without v prefix)
         required: true
-        default: 1.2.0-rc.2
+        default: 1.2.0-rc.3
       publish:
         description: Create a draft GitHub prerelease (the matching tag must exist)
         required: true

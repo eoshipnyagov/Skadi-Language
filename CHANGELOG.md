@@ -8,7 +8,11 @@ versions.
 
 ## Unreleased
 
-## [1.2.0-rc.2] - 2026-09-30
+## [1.2.0-rc.3] - 2026-09-30
+
+The `v1.2.0-rc.2` tag did not pass the Windows distribution smoke and was not
+published. This candidate fixes explicit Win32 `user32` linkage for Canvas on
+MSVC and MinGW.
 
 - Added `skadi-cli quick-run <file.skd> [-- <args>]` for manifest-free scripts
   and examples, with temporary native artifacts, inherited standard streams,
@@ -95,5 +99,5 @@ versions.
 - Memory, Task/Channel, Time/Duration, ByteSize, Angle, and Vector surfaces are
   released as experimental `v1.2` tracks.
 
-[1.2.0-rc.2]: https://github.com/eoshipnyagov/Skadi-Language/releases/tag/v1.2.0-rc.2
+[1.2.0-rc.3]: https://github.com/eoshipnyagov/Skadi-Language/releases/tag/v1.2.0-rc.3
 [1.2.0-rc.1]: https://github.com/eoshipnyagov/Skadi-Language/releases/tag/v1.2.0-rc.1

@@ -159,7 +159,7 @@ def make_user_index_ru() -> str:
 Этот раздел предназначен для тех, кто пишет программы на Skadi и работает с
 `skadi-cli` и `skadi-cli tui`.
 
-Текущий release candidate — `v1.2.0-rc.2`. Он наследует stable base
+Текущий release candidate — `v1.2.0-rc.3`. Он наследует stable base
 `v1.1` и добавляет experimental Memory/ownership, Task/Channel, Time/Duration,
 ByteSize, Angle и Vector tracks.
 
@@ -189,7 +189,7 @@ def make_user_index_en() -> str:
 This section is for people writing programs in Skadi and using `skadi-cli` and
 `skadi-cli tui`.
 
-The current release candidate is `v1.2.0-rc.2`. It builds on the stable `v1.1`
+The current release candidate is `v1.2.0-rc.3`. It builds on the stable `v1.1`
 base and adds experimental Memory/ownership, Task/Channel, Time/Duration,
 ByteSize, Angle, and Vector tracks.
 

@@ -20,7 +20,7 @@ usage() {
 Usage: install.sh [options]
 
 Options:
-  --version <version>         Release version, for example 1.2.0-rc.2
+  --version <version>         Release version, for example 1.2.0-rc.3
   --install-dir <path>        Override installation directory
   --manifest-path <path>      Override installation manifest path
   --repository <owner/repo>   GitHub repository

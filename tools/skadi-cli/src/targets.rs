@@ -60,6 +60,7 @@ fn gnu_link_args(c: &str, out: &str, pthread: bool, windows: bool) -> Vec<String
     args.push("-lm".to_string());
     if windows {
         args.push("-lgdi32".to_string());
+        args.push("-luser32".to_string());
         args.push("-lws2_32".to_string());
     }
     args
@@ -161,6 +162,7 @@ pub fn candidate_invocations(
                         "/nologo".to_string(),
                         c.clone(),
                         "gdi32.lib".to_string(),
+                        "user32.lib".to_string(),
                         "ws2_32.lib".to_string(),
                         format!("/Fo:{object}"),
                         format!("/Fe:{out}"),
@@ -233,6 +235,7 @@ pub fn single_compiler_invocation(
                     "/nologo".to_string(),
                     c,
                     "gdi32.lib".to_string(),
+                    "user32.lib".to_string(),
                     "ws2_32.lib".to_string(),
                     format!("/Fo:{object}"),
                     format!("/Fe:{out}"),
@@ -370,6 +373,10 @@ mod tests {
         );
         assert!(
             xs.iter()
+                .all(|invocation| invocation.args.iter().any(|arg| arg == "-luser32"))
+        );
+        assert!(
+            xs.iter()
                 .all(|invocation| invocation.args.iter().any(|arg| arg == "-lws2_32"))
         );
     }
@@ -410,6 +417,20 @@ mod tests {
                 .iter()
                 .any(|arg| arg == "/Fo:temp/script.obj" || arg == "/Fo:temp\\script.obj")
         );
+        assert!(invocation.args.iter().any(|arg| arg == "user32.lib"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn auto_detected_host_cl_links_win32_canvas_libraries() {
+        let invocations = candidate_invocations("host", Path::new("a.c"), Path::new("a.exe"))
+            .expect("host invocations should be available");
+        let cl = invocations
+            .iter()
+            .find(|invocation| invocation.program == "cl")
+            .expect("MSVC should be considered on Windows");
+        assert!(cl.args.iter().any(|arg| arg == "gdi32.lib"));
+        assert!(cl.args.iter().any(|arg| arg == "user32.lib"));
     }
 
     #[test]
